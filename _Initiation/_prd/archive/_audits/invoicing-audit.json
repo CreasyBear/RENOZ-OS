@@ -1,0 +1,471 @@
+{
+  "prd_id": "WF-INVOICING",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "summary": {
+    "total_stories": 6,
+    "verified_gaps": 6,
+    "invalidated_gaps": 0,
+    "partially_implemented": 0,
+    "implementation_status": "This is a workflow PRD that orchestrates features across orders, financial, and Xero domains. Most underlying functionality exists in pieces but the workflow automation (auto-invoice on ship, batch processing, payment matching, collection workflow, month-end, forecasting) is missing. Heavy dependencies on DOM-FIN and INT-XERO stories."
+  },
+  "codebase_findings": {
+    "schema_files": [
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/lib/schema/orders.ts",
+        "description": "Orders table with invoice fields (invoiceStatus, invoiceNumber, issueDate, dueDate, invoiceNotes, pdfPath, xeroInvoiceId, xeroSyncedAt). Has paymentStatus field. orderMilestones table for milestone billing.",
+        "key_fields": ["invoiceStatus", "invoiceNumber", "paymentStatus", "xeroInvoiceId", "xeroSyncedAt", "requiredDate"]
+      },
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/lib/schemas/financial.ts",
+        "description": "Validation schemas for financial operations including GetFinancialReportsSchema with 'cashflow' report type stub. Has ReconcileTransactionSchema and BulkReconcileSchema stubs."
+      }
+    ],
+    "server_functions": [
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/server/functions/invoices.ts",
+        "description": "Invoice generation, status updates, PDF creation. Manual invoice generation from order.",
+        "exports": ["generateInvoice", "updateInvoiceStatus", "getInvoice", "listInvoices", "sendInvoice"],
+        "workflow_relevance": "WF-INV-001: No auto-trigger on order status change. WF-INV-002: No batch generation support."
+      },
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/server/functions/financial.ts",
+        "description": "Financial overview metrics, invoice listing with filters. recordPayment and listPayments are TODO commented out.",
+        "exports": ["getFinancialOverview", "listInvoices", "getInvoiceDetails"],
+        "workflow_relevance": "WF-INV-003: No payment matching logic exists. WF-INV-004: Basic overdue amount metric but no collection queue."
+      },
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/server/functions/xero.ts",
+        "description": "Xero OAuth, customer/product sync, invoice creation/sync triggers.",
+        "exports": ["getXeroConnectionStatus", "createInvoiceFromOrder", "syncInvoiceStatus"],
+        "workflow_relevance": "WF-INV-001: createInvoiceFromOrder exists as Trigger.dev task but not auto-triggered on ship."
+      }
+    ],
+    "trigger_tasks": [
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/trigger/xero-sync.ts",
+        "description": "Trigger.dev tasks for Xero sync operations",
+        "tasks": [
+          {"id": "create-invoice-from-order", "description": "Create Xero invoice from order - EXISTS but requires manual trigger"},
+          {"id": "sync-invoice-status", "description": "Pull invoice status from Xero - EXISTS"},
+          {"id": "sync-all-invoice-statuses", "description": "Scheduled hourly task to sync all invoice statuses - EXISTS"}
+        ],
+        "workflow_relevance": "WF-INV-003: syncInvoiceStatus pulls payment status but no matching logic. WF-INV-001: No auto-invoke on order ship."
+      }
+    ],
+    "components": [
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/orders/xero-invoice-status.tsx",
+        "description": "Shows invoice status on order, manual create/sync buttons. Has 'Invoice created when order ships' hint text.",
+        "workflow_relevance": "WF-INV-001: Component assumes auto-invoice on ship but logic not implemented."
+      },
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/financial/invoices-tab.tsx",
+        "description": "Invoice list with filters, bulk action bar (Send Reminder, Export, Mark Paid). Bulk actions are console.log only.",
+        "workflow_relevance": "WF-INV-002: Bulk selection UI exists but no batch invoice generation."
+      },
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/financial/reconciliation-tab.tsx",
+        "description": "Placeholder - not implemented. Shows 'Coming Soon'.",
+        "workflow_relevance": "WF-INV-003/WF-INV-005: No reconciliation or month-end UI."
+      }
+    ],
+    "missing_infrastructure": [
+      "Auto-invoice trigger on order status change",
+      "Batch invoice generation service",
+      "Payment matching service (Xero bank transactions)",
+      "Collection queue and workflow engine",
+      "Period close/lock mechanism",
+      "Cash flow forecast calculations"
+    ]
+  },
+  "stories_status": {
+    "WF-INV-001": {
+      "name": "Add Auto-Invoice on Shipment",
+      "status": "valid",
+      "change": "new",
+      "reason": "createInvoiceFromOrder Trigger.dev task exists but is only triggered manually via createInvoiceFromOrder server function. No hook into order status change workflow. XeroInvoiceStatus component UI hints at auto-invoice but logic not wired.",
+      "existing_building_blocks": {
+        "trigger_task": "create-invoice-from-order task in xero-sync.ts",
+        "server_function": "createInvoiceFromOrder in xero.ts",
+        "ui_component": "xero-invoice-status.tsx with 'create when ships' hint",
+        "invoice_generation": "generateInvoice in invoices.ts"
+      },
+      "gaps": [
+        "No auto-trigger on status change to 'shipped'",
+        "No configurable option for auto-invoice",
+        "No auto-send to customer option",
+        "No skip-if-already-invoiced check"
+      ],
+      "layers": ["server"],
+      "estimated_iterations": 4,
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Primarily wiring work. Add status change listener in orders.ts that triggers createInvoiceFromOrder when status → shipped. Add org-level setting for auto-invoice preference.",
+      "dependencies_status": {
+        "DOM-FIN-005": {
+          "status": "partially_implemented",
+          "notes": "Complete Xero Invoice Sync - createInvoiceFromOrder exists. This story depends on it for Xero push."
+        }
+      }
+    },
+    "WF-INV-002": {
+      "name": "Add Batch Invoicing",
+      "status": "valid",
+      "change": "new",
+      "reason": "InvoicesTab has bulk selection UI with BulkActionBar but no batch generation functionality. Only console.log for bulk actions. No server function for batch invoice generation.",
+      "existing_building_blocks": {
+        "ui_bulk_selection": "InvoicesTab with selectedInvoices state and BulkActionBar",
+        "invoice_generation": "generateInvoice works for single order"
+      },
+      "gaps": [
+        "No batch generateInvoices server function",
+        "No preview before generation",
+        "No progress indicator for large batches",
+        "No summary report (created, errors)",
+        "No batch send functionality"
+      ],
+      "layers": ["server", "ui"],
+      "estimated_iterations": 4,
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Reuse generateInvoice in a loop. Add Trigger.dev task for batch processing. Use existing BulkActionBar UI with real handlers.",
+      "dependencies_status": {
+        "WF-INV-001": {
+          "status": "pending",
+          "notes": "Should complete single invoice automation first."
+        }
+      }
+    },
+    "WF-INV-003": {
+      "name": "Add Payment Matching",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No payment matching functionality exists. syncInvoiceStatus pulls Xero payment status but doesn't match payments to invoices. No bank transaction import from Xero. ReconciliationTab is placeholder only.",
+      "existing_building_blocks": {
+        "xero_client": "XeroApiClient has rate limiting and token handling",
+        "invoice_sync": "syncInvoiceStatus task syncs payment status from Xero",
+        "schema_placeholder": "ReconcileTransactionSchema exists in financial.ts"
+      },
+      "gaps": [
+        "No Xero bank transaction API integration",
+        "No matching algorithm (reference/amount)",
+        "No match suggestions for review",
+        "No apply payment to invoice logic",
+        "No partial payment handling",
+        "No unmatched payments queue",
+        "ReconciliationTab placeholder only"
+      ],
+      "layers": ["server", "ui"],
+      "estimated_iterations": {
+        "xero_bank_api": 2,
+        "matching_logic": 2,
+        "ui_and_workflow": 3
+      },
+      "total_estimated_iterations": 7,
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Complex feature. Consider splitting: (A) Import bank transactions (B) Auto-matching algorithm (C) Review and apply UI. Depends on Xero Bank Feeds API access.",
+      "dependencies_status": {
+        "DOM-FIN-005": {
+          "status": "partially_implemented",
+          "notes": "Complete Xero Invoice Sync needed for payment pull infrastructure."
+        }
+      }
+    },
+    "WF-INV-004": {
+      "name": "Add Collection Workflow",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No collection workflow exists. getFinancialOverview has overdueAmount metric but no collection queue. SendInvoiceReminderSchema exists but no implementation. InvoicesTab has 'Send Reminders' button without functionality.",
+      "existing_building_blocks": {
+        "overdue_detection": "getFinancialOverview calculates overdueAmount",
+        "reminder_schema": "SendInvoiceReminderSchema in financial.ts",
+        "ui_stub": "Send Reminders button in InvoicesTab",
+        "email_infrastructure": "Email system exists for other features"
+      },
+      "gaps": [
+        "No collection queue (sorted by age)",
+        "No collection action tracking (call, email, statement)",
+        "No activity logging for collections",
+        "No escalation path configuration",
+        "No promise-to-pay tracking",
+        "No collection effectiveness metrics"
+      ],
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": {
+        "schema": 2,
+        "server": 3,
+        "ui": 3
+      },
+      "total_estimated_iterations": 8,
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Needs collection_activities table. Heavily overlaps with DOM-FIN-006 (Payment Reminders). Consider implementing DOM-FIN-006 first.",
+      "dependencies_status": {
+        "DOM-FIN-006": {
+          "status": "not_implemented",
+          "notes": "Add Payment Reminders - foundational for collection workflow. Should be implemented first."
+        }
+      }
+    },
+    "WF-INV-005": {
+      "name": "Add Month-End Close Process",
+      "status": "valid",
+      "change": "new",
+      "reason": "No month-end close functionality exists. ReconciliationTab is placeholder. No period lock mechanism. No close checklist or verification workflow.",
+      "existing_building_blocks": {
+        "invoice_list": "listInvoices can filter by date range",
+        "xero_sync": "syncAllInvoiceStatuses runs hourly"
+      },
+      "gaps": [
+        "No month-end checklist (uninvoiced orders, unmatched payments)",
+        "No accrual identification",
+        "No reconciliation report",
+        "No period lock mechanism (prevent backdated entries)",
+        "No close confirmation workflow",
+        "No Xero sync verification step"
+      ],
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": {
+        "schema": 1,
+        "server": 2,
+        "ui": 3
+      },
+      "total_estimated_iterations": 6,
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Needs closed_periods table with lock date. Month-end is more checklist-driven than automated. Xero sync verification can use existing syncAllInvoiceStatuses task.",
+      "dependencies_status": {
+        "WF-INV-003": {
+          "status": "pending",
+          "notes": "Payment matching needed for 'unmatched payments' checklist item."
+        }
+      }
+    },
+    "WF-INV-006": {
+      "name": "Add Cash Flow Forecast",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No cash flow forecast functionality exists. GetFinancialReportsSchema has 'cashflow' type but no implementation. No forecast calculations based on invoice due dates or payment patterns.",
+      "existing_building_blocks": {
+        "invoice_data": "Orders with requiredDate (due date) and paymentStatus",
+        "report_schema_stub": "GetFinancialReportsSchema with 'cashflow' type",
+        "pipeline_data": "Opportunities table has probability and expectedValue for pipeline forecast"
+      },
+      "gaps": [
+        "No forecast calculation based on due dates",
+        "No payment pattern analysis (avg days late)",
+        "No weekly/monthly forecast view",
+        "No pipeline integration for expected orders",
+        "No actual vs forecast comparison",
+        "No forecast export"
+      ],
+      "layers": ["server", "ui"],
+      "estimated_iterations": {
+        "server_forecast_logic": 3,
+        "ui_views_and_charts": 3
+      },
+      "total_estimated_iterations": 6,
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Calculation-heavy feature. Invoice due date forecast is straightforward. Pipeline integration adds complexity. Payment pattern analysis needs historical data.",
+      "dependencies_status": {
+        "DOM-FIN-003": {
+          "status": "not_implemented",
+          "notes": "AR Aging - provides foundational queries for overdue buckets."
+        },
+        "DOM-PIPE-001": {
+          "status": "pending",
+          "notes": "Forecasting fields - probability and expectedCloseDate needed for pipeline forecast integration."
+        }
+      }
+    }
+  },
+  "recommended_stories": [
+    "WF-INV-001",
+    "WF-INV-002",
+    "WF-INV-004",
+    "WF-INV-003",
+    "WF-INV-005",
+    "WF-INV-006"
+  ],
+  "recommended_stories_rationale": "Start with auto-invoice on ship (WF-INV-001) as it completes the order-to-invoice automation with mostly existing pieces. Then batch invoicing (WF-INV-002) builds on single invoice. Collection workflow (WF-INV-004) adds immediate business value but depends on DOM-FIN-006. Payment matching (WF-INV-003) is complex Xero integration. Month-end (WF-INV-005) and forecast (WF-INV-006) are lower priority reporting features.",
+  "cross_domain_dependencies": {
+    "DOM-FIN-003": {
+      "name": "Add Accounts Receivable Aging",
+      "status": "not_implemented",
+      "impacts": ["WF-INV-006 (Cash Flow Forecast needs AR bucket queries)"]
+    },
+    "DOM-FIN-005": {
+      "name": "Complete Xero Invoice Sync",
+      "status": "partially_implemented",
+      "impacts": ["WF-INV-001 (Auto-push to Xero)", "WF-INV-003 (Payment status pull)"]
+    },
+    "DOM-FIN-006": {
+      "name": "Add Payment Reminders",
+      "status": "not_implemented",
+      "impacts": ["WF-INV-004 (Collection workflow uses reminder infrastructure)"]
+    },
+    "DOM-PIPE-001": {
+      "name": "Forecasting Fields (probability, expectedCloseDate)",
+      "status": "pending",
+      "impacts": ["WF-INV-006 (Pipeline forecast integration)"]
+    },
+    "INT-XERO-002": {
+      "name": "Add Complete Invoice Sync",
+      "status": "partially_implemented",
+      "impacts": ["WF-INV-001 (Auto-push infrastructure)", "WF-INV-003 (Payment pull infrastructure)"]
+    }
+  },
+  "atomization_notes": {
+    "WF-INV-003": {
+      "suggested_split": [
+        {
+          "id": "WF-INV-003-A",
+          "name": "Import Bank Transactions from Xero",
+          "layers": ["server"],
+          "iterations": 2,
+          "scope": "Add getBankTransactions to XeroApiClient. Import and store for matching."
+        },
+        {
+          "id": "WF-INV-003-B",
+          "name": "Auto-Match Payments to Invoices",
+          "layers": ["server"],
+          "iterations": 2,
+          "scope": "Matching algorithm by reference/amount. Generate match suggestions."
+        },
+        {
+          "id": "WF-INV-003-C",
+          "name": "Payment Matching Review UI",
+          "layers": ["ui"],
+          "iterations": 3,
+          "scope": "Review suggestions, apply payments, handle partials, unmatched queue."
+        }
+      ]
+    },
+    "WF-INV-004": {
+      "suggested_split": [
+        {
+          "id": "WF-INV-004-A",
+          "name": "Collection Queue Backend",
+          "layers": ["schema", "server"],
+          "iterations": 3,
+          "scope": "collection_activities table. Queue sorted by age. Action logging."
+        },
+        {
+          "id": "WF-INV-004-B",
+          "name": "Collection Workflow UI",
+          "layers": ["ui"],
+          "iterations": 3,
+          "scope": "Collection queue page. Action buttons. Activity history. Escalation alerts."
+        },
+        {
+          "id": "WF-INV-004-C",
+          "name": "Collection Metrics and Reporting",
+          "layers": ["server", "ui"],
+          "iterations": 2,
+          "scope": "Effectiveness metrics. Promise-to-pay tracking. Dashboard widget."
+        }
+      ]
+    },
+    "WF-INV-006": {
+      "suggested_split": [
+        {
+          "id": "WF-INV-006-A",
+          "name": "Invoice Due Date Forecast",
+          "layers": ["server"],
+          "iterations": 2,
+          "scope": "Forecast based on invoice due dates. Weekly/monthly aggregation."
+        },
+        {
+          "id": "WF-INV-006-B",
+          "name": "Payment Pattern Analysis",
+          "layers": ["server"],
+          "iterations": 2,
+          "scope": "Calculate avg days late per customer. Adjust forecast based on patterns."
+        },
+        {
+          "id": "WF-INV-006-C",
+          "name": "Forecast UI and Export",
+          "layers": ["ui"],
+          "iterations": 2,
+          "scope": "Forecast view with chart. Actual vs forecast comparison. Export."
+        }
+      ]
+    }
+  },
+  "implementation_gaps_detail": {
+    "auto_invoice_trigger": {
+      "status": "not_wired",
+      "notes": "createInvoiceFromOrder task exists but not auto-triggered. Need to hook into updateOrderStatus in orders.ts."
+    },
+    "batch_processing": {
+      "status": "ui_only",
+      "notes": "Bulk selection UI exists in InvoicesTab but handlers are console.log stubs."
+    },
+    "payment_matching": {
+      "status": "not_started",
+      "notes": "No Xero bank transaction API integration. ReconcileTransactionSchema is stub only."
+    },
+    "collection_workflow": {
+      "status": "minimal",
+      "notes": "Overdue amount metric exists. No queue, actions, or tracking infrastructure."
+    },
+    "period_close": {
+      "status": "not_started",
+      "notes": "No closed_periods table. No lock mechanism. ReconciliationTab placeholder only."
+    },
+    "cash_forecast": {
+      "status": "schema_stub_only",
+      "notes": "GetFinancialReportsSchema has 'cashflow' type but no implementation."
+    }
+  },
+  "prd_corrections": {
+    "current_state_adjustments": {
+      "implemented": {
+        "accurate": [
+          "Invoice creation from order",
+          "Invoice PDF generation",
+          "Payment recording (basic - via Xero sync)",
+          "Basic Xero sync"
+        ],
+        "needs_clarification": [
+          "Payment recording - server function commented out but Xero sync pulls status"
+        ]
+      },
+      "gaps": {
+        "accurate": [
+          "No auto-invoice on ship - confirmed, only manual trigger",
+          "No batch invoicing - confirmed, no server function",
+          "No payment matching - confirmed, no bank transaction API",
+          "Incomplete Xero sync - partially implemented via domain PRD",
+          "No collection workflow - confirmed, no infrastructure"
+        ]
+      }
+    },
+    "dependencies_adjustments": {
+      "WF-INV-001": {
+        "listed": ["DOM-FIN-005"],
+        "accurate": true,
+        "notes": "Xero Invoice Sync is core dependency for auto-push."
+      },
+      "WF-INV-003": {
+        "listed": ["DOM-FIN-005"],
+        "accurate": true,
+        "additional": "Should also list INT-XERO-002 for payment pull infrastructure."
+      },
+      "WF-INV-004": {
+        "listed": ["DOM-FIN-006"],
+        "accurate": true,
+        "notes": "Payment Reminders is foundational for collection workflow."
+      },
+      "WF-INV-006": {
+        "listed": ["DOM-FIN-003", "DOM-PIPE-001"],
+        "accurate": true,
+        "notes": "AR Aging for bucket queries, Pipeline for expected orders."
+      }
+    }
+  },
+  "workflow_orchestration_notes": {
+    "order_status_hooks": "Orders updateOrderStatus needs event emission for status changes. Auto-invoice should subscribe to 'shipped' event.",
+    "trigger_dev_patterns": "Use Trigger.dev for batch and async operations. Existing xero-sync.ts patterns are good reference.",
+    "xero_api_expansion": "Payment matching needs Xero Bank Feeds API (getBankTransactions). Check Xero app permissions.",
+    "ui_patterns": "BulkActionBar pattern exists for batch operations. ReconciliationTab needs full implementation.",
+    "reporting": "GetFinancialReportsSchema stubs exist for 'cashflow', 'aging', 'collections'. Need server implementations."
+  }
+}

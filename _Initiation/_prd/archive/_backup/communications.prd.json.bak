@@ -1,0 +1,245 @@
+{
+  "id": "phase-0-communications",
+  "name": "Communications Hub Page",
+  "description": "Create /communications route for email templates, campaigns, and communication history",
+  "phase": 0,
+  "priority": "P0",
+  "domain": "communications",
+  "wireframe": "memory-bank/ADR/audit/wireframes/communications-hub.md",
+  "efficiency_impact": "88%",
+  "dependencies": [],
+  "completion_promise": "COMMUNICATIONS_PAGE_COMPLETE",
+  "max_iterations": 30,
+
+  "stories": [
+    {
+      "id": "COM-001",
+      "name": "Create Communications Route Structure",
+      "description": "Create the /communications route with tab-based navigation (Compose, Templates, Campaigns, History)",
+      "status": "pending",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Route /communications exists and renders without errors",
+        "Four tabs visible: Compose, Templates, Campaigns, History",
+        "Tab navigation works with URL persistence (?tab=templates)",
+        "Page title and breadcrumb show correctly",
+        "Pending state shows skeleton loader"
+      ],
+      "technical_requirements": [
+        "Create src/routes/communications/index.tsx using TanStack Router",
+        "Use ui/tabs.tsx for tab navigation",
+        "Use nuqs for URL state management",
+        "Follow existing route patterns"
+      ],
+      "completion_promise": "<promise>COM-001-ROUTE-STRUCTURE-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "COM-002",
+      "name": "Communications Metrics Dashboard",
+      "description": "Add metrics row showing emails sent, open rate, click rate, active templates",
+      "status": "pending",
+      "priority": "P0",
+      "dependencies": ["COM-001"],
+      "acceptance_criteria": [
+        "Four MetricCard components display in a row",
+        "Emails Sent This Month shows count with trend",
+        "Open Rate shows percentage with trend",
+        "Click Rate shows percentage with trend",
+        "Active Templates shows count",
+        "All metrics fetch real data from email_history table"
+      ],
+      "technical_requirements": [
+        "Create getCommunicationMetrics server function",
+        "Use shared/metrics/ components",
+        "Calculate metrics from email_history, email_templates tables",
+        "Use TanStack Query for data fetching"
+      ],
+      "completion_promise": "<promise>COM-002-METRICS-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "COM-003",
+      "name": "Templates Tab with Card Grid",
+      "description": "Implement the Templates tab showing all email templates as cards",
+      "status": "pending",
+      "priority": "P0",
+      "dependencies": ["COM-001"],
+      "acceptance_criteria": [
+        "Template cards display in responsive grid",
+        "Each card shows: name, usage count, last used date",
+        "Cards have actions: Preview, Edit, Duplicate, Use",
+        "Search filter works",
+        "Category filter works",
+        "New Template button opens creation dialog"
+      ],
+      "technical_requirements": [
+        "Create src/components/domain/communications/template-card.tsx",
+        "Create listEmailTemplates server function",
+        "Use ui/card.tsx for template cards",
+        "Use shared/empty-state.tsx if no templates"
+      ],
+      "completion_promise": "<promise>COM-003-TEMPLATES-TAB-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "COM-004",
+      "name": "Template Editor Dialog",
+      "description": "Create dialog for creating and editing email templates",
+      "status": "pending",
+      "priority": "P0",
+      "dependencies": ["COM-003"],
+      "acceptance_criteria": [
+        "Dialog opens for new or edit mode",
+        "Template name input",
+        "Subject line input with variable support",
+        "Rich text body editor",
+        "Variable picker shows available merge fields",
+        "Preview button shows rendered template",
+        "Save creates/updates template",
+        "Cancel discards changes"
+      ],
+      "technical_requirements": [
+        "Create src/components/domain/communications/template-editor-dialog.tsx",
+        "Use TanStack Form for form handling",
+        "Create createEmailTemplate, updateEmailTemplate server functions",
+        "Use shared/email-composer.tsx patterns",
+        "Implement merge field insertion"
+      ],
+      "completion_promise": "<promise>COM-004-TEMPLATE-EDITOR-COMPLETE</promise>",
+      "estimated_iterations": 5
+    },
+    {
+      "id": "COM-005",
+      "name": "Compose Tab with Email Composer",
+      "description": "Implement the Compose tab for sending individual emails",
+      "status": "pending",
+      "priority": "P0",
+      "dependencies": ["COM-001", "COM-003"],
+      "acceptance_criteria": [
+        "Template selector dropdown",
+        "Recipient selector (customer search)",
+        "Subject line (auto-filled from template)",
+        "Body editor with merge field rendering",
+        "Preview shows personalized email",
+        "Send button triggers email delivery",
+        "Success toast on send"
+      ],
+      "technical_requirements": [
+        "Create src/components/domain/communications/email-composer-tab.tsx",
+        "Use shared/email-composer.tsx",
+        "Create sendEmail server function using Resend",
+        "Create email_history record on send"
+      ],
+      "completion_promise": "<promise>COM-005-COMPOSE-TAB-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "COM-006",
+      "name": "History Tab with Communication Log",
+      "description": "Implement the History tab showing sent email history",
+      "status": "pending",
+      "priority": "P0",
+      "dependencies": ["COM-001"],
+      "acceptance_criteria": [
+        "DataTable displays emails with columns: Subject, Recipient, Status, Sent, Opens",
+        "Status shows: Delivered, Opened, Clicked, Bounced, Failed",
+        "Date range filter works",
+        "Recipient search works",
+        "Status filter works",
+        "Clicking row shows email details"
+      ],
+      "technical_requirements": [
+        "Create src/components/domain/communications/history-columns.tsx",
+        "Use shared/data-table/",
+        "Query email_history table with filters",
+        "Show delivery status from Resend webhooks"
+      ],
+      "completion_promise": "<promise>COM-006-HISTORY-TAB-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "COM-007",
+      "name": "Template Categories and Organization",
+      "description": "Add category organization to templates",
+      "status": "pending",
+      "priority": "P1",
+      "dependencies": ["COM-003"],
+      "acceptance_criteria": [
+        "Categories: Sales, Customer Service, Marketing, Internal",
+        "Category filter in Templates tab",
+        "Category selector in template editor",
+        "Empty category shows message"
+      ],
+      "technical_requirements": [
+        "Add category field to email_templates schema if needed",
+        "Update listEmailTemplates with category filter",
+        "Add category dropdown in template editor"
+      ],
+      "completion_promise": "<promise>COM-007-CATEGORIES-COMPLETE</promise>",
+      "estimated_iterations": 2
+    },
+    {
+      "id": "COM-008",
+      "name": "Email Analytics Summary",
+      "description": "Add analytics summary to email detail view",
+      "status": "pending",
+      "priority": "P2",
+      "dependencies": ["COM-006"],
+      "acceptance_criteria": [
+        "Email detail shows: sent time, delivered time, opened time, clicks",
+        "Shows recipient's email client if available",
+        "Shows geographic location if available",
+        "Link click tracking visible"
+      ],
+      "technical_requirements": [
+        "Parse Resend webhook data for analytics",
+        "Create email analytics component",
+        "Store analytics in email_history metadata"
+      ],
+      "completion_promise": "<promise>COM-008-ANALYTICS-COMPLETE</promise>",
+      "estimated_iterations": 2
+    }
+  ],
+
+  "success_metrics": {
+    "route_renders": "Page loads without errors",
+    "data_displayed": "Real email history from database",
+    "templates_work": "Can create, edit, use templates",
+    "sending_works": "Emails actually delivered via Resend",
+    "efficiency_gain": "Users can complete communication tasks 88% faster"
+  },
+
+  "existing_components_to_use": [
+    "shared/data-table/",
+    "shared/metrics/",
+    "shared/email-composer.tsx",
+    "shared/entity-preview-card.tsx",
+    "ui/tabs.tsx",
+    "ui/card.tsx",
+    "domain/email/"
+  ],
+
+  "server_functions_to_create": [
+    "getCommunicationMetrics",
+    "listEmailTemplates",
+    "createEmailTemplate",
+    "updateEmailTemplate",
+    "deleteEmailTemplate",
+    "sendEmail",
+    "listEmailHistory",
+    "getEmailDetails"
+  ],
+
+  "merge_fields": [
+    "{{customer.name}}",
+    "{{customer.company}}",
+    "{{order.number}}",
+    "{{order.total}}",
+    "{{quote.valid_until}}",
+    "{{user.name}}",
+    "{{company.name}}",
+    "{{company.phone}}",
+    "{{company.email}}"
+  ]
+}

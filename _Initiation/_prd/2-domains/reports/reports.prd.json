@@ -1,0 +1,502 @@
+{
+  "id": "DOM-REPORTS",
+  "name": "Reports Domain",
+  "description": "Business reporting and analytics. Pre-built reports and custom report builder for data analysis and decision support.",
+  "created": "2026-01-09",
+  "priority": 15,
+  "phase": "domain-system",
+  "version": "v1",
+  "dependencies": {
+    "phase": "Domain",
+    "executionOrder": 15,
+    "schemaRequired": [
+      {
+        "table": "organizations",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "users",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "user-preferences",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "customers",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "orders",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "products",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "warranties",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "issues",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      }
+    ],
+    "schemaCreates": [
+      {
+        "table": "scheduled_reports",
+        "story": "DOM-RPT-005a"
+      },
+      {
+        "table": "report_favorites",
+        "story": "DOM-RPT-006a"
+      },
+      {
+        "table": "custom_reports",
+        "story": "DOM-RPT-007"
+      }
+    ],
+    "serverFunctionsRequired": [],
+    "serverFunctionsCreates": [
+      {
+        "function": "getFinancialSummaryReport",
+        "story": "DOM-RPT-004"
+      },
+      {
+        "function": "createScheduledReport",
+        "story": "DOM-RPT-005b"
+      },
+      {
+        "function": "getScheduledReports",
+        "story": "DOM-RPT-005b"
+      },
+      {
+        "function": "updateScheduledReport",
+        "story": "DOM-RPT-005b"
+      },
+      {
+        "function": "deleteScheduledReport",
+        "story": "DOM-RPT-005b"
+      },
+      {
+        "function": "addReportFavorite",
+        "story": "DOM-RPT-006b"
+      },
+      {
+        "function": "getReportFavorites",
+        "story": "DOM-RPT-006b"
+      },
+      {
+        "function": "removeReportFavorite",
+        "story": "DOM-RPT-006b"
+      },
+      {
+        "function": "buildCustomReport",
+        "story": "DOM-RPT-007"
+      },
+      {
+        "function": "saveCustomReport",
+        "story": "DOM-RPT-007"
+      }
+    ],
+    "prdDependencies": [
+      {
+        "prdId": "schema-foundation",
+        "status": "REQUIRED",
+        "reason": "Base schema must exist for report data sources"
+      },
+      {
+        "prdId": "DOM-FINANCIAL",
+        "status": "OPTIONAL",
+        "reason": "Financial data for financial summary report"
+      },
+      {
+        "prdId": "DOM-SUPPORT",
+        "status": "OPTIONAL",
+        "reason": "Support data for issue and SLA reports"
+      },
+      {
+        "prdId": "DOM-WARRANTY",
+        "status": "OPTIONAL",
+        "reason": "Warranty data for warranty reports"
+      }
+    ],
+    "enables": []
+  },
+  "references": {
+    "internal": [
+      "memory-bank/_meta/glossary.md - Reporting terminology",
+      "src/components/domain/reports/ - Report components",
+      "src/server/functions/reports.ts - Report server functions"
+    ],
+    "external": [
+      "No external dependencies"
+    ]
+  },
+  "current_state": {
+    "implemented": [
+      "Reports hub with category grouping",
+      "Sales report with revenue, margin, order metrics",
+      "Pipeline report with stage breakdown",
+      "Inventory report with stock levels, valuation, low stock",
+      "Customer report with orders, spend, last order",
+      "Warranty report with expiry, claim rates",
+      "Export to CSV/Excel for all reports",
+      "Print support with print preview dialog",
+      "Trigger.dev emailReport task (manual trigger)"
+    ],
+    "gaps": [
+      "No financial summary report (stub only)",
+      "No report scheduling UI (Trigger.dev task exists)",
+      "No report favorites",
+      "No custom report builder"
+    ]
+  },
+  "stories": [
+    {
+      "id": "DOM-RPT-004",
+      "name": "Add Financial Summary Report",
+      "description": "Financial performance overview with P&L, cash flow, AR",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Financial report page at /reports/financial",
+        "Metrics: revenue, costs, gross margin, outstanding AR",
+        "P&L style summary from orders data",
+        "Cash flow indicators",
+        "Comparison to budget/forecast (if targets set)",
+        "Reuse existing ReportLayout and export infrastructure",
+        "Export to CSV/PDF",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "server",
+        "ui"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 5,
+      "completion_promise": "DOM_RPT_004_COMPLETE",
+      "uiPatterns": {
+        "layout": "ReportLayout with KPI cards grid + charts section",
+        "components": [
+          {
+            "type": "KPI Cards Grid",
+            "reference": "_reference/.reui-reference/registry/default/blocks/charts/area-charts/area-chart-1.tsx",
+            "usage": "Top section with 4 KPI cards: Revenue (area chart), Costs (area chart), Gross Margin (line chart), AR Outstanding (badge)",
+            "props": "Card + CardContent with icon, title, value, period, mini-chart"
+          },
+          {
+            "type": "Line Chart - P&L Trend",
+            "reference": "_reference/.reui-reference/registry/default/blocks/charts/line-charts/line-chart-1.tsx",
+            "usage": "Monthly P&L trend showing revenue vs costs vs margin",
+            "props": "ComposedChart with Area (revenue), Line (costs, dashed), Line (margin), CartesianGrid, XAxis (months), YAxis (currency), custom Tooltip with badges"
+          },
+          {
+            "type": "Data Table - Cash Flow",
+            "reference": "TanStack Table component (existing in codebase patterns)",
+            "usage": "Cash flow breakdown by month with inflow/outflow/net columns",
+            "props": "Sortable columns, row actions, export button"
+          },
+          {
+            "type": "Export Actions",
+            "reference": "Existing ReportLayout export infrastructure",
+            "usage": "CSV/PDF export buttons in toolbar",
+            "props": "DropdownMenu with Download, Calendar, Filter, Refresh, Share options"
+          }
+        ],
+        "dataFlow": "Server function getFinancialSummaryReport → aggregates orders/payments → returns { kpis, trends, cashFlow }",
+        "visualHierarchy": "KPI cards (top) → P&L chart (middle) → Cash flow table (bottom)"
+      }
+    },
+    {
+      "id": "DOM-RPT-005a",
+      "name": "Scheduled Reports Schema",
+      "description": "Add scheduled_reports table for storing report schedule configurations",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "scheduled_reports table (id, organizationId, userId, reportType, frequency, recipients, filters, format, enabled, lastRunAt, nextRunAt, createdAt, updatedAt)",
+        "Migration runs successfully",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "schema"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "DOM_RPT_005a_COMPLETE",
+      "uiPatterns": {
+        "layout": "N/A - Schema only",
+        "components": [],
+        "dataFlow": "Migration creates scheduled_reports table with RLS policies for org scope",
+        "notes": "No UI for this story - enables DOM-RPT-005c"
+      }
+    },
+    {
+      "id": "DOM-RPT-005b",
+      "name": "Schedule Management Server Functions",
+      "description": "CRUD operations for scheduled reports",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "createScheduledReport, getScheduledReports, updateScheduledReport, deleteScheduledReport server functions",
+        "RLS enforced for organization scope",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "server"
+      ],
+      "dependencies": [
+        "DOM-RPT-005a"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "DOM_RPT_005b_COMPLETE",
+      "uiPatterns": {
+        "layout": "N/A - Server functions only",
+        "components": [],
+        "dataFlow": "Server functions interact with scheduled_reports table via Supabase client with RLS",
+        "notes": "No UI for this story - enables DOM-RPT-005c"
+      }
+    },
+    {
+      "id": "DOM-RPT-005c",
+      "name": "Schedule Management UI",
+      "description": "UI for creating and managing report schedules",
+      "priority": 4,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Schedule button on each report page",
+        "Schedule dialog: frequency (daily/weekly/monthly), recipients, format",
+        "Schedule list view accessible from reports hub",
+        "Edit/delete/toggle enabled for existing schedules",
+        "Integration with existing emailReport Trigger.dev task",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "ui"
+      ],
+      "dependencies": [
+        "DOM-RPT-005b"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "DOM_RPT_005c_COMPLETE",
+      "uiPatterns": {
+        "layout": "Dialog modal + List page",
+        "components": [
+          {
+            "type": "Schedule Dialog",
+            "reference": "Shadcn Dialog + Form components (existing in codebase)",
+            "usage": "Modal dialog triggered from report toolbar 'Schedule' button",
+            "props": "Form fields: frequency (Select), recipients (Combobox multi-select), format (Radio: CSV/PDF), enabled (Switch)"
+          },
+          {
+            "type": "Schedule List Card",
+            "reference": "_reference/.reui-reference/registry/default/blocks/charts/line-charts/line-chart-1.tsx (CardHeader pattern)",
+            "usage": "List view at /reports/schedules showing all scheduled reports",
+            "props": "Card with CardHeader (report name, frequency badge), CardContent (recipients list, next run time), CardToolbar (Edit/Delete/Toggle DropdownMenu)"
+          },
+          {
+            "type": "Toolbar Button",
+            "reference": "Existing ReportLayout toolbar pattern",
+            "usage": "Add 'Schedule' button to report toolbar alongside Export/Print",
+            "props": "Button variant='dim' size='sm' with Calendar icon"
+          }
+        ],
+        "dataFlow": "Schedule button → Dialog opens → Form submit → createScheduledReport() → Trigger.dev emailReport task setup",
+        "visualHierarchy": "Report page toolbar → Schedule button → Dialog → List view (/reports/schedules)"
+      }
+    },
+    {
+      "id": "DOM-RPT-006a",
+      "name": "Report Favorites Schema",
+      "description": "Add report_favorites table or extend user_preferences",
+      "priority": 5,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "report_favorites table (id, userId, reportType, filters, name, createdAt) OR add favorites array to user_preferences.dashboardLayout",
+        "Migration runs successfully",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "schema"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 1,
+      "completion_promise": "DOM_RPT_006a_COMPLETE",
+      "uiPatterns": {
+        "layout": "N/A - Schema only",
+        "components": [],
+        "dataFlow": "Migration creates report_favorites table with user scope",
+        "notes": "No UI for this story - enables DOM-RPT-006c"
+      }
+    },
+    {
+      "id": "DOM-RPT-006b",
+      "name": "Favorites Server Functions",
+      "description": "CRUD for report favorites",
+      "priority": 6,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "addReportFavorite, getReportFavorites, removeReportFavorite server functions",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "server"
+      ],
+      "dependencies": [
+        "DOM-RPT-006a"
+      ],
+      "estimated_iterations": 1,
+      "completion_promise": "DOM_RPT_006b_COMPLETE",
+      "uiPatterns": {
+        "layout": "N/A - Server functions only",
+        "components": [],
+        "dataFlow": "Server functions interact with report_favorites table via Supabase client",
+        "notes": "No UI for this story - enables DOM-RPT-006c"
+      }
+    },
+    {
+      "id": "DOM-RPT-006c",
+      "name": "Favorites UI",
+      "description": "Star button on reports and favorites section in hub",
+      "priority": 7,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Favorite star button in ReportLayout header",
+        "Save current filters with favorite",
+        "Favorites section at top of reports hub",
+        "Click favorite navigates to report with saved filters",
+        "Remove favorite option",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "ui"
+      ],
+      "dependencies": [
+        "DOM-RPT-006b"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "DOM_RPT_006c_COMPLETE",
+      "uiPatterns": {
+        "layout": "Button in header + Grid section in hub",
+        "components": [
+          {
+            "type": "Favorite Star Button",
+            "reference": "Lucide Star icon + Button component",
+            "usage": "Toggle button in ReportLayout header next to export buttons",
+            "props": "Button variant='ghost' size='sm' mode='icon', Star icon (filled when favorited), onClick toggles addReportFavorite/removeReportFavorite"
+          },
+          {
+            "type": "Favorites Grid Section",
+            "reference": "_reference/.reui-reference/registry/default/blocks/charts/area-charts/area-chart-1.tsx (grid layout)",
+            "usage": "Top section in /reports hub showing favorited reports as cards",
+            "props": "Grid of Card components, each with report name, saved filters preview, click navigates to report with filters applied"
+          },
+          {
+            "type": "Favorite Card",
+            "reference": "Card + CardContent + Badge components",
+            "usage": "Individual favorite in the grid",
+            "props": "Card with report icon, name, filter badges, click action, remove (X) button"
+          }
+        ],
+        "dataFlow": "Star button → addReportFavorite(reportType, currentFilters, name) → Favorites section fetches getReportFavorites() → Click card → Navigate with filters",
+        "visualHierarchy": "Reports hub: Favorites grid (top) → All reports grid (below)"
+      }
+    },
+    {
+      "id": "DOM-RPT-007",
+      "name": "Add Simple Report Builder",
+      "description": "Create basic custom reports with column selection and filtering",
+      "priority": 8,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Report builder UI at /reports/builder",
+        "Select data source (customers, orders, products)",
+        "Choose columns to display",
+        "Add filters and date ranges (reuse existing filter components)",
+        "Sort and group options",
+        "Save custom report with name",
+        "Share report with team",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "schema",
+        "server",
+        "ui"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 8,
+      "completion_promise": "DOM_RPT_007_COMPLETE",
+      "notes": "High complexity - consider deferring to later phase or splitting further",
+      "uiPatterns": {
+        "layout": "Multi-step builder wizard + Preview + Data table",
+        "components": [
+          {
+            "type": "Builder Wizard",
+            "reference": "Shadcn Form + Tabs components for step navigation",
+            "usage": "Left sidebar with steps: 1) Data Source 2) Columns 3) Filters 4) Sort/Group 5) Save",
+            "props": "Tabs vertical orientation, Form with Select (data source), Multi-select (columns), Filter components (existing), Sort/Group controls"
+          },
+          {
+            "type": "Column Selector",
+            "reference": "Shadcn Command + Checkbox components",
+            "usage": "Multi-select interface for choosing columns from data source",
+            "props": "Command component with search, list of checkboxes for available columns, drag-to-reorder"
+          },
+          {
+            "type": "Filter Builder",
+            "reference": "Existing filter components from other reports",
+            "usage": "Reuse DateRangePicker, Select, Input components for building filter conditions",
+            "props": "Add filter button, condition rows (field, operator, value), remove button"
+          },
+          {
+            "type": "Data Table Preview",
+            "reference": "TanStack Table component (existing patterns)",
+            "usage": "Right panel showing live preview of report based on current builder selections",
+            "props": "Table with selected columns, filtered rows, sorting applied, pagination"
+          },
+          {
+            "type": "Save/Share Dialog",
+            "reference": "Shadcn Dialog + Form components",
+            "usage": "Modal for saving custom report with name and sharing options",
+            "props": "Input (report name), Combobox (share with users/teams), Button (Save)"
+          }
+        ],
+        "dataFlow": "Builder selections → buildCustomReport(dataSource, columns, filters, sort) → Preview table updates → Save → saveCustomReport() → custom_reports table",
+        "visualHierarchy": "Left sidebar (builder steps) | Right panel (live preview table) | Top toolbar (Save/Share buttons)"
+      }
+    }
+  ],
+  "success_criteria": [
+    "Financial report provides business overview",
+    "Reports schedulable for automation",
+    "Favorites enable quick access",
+    "Simple custom reports possible",
+    "Reports exportable to CSV/PDF",
+    "npm run typecheck passes",
+    "No reporting functionality regressions"
+  ],
+  "out_of_scope": [
+    "Advanced BI platform",
+    "SQL query builder",
+    "External data sources",
+    "Real-time report streaming"
+  ]
+}

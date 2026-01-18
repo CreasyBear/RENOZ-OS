@@ -1,0 +1,260 @@
+{
+  "prd_id": "ROLE-FIELD",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "summary": {
+    "total_stories": 8,
+    "verified_gaps": 4,
+    "partially_valid": 3,
+    "invalidated_gaps": 1,
+    "implementation_status": "Field technician infrastructure is substantially implemented. PWA with service worker, IndexedDB offline storage, sync manager, GPS tracking, offline indicator, and mobile-first installer shell exist. /installer/today, /installer/schedule, /installer/jobs/$jobId routes are implemented with photo capture, signature pad, completion wizard, and GPS location checking. Gaps remain for: swipe gestures on job cards (SwipeableRow exists but not integrated), pull-to-refresh, 44px touch targets (inconsistent), time tracking schema/UI (depends on DOM-JOBS-003), and punchlist/checklists (depends on DOM-JOBS-004). ROLE-FIELD-002 (PWA) is substantially complete."
+  },
+  "codebase_findings": {
+    "routes": [
+      "renoz-v2/src/routes/installer/today.tsx - Today's jobs dashboard with summary cards, job list with Start Job/Continue actions, mobile-responsive layout",
+      "renoz-v2/src/routes/installer/schedule.tsx - Weekly schedule view with week navigation, jobs grouped by date, list format (not calendar)",
+      "renoz-v2/src/routes/installer/jobs/$jobId.tsx - Full job detail with tabs (Details/Items/Photos/Signature), GPS location check, photo capture, completion wizard, report issue, message office"
+    ],
+    "components": [
+      "renoz-v2/src/components/layout/installer-shell.tsx - Mobile-first shell with sticky header, bottom nav (hidden on lg:), offline indicator integration, logout button",
+      "renoz-v2/src/components/domain/jobs/photo-capture.tsx - Camera access, photo type selection (before/during/after/issue), caption, Supabase storage upload, photo gallery by type",
+      "renoz-v2/src/components/domain/jobs/signature-pad.tsx - Customer signature capture",
+      "renoz-v2/src/components/domain/jobs/completion-wizard.tsx - Multi-step job completion wizard",
+      "renoz-v2/src/components/domain/jobs/report-issue.tsx - Issue reporting from field",
+      "renoz-v2/src/components/domain/jobs/message-office-dialog.tsx - Installer to office messaging",
+      "renoz-v2/src/components/shared/offline-indicator.tsx - Online/offline status, pending actions count, sync progress, failed sync indicator",
+      "renoz-v2/src/components/shared/swipeable-row.tsx - Touch/mouse swipe gesture component (exists but NOT integrated into installer routes)"
+    ],
+    "pwa_infrastructure": [
+      "renoz-v2/public/manifest.json - PWA manifest (short_name: RENOZ CRM, start_url: /installer/today, display: standalone, orientation: portrait)",
+      "renoz-v2/public/sw.js - Service worker (STATIC_CACHE for routes, DATA_CACHE for jobs, DASHBOARD_CACHE for dashboard endpoints, background sync for pending actions)",
+      "renoz-v2/lib/offline/service-worker.ts - Service worker registration (skipped in dev mode)",
+      "renoz-v2/lib/offline/sync-manager.ts - Sync manager (syncPendingActions, syncPhotos, onSyncStatusChange, auto-sync on online event, background sync registration)",
+      "renoz-v2/lib/offline/db.ts - IndexedDB wrapper (jobs, pendingActions, photos, syncQueue stores)",
+      "renoz-v2/lib/offline/gps.ts - GPS utilities (startLocationTracking, getCurrentLocation, calculateDistance, isWithinRadius)"
+    ],
+    "missing_schema": [
+      "job_time_entries table - No time tracking schema exists (required for ROLE-FIELD-004)",
+      "job_checklists/job_checklist_items tables - No checklist schema exists (required for ROLE-FIELD-005)"
+    ]
+  },
+  "stories_status": {
+    "ROLE-FIELD-001": {
+      "name": "Mobile-First Job Views",
+      "status": "partially_valid",
+      "change": "reduce_scope",
+      "reason": "Job list and detail ARE mobile-responsive with InstallerShell (bottom nav, mobile header). HOWEVER: touch targets are standard Tailwind sizes (not explicit 44px), SwipeableRow component exists but is NOT integrated into job cards, viewport works on 375px but not tested. Some acceptance criteria met, others need work.",
+      "existing_implementation": {
+        "responsive_layout": "InstallerShell with bottom nav (lg:hidden), h-16 header",
+        "job_cards": "Card components in today.tsx and schedule.tsx with cursor-pointer, hover states",
+        "action_buttons": "Button components with size='sm', NOT 44px explicit minimum",
+        "viewport_support": "Responsive but not explicitly tested for 375px"
+      },
+      "remaining_gaps": [
+        "44px minimum touch targets (acceptance criteria says 44px+)",
+        "Swipe gestures for common actions (SwipeableRow exists but not used)",
+        "Explicit 375px viewport testing"
+      ],
+      "layers": ["ui"],
+      "estimated_iterations": 2,
+      "atomization_recommendation": "Single story to: (1) Add SwipeableRow to job cards in today.tsx for swipe-to-start, (2) Add min-h-[44px] to primary action buttons, (3) Test on 375px viewport"
+    },
+    "ROLE-FIELD-002": {
+      "name": "PWA Configuration for Offline",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "ALREADY IMPLEMENTED: PWA infrastructure is complete. manifest.json configured with start_url, display:standalone, orientation:portrait. Service worker (sw.js) caches static assets and installer routes. Service worker registration in service-worker.ts. OfflineIndicator component shows offline status and sync progress. Critical assets cached via STATIC_CACHE. All acceptance criteria are met.",
+      "existing_implementation": {
+        "service_worker": "renoz-v2/public/sw.js - Caches /, /installer/today, /installer/schedule, /manifest.json",
+        "manifest": "renoz-v2/public/manifest.json - start_url: /installer/today, display: standalone, icons defined",
+        "offline_indicator": "OfflineIndicator component in InstallerShell shows online/offline status with pending count",
+        "assets_cached": "STATIC_CACHE caches static assets, network-first with cache fallback for all GET requests"
+      },
+      "layers": [],
+      "estimated_iterations": 0
+    },
+    "ROLE-FIELD-003": {
+      "name": "Offline Data Sync Queue",
+      "status": "partially_valid",
+      "change": "reduce_scope",
+      "reason": "Core sync infrastructure EXISTS but needs hardening. IndexedDB (pendingActions, photos stores) exists. sync-manager.ts processes queue and retries with backoff. OfflineIndicator shows pending count. GAPS: Conflict resolution is basic (overwrites), failed syncs show count but no detailed resolution UI, no per-item sync status visibility in job detail.",
+      "existing_implementation": {
+        "indexeddb": "renoz-v2/lib/offline/db.ts - pendingActions store with status index, photos store",
+        "sync_manager": "renoz-v2/lib/offline/sync-manager.ts - getPendingActions, syncAction, retry up to 5 times, syncPhotos",
+        "auto_sync": "Online event triggers syncPendingActions(), background sync registration",
+        "queue_indicator": "OfflineIndicator shows pendingCount, isSyncing status, failedCount badge"
+      },
+      "remaining_gaps": [
+        "Conflict resolution for stale data (currently just overwrites)",
+        "Per-action sync status visibility (only aggregate count shown)",
+        "Detailed failed sync resolution UI (only shows count, no retry individual)"
+      ],
+      "layers": ["ui", "server"],
+      "estimated_iterations": 3,
+      "atomization_recommendation": "Split into: (1) Add version-based conflict detection on server, (2) UI for viewing/resolving individual failed syncs"
+    },
+    "ROLE-FIELD-004": {
+      "name": "Quick Time Entry",
+      "status": "valid",
+      "change": "keep",
+      "reason": "NO time tracking schema exists. job_time_entries table not found. Jobs track startedAt/completedAt but no detailed time logging. This depends on DOM-JOBS-003 (Time Tracking Schema & Server Functions) being implemented first.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 4,
+      "dependencies": ["DOM-JOBS-003"],
+      "dependencies_note": "DOM-JOBS-003 must be implemented first to create job_time_entries table and server functions. This story is the mobile-optimized UI for field techs."
+    },
+    "ROLE-FIELD-005": {
+      "name": "Simple Punchlist Completion",
+      "status": "valid",
+      "change": "keep",
+      "reason": "NO checklist schema exists. No checklist_templates, job_checklists, or job_checklist_items tables. Jobs have completion wizard but no customizable checklists. This depends on DOM-JOBS-004 (Punchlist/Checklist) being implemented first.",
+      "layers": ["ui"],
+      "estimated_iterations": 3,
+      "dependencies": ["DOM-JOBS-004"],
+      "dependencies_note": "DOM-JOBS-004 must be implemented first to create checklist schema and server functions. This story is the mobile-optimized UI with large checkboxes and inline photo attachment."
+    },
+    "ROLE-FIELD-006": {
+      "name": "Photo Capture and Upload",
+      "status": "partially_valid",
+      "change": "reduce_scope",
+      "reason": "Photo capture IS implemented: photo-capture.tsx has camera access, photo types (before/during/after/issue), Supabase upload, photo gallery by type, captions. GAPS: Photos are uploaded immediately (not queued when offline via IndexedDB), auto-compression is browser default (not explicit optimization). sync-manager.ts HAS syncPhotos function for offline photos but it's not integrated into photo-capture.tsx.",
+      "existing_implementation": {
+        "camera_access": "photo-capture.tsx - navigator.mediaDevices.getUserMedia with facingMode: environment",
+        "multiple_photos": "Photos stored by type (before/during/after/issue), gallery view",
+        "photo_gallery": "Grid display with type badges, captions",
+        "caption_support": "Caption input per photo"
+      },
+      "remaining_gaps": [
+        "Offline photo queuing not integrated (syncPhotos exists but not used in capture flow)",
+        "Auto-compression to smaller file size (currently browser default JPEG 0.9)",
+        "Queue uploads when offline (currently fails if offline)"
+      ],
+      "layers": ["ui"],
+      "estimated_iterations": 2,
+      "atomization_recommendation": "Single story to: (1) Integrate savePhoto from db.ts into capture flow, (2) Add compression with max dimension/quality, (3) Show upload queue status per photo"
+    },
+    "ROLE-FIELD-007": {
+      "name": "GPS Location Capture",
+      "status": "partially_valid",
+      "change": "reduce_scope",
+      "reason": "GPS IS implemented: gps.ts has getCurrentLocation, isWithinRadius, calculateDistance. Job detail page checks if user is within 100m of job site and shows 'At job site'/'Not at job site'. GAPS: GPS not captured/stored on job start/complete (just used for display), no map view of job locations, location is checked but not recorded.",
+      "existing_implementation": {
+        "gps_utilities": "renoz-v2/lib/offline/gps.ts - getCurrentLocation, isWithinRadius (Haversine formula)",
+        "job_site_check": "Job detail page checks if within 100m radius and shows status badge",
+        "optional_prompt": "Uses getCurrentLocation which prompts user (navigator.geolocation)"
+      },
+      "remaining_gaps": [
+        "GPS not stored/recorded on job start",
+        "GPS not stored/recorded on job complete",
+        "No map view of job locations",
+        "Location displayed but not persisted"
+      ],
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 3,
+      "atomization_recommendation": "Split into: (1) Add startLocation/completeLocation fields to jobAssignments schema, (2) Capture GPS on startJob/completeJob server calls, (3) Add map view route with job markers"
+    },
+    "ROLE-FIELD-008": {
+      "name": "Technician Daily Schedule",
+      "status": "partially_valid",
+      "change": "reduce_scope",
+      "reason": "Today's jobs view EXISTS at /installer/today: shows scheduled/in_progress/completed counts, job cards with time/address, Start Job and Continue buttons. GAPS: Jobs not ordered by route optimization, no explicit 'next job' highlighting, no pull-to-refresh (uses TanStack Query staleTime), navigation link exists but not prominent.",
+      "existing_implementation": {
+        "my_jobs_today": "/installer/today shows jobs for current date with summary cards",
+        "status_quick_update": "Start Job button on scheduled jobs, Continue on in_progress",
+        "navigation_link": "Navigate button on job detail opens Google Maps"
+      },
+      "remaining_gaps": [
+        "Jobs not ordered by optimal route/time",
+        "No explicit 'Next Job' prominent styling",
+        "No pull-to-refresh gesture (uses staleTime refresh)",
+        "Navigation link not on job cards (only on detail page)"
+      ],
+      "layers": ["ui"],
+      "estimated_iterations": 2,
+      "dependencies": ["DOM-JOBS-005"],
+      "dependencies_note": "DOM-JOBS-005 (Calendar View) provides scheduling infrastructure. This story adds mobile-specific optimizations."
+    }
+  },
+  "recommended_stories": [
+    {
+      "id": "ROLE-FIELD-001-R",
+      "name": "Enhance Mobile Touch Targets & Swipe",
+      "description": "Add 44px touch targets to primary buttons and integrate SwipeableRow for job cards",
+      "priority": 1,
+      "layers": ["ui"],
+      "acceptance_criteria": [
+        "Primary action buttons have min-h-[44px] class",
+        "Job cards in today.tsx use SwipeableRow for swipe-to-start",
+        "Test passes on 375px viewport",
+        "TypeScript compiles without errors"
+      ],
+      "estimated_iterations": 2
+    },
+    {
+      "id": "ROLE-FIELD-003-R",
+      "name": "Sync Conflict Resolution UI",
+      "description": "Add UI for viewing and resolving failed syncs",
+      "priority": 2,
+      "layers": ["ui"],
+      "acceptance_criteria": [
+        "Failed syncs list accessible from OfflineIndicator",
+        "Each failed item shows error message",
+        "Retry individual item button",
+        "Discard item option",
+        "TypeScript compiles without errors"
+      ],
+      "estimated_iterations": 2
+    },
+    {
+      "id": "ROLE-FIELD-006-R",
+      "name": "Offline Photo Queuing Integration",
+      "description": "Integrate IndexedDB photo storage for offline capture",
+      "priority": 2,
+      "layers": ["ui"],
+      "acceptance_criteria": [
+        "Photos saved to IndexedDB when offline",
+        "Upload queue indicator per photo",
+        "Auto-sync when online",
+        "Compression to max 1920px dimension",
+        "TypeScript compiles without errors"
+      ],
+      "estimated_iterations": 2
+    },
+    {
+      "id": "ROLE-FIELD-007-R",
+      "name": "GPS Capture on Job Events",
+      "description": "Record GPS location when starting and completing jobs",
+      "priority": 3,
+      "layers": ["schema", "server", "ui"],
+      "acceptance_criteria": [
+        "Add startLocation, completeLocation JSONB fields to jobAssignments",
+        "startJob captures and stores GPS",
+        "completeJob captures and stores GPS",
+        "Location shown on job detail",
+        "TypeScript compiles without errors"
+      ],
+      "estimated_iterations": 3
+    },
+    {
+      "id": "ROLE-FIELD-008-R",
+      "name": "Today View Enhancements",
+      "description": "Add pull-to-refresh and next job highlighting",
+      "priority": 3,
+      "layers": ["ui"],
+      "acceptance_criteria": [
+        "Pull-to-refresh gesture triggers query refetch",
+        "Next scheduled job has prominent styling",
+        "Navigate button on job cards (not just detail)",
+        "TypeScript compiles without errors"
+      ],
+      "estimated_iterations": 2
+    }
+  ],
+  "atomization_notes": {
+    "general_pattern": "Field tech stories are UI-heavy with existing infrastructure. Most stories need scope reduction, not full implementation.",
+    "dependency_chain": "ROLE-FIELD-004 and ROLE-FIELD-005 BLOCKED by DOM-JOBS-003 and DOM-JOBS-004 respectively. Cannot proceed until Jobs domain stories complete.",
+    "pwa_complete": "ROLE-FIELD-002 (PWA) is fully implemented. Remove from backlog.",
+    "infrastructure_complete": "Core offline infrastructure (IndexedDB, sync manager, service worker, GPS, offline indicator) exists and works. Stories should focus on integration and polish.",
+    "mobile_optimization": "InstallerShell provides mobile-first layout. Stories should enhance touch targets and gestures, not rebuild the shell."
+  }
+}

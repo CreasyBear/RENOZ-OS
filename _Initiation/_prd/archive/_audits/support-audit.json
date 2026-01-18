@@ -1,0 +1,565 @@
+{
+  "prd_id": "DOM-SUPPORT",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Code",
+  "summary": {
+    "total_stories": 8,
+    "valid_gaps": 8,
+    "already_implemented": 0,
+    "needs_atomization": 5,
+    "estimated_total_iterations": 33,
+    "risk_level": "medium",
+    "notes": "Strong foundation exists with issues schema, server functions, and comprehensive list/detail UI. All proposed stories address genuine gaps. Several stories require atomization due to cross-layer complexity (schema + server + UI). SLA tracking has partial foundation (hardcoded 7-day threshold in metrics)."
+  },
+  "codebase_findings": {
+    "schema": {
+      "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/lib/schema/issues.ts",
+      "tables_found": [
+        {
+          "name": "issues",
+          "columns": ["id", "organizationId", "issueNumber", "type", "customerId", "warrantyId", "orderId", "title", "description", "priority", "status", "assignedToUserId", "resolutionType", "resolutionNotes", "resolvedAt", "returnItems", "returnReason", "attachments", "createdByUserId", "updatedByUserId", "createdAt", "updatedAt", "version"],
+          "notes": "No SLA columns (slaResponseDue, slaResolutionDue). No escalation tracking columns."
+        },
+        {
+          "name": "issueActivities",
+          "columns": ["id", "issueId", "type", "content", "metadata", "createdByUserId", "createdAt"],
+          "notes": "Activity types include 'comment', 'status_change', 'assignment', 'attachment'. Can track escalation as status_change."
+        }
+      ],
+      "missing_tables": ["sla_policies", "return_authorizations", "issue_templates", "issue_feedback", "kb_articles"]
+    },
+    "validation_schemas": {
+      "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/lib/schemas/issues.ts",
+      "schemas_found": ["CreateIssueSchema", "UpdateIssueSchema", "ResolveIssueSchema"],
+      "notes": "Well-structured Zod schemas. No SLA-related validation schemas."
+    },
+    "server_functions": {
+      "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/server/functions/issues.ts",
+      "functions_found": [
+        "listIssues",
+        "getIssue",
+        "createIssue",
+        "updateIssue",
+        "assignIssue",
+        "changeStatus",
+        "resolveIssue",
+        "addActivity",
+        "getIssueListMetrics"
+      ],
+      "notes": "Comprehensive CRUD and workflow functions. getIssueListMetrics has hardcoded 7-day SLA threshold for overdue calculation. Email notifications on status change already implemented via Trigger.dev."
+    },
+    "components": {
+      "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/support/",
+      "components_found": [
+        "issue-form.tsx",
+        "issue-columns.tsx",
+        "resolution-workflow.tsx",
+        "warranty-form.tsx",
+        "warranty-columns.tsx",
+        "bulk-warranty-register.tsx"
+      ],
+      "notes": "Full issue form with customer/warranty/order linking. Resolution workflow is a multi-step dialog. No Kanban board view."
+    },
+    "routes": {
+      "list_page": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/routes/support/issues/index.tsx",
+      "detail_page": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/routes/support/issues/$issueId.tsx",
+      "notes": "Issue list has metrics summary (open, urgent, overdue, resolved this week, avg resolution). Quick filters for 'My Issues', 'Urgent', 'Overdue'. Detail page has activity timeline, status change, assignment, and resolution workflows. Email history dialog present."
+    },
+    "existing_sla_related": {
+      "hardcoded_threshold": true,
+      "location": "getIssueListMetrics function - slaThresholdDays = 7",
+      "notes": "Basic overdue detection exists but not configurable. No per-issue SLA tracking."
+    },
+    "existing_escalation": {
+      "status_value": "'escalated' is a valid issue status",
+      "ui_support": "Escalate button in issue detail sidebar quick actions",
+      "notes": "Manual escalation via status change exists. No automatic escalation rules."
+    }
+  },
+  "stories_status": [
+    {
+      "id": "DOM-SUP-001",
+      "name": "Add SLA Tracking",
+      "gap_validated": true,
+      "gap_validation_notes": "No sla_policies table exists. Issues have no SLA columns. Only hardcoded 7-day threshold in metrics. Real gap requiring schema, server, and UI work.",
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "All criteria are testable. However, 'Pause SLA on customer response wait' requires additional status tracking (waiting_on_customer status or separate pause mechanism).",
+      "crosses_layers": true,
+      "layers": ["schema", "server", "UI"],
+      "original_estimate": 4,
+      "audited_estimate": 6,
+      "estimate_notes": "Schema (sla_policies + issue columns) = 2 iterations, Server (SLA calculation + breach detection) = 2 iterations, UI (indicators + dashboard widget + reports) = 2 iterations. Total exceeds single-layer limits.",
+      "atomization_required": true,
+      "atomization_reason": "Story spans all layers with complex pause/unpause logic. Should split into: SUP-001a (schema + basic server), SUP-001b (SLA breach detection + warnings), SUP-001c (dashboard + reports)."
+    },
+    {
+      "id": "DOM-SUP-002",
+      "name": "Add Issue Escalation Rules",
+      "gap_validated": true,
+      "gap_validation_notes": "Manual escalation exists (status change to 'escalated'). No automatic rules or time-based triggers. Configuration system needed.",
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Criteria clear. VIP customer escalation requires customer tier/VIP flag (verify if exists in customers schema).",
+      "crosses_layers": true,
+      "layers": ["schema", "server", "UI"],
+      "original_estimate": 4,
+      "audited_estimate": 5,
+      "estimate_notes": "Schema (escalation_rules table) = 1 iteration, Server (rule engine + cron/trigger job) = 2 iterations, UI (config + notifications) = 2 iterations.",
+      "atomization_required": true,
+      "atomization_reason": "Requires background job for time-based escalation. Split into: SUP-002a (schema + manual escalation improvements), SUP-002b (auto-escalation engine), SUP-002c (notification + history UI)."
+    },
+    {
+      "id": "DOM-SUP-003",
+      "name": "Add Return Authorization (RMA)",
+      "gap_validated": true,
+      "gap_validation_notes": "Issues have returnItems/returnReason fields but no formal RMA workflow. No return_authorizations table. Real gap.",
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Criteria clear and testable. RMA workflow (requested -> approved -> received -> processed) is well-defined.",
+      "crosses_layers": true,
+      "layers": ["schema", "server", "UI"],
+      "original_estimate": 5,
+      "audited_estimate": 6,
+      "estimate_notes": "Schema (return_authorizations + items) = 1 iteration, Server (CRUD + workflow + number gen) = 2 iterations, UI (RMA form + workflow + receipt logging) = 3 iterations.",
+      "atomization_required": true,
+      "atomization_reason": "Complex workflow with multiple states. Split into: SUP-003a (schema + basic CRUD), SUP-003b (workflow engine + status transitions), SUP-003c (full UI + receipt logging)."
+    },
+    {
+      "id": "DOM-SUP-004",
+      "name": "Add Issue Templates",
+      "gap_validated": true,
+      "gap_validation_notes": "No issue_templates table or template-related code found. Complete gap.",
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "All criteria testable. 'Most used templates suggested' requires usage tracking.",
+      "crosses_layers": true,
+      "layers": ["schema", "server", "UI"],
+      "original_estimate": 3,
+      "audited_estimate": 4,
+      "estimate_notes": "Schema (issue_templates) = 1 iteration, Server (CRUD + usage tracking) = 1 iteration, UI (template management + quick create) = 2 iterations.",
+      "atomization_required": false,
+      "atomization_reason": "Estimate within limits. Single Ralph loop can handle if focused."
+    },
+    {
+      "id": "DOM-SUP-005",
+      "name": "Add Customer Satisfaction Tracking",
+      "gap_validated": true,
+      "gap_validation_notes": "No issue_feedback table or CSAT tracking. Email on resolution exists (could send rating request). Complete gap.",
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Criteria clear. 'Low rating triggers follow-up task' requires task/reminder system integration (verify existence).",
+      "crosses_layers": true,
+      "layers": ["schema", "server", "UI"],
+      "original_estimate": 4,
+      "audited_estimate": 5,
+      "estimate_notes": "Schema (issue_feedback) = 1 iteration, Server (feedback submission + email trigger) = 2 iterations, UI (rating form + dashboard integration) = 2 iterations.",
+      "atomization_required": true,
+      "atomization_reason": "Email integration + public rating form adds complexity. Split into: SUP-005a (schema + server + internal rating entry), SUP-005b (email trigger + public form), SUP-005c (dashboard + follow-up task)."
+    },
+    {
+      "id": "DOM-SUP-006",
+      "name": "Create Support Dashboard",
+      "gap_validated": true,
+      "gap_validation_notes": "No dedicated /support/dashboard route. Metrics exist on issues list page but not a full dashboard. Real gap.",
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Criteria clear. Depends on SLA (DOM-SUP-001) and CSAT (DOM-SUP-005) being implemented first.",
+      "crosses_layers": false,
+      "layers": ["UI", "server"],
+      "original_estimate": 4,
+      "audited_estimate": 4,
+      "estimate_notes": "Server (metrics aggregation queries) = 1 iteration, UI (dashboard page + widgets + charts) = 3 iterations.",
+      "atomization_required": false,
+      "atomization_reason": "Primarily UI work with existing patterns. Dependencies are concern, not complexity."
+    },
+    {
+      "id": "DOM-SUP-007",
+      "name": "Add Knowledge Base",
+      "gap_validated": true,
+      "gap_validation_notes": "No kb_articles table or knowledge base code. Complete gap.",
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Rich text editor may require new dependency. 'Link article to issue resolution' clear.",
+      "crosses_layers": true,
+      "layers": ["schema", "server", "UI"],
+      "original_estimate": 5,
+      "audited_estimate": 6,
+      "estimate_notes": "Schema (kb_articles + categories) = 1 iteration, Server (CRUD + search + view tracking) = 2 iterations, UI (article management + search integration + helpfulness) = 3 iterations.",
+      "atomization_required": true,
+      "atomization_reason": "Rich text editing + search integration is complex. Split into: SUP-007a (schema + basic CRUD), SUP-007b (categories + search), SUP-007c (issue integration + analytics)."
+    },
+    {
+      "id": "DOM-SUP-008",
+      "name": "Enhance Issue Workflow",
+      "gap_validated": true,
+      "gap_validation_notes": "No Kanban board view. No bulk actions beyond export. No related issues linking. No duplication detection. Real gaps.",
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "'Issue duplication detection' needs definition - title similarity? Same customer+warranty?",
+      "crosses_layers": true,
+      "layers": ["server", "UI"],
+      "original_estimate": 4,
+      "audited_estimate": 5,
+      "estimate_notes": "Server (bulk actions + duplication detection) = 2 iterations, UI (Kanban board + drag-drop + related issues) = 3 iterations.",
+      "atomization_required": false,
+      "atomization_reason": "Depends on SUP-001 for SLA-at-risk filter. Can be single loop if focused on UI with existing server patterns."
+    }
+  ],
+  "recommended_stories": [
+    {
+      "id": "DOM-SUP-001a",
+      "name": "SLA Schema and Basic Tracking",
+      "description": "Add sla_policies table and SLA columns to issues. Implement basic SLA calculation on issue creation.",
+      "priority": 1,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "sla_policies table created (id, name, responseHours, resolutionHours, organizationId)",
+        "issues table has slaResponseDue, slaResolutionDue, slaPolicyId columns",
+        "Migration script runs without errors",
+        "CreateIssueSchema updated with optional slaPolicyId",
+        "createIssue function calculates and sets SLA due dates based on policy",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "DOM-SUP-001b",
+      "name": "SLA Breach Detection and Warnings",
+      "description": "Implement SLA breach detection logic with visual warning indicators.",
+      "priority": 2,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "getIssueListMetrics uses actual SLA due dates instead of hardcoded threshold",
+        "Issue list shows SLA breach warning badge (yellow = at risk, red = breached)",
+        "Issue detail page shows SLA status section",
+        "SLA status considers response vs resolution separately",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["DOM-SUP-001a"]
+    },
+    {
+      "id": "DOM-SUP-001c",
+      "name": "SLA Dashboard and Pause Feature",
+      "description": "Add SLA widgets to dashboard and implement pause/resume on customer wait.",
+      "priority": 3,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "issues.slaWaitingOnCustomerSince column added (nullable timestamp)",
+        "Changing to 'on_hold' status with reason 'waiting_on_customer' pauses SLA",
+        "Resuming from on_hold recalculates SLA due dates",
+        "SLA breach count shown on support dashboard/metrics",
+        "SLA report by issue type available",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["DOM-SUP-001b"]
+    },
+    {
+      "id": "DOM-SUP-002a",
+      "name": "Escalation Schema and Manual Improvements",
+      "description": "Add escalation_rules table and improve manual escalation with history tracking.",
+      "priority": 4,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "escalation_rules table created (id, name, condition, action, organizationId)",
+        "issues.escalatedAt column added",
+        "Escalation recorded as activity with metadata (escalatedBy, reason)",
+        "De-escalate action available with notes",
+        "Escalation history visible in issue timeline",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "DOM-SUP-002b",
+      "name": "Automatic Escalation Engine",
+      "description": "Implement background job for time-based and rule-based automatic escalation.",
+      "priority": 5,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "Trigger.dev job runs every 15 minutes to check escalation rules",
+        "Time-based escalation works (e.g., after 24h unresponded)",
+        "VIP customer escalation works (if customer has VIP flag)",
+        "Manager notification sent on auto-escalation",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["DOM-SUP-002a", "DOM-SUP-001a"]
+    },
+    {
+      "id": "DOM-SUP-003a",
+      "name": "RMA Schema and Basic CRUD",
+      "description": "Create return_authorizations table with basic CRUD operations.",
+      "priority": 6,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "return_authorizations table created (id, rmaNumber, issueId, status, items, notes, organizationId)",
+        "RMA number generation function (RMA-000001 format)",
+        "CreateRMASchema and UpdateRMASchema implemented",
+        "createRMA and getRMA server functions work",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "DOM-SUP-003b",
+      "name": "RMA Workflow and Status Transitions",
+      "description": "Implement RMA workflow with proper status transitions and validation.",
+      "priority": 7,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "RMA workflow statuses: requested -> approved -> received -> processed/rejected",
+        "Status transition validation (cannot skip states)",
+        "approveRMA, receiveRMA, processRMA server functions",
+        "RMA items linked to original order line items",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["DOM-SUP-003a"]
+    },
+    {
+      "id": "DOM-SUP-003c",
+      "name": "RMA UI and Issue Integration",
+      "description": "Build RMA form, workflow UI, and integrate with issue detail page.",
+      "priority": 8,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "RMA creation button on issue detail (for return type issues)",
+        "RMA form with item selection from linked order",
+        "RMA workflow status display and transition buttons",
+        "Receipt inspection logging form",
+        "RMA list visible on customer and issue detail pages",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["DOM-SUP-003b"]
+    },
+    {
+      "id": "DOM-SUP-004",
+      "name": "Add Issue Templates",
+      "description": "Pre-configured issue types with defaults for quick creation.",
+      "priority": 9,
+      "estimated_iterations": 4,
+      "acceptance_criteria": [
+        "issue_templates table (id, name, type, defaultPriority, defaultAssignee, descriptionPrompt, requiredFields, usageCount)",
+        "Template management UI in settings",
+        "Quick issue creation from template",
+        "Template includes: description prompts, required fields",
+        "Most used templates suggested on issue creation",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "DOM-SUP-005a",
+      "name": "CSAT Schema and Internal Entry",
+      "description": "Create issue_feedback table and internal rating entry capability.",
+      "priority": 10,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "issue_feedback table (id, issueId, rating, comment, submittedAt, submittedBy)",
+        "CreateFeedbackSchema implemented",
+        "Server function to submit feedback",
+        "Rating display on issue detail page",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "DOM-SUP-005b",
+      "name": "CSAT Email and Public Form",
+      "description": "Send rating request email on resolution and public form for customers.",
+      "priority": 11,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "Email sent on issue resolution with rating link",
+        "Public rating form (no auth required, token-based)",
+        "Simple 1-5 star rating with optional comment",
+        "Feedback stored with customer context",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["DOM-SUP-005a"]
+    },
+    {
+      "id": "DOM-SUP-005c",
+      "name": "CSAT Dashboard and Follow-up",
+      "description": "Display CSAT score on dashboard and trigger follow-up on low ratings.",
+      "priority": 12,
+      "estimated_iterations": 1,
+      "acceptance_criteria": [
+        "CSAT average score on support metrics/dashboard",
+        "Low rating (1-2) creates follow-up notification/task",
+        "CSAT trend visible over time",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["DOM-SUP-005b", "DOM-SUP-006"]
+    },
+    {
+      "id": "DOM-SUP-006",
+      "name": "Create Support Dashboard",
+      "description": "Support team performance overview dashboard.",
+      "priority": 13,
+      "estimated_iterations": 4,
+      "acceptance_criteria": [
+        "Support dashboard page at /support/dashboard",
+        "Widgets: open issues, SLA breaches, avg resolution time",
+        "Issue breakdown by type, priority, status",
+        "Team performance comparison",
+        "Trend charts over time",
+        "Quick actions: create issue, view queue",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["DOM-SUP-001c"]
+    },
+    {
+      "id": "DOM-SUP-007a",
+      "name": "Knowledge Base Schema and Basic CRUD",
+      "description": "Create kb_articles table with basic article management.",
+      "priority": 14,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "kb_articles table (id, title, content, category, tags, status, viewCount, organizationId)",
+        "kb_categories table (id, name, parentId, organizationId)",
+        "Article CRUD server functions",
+        "Basic article list and detail pages",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "DOM-SUP-007b",
+      "name": "Knowledge Base Search and Categories",
+      "description": "Add search functionality and category management.",
+      "priority": 15,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "Full-text search across article title and content",
+        "Category CRUD and hierarchy support",
+        "Article tags for filtering",
+        "Category management in settings",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["DOM-SUP-007a"]
+    },
+    {
+      "id": "DOM-SUP-007c",
+      "name": "Knowledge Base Issue Integration",
+      "description": "Integrate KB search into issue form and track article helpfulness.",
+      "priority": 16,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "Search articles from issue creation form",
+        "Link article to issue resolution",
+        "Helpfulness rating on articles (was this helpful?)",
+        "View count tracking on article access",
+        "Most viewed/helpful articles displayed",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["DOM-SUP-007b"]
+    },
+    {
+      "id": "DOM-SUP-008",
+      "name": "Enhance Issue Workflow",
+      "description": "Kanban board view, bulk actions, and related issues.",
+      "priority": 17,
+      "estimated_iterations": 5,
+      "acceptance_criteria": [
+        "Issue board (Kanban) view by status",
+        "Drag-drop status change with note prompt",
+        "Quick filters: my issues, unassigned, SLA at risk",
+        "Bulk actions: assign, change priority",
+        "Related issues linking (manual)",
+        "Issue duplication detection (same customer + similar title)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["DOM-SUP-001b"]
+    }
+  ],
+  "atomization_notes": {
+    "DOM-SUP-001": {
+      "reason": "Story spans schema, server, and UI layers with complex pause/unpause SLA logic. Single loop would exceed 8 iterations.",
+      "recommended_splits": [
+        "DOM-SUP-001a: Schema + basic SLA tracking (2 iterations)",
+        "DOM-SUP-001b: Breach detection + warnings (2 iterations)",
+        "DOM-SUP-001c: Dashboard + pause feature (2 iterations)"
+      ]
+    },
+    "DOM-SUP-002": {
+      "reason": "Automatic escalation requires background job infrastructure. Manual vs automatic should be separate.",
+      "recommended_splits": [
+        "DOM-SUP-002a: Schema + manual improvements (2 iterations)",
+        "DOM-SUP-002b: Automatic escalation engine (2 iterations)"
+      ]
+    },
+    "DOM-SUP-003": {
+      "reason": "RMA is a complete workflow system with multiple states. Schema, workflow, and UI should be separated.",
+      "recommended_splits": [
+        "DOM-SUP-003a: Schema + basic CRUD (2 iterations)",
+        "DOM-SUP-003b: Workflow + transitions (2 iterations)",
+        "DOM-SUP-003c: UI + issue integration (2 iterations)"
+      ]
+    },
+    "DOM-SUP-005": {
+      "reason": "Public-facing rating form requires different security model. Email integration adds complexity.",
+      "recommended_splits": [
+        "DOM-SUP-005a: Schema + internal entry (2 iterations)",
+        "DOM-SUP-005b: Email + public form (2 iterations)",
+        "DOM-SUP-005c: Dashboard + follow-up (1 iteration)"
+      ]
+    },
+    "DOM-SUP-007": {
+      "reason": "Knowledge base is a mini-domain. Search, categories, and issue integration should be phased.",
+      "recommended_splits": [
+        "DOM-SUP-007a: Schema + basic CRUD (2 iterations)",
+        "DOM-SUP-007b: Search + categories (2 iterations)",
+        "DOM-SUP-007c: Issue integration + analytics (2 iterations)"
+      ]
+    }
+  },
+  "dependency_graph": {
+    "nodes": ["DOM-SUP-001a", "DOM-SUP-001b", "DOM-SUP-001c", "DOM-SUP-002a", "DOM-SUP-002b", "DOM-SUP-003a", "DOM-SUP-003b", "DOM-SUP-003c", "DOM-SUP-004", "DOM-SUP-005a", "DOM-SUP-005b", "DOM-SUP-005c", "DOM-SUP-006", "DOM-SUP-007a", "DOM-SUP-007b", "DOM-SUP-007c", "DOM-SUP-008"],
+    "edges": [
+      ["DOM-SUP-001a", "DOM-SUP-001b"],
+      ["DOM-SUP-001b", "DOM-SUP-001c"],
+      ["DOM-SUP-001c", "DOM-SUP-006"],
+      ["DOM-SUP-002a", "DOM-SUP-002b"],
+      ["DOM-SUP-001a", "DOM-SUP-002b"],
+      ["DOM-SUP-003a", "DOM-SUP-003b"],
+      ["DOM-SUP-003b", "DOM-SUP-003c"],
+      ["DOM-SUP-005a", "DOM-SUP-005b"],
+      ["DOM-SUP-005b", "DOM-SUP-005c"],
+      ["DOM-SUP-006", "DOM-SUP-005c"],
+      ["DOM-SUP-007a", "DOM-SUP-007b"],
+      ["DOM-SUP-007b", "DOM-SUP-007c"],
+      ["DOM-SUP-001b", "DOM-SUP-008"]
+    ],
+    "critical_path": ["DOM-SUP-001a", "DOM-SUP-001b", "DOM-SUP-001c", "DOM-SUP-006", "DOM-SUP-005c"],
+    "parallel_streams": [
+      ["DOM-SUP-001a", "DOM-SUP-003a", "DOM-SUP-004", "DOM-SUP-005a", "DOM-SUP-007a"],
+      ["DOM-SUP-002a"]
+    ]
+  },
+  "risks_and_mitigations": [
+    {
+      "risk": "SLA pause/resume logic is complex and may have edge cases",
+      "mitigation": "Define clear rules for when SLA is paused. Add integration tests for state transitions.",
+      "severity": "medium"
+    },
+    {
+      "risk": "Automatic escalation requires reliable background job infrastructure",
+      "mitigation": "Use existing Trigger.dev setup. Add job monitoring and failure alerts.",
+      "severity": "medium"
+    },
+    {
+      "risk": "Public rating form needs security review (no auth)",
+      "mitigation": "Use signed tokens with expiration. Rate limit submissions.",
+      "severity": "medium"
+    },
+    {
+      "risk": "Knowledge base rich text editor may require new dependency",
+      "mitigation": "Evaluate TipTap or similar. Check bundle size impact.",
+      "severity": "low"
+    },
+    {
+      "risk": "Kanban board drag-drop may have performance issues with many issues",
+      "mitigation": "Implement virtual scrolling. Limit visible columns.",
+      "severity": "low"
+    }
+  ],
+  "testing_requirements": [
+    "Unit tests for SLA calculation functions",
+    "Integration tests for RMA workflow state transitions",
+    "E2E test for public rating form submission",
+    "Performance tests for issue list with >1000 records",
+    "Accessibility audit for new dashboard and Kanban board"
+  ]
+}

@@ -1,0 +1,28 @@
+# Reports Domain Progress
+# PRD: reports.prd.json
+# Started: 2026-01-17
+# Updated: 2026-01-17
+
+## Stories (8 total)
+
+- [ ] DOM-RPT-004: Add Financial Summary Report
+- [ ] DOM-RPT-005a: Scheduled Reports Schema
+- [ ] DOM-RPT-005b: Schedule Management Server Functions
+- [ ] DOM-RPT-005c: Schedule Management UI
+- [ ] DOM-RPT-006a: Report Favorites Schema
+- [ ] DOM-RPT-006b: Favorites Server Functions
+- [ ] DOM-RPT-006c: Favorites UI
+- [ ] DOM-RPT-007: Add Simple Report Builder
+
+## Current Story
+Not started
+
+## Iteration Count
+Total: 0
+Current Story: 0
+
+## Blockers
+None
+
+## Notes
+- Progress tracking initialized

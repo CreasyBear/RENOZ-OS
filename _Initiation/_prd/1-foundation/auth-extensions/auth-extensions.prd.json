@@ -1,0 +1,479 @@
+{
+  "id": "FOUND-AUTH-EXT",
+  "name": "Auth Extensions",
+  "description": "Extensions to FOUND-AUTH adding multi-factor authentication (TOTP), password reset UI flows, and active session management. Leverages Supabase Auth MFA capabilities with custom UI components.",
+  "created": "2026-01-13",
+  "updated": "2026-01-13",
+  "priority": 1,
+  "phase": "foundation",
+  "version": "1.1",
+  "business_value": {
+    "security_hardening": true,
+    "compliance_readiness": true,
+    "user_self_service": true,
+    "description": "Enhanced security through MFA reduces account compromise risk; password reset self-service reduces support burden; session management gives users control over their security"
+  },
+  "system_requirements": {
+    "infrastructure": {
+      "supabase_mfa": {
+        "description": "Supabase Auth MFA via TOTP (Time-based One-Time Password)",
+        "method": "supabase.auth.mfa.enroll() and supabase.auth.mfa.challenge()",
+        "storage": "MFA factors stored in auth.mfa_factors (Supabase managed)",
+        "backup_codes": "Generated and stored in application database for recovery",
+        "required": true
+      }
+    },
+    "database": {
+      "mfaBackupCodes": {
+        "description": "Backup recovery codes for MFA-enabled accounts",
+        "fields": {
+          "id": "uuid PRIMARY KEY DEFAULT gen_random_uuid()",
+          "userId": "uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE",
+          "codeHash": "text NOT NULL",
+          "usedAt": "timestamp",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "userId",
+          "codeHash"
+        ],
+        "rls": "users can only see own backup codes",
+        "notes": "Codes are one-time use; 10 generated per MFA enrollment"
+      },
+      "userSessions": {
+        "description": "Active user session tracking for security",
+        "fields": {
+          "id": "uuid PRIMARY KEY DEFAULT gen_random_uuid()",
+          "userId": "uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE",
+          "sessionToken": "text UNIQUE NOT NULL",
+          "ipAddress": "inet",
+          "userAgent": "text",
+          "lastActiveAt": "timestamp NOT NULL DEFAULT NOW()",
+          "expiresAt": "timestamp NOT NULL",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "userId",
+          "sessionToken",
+          "expiresAt"
+        ],
+        "rls": "users can only see own sessions"
+      }
+    },
+    "api_endpoints": {
+      "mfa": {
+        "enroll": {
+          "method": "POST",
+          "path": "/api/auth/mfa/enroll",
+          "body": {},
+          "response": {
+            "qrCode": "string (data URL)",
+            "secret": "string (for manual entry)",
+            "factorId": "string"
+          },
+          "description": "Start MFA enrollment, returns QR code for authenticator app"
+        },
+        "verify": {
+          "method": "POST",
+          "path": "/api/auth/mfa/verify",
+          "body": {
+            "factorId": "string",
+            "code": "string (6-digit TOTP or 8-char backup code)"
+          },
+          "response": {
+            "success": "boolean",
+            "backupCodes": "string[] (only on initial enrollment)"
+          },
+          "description": "Verify TOTP or backup code to complete enrollment or authenticate"
+        },
+        "disable": {
+          "method": "POST",
+          "path": "/api/auth/mfa/disable",
+          "body": {
+            "code": "string (6-digit TOTP or backup code)"
+          },
+          "response": {
+            "success": "boolean"
+          },
+          "description": "Disable MFA for current user (requires valid code)"
+        },
+        "backupCodes": {
+          "method": "POST",
+          "path": "/api/auth/mfa/backup-codes/regenerate",
+          "body": {
+            "code": "string (6-digit TOTP)"
+          },
+          "response": {
+            "backupCodes": "string[]"
+          },
+          "description": "Regenerate backup codes (invalidates previous)"
+        }
+      },
+      "sessions": {
+        "list": {
+          "method": "GET",
+          "path": "/api/auth/sessions",
+          "response": {
+            "sessions": "Session[]",
+            "currentSessionId": "string"
+          },
+          "description": "List all active sessions for current user"
+        },
+        "terminate": {
+          "method": "DELETE",
+          "path": "/api/auth/sessions/:sessionId",
+          "response": {
+            "success": "boolean"
+          },
+          "description": "Terminate a specific session"
+        },
+        "terminateAll": {
+          "method": "DELETE",
+          "path": "/api/auth/sessions",
+          "query_params": [
+            "exceptCurrent"
+          ],
+          "response": {
+            "terminated": "number"
+          },
+          "description": "Terminate all sessions except optionally current"
+        }
+      }
+    },
+    "ui_components": {
+      "mfaSetupWizard": {
+        "description": "Multi-step wizard for enabling TOTP MFA",
+        "steps": [
+          "QR code display",
+          "Code verification",
+          "Backup codes display"
+        ],
+        "location": "src/components/auth/mfa-setup-wizard.tsx"
+      },
+      "mfaVerifyDialog": {
+        "description": "Dialog for entering TOTP code during login",
+        "features": [
+          "6-digit input",
+          "Backup code option",
+          "Remember device checkbox"
+        ],
+        "location": "src/components/auth/mfa-verify-dialog.tsx"
+      },
+      "passwordResetForm": {
+        "description": "Forgot password email request form",
+        "location": "src/routes/forgot-password.tsx"
+      },
+      "passwordResetConfirm": {
+        "description": "New password entry form (from email link)",
+        "location": "src/routes/reset-password.tsx"
+      },
+      "sessionManager": {
+        "description": "Active sessions list with terminate actions",
+        "location": "src/components/settings/session-manager.tsx"
+      }
+    }
+  },
+  "stories": [
+    {
+      "id": "AUTH-EXT-001",
+      "name": "MFA Backup Codes Schema",
+      "description": "Create database schema for MFA backup recovery codes",
+      "type": "schema",
+      "acceptance_criteria": [
+        "Table mfa_backup_codes exists in drizzle/schema/auth/mfa-backup-codes.ts",
+        "Fields: id (uuid PK), userId (uuid FK users ON DELETE CASCADE), codeHash (text NOT NULL), usedAt (timestamp nullable), createdAt (timestamp NOT NULL DEFAULT NOW())",
+        "Index on userId for user queries",
+        "Index on (userId, codeHash) for code validation lookups",
+        "RLS policy: SELECT restricted to rows where userId matches authenticated user",
+        "RLS policy: DELETE restricted to rows where userId matches authenticated user",
+        "TypeScript type MfaBackupCode exported from drizzle/schema/auth/index.ts",
+        "Migration file exists in drizzle/migrations/ with timestamp prefix",
+        "bun run db:generate succeeds",
+        "bun run typecheck passes"
+      ],
+      "files_to_modify": [
+        "drizzle/schema/auth/mfa-backup-codes.ts",
+        "drizzle/schema/auth/index.ts",
+        "drizzle/schema/index.ts"
+      ],
+      "dependencies": [],
+      "completion_promise": "AUTH_EXT_001_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending"
+    },
+    {
+      "id": "AUTH-EXT-002",
+      "name": "User Sessions Schema",
+      "description": "Create database schema for active user session tracking",
+      "type": "schema",
+      "acceptance_criteria": [
+        "Table user_sessions exists in drizzle/schema/auth/user-sessions.ts",
+        "Fields: id (uuid PK), userId (uuid FK users ON DELETE CASCADE NOT NULL), sessionToken (text UNIQUE NOT NULL), ipAddress (inet nullable), userAgent (text nullable), lastActiveAt (timestamp NOT NULL DEFAULT NOW()), expiresAt (timestamp NOT NULL), createdAt (timestamp NOT NULL DEFAULT NOW())",
+        "Index on userId for user queries",
+        "Index on sessionToken for token lookups",
+        "Index on expiresAt for cleanup queries",
+        "RLS policy: SELECT restricted to rows where userId matches authenticated user",
+        "RLS policy: DELETE restricted to rows where userId matches authenticated user",
+        "TypeScript type UserSession exported from drizzle/schema/auth/index.ts",
+        "Migration file exists in drizzle/migrations/ with timestamp prefix",
+        "bun run db:generate succeeds",
+        "bun run typecheck passes"
+      ],
+      "files_to_modify": [
+        "drizzle/schema/auth/user-sessions.ts",
+        "drizzle/schema/auth/index.ts",
+        "drizzle/schema/index.ts"
+      ],
+      "dependencies": [],
+      "completion_promise": "AUTH_EXT_002_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending"
+    },
+    {
+      "id": "AUTH-EXT-003",
+      "name": "MFA Server Functions",
+      "description": "Implement server functions for MFA enrollment, verification, and management",
+      "type": "server",
+      "acceptance_criteria": [
+        "File src/lib/server/auth/mfa.ts exports enrollMfa, verifyMfa, verifyBackupCode, disableMfa, regenerateBackupCodes functions",
+        "enrollMfa calls supabase.auth.mfa.enroll({ factorType: 'totp' }), returns { qrCode, secret, factorId }",
+        "verifyMfa calls supabase.auth.mfa.challengeAndVerify({ factorId, code }) for TOTP codes",
+        "verifyBackupCode function: takes 8-char backup code, queries mfa_backup_codes by userId WHERE usedAt IS NULL, compares bcrypt hash, if match marks usedAt=NOW() and returns true",
+        "On first successful verifyMfa: generates 10 backup codes via crypto.randomBytes(4).toString('hex'), stores bcrypt hashes in mfa_backup_codes, returns plain codes ONCE",
+        "disableMfa validates TOTP code OR unused backup code before calling supabase.auth.mfa.unenroll({ factorId })",
+        "regenerateBackupCodes: deletes existing codes, generates new 10, requires valid TOTP code",
+        "All functions wrapped with createProtectedFn from src/lib/server/protected.ts",
+        "Zod schemas in src/lib/schemas/mfa.ts for request validation",
+        "File src/routes/api/auth/mfa/enroll.ts exports POST handler using createAPIFileRoute",
+        "File src/routes/api/auth/mfa/verify.ts exports POST handler",
+        "File src/routes/api/auth/mfa/disable.ts exports POST handler",
+        "File src/routes/api/auth/mfa/backup-codes/regenerate.ts exports POST handler",
+        "Error responses: 400 for invalid code, 401 for unauthenticated, 409 if MFA already enabled/disabled",
+        "bun run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/lib/server/auth/mfa.ts",
+        "src/lib/schemas/mfa.ts",
+        "src/routes/api/auth/mfa/enroll.ts",
+        "src/routes/api/auth/mfa/verify.ts",
+        "src/routes/api/auth/mfa/disable.ts",
+        "src/routes/api/auth/mfa/backup-codes/regenerate.ts"
+      ],
+      "dependencies": [
+        "AUTH-EXT-001"
+      ],
+      "completion_promise": "AUTH_EXT_003_COMPLETE",
+      "estimated_iterations": 4,
+      "status": "pending"
+    },
+    {
+      "id": "AUTH-EXT-004",
+      "name": "MFA Setup UI Components",
+      "description": "Create UI components for MFA enrollment wizard and verification dialog",
+      "type": "ui",
+      "acceptance_criteria": [
+        "MfaSetupWizard component in src/components/auth/mfa-setup-wizard.tsx",
+        "Wizard has 3 steps: 'scan' (QR code), 'verify' (code input), 'backup' (codes display)",
+        "Step 1 displays QR code from enrollMfa response using img tag with src={qrCode}",
+        "Step 1 has 'Can't scan?' toggle showing manual secret entry in monospace font",
+        "Step 2 has 6-digit OTP input using InputOTP from @/components/ui/input-otp (6 slots)",
+        "Step 2 calls POST /api/auth/mfa/verify on submit, shows Loader2 from lucide-react with animate-spin class during API call",
+        "Step 3 displays backup codes in grid (2 columns) with monospace font and copy-all button using navigator.clipboard.writeText()",
+        "Step 3 has checkbox 'I have saved these codes' required to enable Done button",
+        "Uses Dialog from @/components/ui/dialog for modal container",
+        "MfaVerifyDialog component in src/components/auth/mfa-verify-dialog.tsx",
+        "MfaVerifyDialog props: { open, onOpenChange, onVerified, factorId }",
+        "MfaVerifyDialog has 'Use backup code instead' link that switches to 8-char text input",
+        "Both components exported from src/components/auth/index.ts",
+        "ARIA: aria-label on OTP input, aria-live='polite' on error messages",
+        "bun run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/components/auth/mfa-setup-wizard.tsx",
+        "src/components/auth/mfa-verify-dialog.tsx",
+        "src/components/auth/index.ts"
+      ],
+      "dependencies": [
+        "AUTH-EXT-003"
+      ],
+      "completion_promise": "AUTH_EXT_004_COMPLETE",
+      "estimated_iterations": 4,
+      "status": "pending"
+    },
+    {
+      "id": "AUTH-EXT-005",
+      "name": "Login Flow MFA Integration",
+      "description": "Integrate MFA verification into the login flow when user has MFA enabled",
+      "type": "ui",
+      "acceptance_criteria": [
+        "File src/routes/login.tsx modified to handle MFA challenge",
+        "After supabase.auth.signInWithPassword(), check if response has data.user but data.session is null (indicates MFA required)",
+        "When MFA required, extract factorId from response.data.user.factors[0].id",
+        "Render MfaVerifyDialog with open=true, factorId, onVerified callback",
+        "onVerified callback: calls supabase.auth.mfa.challengeAndVerify({ factorId, code }), then redirects to dashboard",
+        "If user clicks 'Use backup code instead', MfaVerifyDialog switches to backup code input mode",
+        "Backup code verification calls POST /api/auth/mfa/verify with code (backend detects 8-char vs 6-digit)",
+        "On successful MFA verify, redirect to original destination or /dashboard",
+        "On failed MFA verify 3 times, show lockout message and link to /forgot-password",
+        "MFA challenge state persisted in React state (not localStorage) for security",
+        "bun run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/routes/login.tsx"
+      ],
+      "dependencies": [
+        "AUTH-EXT-004",
+        "FOUND-AUTH-004"
+      ],
+      "completion_promise": "AUTH_EXT_005_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "AUTH-EXT-006",
+      "name": "Password Reset UI",
+      "description": "Create password reset request and confirmation UI flows",
+      "type": "ui",
+      "acceptance_criteria": [
+        "Route src/routes/forgot-password.tsx created",
+        "ForgotPasswordForm displays email input with label 'Email address'",
+        "Form submit calls supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + '/reset-password' })",
+        "Success state shows 'Check your email' message with Mail icon from lucide-react",
+        "Error state shows inline error below input for invalid email",
+        "Link to /login with text 'Back to login'",
+        "Route src/routes/reset-password.tsx created",
+        "ResetPasswordForm extracts access_token and refresh_token from URL hash params",
+        "On mount, calls supabase.auth.setSession({ access_token, refresh_token }) to establish session",
+        "Form has password input and confirm password input",
+        "Password strength indicator using Progress from @/components/ui/progress",
+        "Strength calculated: < 8 chars = 25%, 8+ chars = 50%, +number = 75%, +special = 100%",
+        "Form submit calls supabase.auth.updateUser({ password })",
+        "On success: redirects to /login with toast 'Password updated successfully'",
+        "Zod schema validates: min 12 chars, 1 uppercase, 1 number, 1 special char",
+        "Forms use react-hook-form with zodResolver",
+        "ARIA: aria-describedby linking password requirements list",
+        "bun run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/routes/forgot-password.tsx",
+        "src/routes/reset-password.tsx",
+        "src/components/auth/forgot-password-form.tsx",
+        "src/components/auth/reset-password-form.tsx",
+        "src/lib/schemas/auth.ts"
+      ],
+      "dependencies": [
+        "FOUND-AUTH-004"
+      ],
+      "completion_promise": "AUTH_EXT_006_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "AUTH-EXT-007",
+      "name": "Session Management API",
+      "description": "Implement server functions for listing and terminating active sessions",
+      "type": "server",
+      "acceptance_criteria": [
+        "File src/lib/server/auth/sessions.ts exports listSessions, terminateSession, terminateAllSessions, trackSessionActivity functions",
+        "listSessions queries user_sessions table: SELECT id, ipAddress, userAgent, createdAt, lastActiveAt WHERE userId = currentUser AND expiresAt > NOW()",
+        "listSessions parses userAgent using ua-parser-js package to extract device type (desktop/mobile/tablet) and browser name",
+        "listSessions returns { sessions: Session[], currentSessionId } where currentSessionId from request cookie",
+        "Session type: { id: string, deviceType: 'desktop' | 'mobile' | 'tablet', browser: string, ipAddress: string | null, createdAt: Date, lastActiveAt: Date, isCurrent: boolean }",
+        "terminateSession(sessionId) validates session belongs to current user, then DELETE FROM user_sessions WHERE id = sessionId",
+        "terminateAllSessions(exceptCurrent?: boolean) deletes all user sessions, optionally excluding current session",
+        "Returns { terminated: number } with count of terminated sessions",
+        "trackSessionActivity(sessionId) updates lastActiveAt to NOW() - called by middleware on each request",
+        "File src/routes/api/auth/sessions/index.ts exports GET (list) and DELETE (terminate all) handlers using createAPIFileRoute",
+        "File src/routes/api/auth/sessions/$sessionId.ts exports DELETE handler for single session termination",
+        "All functions wrapped with createProtectedFn",
+        "Error responses: 404 for session not found, 403 for session not owned by user",
+        "bun run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/lib/server/auth/sessions.ts",
+        "src/routes/api/auth/sessions/index.ts",
+        "src/routes/api/auth/sessions/$sessionId.ts"
+      ],
+      "dependencies": [
+        "AUTH-EXT-002"
+      ],
+      "completion_promise": "AUTH_EXT_007_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "AUTH-EXT-008",
+      "name": "Session Management UI",
+      "description": "Create UI component for viewing and managing active sessions",
+      "type": "ui",
+      "acceptance_criteria": [
+        "SessionManager component in src/components/settings/session-manager.tsx",
+        "Fetches sessions via GET /api/auth/sessions on mount using TanStack Query queryKey: ['auth', 'sessions']",
+        "Displays sessions in Card list, each card shows: device icon (Laptop/Smartphone/Tablet from lucide-react based on deviceType), browser name, IP address, 'Last active' relative time via date-fns formatDistanceToNow",
+        "Current session card has Badge with text 'Current session' and variant='default' (green)",
+        "Each non-current session has 'Terminate' button with Trash2 icon",
+        "Terminate button shows AlertDialog confirmation with title 'Terminate session?' and description 'This will sign out this device. You can sign in again anytime.'",
+        "On confirm: calls DELETE /api/auth/sessions/:id, invalidates query via queryClient.invalidateQueries(['auth', 'sessions']), shows success toast",
+        "'Terminate all other sessions' button at bottom when sessions.length > 1, calls DELETE /api/auth/sessions?exceptCurrent=true",
+        "Empty state when only current session: 'No other active sessions' text with CheckCircle icon",
+        "Loading state shows 3 Skeleton cards",
+        "Error state shows AlertTriangle icon and 'Failed to load sessions' with retry button",
+        "Component added to settings page at src/routes/_authenticated/settings/security.tsx",
+        "ARIA: aria-label on terminate buttons in format 'Terminate {browser} session'",
+        "bun run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/components/settings/session-manager.tsx",
+        "src/routes/_authenticated/settings/security.tsx"
+      ],
+      "dependencies": [
+        "AUTH-EXT-007"
+      ],
+      "completion_promise": "AUTH_EXT_008_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    }
+  ],
+  "cross_prd_dependencies": {
+    "note": "This PRD extends FOUND-AUTH and requires it to be complete",
+    "required_prds": [
+      "FOUND-AUTH",
+      "FOUND-AUTH-004",
+      "FOUND-SCHEMA",
+      "FOUND-SHARED"
+    ],
+    "rationale": "FOUND-AUTH provides Supabase client, users table, protected function pattern; FOUND-AUTH-004 provides login.tsx route to modify; FOUND-SCHEMA provides base Drizzle setup; FOUND-SHARED provides UI primitives (Dialog, Card, Badge, etc.)"
+  },
+  "success_criteria": [
+    "MFA backup codes table created with proper RLS",
+    "User sessions table created with proper RLS",
+    "MFA enrollment generates QR code and returns secret",
+    "MFA verification validates TOTP codes via Supabase",
+    "MFA verification validates backup codes via application database",
+    "Backup codes generated on first MFA verify, one-time use",
+    "MFA setup wizard guides user through 3-step enrollment",
+    "MFA verify dialog shown during login when MFA enabled",
+    "Login flow handles MFA challenge and backup code fallback",
+    "Password reset email sent via Supabase on request",
+    "Password reset form validates strength and updates password",
+    "Session list shows all active sessions with device info",
+    "Session termination signs out specific devices",
+    "All API routes use TanStack Start conventions",
+    "TypeScript compiles with no errors",
+    "All 8 stories have testable acceptance criteria"
+  ],
+  "out_of_scope": [
+    "SMS-based MFA (Supabase phone auth requires separate setup)",
+    "Hardware security keys (WebAuthn/FIDO2)",
+    "OAuth/Social login (separate PRD)",
+    "Remember me / persistent sessions (uses Supabase default)",
+    "Email verification UI (Supabase handles)",
+    "Account lockout after failed MFA attempts (Supabase handles)",
+    "Session activity tracking middleware (can be added incrementally)"
+  ],
+  "migration_notes": {
+    "existing_users": "Existing users will have MFA disabled by default",
+    "mfa_enforcement": "Consider org-level MFA requirement setting in future PRD"
+  },
+  "domain_completion_promise": "FOUND_AUTH_EXT_COMPLETE"
+}

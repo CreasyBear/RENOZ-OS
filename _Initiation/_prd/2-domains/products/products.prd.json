@@ -1,0 +1,1465 @@
+{
+  "id": "DOM-PRODUCTS",
+  "name": "Product Catalog Management System",
+  "description": "Complete product catalog and inventory management platform providing centralized product information, pricing strategies, categorization, and catalog presentation across the entire business system.",
+  "created": "2026-01-10",
+  "updated": "2026-01-10",
+  "priority": 5,
+  "phase": "core-business",
+  "version": "1.0",
+  "business_value": {
+    "catalog_centralization": true,
+    "pricing_flexibility": true,
+    "inventory_accuracy": true,
+    "description": "Unified product information system enabling consistent catalog management and pricing"
+  },
+  "system_requirements": {
+    "database": {
+      "products": {
+        "description": "Core product information and catalog data",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "sku": "varchar(100) UNIQUE NOT NULL",
+          "name": "varchar(255) NOT NULL",
+          "description": "text",
+          "categoryId": "uuid REFERENCES categories(id)",
+          "status": "enum('active', 'inactive', 'discontinued') DEFAULT 'active'",
+          "productType": "enum('physical', 'service', 'digital', 'bundle') DEFAULT 'physical'",
+          "isSerialized": "boolean DEFAULT false",
+          "trackInventory": "boolean DEFAULT true",
+          "basePrice": "decimal(10,2) NOT NULL CHECK (basePrice >= 0)",
+          "costPrice": "decimal(10,2)",
+          "weight": "decimal(8,3)",
+          "dimensions": "jsonb",
+          "specifications": "jsonb DEFAULT '{}'",
+          "seoTitle": "varchar(255)",
+          "seoDescription": "text",
+          "tags": "text[] DEFAULT '{}'",
+          "xeroItemId": "varchar(255)",
+          "createdBy": "uuid NOT NULL REFERENCES users(id)",
+          "updatedBy": "uuid NOT NULL REFERENCES users(id)",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()",
+          "updatedAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "organizationId",
+          "sku",
+          "categoryId",
+          "status",
+          "productType"
+        ],
+        "constraints": [
+          "basePrice >= 0",
+          "costPrice >= 0 OR costPrice IS NULL"
+        ]
+      },
+      "categories": {
+        "description": "Product categorization hierarchy",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "name": "varchar(100) NOT NULL",
+          "description": "text",
+          "parentId": "uuid REFERENCES categories(id)",
+          "sortOrder": "integer DEFAULT 0",
+          "isActive": "boolean DEFAULT true",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()",
+          "updatedAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "organizationId",
+          "parentId",
+          "isActive"
+        ],
+        "constraints": [
+          "parentId != id"
+        ]
+      },
+      "productPriceTiers": {
+        "description": "Volume-based pricing tiers",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "productId": "uuid NOT NULL REFERENCES products(id)",
+          "minQuantity": "integer NOT NULL CHECK (minQuantity > 0)",
+          "maxQuantity": "integer",
+          "price": "decimal(10,2) NOT NULL CHECK (price >= 0)",
+          "discountPercent": "decimal(5,2) CHECK (discountPercent >= 0 AND discountPercent <= 100)",
+          "isActive": "boolean DEFAULT true",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "organizationId",
+          "productId",
+          "minQuantity"
+        ],
+        "constraints": [
+          "maxQuantity > minQuantity OR maxQuantity IS NULL",
+          "price >= 0"
+        ]
+      },
+      "customerProductPrices": {
+        "description": "Customer-specific pricing overrides",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "customerId": "uuid NOT NULL REFERENCES customers(id)",
+          "productId": "uuid NOT NULL REFERENCES products(id)",
+          "price": "decimal(10,2) NOT NULL CHECK (price >= 0)",
+          "discountPercent": "decimal(5,2) CHECK (discountPercent >= 0 AND discountPercent <= 100)",
+          "validFrom": "timestamp DEFAULT NOW()",
+          "validTo": "timestamp",
+          "createdBy": "uuid NOT NULL REFERENCES users(id)",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "organizationId",
+          "customerId",
+          "productId",
+          "validFrom",
+          "validTo"
+        ],
+        "constraints": [
+          "validTo > validFrom OR validTo IS NULL",
+          "price >= 0"
+        ]
+      },
+      "productBundles": {
+        "description": "Product bundle definitions and components",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "bundleProductId": "uuid NOT NULL REFERENCES products(id)",
+          "componentProductId": "uuid NOT NULL REFERENCES products(id)",
+          "quantity": "integer NOT NULL CHECK (quantity > 0)",
+          "isOptional": "boolean DEFAULT false",
+          "sortOrder": "integer DEFAULT 0",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "organizationId",
+          "bundleProductId",
+          "componentProductId"
+        ],
+        "constraints": [
+          "bundleProductId != componentProductId",
+          "quantity > 0"
+        ]
+      },
+      "productImages": {
+        "description": "Product image gallery and metadata",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "productId": "uuid NOT NULL REFERENCES products(id)",
+          "imageUrl": "text NOT NULL",
+          "altText": "varchar(255)",
+          "caption": "text",
+          "sortOrder": "integer DEFAULT 0",
+          "isPrimary": "boolean DEFAULT false",
+          "fileSize": "integer",
+          "dimensions": "jsonb",
+          "uploadedBy": "uuid NOT NULL REFERENCES users(id)",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "organizationId",
+          "productId",
+          "sortOrder",
+          "isPrimary"
+        ],
+        "constraints": [
+          "fileSize >= 0 OR fileSize IS NULL"
+        ]
+      },
+      "productAttributes": {
+        "description": "Dynamic product attribute definitions",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "name": "varchar(100) NOT NULL",
+          "attributeType": "enum('text', 'number', 'boolean', 'select', 'multiselect', 'date') NOT NULL",
+          "description": "text",
+          "options": "jsonb",
+          "isRequired": "boolean DEFAULT false",
+          "isFilterable": "boolean DEFAULT false",
+          "isSearchable": "boolean DEFAULT false",
+          "categoryIds": "uuid[] DEFAULT '{}'",
+          "sortOrder": "integer DEFAULT 0",
+          "isActive": "boolean DEFAULT true",
+          "createdBy": "uuid NOT NULL REFERENCES users(id)",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "organizationId",
+          "attributeType",
+          "isActive",
+          "isFilterable"
+        ],
+        "constraints": [
+          "name IS NOT NULL",
+          "attributeType IS NOT NULL"
+        ]
+      },
+      "productAttributeValues": {
+        "description": "Product attribute values",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "productId": "uuid NOT NULL REFERENCES products(id)",
+          "attributeId": "uuid NOT NULL REFERENCES productAttributes(id)",
+          "value": "jsonb NOT NULL",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()",
+          "updatedAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "organizationId",
+          "productId",
+          "attributeId"
+        ],
+        "unique": [
+          "productId",
+          "attributeId"
+        ]
+      },
+      "productRelations": {
+        "description": "Product relationship definitions",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "productId": "uuid NOT NULL REFERENCES products(id)",
+          "relatedProductId": "uuid NOT NULL REFERENCES products(id)",
+          "relationType": "enum('accessory', 'alternative', 'upgrade', 'compatible', 'bundle') NOT NULL",
+          "sortOrder": "integer DEFAULT 0",
+          "isActive": "boolean DEFAULT true",
+          "createdBy": "uuid NOT NULL REFERENCES users(id)",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "organizationId",
+          "productId",
+          "relatedProductId",
+          "relationType"
+        ],
+        "constraints": [
+          "productId != relatedProductId"
+        ]
+      },
+    },
+    "_schema_remediation": {
+      "note": "inventoryMovements table REMOVED from this PRD - defined in shared 007_inventory-core.ts migration",
+      "reason": "Prevents circular dependency between Products, Inventory, and Suppliers domains",
+      "dependency": "007_inventory-core.ts must run BEFORE 008_products.ts",
+      "action_required": "008_products.ts should ADD FK constraint: inventoryMovements.productId -> products.id",
+      "reference": "_meta/remediation-schema-migrations.md"
+    },
+    "api_endpoints": {
+      "products": {
+        "list": {
+          "method": "GET",
+          "path": "/api/products",
+          "query_params": [
+            "page",
+            "limit",
+            "categoryId",
+            "status",
+            "search",
+            "sortBy",
+            "sortDir"
+          ],
+          "response": {
+            "products": "Product[]",
+            "total": "number",
+            "page": "number",
+            "limit": "number",
+            "categories": "Category[]"
+          },
+          "description": "List products with filtering, sorting, and pagination"
+        },
+        "get": {
+          "method": "GET",
+          "path": "/api/products/:id",
+          "response": {
+            "product": "Product",
+            "images": "ProductImage[]",
+            "attributes": "ProductAttributeValue[]",
+            "priceTiers": "ProductPriceTier[]",
+            "relations": "ProductRelation[]",
+            "inventory": "InventorySummary",
+            "category": "Category"
+          },
+          "description": "Get complete product details"
+        },
+        "create": {
+          "method": "POST",
+          "path": "/api/products",
+          "body": {
+            "sku": "string",
+            "name": "string",
+            "description": "string?",
+            "categoryId": "uuid?",
+            "productType": "ProductType?",
+            "basePrice": "number",
+            "costPrice": "number?",
+            "specifications": "Record<string, any>?",
+            "tags": "string[]?"
+          },
+          "response": {
+            "product": "Product"
+          },
+          "description": "Create new product"
+        },
+        "update": {
+          "method": "PUT",
+          "path": "/api/products/:id",
+          "body": {
+            "sku": "string?",
+            "name": "string?",
+            "description": "string?",
+            "categoryId": "uuid?",
+            "status": "ProductStatus?",
+            "basePrice": "number?",
+            "costPrice": "number?",
+            "specifications": "Record<string, any>?",
+            "tags": "string[]?"
+          },
+          "response": {
+            "product": "Product"
+          },
+          "description": "Update product information"
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "/api/products/:id",
+          "response": {
+            "success": "boolean"
+          },
+          "description": "Delete product (soft delete)"
+        },
+        "search": {
+          "method": "GET",
+          "path": "/api/products/search",
+          "query_params": [
+            "q",
+            "categoryId",
+            "limit"
+          ],
+          "response": {
+            "products": "Product[]",
+            "total": "number"
+          },
+          "description": "Search products with full-text search"
+        },
+        "bulkImport": {
+          "method": "POST",
+          "path": "/api/products/bulk-import",
+          "body": {
+            "file": "file",
+            "updateExisting": "boolean?"
+          },
+          "response": {
+            "jobId": "string"
+          },
+          "description": "Bulk import products from CSV/Excel"
+        },
+        "bulkExport": {
+          "method": "GET",
+          "path": "/api/products/bulk-export",
+          "query_params": [
+            "format",
+            "categoryId",
+            "status"
+          ],
+          "response": "file",
+          "description": "Export products to CSV/Excel"
+        }
+      },
+      "categories": {
+        "list": {
+          "method": "GET",
+          "path": "/api/categories",
+          "query_params": [
+            "parentId",
+            "includeInactive"
+          ],
+          "response": {
+            "categories": "Category[]"
+          },
+          "description": "Get category hierarchy"
+        },
+        "create": {
+          "method": "POST",
+          "path": "/api/categories",
+          "body": {
+            "name": "string",
+            "description": "string?",
+            "parentId": "uuid?"
+          },
+          "response": {
+            "category": "Category"
+          },
+          "description": "Create product category"
+        },
+        "update": {
+          "method": "PUT",
+          "path": "/api/categories/:id",
+          "body": {
+            "name": "string?",
+            "description": "string?",
+            "parentId": "uuid?"
+          },
+          "response": {
+            "category": "Category"
+          },
+          "description": "Update category"
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "/api/categories/:id",
+          "response": {
+            "success": "boolean"
+          },
+          "description": "Delete category"
+        }
+      },
+      "pricing": {
+        "getPrice": {
+          "method": "GET",
+          "path": "/api/products/:id/price",
+          "query_params": [
+            "customerId",
+            "quantity"
+          ],
+          "response": {
+            "basePrice": "number",
+            "finalPrice": "number",
+            "discount": "number",
+            "tier": "ProductPriceTier?",
+            "customerPrice": "CustomerProductPrice?"
+          },
+          "description": "Get resolved price for product"
+        },
+        "setPriceTiers": {
+          "method": "PUT",
+          "path": "/api/products/:id/price-tiers",
+          "body": {
+            "tiers": "ProductPriceTierInput[]"
+          },
+          "response": {
+            "tiers": "ProductPriceTier[]"
+          },
+          "description": "Set volume pricing tiers for product"
+        },
+        "setCustomerPrice": {
+          "method": "PUT",
+          "path": "/api/customers/:customerId/products/:productId/price",
+          "body": {
+            "price": "number",
+            "discountPercent": "number?",
+            "validTo": "date?"
+          },
+          "response": {
+            "customerPrice": "CustomerProductPrice"
+          },
+          "description": "Set customer-specific pricing"
+        }
+      },
+      "bundles": {
+        "create": {
+          "method": "POST",
+          "path": "/api/products/:id/bundle",
+          "body": {
+            "components": "BundleComponentInput[]"
+          },
+          "response": {
+            "bundle": "ProductBundle[]"
+          },
+          "description": "Create product bundle from components"
+        },
+        "getComponents": {
+          "method": "GET",
+          "path": "/api/products/:id/bundle",
+          "response": {
+            "components": "ProductBundle[]"
+          },
+          "description": "Get bundle components"
+        },
+        "updateComponents": {
+          "method": "PUT",
+          "path": "/api/products/:id/bundle",
+          "body": {
+            "components": "BundleComponentInput[]"
+          },
+          "response": {
+            "components": "ProductBundle[]"
+          },
+          "description": "Update bundle components"
+        },
+        "expandBundle": {
+          "method": "GET",
+          "path": "/api/products/:id/expand-bundle",
+          "response": {
+            "components": "Product[]"
+          },
+          "description": "Expand bundle into individual products"
+        }
+      },
+      "images": {
+        "upload": {
+          "method": "POST",
+          "path": "/api/products/:id/images",
+          "body": {
+            "file": "file",
+            "altText": "string?",
+            "caption": "string?"
+          },
+          "response": {
+            "image": "ProductImage"
+          },
+          "description": "Upload product image"
+        },
+        "list": {
+          "method": "GET",
+          "path": "/api/products/:id/images",
+          "response": {
+            "images": "ProductImage[]"
+          },
+          "description": "Get product images"
+        },
+        "update": {
+          "method": "PUT",
+          "path": "/api/products/:id/images/:imageId",
+          "body": {
+            "altText": "string?",
+            "caption": "string?",
+            "sortOrder": "number?",
+            "isPrimary": "boolean?"
+          },
+          "response": {
+            "image": "ProductImage"
+          },
+          "description": "Update image metadata"
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "/api/products/:id/images/:imageId",
+          "response": {
+            "success": "boolean"
+          },
+          "description": "Delete product image"
+        },
+        "reorder": {
+          "method": "PUT",
+          "path": "/api/products/:id/images/reorder",
+          "body": {
+            "imageIds": "string[]"
+          },
+          "response": {
+            "success": "boolean"
+          },
+          "description": "Reorder product images"
+        }
+      },
+      "attributes": {
+        "listDefinitions": {
+          "method": "GET",
+          "path": "/api/product-attributes",
+          "query_params": [
+            "categoryId"
+          ],
+          "response": {
+            "attributes": "ProductAttribute[]"
+          },
+          "description": "Get attribute definitions"
+        },
+        "createDefinition": {
+          "method": "POST",
+          "path": "/api/product-attributes",
+          "body": {
+            "name": "string",
+            "attributeType": "AttributeType",
+            "options": "any?",
+            "categoryIds": "uuid[]?",
+            "isRequired": "boolean?",
+            "isFilterable": "boolean?"
+          },
+          "response": {
+            "attribute": "ProductAttribute"
+          },
+          "description": "Create attribute definition"
+        },
+        "setValues": {
+          "method": "PUT",
+          "path": "/api/products/:id/attributes",
+          "body": {
+            "values": "Record<string, any>"
+          },
+          "response": {
+            "values": "ProductAttributeValue[]"
+          },
+          "description": "Set attribute values for product"
+        },
+        "getValues": {
+          "method": "GET",
+          "path": "/api/products/:id/attributes",
+          "response": {
+            "values": "ProductAttributeValue[]"
+          },
+          "description": "Get attribute values for product"
+        }
+      },
+      "relations": {
+        "setRelations": {
+          "method": "PUT",
+          "path": "/api/products/:id/relations",
+          "body": {
+            "relations": "ProductRelationInput[]"
+          },
+          "response": {
+            "relations": "ProductRelation[]"
+          },
+          "description": "Set product relations"
+        },
+        "getRelations": {
+          "method": "GET",
+          "path": "/api/products/:id/relations",
+          "response": {
+            "relations": "ProductRelation[]"
+          },
+          "description": "Get product relations"
+        }
+      },
+      "inventory": {
+        "getSummary": {
+          "method": "GET",
+          "path": "/api/products/:id/inventory",
+          "response": {
+            "onHand": "number",
+            "available": "number",
+            "allocated": "number",
+            "onOrder": "number",
+            "movements": "InventoryMovement[]"
+          },
+          "description": "Get inventory summary for product"
+        },
+        "adjustStock": {
+          "method": "POST",
+          "path": "/api/products/:id/inventory/adjust",
+          "body": {
+            "quantity": "number",
+            "movementType": "MovementType",
+            "notes": "string?",
+            "referenceId": "uuid?"
+          },
+          "response": {
+            "movement": "InventoryMovement"
+          },
+          "description": "Adjust product inventory"
+        },
+        "getMovements": {
+          "method": "GET",
+          "path": "/api/products/:id/inventory/movements",
+          "query_params": [
+            "page",
+            "limit",
+            "movementType",
+            "dateFrom",
+            "dateTo"
+          ],
+          "response": {
+            "movements": "InventoryMovement[]",
+            "total": "number"
+          },
+          "description": "Get inventory movement history"
+        }
+      }
+    },
+    "ui_components": {
+      "productCatalog": {
+        "description": "Main product catalog browsing interface",
+        "layout": {
+          "mobile": "Card-based grid with filters in drawer",
+          "tablet": "Table view with collapsible filters",
+          "desktop": "Split view with filters sidebar and table"
+        },
+        "features": [
+          "Advanced filtering by category, status, price range",
+          "Sorting by name, price, created date, popularity",
+          "Bulk actions (activate, deactivate, export)",
+          "Quick search with autocomplete",
+          "Category tree navigation",
+          "Product status indicators",
+          "Inventory level warnings"
+        ]
+      },
+      "productDetail": {
+        "description": "Complete product information and management",
+        "tabs": [
+          "Overview",
+          "Pricing",
+          "Inventory",
+          "Images",
+          "Attributes",
+          "Relations",
+          "History"
+        ],
+        "overview": {
+          "basicInfo": "SKU, name, description, category",
+          "pricing": "Base price, cost, margins",
+          "status": "Active/inactive/discontinued status",
+          "specifications": "Technical specifications display",
+          "tags": "Tag management"
+        },
+        "pricing": {
+          "priceTiers": "Volume discount configuration",
+          "customerPrices": "Special pricing by customer",
+          "priceHistory": "Price change tracking",
+          "marginAnalysis": "Profit margin calculations"
+        },
+        "inventory": {
+          "currentStock": "On-hand, available, allocated quantities",
+          "movements": "Transaction history with filtering",
+          "adjustments": "Stock adjustment interface",
+          "lowStockAlerts": "Reorder point configuration"
+        }
+      },
+      "productForm": {
+        "description": "Product creation and editing interface",
+        "sections": [
+          "Basic Information",
+          "Pricing",
+          "Categories",
+          "Specifications",
+          "Attributes"
+        ],
+        "features": [
+          "SKU generation and validation",
+          "Category selection with hierarchy",
+          "Dynamic attribute forms based on category",
+          "Image upload with drag-drop",
+          "Bundle component selection",
+          "SEO fields for web display",
+          "Save as draft functionality"
+        ],
+        "validation": [
+          "SKU uniqueness",
+          "Required field validation",
+          "Price format validation",
+          "Image size limits",
+          "Attribute type validation"
+        ]
+      },
+      "productSearch": {
+        "description": "Advanced product search and discovery",
+        "features": [
+          "Full-text search across name, SKU, description",
+          "Attribute-based filtering",
+          "Category filtering with hierarchy",
+          "Price range filtering",
+          "Search result highlighting",
+          "Recent searches",
+          "Search suggestions"
+        ]
+      },
+      "bulkOperations": {
+        "description": "Bulk product management operations",
+        "operations": [
+          "Bulk import from CSV/Excel",
+          "Bulk price updates",
+          "Bulk category changes",
+          "Bulk status updates",
+          "Bulk attribute updates",
+          "Bulk export with filtering"
+        ],
+        "validation": [
+          "Import data validation",
+          "Conflict resolution",
+          "Progress tracking",
+          "Error reporting",
+          "Rollback capabilities"
+        ]
+      },
+      "categoryManagement": {
+        "description": "Product category hierarchy management",
+        "features": [
+          "Tree view of category hierarchy",
+          "Drag-drop category reordering",
+          "Category creation and editing",
+          "Bulk category operations",
+          "Category usage statistics",
+          "Attribute assignment to categories"
+        ]
+      },
+      "pricingManagement": {
+        "description": "Comprehensive pricing configuration",
+        "features": [
+          "Volume pricing tiers",
+          "Customer-specific pricing",
+          "Price change history",
+          "Margin analysis",
+          "Pricing rules engine",
+          "Price list export"
+        ]
+      },
+      "attributeSystem": {
+        "description": "Dynamic product attribute management",
+        "features": [
+          "Attribute definition creation",
+          "Category-specific attributes",
+          "Attribute types (text, number, select, etc.)",
+          "Attribute validation rules",
+          "Search and filter configuration",
+          "Bulk attribute value updates"
+        ]
+      },
+      "imageGallery": {
+        "description": "Product image management system",
+        "features": [
+          "Drag-drop image upload",
+          "Image gallery with lightbox",
+          "Primary image selection",
+          "Image metadata editing",
+          "Bulk image operations",
+          "Image optimization and resizing"
+        ]
+      }
+    },
+    "business_rules": {
+      "product_identification": {
+        "sku_format": "Organization prefix + sequential number (e.g., RENOZ-001)",
+        "sku_uniqueness": "SKUs must be unique across organization",
+        "name_requirements": "Product names must be unique within category",
+        "status_workflow": "Draft \u2192 Active \u2192 Inactive \u2192 Discontinued",
+        "discontinued_handling": "Discontinued products hidden from new orders"
+      },
+      "pricing_engine": {
+        "price_resolution_order": "Customer-specific \u2192 Volume tier \u2192 Base price",
+        "tier_calculation": "Applied based on total quantity across order",
+        "customer_pricing": "Time-limited overrides with expiration",
+        "margin_validation": "Cost price must be less than selling price",
+        "price_history": "All price changes audited with user and timestamp"
+      },
+      "inventory_management": {
+        "stock_tracking": "Real-time stock levels with allocation tracking",
+        "negative_stock": "Allowed for backorders but flagged",
+        "movement_auditing": "All inventory changes logged with reason",
+        "low_stock_alerts": "Automated alerts when stock below reorder point",
+        "cost_of_goods": "Weighted average cost calculation"
+      },
+      "bundle_handling": {
+        "bundle_pricing": "Can override calculated component total",
+        "inventory_deduction": "Components deducted individually on fulfillment",
+        "bundle_expansion": "Orders show components for picking",
+        "bundle_modification": "Components can be changed without affecting bundle definition",
+        "pricing_inheritance": "Component pricing can be overridden in bundle context"
+      },
+      "categorization": {
+        "hierarchy_depth": "Unlimited category nesting",
+        "category_inheritance": "Attributes inherited from parent categories",
+        "product_assignment": "Products can belong to only one category",
+        "category_navigation": "Breadcrumb navigation in catalog",
+        "seo_optimization": "Category URLs and meta tags"
+      },
+      "attribute_system": {
+        "dynamic_assignment": "Attributes assigned based on product category",
+        "validation_rules": "Type-specific validation (number ranges, select options)",
+        "search_indexing": "Filterable attributes indexed for fast search",
+        "inheritance": "Category attributes automatically applied to products",
+        "bulk_updates": "Attribute values can be updated across multiple products"
+      },
+      "data_integrity": {
+        "referential_integrity": "All foreign key relationships enforced",
+        "audit_trailing": "All changes logged with user attribution",
+        "data_validation": "Business rule validation at API level",
+        "conflict_resolution": "Concurrent edit conflict detection",
+        "backup_recovery": "Automated backups with point-in-time recovery"
+      }
+    },
+    "integrations": {
+      "order_system": {
+        "product_resolution": "Real-time product data for order creation",
+        "price_calculation": "Dynamic pricing based on customer and quantity",
+        "inventory_checking": "Stock validation during order placement",
+        "bundle_expansion": "Automatic component breakdown for fulfillment",
+        "backorder_handling": "Automatic backorder creation for insufficient stock"
+      },
+      "inventory_system": {
+        "stock_synchronization": "Real-time inventory updates from movements",
+        "allocation_tracking": "Stock reservation for pending orders",
+        "low_stock_alerts": "Integration with inventory alerting system",
+        "cost_calculation": "Integration with weighted average costing",
+        "location_tracking": "Multi-location inventory management"
+      },
+      "pipeline_system": {
+        "quote_pricing": "Product pricing integration in quote creation",
+        "product_search": "Product lookup during opportunity creation",
+        "bundle_handling": "Bundle expansion for quote line items",
+        "price_tiers": "Volume pricing application in quotes",
+        "product_attributes": "Attribute-based product filtering in search"
+      },
+      "financial_system": {
+        "xero_integration": "Product sync to Xero item catalog",
+        "invoice_generation": "Product line items on invoices",
+        "revenue_recognition": "Product-based revenue tracking",
+        "cost_accounting": "Product cost integration with financials",
+        "tax_calculation": "Product-specific tax rate application"
+      },
+      "search_system": {
+        "full_text_indexing": "Product content indexed for search",
+        "attribute_filtering": "Dynamic filtering by product attributes",
+        "category_navigation": "Hierarchical category browsing",
+        "autocomplete": "Product name and SKU suggestions",
+        "search_analytics": "Popular search term tracking"
+      },
+      "file_system": {
+        "image_storage": "Product images stored in Supabase Storage",
+        "file_optimization": "Automatic image resizing and optimization",
+        "cdn_delivery": "Fast image delivery via CDN",
+        "backup_redundancy": "Multi-region image backup",
+        "access_control": "Organization-level image access control"
+      }
+    },
+    "performance_requirements": {
+      "response_times": {
+        "product_search": "< 200 milliseconds",
+        "product_detail_load": "< 500 milliseconds",
+        "catalog_browse": "< 1 second for 100 products",
+        "price_calculation": "< 100 milliseconds",
+        "bulk_operations": "< 30 seconds for 1000 products"
+      },
+      "scalability": {
+        "concurrent_users": "100 simultaneous catalog users",
+        "product_catalog_size": "100,000+ products",
+        "image_storage": "10GB+ of product images",
+        "search_throughput": "1000 searches per minute",
+        "api_throughput": "10,000 product API calls per minute"
+      },
+      "data_volume": {
+        "product_records": "Unlimited growth with pagination",
+        "image_files": "Multiple images per product",
+        "attribute_data": "Flexible schema for custom attributes",
+        "audit_history": "Complete change history retention",
+        "search_index": "Real-time search index updates"
+      },
+      "reliability": {
+        "uptime_target": "99.9% availability",
+        "data_durability": "100% product data durability",
+        "backup_frequency": "Daily automated backups",
+        "disaster_recovery": "4-hour RTO, 1-hour RPO",
+        "cache_invalidation": "Real-time cache updates"
+      }
+    }
+  },
+  "stories": [
+    {
+      "id": "PROD-CORE-SCHEMA",
+      "name": "Product Core Schema",
+      "description": "Create complete product catalog database schema with all tables and relationships",
+      "type": "schema",
+      "acceptance_criteria": [
+        "Complete products table with all fields and constraints",
+        "Categories table with hierarchical relationships",
+        "Price tiers and customer pricing tables",
+        "Bundle components and relationships",
+        "Image gallery and attribute systems",
+        "Inventory movement tracking",
+        "Foreign keys with ON DELETE CASCADE/RESTRICT, indexes on organizationId, sku, categoryId, and status columns",
+        "RLS policies for organization data isolation",
+        "TypeScript types exported for all entities"
+      ],
+      "files_to_modify": [
+        "src/lib/schema/products.ts",
+        "src/lib/schema/categories.ts",
+        "src/lib/schema/product-pricing.ts",
+        "src/lib/schema/product-bundles.ts",
+        "src/lib/schema/product-images.ts",
+        "src/lib/schema/product-attributes.ts",
+        "src/lib/schema/product-relations.ts",
+        "src/lib/schema/index.ts",
+        "drizzle/migrations/008_products.ts"
+      ],
+      "_schema_note": "inventory-movements.ts REMOVED - now in shared 007_inventory-core migration. 008_products.ts adds FK only.",
+      "completion_promise": "PROD_CORE_SCHEMA_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending"
+    },
+    {
+      "id": "PROD-CORE-API",
+      "name": "Product Core API",
+      "description": "Implement comprehensive product CRUD and search operations",
+      "type": "server-function",
+      "acceptance_criteria": [
+        "Complete product CRUD operations with validation",
+        "Advanced search with full-text and attribute filtering",
+        "Category management with hierarchy support",
+        "Bulk import/export functionality",
+        "Price resolution and tier management",
+        "Zod validation on inputs; try-catch with 400/404/500 responses; RLS policies restrict access to organization's own data",
+        "Comprehensive Zod validation schemas"
+      ],
+      "files_to_modify": [
+        "src/server/functions/products.ts",
+        "src/server/functions/categories.ts",
+        "src/server/functions/product-pricing.ts",
+        "src/server/functions/product-search.ts",
+        "src/lib/schemas/products.ts"
+      ],
+      "dependencies": [
+        "PROD-CORE-SCHEMA"
+      ],
+      "completion_promise": "PROD_CORE_API_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "PROD-CATALOG-UI",
+      "name": "Product Catalog Interface",
+      "description": "Responsive product catalog browsing with advanced filtering and search",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Responsive catalog layout (mobile cards, desktop table)",
+        "Advanced filtering by category, status, price, attributes",
+        "Full-text search with autocomplete",
+        "Sorting and pagination",
+        "Bulk selection and actions",
+        "Category tree navigation",
+        "Quick actions per product",
+        "Export functionality"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/products/index.tsx",
+        "src/components/domain/products/product-catalog.tsx",
+        "src/components/domain/products/product-filters.tsx",
+        "src/components/domain/products/product-table.tsx"
+      ],
+      "dependencies": [
+        "PROD-CORE-API"
+      ],
+      "completion_promise": "PROD_CATALOG_UI_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "PROD-DETAIL-UI",
+      "name": "Product Detail Interface",
+      "description": "Complete product management interface with all tabs and functionality",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Tabbed interface: Overview, Pricing, Inventory, Images, Attributes, Relations",
+        "Overview with all product information and quick actions",
+        "Pricing tab with tier management and customer prices",
+        "Inventory tab with stock levels and movement history",
+        "Images tab with gallery management",
+        "Attributes tab with dynamic field editing",
+        "Relations tab with related product management"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/products/$productId.tsx",
+        "src/components/domain/products/product-detail.tsx",
+        "src/components/domain/products/product-tabs.tsx",
+        "src/components/domain/products/pricing-tab.tsx"
+      ],
+      "dependencies": [
+        "PROD-CORE-API"
+      ],
+      "completion_promise": "PROD_DETAIL_UI_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "PROD-FORM-UI",
+      "name": "Product Creation/Edit Form",
+      "description": "Comprehensive product form with all field types and validation",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Multi-section form with validation",
+        "Dynamic attribute fields based on category",
+        "Image upload with drag-drop",
+        "Category selection with hierarchy",
+        "SKU generation and validation",
+        "Specification fields",
+        "Save as draft functionality",
+        "Form state persistence"
+      ],
+      "files_to_modify": [
+        "src/components/domain/products/product-form.tsx",
+        "src/components/domain/products/attribute-fields.tsx",
+        "src/components/domain/products/image-uploader.tsx",
+        "src/components/domain/products/specification-fields.tsx"
+      ],
+      "dependencies": [
+        "PROD-CORE-API"
+      ],
+      "completion_promise": "PROD_FORM_UI_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "PROD-PRICING-API",
+      "name": "Pricing Engine API",
+      "description": "Implement comprehensive pricing calculations and tier management",
+      "type": "server-function",
+      "acceptance_criteria": [
+        "Price resolution with customer and quantity logic",
+        "Volume tier CRUD operations",
+        "Customer-specific pricing management",
+        "Price history tracking",
+        "Bulk price updates",
+        "Price validation and conflict detection"
+      ],
+      "files_to_modify": [
+        "src/server/functions/pricing-engine.ts",
+        "src/lib/schemas/pricing.ts"
+      ],
+      "dependencies": [
+        "PROD-CORE-SCHEMA"
+      ],
+      "completion_promise": "PROD_PRICING_API_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "PROD-PRICING-UI",
+      "name": "Pricing Management Interface",
+      "description": "Complete pricing configuration and management UI",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Price tier configuration with quantity ranges",
+        "Customer-specific pricing management",
+        "Price change history display",
+        "Bulk price update interface",
+        "Margin analysis and recommendations",
+        "Price validation and conflict warnings"
+      ],
+      "files_to_modify": [
+        "src/components/domain/products/pricing-engine.tsx",
+        "src/components/domain/products/price-tiers.tsx",
+        "src/components/domain/products/customer-pricing.tsx",
+        "src/components/domain/products/price-history.tsx"
+      ],
+      "dependencies": [
+        "PROD-PRICING-API"
+      ],
+      "completion_promise": "PROD_PRICING_UI_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "PROD-BUNDLES-API",
+      "name": "Product Bundles API",
+      "description": "Implement bundle creation, management, and expansion functionality",
+      "type": "server-function",
+      "acceptance_criteria": [
+        "Bundle CRUD operations",
+        "Component management with quantities",
+        "Bundle price calculation",
+        "Bundle expansion for orders",
+        "Bundle validation and constraints",
+        "Inventory handling for bundles"
+      ],
+      "files_to_modify": [
+        "src/server/functions/product-bundles.ts",
+        "src/lib/schemas/bundles.ts"
+      ],
+      "dependencies": [
+        "PROD-CORE-SCHEMA"
+      ],
+      "completion_promise": "PROD_BUNDLES_API_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "PROD-BUNDLES-UI",
+      "name": "Bundle Management Interface",
+      "description": "Product bundle creation and editing interface",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Bundle creation from existing product",
+        "Component selection and quantity setting",
+        "Bundle price override options",
+        "Component validation and availability checking",
+        "Bundle preview and testing",
+        "Bundle conversion to regular product"
+      ],
+      "files_to_modify": [
+        "src/components/domain/products/bundle-creator.tsx",
+        "src/components/domain/products/bundle-editor.tsx",
+        "src/components/domain/products/component-selector.tsx"
+      ],
+      "dependencies": [
+        "PROD-BUNDLES-API"
+      ],
+      "completion_promise": "PROD_BUNDLES_UI_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "PROD-IMAGES-API",
+      "name": "Product Images API",
+      "description": "Implement image upload, storage, and management functionality",
+      "type": "server-function",
+      "acceptance_criteria": [
+        "Image upload to Supabase Storage",
+        "Image metadata management",
+        "Primary image selection",
+        "Image reordering",
+        "Bulk image operations",
+        "Image optimization and validation"
+      ],
+      "files_to_modify": [
+        "src/server/functions/product-images.ts",
+        "src/lib/schemas/images.ts"
+      ],
+      "dependencies": [
+        "PROD-CORE-SCHEMA"
+      ],
+      "completion_promise": "PROD_IMAGES_API_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "PROD-IMAGES-UI",
+      "name": "Image Gallery Interface",
+      "description": "Complete image management with upload, gallery, and editing",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Drag-drop image upload",
+        "Image gallery with lightbox viewer",
+        "Image metadata editing (alt text, captions)",
+        "Primary image selection and reordering",
+        "Bulk image upload and management",
+        "Image optimization feedback"
+      ],
+      "files_to_modify": [
+        "src/components/domain/products/image-gallery.tsx",
+        "src/components/domain/products/image-uploader.tsx",
+        "src/components/domain/products/image-editor.tsx"
+      ],
+      "dependencies": [
+        "PROD-IMAGES-API"
+      ],
+      "completion_promise": "PROD_IMAGES_UI_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "PROD-ATTRIBUTES-API",
+      "name": "Product Attributes API",
+      "description": "Implement dynamic attribute definition and value management",
+      "type": "server-function",
+      "acceptance_criteria": [
+        "Attribute definition CRUD",
+        "Attribute value management",
+        "Category-based attribute assignment",
+        "Attribute validation and constraints",
+        "Bulk attribute operations",
+        "Attribute search and filtering integration"
+      ],
+      "files_to_modify": [
+        "src/server/functions/product-attributes.ts",
+        "src/lib/schemas/attributes.ts"
+      ],
+      "dependencies": [
+        "PROD-CORE-SCHEMA"
+      ],
+      "completion_promise": "PROD_ATTRIBUTES_API_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "PROD-ATTRIBUTES-UI",
+      "name": "Attributes Management Interface",
+      "description": "Attribute definition and product attribute editing interface",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Attribute definition creation and management",
+        "Category assignment for attributes",
+        "Dynamic form generation for product attributes",
+        "Attribute type-specific editors (select, number, text, etc.)",
+        "Attribute validation and required field handling",
+        "Bulk attribute value updates"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/settings/product-attributes.tsx",
+        "src/components/domain/products/attribute-definitions.tsx",
+        "src/components/domain/products/attribute-editor.tsx"
+      ],
+      "dependencies": [
+        "PROD-ATTRIBUTES-API"
+      ],
+      "completion_promise": "PROD_ATTRIBUTES_UI_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "PROD-INVENTORY-API",
+      "name": "Inventory Management API",
+      "description": "Implement inventory tracking and movement functionality",
+      "type": "server-function",
+      "acceptance_criteria": [
+        "Stock level tracking and updates",
+        "Inventory movement logging",
+        "Stock allocation for orders",
+        "Low stock alerts and reorder points",
+        "Inventory adjustments and corrections",
+        "Multi-location inventory support"
+      ],
+      "files_to_modify": [
+        "src/server/functions/product-inventory.ts",
+        "src/lib/schemas/inventory.ts"
+      ],
+      "dependencies": [
+        "PROD-CORE-SCHEMA"
+      ],
+      "completion_promise": "PROD_INVENTORY_API_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "PROD-INVENTORY-UI",
+      "name": "Inventory Management Interface",
+      "description": "Stock level monitoring and adjustment interface",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Current stock level display",
+        "Stock adjustment interface",
+        "Movement history with filtering",
+        "Low stock alerts and notifications",
+        "Bulk inventory updates",
+        "Inventory reporting and analytics"
+      ],
+      "files_to_modify": [
+        "src/components/domain/products/inventory-panel.tsx",
+        "src/components/domain/products/stock-adjustment.tsx",
+        "src/components/domain/products/inventory-history.tsx"
+      ],
+      "dependencies": [
+        "PROD-INVENTORY-API"
+      ],
+      "completion_promise": "PROD_INVENTORY_UI_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "PROD-BULK-OPERATIONS",
+      "name": "Bulk Operations System",
+      "description": "Implement bulk import, export, and update functionality",
+      "type": "server-function",
+      "acceptance_criteria": [
+        "CSV/Excel import with validation",
+        "Bulk update operations",
+        "Progress tracking for large operations",
+        "Error reporting and conflict resolution",
+        "Rollback capabilities for failed operations",
+        "Background processing for large datasets"
+      ],
+      "files_to_modify": [
+        "src/server/functions/product-bulk-ops.ts",
+        "src/components/domain/products/bulk-import.tsx",
+        "src/components/domain/products/bulk-operations.tsx"
+      ],
+      "dependencies": [
+        "PROD-CORE-API"
+      ],
+      "completion_promise": "PROD_BULK_OPERATIONS_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "PROD-SEARCH-OPTIMIZATION",
+      "name": "Search Optimization",
+      "description": "Implement full-text search and advanced filtering",
+      "type": "server-function",
+      "acceptance_criteria": [
+        "PostgreSQL full-text search setup",
+        "Attribute-based filtering",
+        "Search result ranking and relevance",
+        "Search suggestions and autocomplete",
+        "Search analytics and popular terms",
+        "Performance optimization for large catalogs"
+      ],
+      "files_to_modify": [
+        "src/server/functions/product-search.ts",
+        "src/lib/search/product-search-index.ts",
+        "src/components/domain/products/search-interface.tsx"
+      ],
+      "dependencies": [
+        "PROD-CORE-API"
+      ],
+      "completion_promise": "PROD_SEARCH_OPTIMIZATION_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "PROD-CATEGORY-MANAGEMENT",
+      "name": "Category Management System",
+      "description": "Implement hierarchical category management with inheritance",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Category tree visualization",
+        "Drag-drop category reordering",
+        "Category creation and editing",
+        "Attribute inheritance configuration",
+        "Category-based navigation",
+        "Bulk category operations"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/settings/categories.tsx",
+        "src/components/domain/products/category-tree.tsx",
+        "src/components/domain/products/category-editor.tsx"
+      ],
+      "dependencies": [
+        "PROD-CORE-API"
+      ],
+      "completion_promise": "PROD_CATEGORY_MANAGEMENT_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    }
+  ],
+  "success_criteria": [
+    "Complete product catalog management system with hierarchical categories",
+    "Flexible pricing engine with volume tiers and customer-specific pricing",
+    "Comprehensive product attribute system for dynamic specifications",
+    "Professional image gallery with optimization and management",
+    "Bundle product support with component inventory tracking",
+    "Full-text search with attribute filtering and relevance ranking",
+    "Bulk operations for efficient catalog management",
+    "Real-time inventory tracking with movement history",
+    "Mobile-responsive catalog browsing and management",
+    "Integration with order, inventory, and financial systems",
+    "Performance optimized for 100k+ product catalogs",
+    "Complete audit trail for all product changes",
+    "Export capabilities in multiple formats",
+    "Advanced product relations and recommendations"
+  ],
+  "out_of_scope": [
+    "Multi-organization product sharing",
+    "Advanced product configurator (options/variants)",
+    "Product approval workflows",
+    "Advanced reporting and analytics dashboards",
+    "Third-party marketplace integrations",
+    "Product lifecycle management (PLM) features",
+    "Advanced pricing rules engine",
+    "Product comparison tools"
+  ],
+  "migration_notes": {
+    "existing_data": "If existing product data exists, migration scripts needed to transform category structure and attribute data to new flexible schema",
+    "inventory_data": "Existing inventory levels and movement history should be preserved during migration",
+    "pricing_data": "Current pricing structures need mapping to new tiered and customer-specific pricing system",
+    "image_assets": "Existing product images need migration to new Supabase Storage with proper metadata"
+  },
+  "schema_dependencies": {
+    "prerequisite_migrations": [
+      {
+        "migration": "007_inventory-core.ts",
+        "provides": ["warehouseLocations", "inventoryMovements"],
+        "note": "Shared inventory tables must exist before 008_products.ts runs"
+      }
+    ],
+    "this_migration": "008_products.ts",
+    "post_actions": [
+      "Add FK constraint: ALTER TABLE inventoryMovements ADD CONSTRAINT fk_movement_product FOREIGN KEY (productId) REFERENCES products(id) ON DELETE SET NULL"
+    ]
+  }
+}

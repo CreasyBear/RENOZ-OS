@@ -1,0 +1,457 @@
+{
+  "prd_id": "WF-PROCUREMENT",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "summary": {
+    "total_stories": 6,
+    "verified_gaps": 2,
+    "invalidated_gaps": 4,
+    "implementation_status": "Strong existing foundation. Manual PO creation is complete with full lifecycle (draft->send->in_transit->received). Goods receipt with partial quantities, serial number entry, and bin location is implemented. Procurement metrics dashboard exists on PO list page. Demand identification via getSuggestedOrderItems exists. Supplier comparison is missing but supplier performance metrics exist. Major gaps are formal demand planning queue, supplier comparison UI during PO creation, and dedicated procurement analytics page."
+  },
+  "codebase_findings": {
+    "schema_files": [
+      {
+        "path": "renoz-v2/lib/schema/purchase-orders.ts",
+        "contains": [
+          "purchaseOrders table with poNumber (auto-generated via Postgres function)",
+          "supplierId FK to suppliers table",
+          "status: draft, sent, in_transit, partially_received, received, cancelled",
+          "orderDate, expectedDate, receivedDate timestamps",
+          "shippingCarrier, trackingNumber for shipping tracking",
+          "subtotalAmount, taxAmount, totalAmount decimals",
+          "xeroPoId for Xero integration",
+          "purchaseOrderItems table with quantity, quantityReceived, quantityRejected"
+        ],
+        "notes": "Schema supports full PO lifecycle including partial receipt tracking. No approval workflow fields. No demand_queue or demand_items tables."
+      },
+      {
+        "path": "renoz-v2/lib/schema/suppliers.ts",
+        "contains": [
+          "suppliers table with companyName, contactName, contact info",
+          "paymentTerms, category fields",
+          "xeroContactId for integration"
+        ],
+        "notes": "No supplier_prices table for price comparison. No preferredSupplierId on products."
+      },
+      {
+        "path": "renoz-v2/lib/schema/products.ts",
+        "contains": [
+          "products table with reorderPoint column",
+          "inventoryItems with receivedFromPoId tracking PO receipt source"
+        ],
+        "notes": "reorderPoint exists for low stock detection used in demand identification."
+      }
+    ],
+    "server_functions": [
+      {
+        "path": "renoz-v2/src/server/functions/purchase-orders.ts",
+        "functions": [
+          "listPurchaseOrders - Paginated list with search, status, supplier filters",
+          "getPurchaseOrder - Single PO with items and supplier",
+          "createPurchaseOrder - Create with auto-generated PO number",
+          "addPOItem - Add item to draft PO",
+          "updatePOItem - Update quantity/price on draft PO",
+          "removePOItem - Remove item from draft PO",
+          "updatePOStatus - Validated status transitions",
+          "sendPO - Send PO (triggers email via Trigger.dev)",
+          "markPOShipped - Mark as in_transit with carrier/tracking",
+          "getSuggestedOrderItems - DEMAND IDENTIFICATION: Returns products below reorder point with suggested quantities"
+        ],
+        "notes": "Full PO CRUD and lifecycle implemented. getSuggestedOrderItems provides demand identification based on reorder points - this is the foundation for WF-PROC-001."
+      },
+      {
+        "path": "renoz-v2/src/server/functions/receive-goods.ts",
+        "functions": [
+          "receiveGoods - Full goods receipt process with partial quantity support, serial number validation, bin location assignment, inventory item creation, inventory movement logging, automatic PO status updates"
+        ],
+        "notes": "Complete goods receipt implementation. Creates inventory items, tracks movements, handles serialized products with serial number entry."
+      },
+      {
+        "path": "renoz-v2/src/server/functions/supplier-performance.ts",
+        "functions": [
+          "getSupplierPerformanceMetrics - On-time delivery %, avg lead time, total orders for period",
+          "getSupplierPortfolioOverview - Aggregate supplier metrics",
+          "listSuppliersWithPerformance - List suppliers with calculated performance",
+          "getSupplierAlerts - Performance alerts (mock implementation)",
+          "calculatePerformanceRating - Helper for 1-5 star rating"
+        ],
+        "notes": "Supplier performance tracking exists and could be used for supplier comparison. Performance calculated from PO history dynamically."
+      },
+      {
+        "path": "renoz-v2/src/server/functions/orders.ts",
+        "functions": [
+          "getProcurementMetrics - Dashboard metrics by PO status (draft, sent, in_transit, partially_received, received, overdue) with counts and values"
+        ],
+        "notes": "Procurement metrics exist and are displayed on PO list page."
+      }
+    ],
+    "components": [
+      {
+        "path": "renoz-v2/src/components/domain/procurement/po-builder.tsx",
+        "contains": "PO creation builder component"
+      },
+      {
+        "path": "renoz-v2/src/components/domain/procurement/receive-goods.tsx",
+        "contains": "Full goods receipt UI: partial quantity entry, serial number input for serialized products, bin location, quick receive all, confirmation dialog"
+      },
+      {
+        "path": "renoz-v2/src/components/domain/procurement/suggest-items-dialog.tsx",
+        "contains": "Dialog showing low stock products with suggested quantities, allows adding to PO"
+      },
+      {
+        "path": "renoz-v2/src/components/domain/procurement/purchase-order-columns.tsx",
+        "contains": "DataTable columns for PO list"
+      },
+      {
+        "path": "renoz-v2/src/components/domain/procurement/po-detail/*",
+        "contains": "PO detail components: overview tab, items tab, send dialog, mark shipped dialog, add item dialog"
+      },
+      {
+        "path": "renoz-v2/src/components/domain/procurement/po-pdf.tsx",
+        "contains": "PO PDF generation and preview"
+      }
+    ],
+    "routes": [
+      {
+        "path": "renoz-v2/src/routes/procurement/purchase-orders/index.tsx",
+        "contains": [
+          "PO list page with procurement metrics summary (draft, sent, in_transit, partially_received, received, overdue counts)",
+          "Status filter buttons",
+          "Search, DataTable with bulk export",
+          "New PO button"
+        ]
+      },
+      {
+        "path": "renoz-v2/src/routes/procurement/purchase-orders/$poId.tsx",
+        "contains": [
+          "PO detail page with Overview, Items, Receiving tabs",
+          "Send PO action (for draft)",
+          "Mark Shipped action (for sent)",
+          "ReceiveGoods component for goods receipt"
+        ]
+      },
+      {
+        "path": "renoz-v2/src/routes/procurement/purchase-orders/new.tsx",
+        "contains": "New PO creation page with supplier selection and item addition"
+      },
+      {
+        "path": "renoz-v2/src/routes/procurement/suppliers/index.tsx",
+        "contains": "Supplier list page"
+      },
+      {
+        "path": "renoz-v2/src/routes/procurement/suppliers/$supplierId.tsx",
+        "contains": "Supplier detail with PO history tab"
+      }
+    ]
+  },
+  "stories_status": {
+    "WF-PROC-001": {
+      "name": "Add Demand Identification",
+      "status": "mostly_implemented",
+      "change": "reduce_scope",
+      "layers": ["server", "UI"],
+      "estimated_iterations": 3,
+      "existing_implementation": {
+        "daily_check_below_reorder": "PARTIAL - getSuggestedOrderItems checks products below reorder but not scheduled daily",
+        "demand_queue_with_quantities": "EXISTS - getSuggestedOrderItems returns product list with suggestedQty",
+        "factor_in_lead_times": "MISSING - no lead time consideration in suggestions",
+        "consider_open_pos_in_transit": "MISSING - doesn't subtract pending PO quantities",
+        "manual_add_to_demand_queue": "MISSING - no persistent demand queue, only suggestions",
+        "demand_forecast_integration": "MISSING - no forecasting"
+      },
+      "remaining_work": [
+        "Factor in pending PO quantities when calculating suggested qty",
+        "Consider supplier lead times for order timing",
+        "Optionally create persistent demand_queue table for tracking",
+        "Add demand suggestions widget to procurement dashboard"
+      ],
+      "atomization_needed": false,
+      "atomization_reason": "Core logic exists in getSuggestedOrderItems. Enhancements are incremental."
+    },
+    "WF-PROC-002": {
+      "name": "Add Supplier Comparison",
+      "status": "partial",
+      "change": "atomize",
+      "layers": ["schema", "server", "UI"],
+      "estimated_iterations": 5,
+      "existing_implementation": {
+        "view_multiple_suppliers_per_product": "MISSING - no supplier_prices table, products don't track multiple suppliers",
+        "compare_price_lead_time_performance": "PARTIAL - performance metrics exist via getSupplierPerformanceMetrics but no price comparison",
+        "preferred_supplier_highlighted": "MISSING - no preferredSupplierId on products",
+        "total_cost_calculation": "MISSING - no landed cost or total cost comparison",
+        "select_supplier_for_po": "EXISTS - PO creation has supplier selection",
+        "record_selection_reasoning": "MISSING - no notes/reason field for supplier selection"
+      },
+      "remaining_work": [
+        "Create supplier_prices table (supplierId, productId, unitPrice, minQty, effectiveDate)",
+        "Add products.preferredSupplierId FK",
+        "Create supplier comparison UI showing prices from all suppliers for product",
+        "Show supplier performance score in comparison view",
+        "Add supplier selection notes field to PO"
+      ],
+      "atomization_needed": true,
+      "atomization_reason": "Requires new schema tables, server functions, and comparison UI"
+    },
+    "WF-PROC-003": {
+      "name": "Add PO Creation Wizard",
+      "status": "mostly_implemented",
+      "change": "reduce_scope",
+      "layers": ["UI"],
+      "estimated_iterations": 2,
+      "existing_implementation": {
+        "create_po_from_demand_queue": "PARTIAL - suggest-items-dialog.tsx allows adding suggested items to PO",
+        "group_by_supplier_automatically": "MISSING - suggestions not grouped by supplier",
+        "adjust_quantities_before_creating": "EXISTS - can edit quantities in PO builder",
+        "add_non_demand_items_manually": "EXISTS - addPOItem allows manual product addition",
+        "preview_po_before_creation": "EXISTS - po-pdf-preview shows PO preview",
+        "submit_for_approval": "MISSING - no approval workflow"
+      },
+      "remaining_work": [
+        "Add supplier grouping to suggest-items-dialog.tsx",
+        "Create 'Create PO for Supplier' action from grouped suggestions",
+        "Link approval workflow when DOM-SUPP-002 is complete"
+      ],
+      "atomization_needed": false,
+      "atomization_reason": "Most functionality exists. Only supplier grouping and approval link needed."
+    },
+    "WF-PROC-004": {
+      "name": "Add PO Status Tracking",
+      "status": "mostly_implemented",
+      "change": "reduce_scope",
+      "layers": ["server", "UI"],
+      "estimated_iterations": 2,
+      "existing_implementation": {
+        "po_statuses": "EXISTS - draft, sent, in_transit, partially_received, received, cancelled (pending_approval missing for approval workflow)",
+        "expected_delivery_date_tracking": "EXISTS - expectedDate column and displayed in UI",
+        "supplier_acknowledgment_capture": "MISSING - no acknowledgement tracking",
+        "overdue_po_alerts": "EXISTS - getProcurementMetrics counts overdue POs (sent/in_transit with past expectedDate)",
+        "status_history_with_timestamps": "PARTIAL - audit log tracks changes but no dedicated status_history table",
+        "email_notifications_on_events": "PARTIAL - sendPO triggers email via Trigger.dev, no other event emails"
+      },
+      "remaining_work": [
+        "Add supplier acknowledgement capture (ack date, ack by)",
+        "Add email notifications for overdue POs",
+        "Consider adding po_status_history table for explicit timeline view"
+      ],
+      "atomization_needed": false,
+      "atomization_reason": "Core tracking exists. Only acknowledgement and additional notifications needed."
+    },
+    "WF-PROC-005": {
+      "name": "Add Goods Receipt Process",
+      "status": "complete",
+      "change": "none",
+      "layers": [],
+      "estimated_iterations": 0,
+      "existing_implementation": {
+        "receipt_from_pending_po_list": "EXISTS - Receiving tab on PO detail shows receivable items",
+        "scan_enter_serial_numbers": "EXISTS - SerialNumberInput component for serialized products",
+        "record_actual_quantities": "EXISTS - quantityReceived and quantityRejected tracked per item",
+        "quality_inspection_checklist": "MISSING - no checklist, but rejection with quantity supported",
+        "handle_discrepancies": "EXISTS - can receive less than ordered, reject damaged, PO goes to partially_received",
+        "auto_allocate_to_waiting_orders": "MISSING - received inventory goes to available status, no auto-allocation"
+      },
+      "remaining_work": [
+        "Optional: Add quality inspection checklist",
+        "Optional: Auto-allocate received inventory to waiting orders (depends on DOM-INV-004)"
+      ],
+      "atomization_needed": false,
+      "atomization_reason": "Core goods receipt process is complete. Optional enhancements only."
+    },
+    "WF-PROC-006": {
+      "name": "Add Procurement Analytics",
+      "status": "partial",
+      "change": "atomize",
+      "layers": ["server", "UI"],
+      "estimated_iterations": 5,
+      "existing_implementation": {
+        "spend_analysis_by_supplier_category_period": "PARTIAL - getProcurementMetrics has status breakdown, no spend by category/supplier",
+        "lead_time_performance_vs_promised": "EXISTS - getSupplierPerformanceMetrics calculates on-time delivery % and avg lead time",
+        "price_trend_analysis": "MISSING - no price history tracking",
+        "supplier_comparison_scorecard": "EXISTS - listSuppliersWithPerformance returns performance metrics per supplier",
+        "demand_accuracy_vs_actual": "MISSING - no demand tracking for accuracy measurement",
+        "export_for_management": "PARTIAL - bulk export exists for suppliers, no procurement report export"
+      },
+      "remaining_work": [
+        "Create dedicated /procurement/analytics or /procurement/dashboard route",
+        "Add spend analysis by supplier chart",
+        "Add spend by category breakdown",
+        "Add lead time trend chart",
+        "Add supplier scorecard comparison view",
+        "Add procurement report export"
+      ],
+      "atomization_needed": true,
+      "atomization_reason": "Requires new route with multiple dashboard widgets and charts"
+    }
+  },
+  "recommended_stories": [
+    {
+      "priority": 1,
+      "story_id": "WF-PROC-005",
+      "reason": "Already complete. Can be marked done. Goods receipt with serial numbers, partial quantities, and bin location fully implemented."
+    },
+    {
+      "priority": 2,
+      "story_id": "WF-PROC-004",
+      "reason": "95% complete. Only missing supplier acknowledgement capture and overdue notification emails. High value for visibility."
+    },
+    {
+      "priority": 3,
+      "story_id": "WF-PROC-001",
+      "reason": "getSuggestedOrderItems provides foundation. Needs enhancement to consider pending POs and lead times."
+    },
+    {
+      "priority": 4,
+      "story_id": "WF-PROC-003",
+      "reason": "PO creation exists. Only needs supplier grouping in suggestions dialog for workflow improvement."
+    },
+    {
+      "priority": 5,
+      "story_id": "WF-PROC-006",
+      "reason": "Analytics require new UI work but leverage existing server functions. Good consolidation of metrics."
+    },
+    {
+      "priority": 6,
+      "story_id": "WF-PROC-002",
+      "reason": "Supplier comparison requires new schema (supplier_prices table). Depends on products domain work. Defer."
+    }
+  ],
+  "atomization_notes": {
+    "WF-PROC-002": {
+      "suggested_split": [
+        {
+          "id": "WF-PROC-002-A",
+          "name": "Create supplier_prices schema",
+          "layers": ["schema"],
+          "iterations": 2
+        },
+        {
+          "id": "WF-PROC-002-B",
+          "name": "Add preferredSupplierId to products schema",
+          "layers": ["schema"],
+          "iterations": 1
+        },
+        {
+          "id": "WF-PROC-002-C",
+          "name": "Create supplier price CRUD server functions",
+          "layers": ["server"],
+          "iterations": 2
+        },
+        {
+          "id": "WF-PROC-002-D",
+          "name": "Create supplier comparison UI for PO creation",
+          "layers": ["UI"],
+          "iterations": 2
+        }
+      ]
+    },
+    "WF-PROC-006": {
+      "suggested_split": [
+        {
+          "id": "WF-PROC-006-A",
+          "name": "Create /procurement/dashboard route with layout",
+          "layers": ["UI"],
+          "iterations": 1
+        },
+        {
+          "id": "WF-PROC-006-B",
+          "name": "Add spend analysis widgets (by supplier, by category)",
+          "layers": ["server", "UI"],
+          "iterations": 2
+        },
+        {
+          "id": "WF-PROC-006-C",
+          "name": "Add supplier scorecard comparison widget",
+          "layers": ["UI"],
+          "iterations": 1
+        },
+        {
+          "id": "WF-PROC-006-D",
+          "name": "Add procurement report export",
+          "layers": ["server", "UI"],
+          "iterations": 1
+        }
+      ]
+    }
+  },
+  "warnings": [
+    {
+      "type": "gap_invalidated",
+      "story": "WF-PROC-005",
+      "message": "PRD current_state.implemented says 'Goods receipt' but audit found full implementation including serial numbers, partial quantities, bin locations, and inventory creation."
+    },
+    {
+      "type": "gap_invalidated",
+      "story": "WF-PROC-001",
+      "message": "PRD claims 'No demand planning' but getSuggestedOrderItems provides demand identification based on reorder points."
+    },
+    {
+      "type": "gap_invalidated",
+      "story": "WF-PROC-004",
+      "message": "PRD claims 'No PO tracking' but full status lifecycle with metrics exists including overdue detection."
+    },
+    {
+      "type": "iteration_overestimate",
+      "story": "WF-PROC-001",
+      "message": "Estimated 5 iterations but core getSuggestedOrderItems exists. Enhancements likely need only 3 iterations."
+    },
+    {
+      "type": "dependency_missing",
+      "story": "WF-PROC-002",
+      "message": "Supplier comparison depends on supplier_prices schema which is also needed for DOM-SUPP-005 (Supplier Price Lists). Consider sequencing."
+    },
+    {
+      "type": "dependency_missing",
+      "story": "WF-PROC-003",
+      "message": "Submit for approval feature depends on DOM-SUPP-002 (PO Approval Workflow) which is not implemented."
+    }
+  ],
+  "critical_findings": [
+    {
+      "finding": "Goods receipt process is fully implemented with serialized product support",
+      "impact": "WF-PROC-005 can be marked as complete - no development work needed",
+      "recommendation": "Update PRD current_state.implemented to reflect complete goods receipt."
+    },
+    {
+      "finding": "getProcurementMetrics provides dashboard-ready metrics on PO list page",
+      "impact": "Procurement visibility exists but not in dedicated dashboard",
+      "recommendation": "WF-PROC-006 should focus on creating dedicated dashboard route, not creating metrics from scratch."
+    },
+    {
+      "finding": "Demand identification exists via getSuggestedOrderItems but doesn't consider pending POs",
+      "impact": "Suggested quantities may be too high if POs already in transit",
+      "recommendation": "Priority enhancement for WF-PROC-001: subtract pending PO quantities from suggestions."
+    },
+    {
+      "finding": "Supplier performance metrics calculated dynamically - no price comparison",
+      "impact": "Can compare suppliers by performance but not by price during procurement",
+      "recommendation": "WF-PROC-002 (Supplier Comparison) should build on existing performance metrics and add price data."
+    },
+    {
+      "finding": "No approval workflow - POs go draft->sent without approval",
+      "impact": "No spend controls for high-value POs",
+      "recommendation": "Approval workflow is in DOM-SUPP-002 (Suppliers domain). WF-PROC-003 should integrate when available."
+    }
+  ],
+  "cross_domain_dependencies": {
+    "DOM-INV-001": {
+      "from_stories": ["WF-PROC-001"],
+      "reason": "Demand identification uses products.reorderPoint from inventory domain"
+    },
+    "DOM-INV-002": {
+      "from_stories": ["WF-PROC-005"],
+      "reason": "Goods receipt assigns binLocation but full warehouse_locations integration pending"
+    },
+    "DOM-SUPP-002": {
+      "from_stories": ["WF-PROC-003"],
+      "reason": "PO creation wizard needs approval workflow for submit for approval feature"
+    },
+    "DOM-SUPP-005": {
+      "from_stories": ["WF-PROC-002"],
+      "reason": "Supplier comparison requires supplier_prices table from supplier price lists feature"
+    },
+    "DOM-PROC-003": {
+      "from_stories": ["WF-PROC-001"],
+      "reason": "PRD references this dependency but domain procurement PRD not found - likely refers to products/inventory"
+    }
+  }
+}

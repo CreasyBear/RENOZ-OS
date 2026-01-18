@@ -1,0 +1,297 @@
+{
+  "prd_id": "CC-A11Y",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "summary": {
+    "total_stories": 8,
+    "verified_gaps": 3,
+    "invalidated_gaps": 4,
+    "new_gaps_found": 1,
+    "implementation_status": "partially_complete"
+  },
+  "codebase_findings": {
+    "skip_link": {
+      "status": "implemented",
+      "files": [
+        "renoz-v2/src/components/shared/skip-link.tsx",
+        "renoz-v2/src/components/layout/app-shell.tsx"
+      ],
+      "notes": "SkipLink component exists, targets #main-content, properly hidden until focused. AppShell includes SkipLink and main element with id='main-content', role='main', tabIndex={-1}."
+    },
+    "landmarks": {
+      "status": "implemented",
+      "files": [
+        "renoz-v2/src/components/layout/app-shell.tsx",
+        "renoz-v2/src/components/layout/header.tsx",
+        "renoz-v2/src/components/layout/sidebar.tsx"
+      ],
+      "notes": "Header uses role='banner', Sidebar uses role='navigation' with aria-label='Main navigation', main content uses role='main'. Proper landmark structure in place."
+    },
+    "keyboard_navigation": {
+      "status": "partially_implemented",
+      "files": [
+        "renoz-v2/src/components/layout/sidebar.tsx",
+        "renoz-v2/src/components/layout/header.tsx",
+        "renoz-v2/src/components/shared/editable-field.tsx",
+        "renoz-v2/src/components/ai/prompt-input.tsx"
+      ],
+      "notes": "Sidebar handles Escape key for mobile close. Multiple components have onKeyDown handlers. Radix UI primitives provide built-in keyboard support for dropdowns, dialogs, tabs, etc. aria-expanded, aria-controls, aria-current='page' properly used in navigation."
+    },
+    "focus_management": {
+      "status": "partially_implemented",
+      "files": [
+        "renoz-v2/src/components/shared/accessibility-helpers.ts",
+        "renoz-v2/src/components/ui/dialog.tsx"
+      ],
+      "notes": "trapFocus utility exists in accessibility-helpers.ts but is NOT a React hook. Radix Dialog provides focus trapping out of the box. No custom useFocusTrap, useFocusOnMount, useFocusReturn hooks exist. main content has tabIndex={-1} for skip link targeting."
+    },
+    "screen_reader_announcements": {
+      "status": "implemented",
+      "files": [
+        "renoz-v2/src/components/shared/aria-live-region.tsx",
+        "renoz-v2/src/components/shared/accessibility-helpers.ts",
+        "renoz-v2/src/components/layout/app-shell.tsx",
+        "renoz-v2/src/components/shared/loading-state.tsx",
+        "renoz-v2/src/components/shared/error-state.tsx",
+        "renoz-v2/src/components/shared/empty-state.tsx"
+      ],
+      "notes": "AriaLiveRegion component and useAriaLiveAnnouncement hook exist. announce() function works via dynamically created live regions. Loading/error/empty states use aria-live='polite' or aria-live='assertive'. AppShell initializes announcements on page load."
+    },
+    "form_accessibility": {
+      "status": "mostly_implemented",
+      "files": [
+        "renoz-v2/src/components/shared/form-field-wrapper.tsx",
+        "renoz-v2/src/components/domain/customers/customer-form.tsx",
+        "renoz-v2/src/components/domain/support/issue-form.tsx",
+        "renoz-v2/src/components/domain/products/product-form.tsx",
+        "renoz-v2/src/components/ui/form.tsx"
+      ],
+      "notes": "FormFieldWrapper provides label association, aria-required, error IDs. Multiple forms use aria-invalid, aria-describedby for errors. UI form component has aria-describedby and aria-invalid. Some forms fully accessible, others may need consistency review."
+    },
+    "color_contrast": {
+      "status": "not_audited",
+      "files": [
+        "renoz-v2/src/styles.css"
+      ],
+      "notes": "Color system uses oklch colors. No documented contrast audit. Primary/foreground combinations need verification for 4.5:1 ratio. muted-foreground (0.556 lightness in light mode, 0.708 in dark) may be borderline."
+    },
+    "reduced_motion": {
+      "status": "not_implemented",
+      "files": [],
+      "notes": "No prefers-reduced-motion media query found in codebase. Animations use animate-pulse, animate-spin, animate-in/out. Skeleton shimmer effects present."
+    },
+    "table_accessibility": {
+      "status": "partially_implemented",
+      "files": [
+        "renoz-v2/src/components/ui/table.tsx"
+      ],
+      "notes": "Table component uses semantic elements (table, thead, tbody, th, td). No scope='col' on headers. No aria-sort for sortable columns. No caption or aria-labelledby. TableCaption component exists but may not be consistently used."
+    },
+    "e2e_accessibility_testing": {
+      "status": "implemented",
+      "files": [
+        "renoz-v2/e2e/fixtures/accessibility.fixture.ts",
+        "renoz-v2/e2e/accessibility/critical-pages.spec.ts"
+      ],
+      "notes": "axe-core integration with WCAG 2.1 AA tags. Tests cover public and protected pages. Good foundation for automated a11y testing."
+    }
+  },
+  "gap_verification": {
+    "no_focus_management_strategy": {
+      "original_gap": true,
+      "verified": false,
+      "reason": "Focus management IS implemented: trapFocus utility exists, Radix handles dialog focus trapping, main content is focusable for skip links. React hooks don't exist but may not be necessary given Radix coverage."
+    },
+    "no_skip_links": {
+      "original_gap": true,
+      "verified": false,
+      "reason": "Skip link IS implemented in SkipLink component and used in AppShell. Main content has id='main-content' and tabIndex={-1}."
+    },
+    "no_screen_reader_announcements": {
+      "original_gap": true,
+      "verified": false,
+      "reason": "Screen reader announcements ARE implemented via AriaLiveRegion component, useAriaLiveAnnouncement hook, and announceToScreenReader utility. Loading/error states use aria-live."
+    },
+    "no_color_contrast_audit": {
+      "original_gap": true,
+      "verified": true,
+      "reason": "No documented color contrast audit. Colors in styles.css need verification against WCAG 4.5:1 and 3:1 requirements."
+    },
+    "no_keyboard_shortcut_documentation": {
+      "original_gap": true,
+      "verified": true,
+      "reason": "Help dialog exists (? key opens it) but no comprehensive keyboard shortcut documentation found. Command palette (Cmd+K) exists but shortcuts not documented for screen reader users."
+    },
+    "no_focus_trap_modals": {
+      "original_gap": true,
+      "verified": false,
+      "reason": "Radix Dialog primitives provide focus trapping automatically. trapFocus utility also exists for custom implementations."
+    },
+    "no_reduced_motion_support": {
+      "original_gap": true,
+      "verified": true,
+      "reason": "No prefers-reduced-motion support found. Animations not conditionally disabled."
+    }
+  },
+  "stories_status": {
+    "CC-A11Y-001": {
+      "name": "Skip Link and Landmark Structure",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "Already fully implemented: SkipLink component in app-shell.tsx, main content with id='main-content', header with role='banner', sidebar with role='navigation' and aria-label, main with role='main'. All acceptance criteria met.",
+      "layers": ["ui"],
+      "estimated_iterations": 0
+    },
+    "CC-A11Y-002": {
+      "name": "Keyboard Navigation Patterns",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "Radix UI primitives (used throughout via shadcn/ui) provide all listed requirements: Tab navigation, Enter/Space activation, Arrow key navigation in menus, focus trapping in modals, Escape to close. Sidebar handles Escape key. Navigation uses aria-current='page'.",
+      "layers": ["ui"],
+      "estimated_iterations": 0
+    },
+    "CC-A11Y-003": {
+      "name": "Focus Management Utilities",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "Radix Dialog handles focus trapping and focus return automatically. trapFocus utility exists in accessibility-helpers.ts. Creating React hooks would duplicate Radix functionality. If custom hooks needed for non-Radix components, scope would be minimal.",
+      "layers": ["ui"],
+      "estimated_iterations": 0
+    },
+    "CC-A11Y-004": {
+      "name": "Screen Reader Announcements",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "Already implemented: AriaLiveRegion component, useAriaLiveAnnouncement hook, announceToScreenReader utility. AppShell announces page load. Loading/error/empty states use aria-live. Toast integration may need verification but foundation exists.",
+      "layers": ["ui"],
+      "estimated_iterations": 0
+    },
+    "CC-A11Y-005": {
+      "name": "Form Accessibility",
+      "status": "valid",
+      "change": "adjust_scope",
+      "reason": "Partially implemented. FormFieldWrapper provides good foundation. Many forms use aria-invalid/aria-describedby but need consistency audit. Missing: fieldset/legend for form groups, autocomplete attributes, error summary component.",
+      "layers": ["ui"],
+      "estimated_iterations": 3,
+      "adjusted_scope": {
+        "new_acceptance_criteria": [
+          "Audit all forms for consistent aria-invalid and aria-describedby usage",
+          "Add fieldset and legend to multi-field groups (e.g., address forms)",
+          "Add autocomplete attributes to email, name, phone, address fields",
+          "Create and integrate ErrorSummary component for form submission failures",
+          "TypeScript compiles without errors"
+        ],
+        "removed_criteria": [
+          "All form fields have associated <label> elements (already done via FormFieldWrapper)",
+          "Required fields marked with aria-required='true' (already in FormFieldWrapper)"
+        ]
+      }
+    },
+    "CC-A11Y-006": {
+      "name": "Color Contrast Compliance",
+      "status": "valid",
+      "change": "none",
+      "reason": "No color contrast audit has been performed. oklch color system needs verification. muted-foreground values may be borderline. This remains a valid gap.",
+      "layers": ["ui"],
+      "estimated_iterations": 3
+    },
+    "CC-A11Y-007": {
+      "name": "Reduced Motion Support",
+      "status": "valid",
+      "change": "none",
+      "reason": "No prefers-reduced-motion implementation found. Animations exist (animate-pulse, animate-spin, transitions). This is a valid accessibility gap for motion-sensitive users.",
+      "layers": ["ui"],
+      "estimated_iterations": 2
+    },
+    "CC-A11Y-008": {
+      "name": "Data Table Accessibility",
+      "status": "valid",
+      "change": "adjust_scope",
+      "reason": "Table component uses semantic elements but lacks full accessibility. Missing scope='col', aria-sort for sortable columns, consistent caption/aria-labelledby usage.",
+      "layers": ["ui"],
+      "estimated_iterations": 3,
+      "adjusted_scope": {
+        "new_acceptance_criteria": [
+          "Add scope='col' to TableHead component",
+          "Add aria-sort prop to TableHead for sortable columns",
+          "Add table caption or aria-labelledby pattern to Table component",
+          "Document pattern for row selection checkbox labels",
+          "Ensure pagination components are keyboard accessible (verify with Radix)",
+          "TypeScript compiles without errors"
+        ],
+        "removed_criteria": [
+          "Tables use proper <table>, <thead>, <tbody>, <th>, <td> elements (already implemented)",
+          "Row actions accessible via keyboard (handled by Radix/shadcn button components)"
+        ]
+      }
+    }
+  },
+  "recommended_stories": [
+    "CC-A11Y-005",
+    "CC-A11Y-006",
+    "CC-A11Y-007",
+    "CC-A11Y-008"
+  ],
+  "new_gaps_found": {
+    "keyboard_shortcut_documentation": {
+      "description": "While Help dialog exists and shortcuts work, there's no discoverable way for screen reader users to learn available shortcuts. Command palette shortcuts should be documented.",
+      "priority": 2,
+      "suggested_story": {
+        "name": "Keyboard Shortcut Discoverability",
+        "acceptance_criteria": [
+          "Help dialog lists all keyboard shortcuts with descriptions",
+          "Shortcuts are announced when focus enters relevant context",
+          "Command palette shows keyboard shortcuts next to actions",
+          "Screen reader users can access shortcut documentation"
+        ],
+        "estimated_iterations": 2
+      }
+    }
+  },
+  "atomization_notes": {
+    "CC-A11Y-005": {
+      "needs_atomization": false,
+      "reason": "Single layer (UI only), scope is manageable. Focus on consistency audit + error summary component in one story."
+    },
+    "CC-A11Y-006": {
+      "needs_atomization": false,
+      "reason": "Single layer (UI/CSS only). Color audit and fixes can be done together. May require tooling for contrast ratio calculation."
+    },
+    "CC-A11Y-007": {
+      "needs_atomization": false,
+      "reason": "Single layer (CSS). All animation changes are CSS-level. One story covers the gap."
+    },
+    "CC-A11Y-008": {
+      "needs_atomization": false,
+      "reason": "Single layer (UI). Table component enhancements can be done in one story."
+    }
+  },
+  "implementation_recommendations": {
+    "priority_order": [
+      {
+        "story": "CC-A11Y-006",
+        "rationale": "Color contrast is WCAG critical. Affects all users immediately. Should be done first."
+      },
+      {
+        "story": "CC-A11Y-007",
+        "rationale": "Reduced motion is low effort (2 iterations) with high accessibility impact."
+      },
+      {
+        "story": "CC-A11Y-008",
+        "rationale": "Tables are heavily used in the app. Improving table accessibility benefits many workflows."
+      },
+      {
+        "story": "CC-A11Y-005",
+        "rationale": "Form accessibility is partially done. Consistency audit and error summary are valuable but less critical."
+      }
+    ],
+    "dependencies": {
+      "notes": "No inter-story dependencies. All remaining stories are independent and can be parallelized."
+    },
+    "risk_areas": [
+      "Color contrast changes may affect visual design. Coordinate with design review.",
+      "Reduced motion may require testing across browsers for media query support.",
+      "Form audit scope may expand if many inconsistencies found."
+    ]
+  }
+}

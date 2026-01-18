@@ -1,0 +1,251 @@
+{
+  "id": "CC-ERROR",
+  "name": "Error Handling",
+  "description": "Consistent error handling patterns across the Renoz application. Implements the AppError class hierarchy, error boundary components, user-friendly error messages, and error logging/reporting. Ensures users understand what went wrong and what they can do about it.",
+  "created": "2026-01-09",
+  "priority": 1,
+  "phase": "cross-cutting",
+  "dependencies": {
+    "phase": "Cross-cutting",
+    "executionOrder": 1,
+    "schemaRequired": [],
+    "schemaCreates": [],
+    "serverFunctionsRequired": [],
+    "serverFunctionsCreates": [
+      {
+        "function": "handleGlobalError",
+        "story": "CC-ERR-007"
+      },
+      {
+        "function": "useOfflineDetection",
+        "story": "CC-ERR-009"
+      },
+      {
+        "function": "queueOfflineOperation",
+        "story": "CC-ERR-009"
+      },
+      {
+        "function": "syncOfflineQueue",
+        "story": "CC-ERR-009"
+      }
+    ],
+    "prdDependencies": [
+      {
+        "prdId": "CC-A11Y",
+        "status": "RECOMMENDED",
+        "reason": "Error messages need accessible announcements via aria-live"
+      },
+      {
+        "prdId": "CC-LOADING",
+        "status": "RECOMMENDED",
+        "reason": "Retry progress uses Spinner component from loading states"
+      }
+    ],
+    "enables": [
+      {
+        "prdId": "all",
+        "reason": "All domain PRDs use error handling patterns for form validation, API errors, and user feedback"
+      }
+    ]
+  },
+  "references": {
+    "internal": [
+      "memory-bank/_meta/conventions.md#error-handling",
+      "memory-bank/_meta/assumptions.md#architecture-patterns"
+    ],
+    "external": [
+      "https://tanstack.com/router/latest/docs/framework/react/guide/error-handling",
+      "https://react.dev/reference/react/Component#catching-rendering-errors-with-an-error-boundary"
+    ]
+  },
+  "current_state": {
+    "implemented": [
+      "AppError class hierarchy at src/server/errors.ts (AppError, UnauthorizedError, PermissionDeniedError, NotFoundError, ValidationError, ContextualValidationError, ConflictError, ConcurrencyError, BusinessLogicError, RateLimitError)",
+      "Error boundary components (global at src/components/layout/error-boundary.tsx, widget-level, auth-level)",
+      "User-friendly error message mapping via formatError() and transformAuthError()",
+      "Form error display with FormFieldWrapper and FormMessage components",
+      "API error handler utility (useErrorHandler hook)",
+      "Error logging with Sentry integration",
+      "Retry mechanisms for auth (RateLimitResilienceManager) and widgets",
+      "Concurrency conflict resolution dialog"
+    ],
+    "gaps": [
+      "No user-visible retry progress for general mutations",
+      "No TanStack Query retry configuration standardized across app",
+      "No offline error handling and user feedback"
+    ]
+  },
+  "stories": [
+    {
+      "id": "CC-ERR-007",
+      "name": "User-Visible Retry Progress for Mutations",
+      "description": "Extend existing retry infrastructure to provide user-visible retry progress for mutations. Add TanStack Query retry configuration defaults and cancel button for in-progress retries.",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "TanStack Query retry configuration defaults set (3 retries, exponential backoff)",
+        "Retry progress indicator visible during mutation retries",
+        "Cancel button available for in-progress retries",
+        "Retry count displayed (e.g., 'Retry 2 of 3...')",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "CC_ERR_007_COMPLETE",
+      "layer": "ui",
+      "ui_spec": {
+        "reusable": true,
+        "component_type": "RetryProgressIndicator",
+        "component_structure": {
+          "wrapper": "Flex container with gap-2, items-center",
+          "spinner": "InlineSpinner size='sm' with aria-hidden='true'",
+          "message": "Text displaying retry count with semantic color",
+          "cancel_button": "Ghost button with X icon, 48x48 touch target"
+        },
+        "animations": {
+          "enter": "fade-in 150ms ease-out",
+          "pulse": "subtle pulse animation on retry count change",
+          "exit": "fade-out 100ms ease-in",
+          "reduced_motion": "opacity transitions only, no pulse"
+        },
+        "theme_compatibility": {
+          "light": "text-warning-600, bg-warning-50 container",
+          "dark": "text-warning-400, bg-warning-900/20 container"
+        },
+        "accessibility": {
+          "aria_live": "polite",
+          "aria_atomic": true,
+          "role": "status",
+          "announcements": {
+            "retry_start": "Retrying request, attempt {n} of {total}",
+            "retry_success": "Request succeeded",
+            "retry_failed": "Request failed after {total} attempts",
+            "cancelled": "Retry cancelled"
+          },
+          "focus_management": {
+            "cancel_button": "Focusable with visible focus ring",
+            "after_cancel": "Return focus to triggering element"
+          },
+          "keyboard": {
+            "escape": "Cancel retry if in progress"
+          }
+        },
+        "touch_targets": {
+          "cancel_button": "min-w-12 min-h-12 (48x48px)"
+        },
+        "responsive": {
+          "mobile": "Stack vertically, full-width cancel button",
+          "tablet_up": "Horizontal inline layout"
+        }
+      }
+    },
+    {
+      "id": "CC-ERR-009",
+      "name": "Offline Error Handling and Feedback",
+      "description": "Implement user feedback when the app detects offline state. Show connection status, queue failed operations, and notify users when operations will retry.",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Offline detection hook that monitors navigator.onLine",
+        "Visual indicator in header/status bar when offline",
+        "Toast notification when going offline/online",
+        "Failed operations queued for retry when back online",
+        "User can view pending operations queue",
+        "Clear feedback when queued operations succeed/fail on reconnection",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "CC_ERR_009_COMPLETE",
+      "layer": "ui",
+      "ui_spec": {
+        "reusable": true,
+        "component_type": "OfflineIndicator",
+        "component_structure": {
+          "status_bar": {
+            "container": "Fixed position banner at top of viewport, below header",
+            "icon": "WifiOff icon, 20px",
+            "message": "Connection status text",
+            "queue_button": "View pending operations button"
+          },
+          "queue_panel": {
+            "container": "Slide-out panel or modal",
+            "list": "Pending operations with timestamps",
+            "actions": "Clear queue, retry now buttons"
+          }
+        },
+        "animations": {
+          "banner_enter": "slide-down 200ms ease-out from -100%",
+          "banner_exit": "slide-up 150ms ease-in to -100%",
+          "queue_panel": "slide-in-right 250ms ease-out",
+          "reconnect_pulse": "green pulse animation on reconnection",
+          "reduced_motion": {
+            "banner": "fade only, no slide",
+            "queue_panel": "fade only",
+            "reconnect": "static green bg, no pulse"
+          }
+        },
+        "theme_compatibility": {
+          "offline": {
+            "light": "bg-destructive-50, text-destructive-700, border-destructive-200",
+            "dark": "bg-destructive-900/30, text-destructive-300, border-destructive-800"
+          },
+          "reconnecting": {
+            "light": "bg-warning-50, text-warning-700",
+            "dark": "bg-warning-900/30, text-warning-300"
+          },
+          "online": {
+            "light": "bg-success-50, text-success-700",
+            "dark": "bg-success-900/30, text-success-300"
+          }
+        },
+        "accessibility": {
+          "aria_live": "assertive",
+          "role": "alert",
+          "announcements": {
+            "offline": "You are offline. Changes will be saved when connection is restored.",
+            "reconnecting": "Reconnecting...",
+            "online": "You are back online. Syncing {n} pending changes.",
+            "sync_complete": "All changes synced successfully.",
+            "sync_failed": "{n} changes could not be synced. Please try again."
+          },
+          "focus_management": {
+            "on_offline": "Announce status, do not steal focus",
+            "queue_panel_open": "Focus trap within panel",
+            "queue_panel_close": "Return focus to trigger button"
+          },
+          "keyboard": {
+            "escape": "Close queue panel",
+            "tab": "Navigate within queue panel"
+          }
+        },
+        "touch_targets": {
+          "queue_button": "min-w-12 min-h-12",
+          "queue_item_actions": "min-h-11 per action button",
+          "close_button": "min-w-12 min-h-12"
+        },
+        "responsive": {
+          "mobile": "Full-width banner, queue as bottom sheet",
+          "tablet_up": "Inline banner, queue as side panel"
+        }
+      }
+    }
+  ],
+  "success_criteria": [
+    "All errors display user-friendly messages, never raw stack traces",
+    "Users always understand what went wrong and have a clear next action",
+    "Errors are logged with sufficient context for debugging",
+    "Forms show validation errors inline with proper accessibility",
+    "Concurrency conflicts are resolved gracefully without data loss",
+    "Transient network failures are retried automatically with user visibility"
+  ],
+  "out_of_scope": [
+    "External error monitoring service integration (Sentry, etc.) - already implemented",
+    "Error analytics and reporting dashboards",
+    "Automated error alerting to developers",
+    "Error machine learning for prediction"
+  ],
+  "domain_completion_promise": "CC_ERROR_COMPLETE"
+}

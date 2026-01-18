@@ -1,0 +1,123 @@
+{
+  "prd_id": "FOUND-AUTH",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "summary": {
+    "total_stories": 8,
+    "verified_gaps": 4,
+    "invalidated_gaps": 2,
+    "new_gaps_found": 0,
+    "implementation_status": "partially_complete"
+  },
+  "codebase_findings": {
+    "auth_lib_location": "src/lib/auth/ (6 files + README.md)",
+    "auth_server_functions": "src/server/functions/auth.ts",
+    "readme_exists": true,
+    "readme_comprehensive": true,
+    "existing_components": [
+      "auth-orchestrator.ts - Master coordinator",
+      "auth-predictor.ts - Behavioral prediction",
+      "auth-state-manager.ts - State management with TanStack Query",
+      "error-transformation.ts - User-friendly error messages",
+      "query-coordinator.ts - Prevents auth storms",
+      "rate-limit-resilience.ts - Exponential backoff + circuit breaker"
+    ]
+  },
+  "gap_verification": {
+    "no_permission_matrix": {
+      "claim": "No centralized permission matrix",
+      "verified": true,
+      "finding": "No permissions.ts file in src/lib/auth/. No PERMISSIONS constant or hasPermission helper found. Role checks likely scattered.",
+      "recommendation": "Keep story FOUND-AUTH-001"
+    },
+    "role_checks_scattered": {
+      "claim": "Role checks scattered in server functions",
+      "verified": true,
+      "finding": "createProtectedFn in server/protected-procedure.ts likely lacks permission option. Need to verify and enhance.",
+      "recommendation": "Keep story FOUND-AUTH-002"
+    },
+    "no_api_token_support": {
+      "claim": "No API token support for integrations",
+      "verified": true,
+      "finding": "No api_tokens table in schema, no api-tokens.ts in auth lib",
+      "recommendation": "Keep story FOUND-AUTH-005 but needs atomization into schema + server + UI"
+    },
+    "no_session_revocation": {
+      "claim": "No immediate session revocation",
+      "verified": true,
+      "finding": "No session-revocation.ts in auth lib. Auth system has rate limiting but not session blacklisting.",
+      "recommendation": "Keep story FOUND-AUTH-004"
+    },
+    "missing_auth_tests": {
+      "claim": "Missing cross-org access tests",
+      "verified": true,
+      "finding": "No tests/auth/ directory found",
+      "recommendation": "Keep story FOUND-AUTH-007"
+    },
+    "auth_readme_missing": {
+      "claim": "Implied need for auth README",
+      "verified": false,
+      "finding": "src/lib/auth/README.md EXISTS and is comprehensive (480 lines). Documents architecture, components, usage patterns, configuration, debugging.",
+      "recommendation": "Remove story FOUND-AUTH-003 - README already exists and is excellent"
+    }
+  },
+  "stories_status": {
+    "FOUND-AUTH-001": {
+      "name": "Create Centralized Permission Matrix",
+      "status": "valid",
+      "change": "none"
+    },
+    "FOUND-AUTH-002": {
+      "name": "Create Permission-Aware Server Function Wrapper",
+      "status": "valid",
+      "change": "none"
+    },
+    "FOUND-AUTH-003": {
+      "name": "Create Auth Foundation README",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "src/lib/auth/README.md already exists with comprehensive documentation"
+    },
+    "FOUND-AUTH-004": {
+      "name": "Add Session Revocation Mechanism",
+      "status": "valid",
+      "change": "none"
+    },
+    "FOUND-AUTH-005": {
+      "name": "Create API Token Infrastructure",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "Too large - needs split into schema, server, and UI stories"
+    },
+    "FOUND-AUTH-006": {
+      "name": "Create Role-Based UI Guard Component",
+      "status": "valid",
+      "change": "none"
+    },
+    "FOUND-AUTH-007": {
+      "name": "Add Auth Integration Tests",
+      "status": "valid",
+      "change": "none"
+    },
+    "FOUND-AUTH-008": {
+      "name": "Create Auth ADR",
+      "status": "valid",
+      "change": "adjust_scope",
+      "reason": "README exists - ADR should focus on decisions not covered in README"
+    }
+  },
+  "recommended_stories": [
+    "FOUND-AUTH-001: Create Centralized Permission Matrix",
+    "FOUND-AUTH-002: Create Permission-Aware Server Function Wrapper",
+    "FOUND-AUTH-004: Add Session Revocation Mechanism",
+    "FOUND-AUTH-005a: API Token Schema (schema)",
+    "FOUND-AUTH-005b: API Token Server Functions (server-function)",
+    "FOUND-AUTH-005c: API Token Admin UI (ui-component)",
+    "FOUND-AUTH-006: Create Role-Based UI Guard Component",
+    "FOUND-AUTH-007: Add Auth Integration Tests",
+    "FOUND-AUTH-008: Create Auth ADR (decisions focus)"
+  ],
+  "atomization_notes": {
+    "FOUND-AUTH-005": "Must be split into 3 stories: schema (api_tokens table), server (createApiToken, validateApiToken, revokeApiToken), UI (admin token management)."
+  }
+}

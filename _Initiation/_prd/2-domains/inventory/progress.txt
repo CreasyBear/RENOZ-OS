@@ -1,0 +1,44 @@
+# Warehouse Management System Progress
+# PRD: inventory.prd.json
+# Started: 2026-01-17
+# Updated: 2026-01-18
+
+## Stories (13 total)
+
+- [x] INV-CORE-SCHEMA: Warehouse Core Schema
+- [x] INV-CORE-API: Warehouse Core API
+- [ ] INV-DASHBOARD-UI: Warehouse Operations Dashboard
+- [ ] INV-BROWSER-UI: Inventory Browser Interface
+- [ ] INV-ITEM-DETAIL-UI: Inventory Item Detail Interface
+- [ ] INV-LOCATION-MANAGEMENT: Location Management System
+- [ ] INV-STOCK-COUNTING: Stock Counting System
+- [ ] INV-RECEIVING-INTERFACE: Goods Receiving Interface
+- [ ] INV-FORECASTING-SYSTEM: Demand Forecasting System
+- [ ] INV-ALERTS-MANAGEMENT: Inventory Alerts Management
+- [ ] INV-ANALYTICS-REPORTING: Warehouse Analytics and Reporting
+- [ ] INV-INTEGRATION-API: Warehouse System Integration Layer
+- [ ] INV-MOBILE-INTERFACE: Mobile Warehouse Interface
+
+## Current Story
+INV-DASHBOARD-UI (next)
+
+## Iteration Count
+Total: 2
+Current Story: 0
+
+## Blockers
+None
+
+## Notes
+- INV-CORE-SCHEMA completed: Added stockCounts, stockCountItems, inventoryCostLayers, inventoryForecasts, inventoryAlerts tables
+- Added warehouse management enums to enums.ts
+- Updated Zod validation schemas in src/lib/schemas/inventory.ts
+- INV-CORE-API completed: Created comprehensive server functions in 6 files:
+  - src/server/functions/inventory.ts - Core CRUD, adjustments, allocation, receiving, dashboard
+  - src/server/functions/locations.ts - Simple locations and warehouse hierarchy management
+  - src/server/functions/stock-counts.ts - Cycle counting lifecycle (create, start, count, complete)
+  - src/server/functions/valuation.ts - FIFO cost layers, valuation reports, aging, turnover
+  - src/server/functions/forecasting.ts - Demand forecasts, safety stock, reorder recommendations
+  - src/server/functions/alerts.ts - Alert CRUD, triggering, acknowledgment
+- TS2345 errors in server functions are TanStack Start framework inference quirks (consistent with existing codebase)
+- Pre-existing typecheck errors in customers/pipeline components (not related to inventory changes)

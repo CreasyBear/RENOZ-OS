@@ -1,0 +1,1322 @@
+{
+  "id": "DOM-COMMS",
+  "name": "Communications Domain",
+  "description": "Email, call logging, and customer communication tracking. Provides unified view of all customer interactions and enables templated communications.",
+  "created": "2026-01-09",
+  "priority": 8,
+  "phase": "domain-v1",
+  "version": "v1",
+  "dependencies": {
+    "phase": "Domain",
+    "executionOrder": 8,
+    "schemaRequired": [
+      {
+        "table": "organizations",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "users",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "customers",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "contacts",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "activities",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "email-history",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "notifications",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      }
+    ],
+    "schemaCreates": [
+      {
+        "table": "scheduled_emails",
+        "story": "DOM-COMMS-002a"
+      },
+      {
+        "table": "email_campaigns",
+        "story": "DOM-COMMS-003a"
+      },
+      {
+        "table": "campaign_recipients",
+        "story": "DOM-COMMS-003a"
+      },
+      {
+        "table": "scheduled_calls",
+        "story": "DOM-COMMS-004a"
+      },
+      {
+        "table": "email_signatures",
+        "story": "DOM-COMMS-006"
+      },
+      {
+        "table": "email_templates",
+        "story": "DOM-COMMS-007"
+      }
+    ],
+    "serverFunctionsRequired": [],
+    "serverFunctionsCreates": [
+      {
+        "function": "recordEmailOpen",
+        "story": "DOM-COMMS-001b"
+      },
+      {
+        "function": "recordEmailClick",
+        "story": "DOM-COMMS-001b"
+      },
+      {
+        "function": "scheduleEmail",
+        "story": "DOM-COMMS-002b"
+      },
+      {
+        "function": "getScheduledEmails",
+        "story": "DOM-COMMS-002b"
+      },
+      {
+        "function": "cancelScheduledEmail",
+        "story": "DOM-COMMS-002b"
+      },
+      {
+        "function": "updateScheduledEmail",
+        "story": "DOM-COMMS-002b"
+      },
+      {
+        "function": "createCampaign",
+        "story": "DOM-COMMS-003b"
+      },
+      {
+        "function": "getCampaignRecipients",
+        "story": "DOM-COMMS-003b"
+      },
+      {
+        "function": "previewCampaignRecipients",
+        "story": "DOM-COMMS-003b"
+      },
+      {
+        "function": "scheduleCall",
+        "story": "DOM-COMMS-004b"
+      },
+      {
+        "function": "getScheduledCalls",
+        "story": "DOM-COMMS-004b"
+      },
+      {
+        "function": "updateScheduledCall",
+        "story": "DOM-COMMS-004b"
+      },
+      {
+        "function": "cancelScheduledCall",
+        "story": "DOM-COMMS-004b"
+      },
+      {
+        "function": "completeCall",
+        "story": "DOM-COMMS-004b"
+      }
+    ],
+    "prdDependencies": [
+      {
+        "prdId": "schema-foundation",
+        "status": "REQUIRED",
+        "reason": "Base schema must exist (organizations, users, customers, contacts, activities, email-history)"
+      },
+      {
+        "prdId": "DOM-CUSTOMERS",
+        "status": "REQUIRED",
+        "reason": "Customer and contact data for communications"
+      }
+    ],
+    "enables": [
+      {
+        "prdId": "DOM-SUPPORT",
+        "reason": "Support domain uses issue-related email templates"
+      },
+      {
+        "prdId": "DOM-FINANCIAL",
+        "reason": "Financial domain uses invoice and reminder emails"
+      },
+      {
+        "prdId": "DOM-WARRANTY",
+        "reason": "Warranty domain uses registration and expiry emails"
+      }
+    ]
+  },
+  "references": {
+    "internal": [
+      "memory-bank/_meta/glossary.md - Communication terminology",
+      "src/lib/schema/email-history.ts - Email schema",
+      "src/lib/schema/activities.ts - Activities schema",
+      "src/server/functions/communications.ts - Server functions",
+      "trigger/email-jobs.ts - Trigger.dev email tasks"
+    ],
+    "external": [
+      "Resend API docs - Email sending"
+    ]
+  },
+  "current_state": {
+    "implemented": [
+      "Email sending via Resend",
+      "Email templates (QuoteSent for battery quotes, OrderConfirmation for battery orders, OrderShipped for deliveries, WarrantyRegistered, IssueUpdate for support)",
+      "Email history tracking",
+      "Activity tracking (email_sent, email_delivered, email_failed)",
+      "Activity list on customer",
+      "Communications route with summary dashboard"
+    ],
+    "gaps": [
+      "No email open/click tracking",
+      "No email scheduling",
+      "No bulk email campaigns",
+      "No call scheduling/reminders",
+      "No communication preferences (emailOptIn/smsOptIn)",
+      "No email signature management",
+      "No custom email template editor (React Email templates exist but hardcoded)"
+    ]
+  },
+  "stories": [
+    {
+      "id": "DOM-COMMS-001a",
+      "name": "Add Email Tracking Schema",
+      "description": "Add openedAt, clickedAt, linkClicks columns to email_history table",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "email_history table has openedAt timestamp column",
+        "email_history table has clickedAt timestamp column",
+        "email_history table has linkClicks JSONB column for tracking individual link clicks",
+        "Migration runs successfully",
+        "Types exported from lib/schema/index.ts",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "DOM_COMMS_001A_COMPLETE"
+    },
+    {
+      "id": "DOM-COMMS-001b",
+      "name": "Implement Email Tracking Service",
+      "description": "Create tracking pixel endpoint and link wrapper service for email engagement tracking",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "GET /api/track/open/:emailId endpoint returns 1x1 transparent pixel and updates openedAt",
+        "GET /api/track/click/:emailId/:linkId endpoint updates clickedAt and redirects to original URL",
+        "Link wrapper function wraps all links in outgoing emails",
+        "Tracking pixel inserted into email HTML before sending",
+        "Privacy-compliant: tracking respects user preferences",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "DOM-COMMS-001a"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "DOM_COMMS_001B_COMPLETE"
+    },
+    {
+      "id": "DOM-COMMS-001c",
+      "name": "Add Email Tracking Stats UI",
+      "description": "Display open/click stats on email detail view and aggregate stats per template",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Email history dialog shows openedAt, clickedAt timestamps when available using DetailDialog",
+        "Communications route templates tab shows aggregate open/click rates using StatsCard",
+        "Stats update in real-time when new tracking events occur via polling or websocket",
+        "Loading skeleton (TrackingStatsSkeleton) during stats fetch",
+        "Empty state: 'No tracking data yet' with explanatory message",
+        "Error boundary with retry for stats loading",
+        "Keyboard navigation: Tab through stats cards",
+        "ARIA labels for stat values and percentages",
+        "Responsive: Compact stats on mobile, detailed cards on desktop",
+        "TypeScript compiles without errors",
+        "StatsCard uses tabular-nums for percentage alignment",
+        "DetailDialog traps focus and returns focus on close",
+        "Timestamps use Intl.DateTimeFormat for locale-awareness",
+        "All icon-only buttons have aria-label"
+      ],
+      "uiPatterns": {
+        "baseComponents": [
+          {
+            "name": "Dialog",
+            "source": "RE-UI",
+            "usage": "Email detail dialog with tracking timestamps",
+            "reference": "_reference/.reui-reference/public/docs/dialog.md"
+          },
+          {
+            "name": "Card",
+            "source": "RE-UI",
+            "usage": "Stats cards for open/click rates",
+            "reference": "_reference/.reui-reference/public/docs/card.md"
+          },
+          {
+            "name": "Badge",
+            "source": "RE-UI",
+            "usage": "Status indicators for opened/clicked",
+            "reference": "_reference/.reui-reference/public/docs/badge.md"
+          },
+          {
+            "name": "Skeleton",
+            "source": "Midday UI",
+            "usage": "Loading state for stats",
+            "reference": "_reference/.midday-reference/packages/ui/src/components/skeleton.tsx"
+          }
+        ],
+        "compositePatterns": [
+          {
+            "name": "StatsCard",
+            "description": "Card with metric value, label, and trend indicator",
+            "composition": "Card > CardHeader (title) + CardContent (metric + percentage)"
+          },
+          {
+            "name": "TrackingStatsSkeleton",
+            "description": "Skeleton loader for stats cards grid",
+            "composition": "Grid of Card skeletons with shimmer effect"
+          }
+        ],
+        "layoutStrategy": "CSS Grid for stats cards (2 cols mobile, 4 cols desktop), Dialog overlay for detail view"
+      },
+      "ui_spec": {
+        "component_type": "StatsCard with DetailDialog",
+        "layout": {
+          "mobile": "Stacked stat badges in email detail, summary cards on templates tab",
+          "tablet": "Inline stats with visual indicators",
+          "desktop": "Full stats display with charts"
+        },
+        "accessibility": {
+          "aria_labels": [
+            "open-rate-stat",
+            "click-rate-stat",
+            "email-detail-dialog",
+            "template-stats-{name}"
+          ],
+          "keyboard_nav": "Tab to stats, Enter for detail",
+          "screen_reader": "Percentage and count announced",
+          "focus_management": "Focus first stat on dialog open"
+        }
+      },
+      "dependencies": [
+        "DOM-COMMS-001b"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "DOM_COMMS_001C_COMPLETE"
+    },
+    {
+      "id": "DOM-COMMS-002a",
+      "name": "Add Scheduled Emails Schema",
+      "description": "Create scheduled_emails table for email scheduling",
+      "priority": 4,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "scheduled_emails table with id, organizationId, userId, recipientEmail, recipientName, subject, templateType, templateData, scheduledAt, timezone, status columns",
+        "Status enum: pending, sent, cancelled",
+        "Indexes on organizationId, scheduledAt, status",
+        "Migration runs successfully",
+        "Types exported from lib/schema/index.ts",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "DOM_COMMS_002A_COMPLETE"
+    },
+    {
+      "id": "DOM-COMMS-002b",
+      "name": "Implement Email Scheduling Service",
+      "description": "Create Trigger.dev scheduled task and CRUD server functions for scheduled emails",
+      "priority": 5,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "scheduleEmail server function creates scheduled email record",
+        "getScheduledEmails, cancelScheduledEmail, updateScheduledEmail server functions",
+        "Trigger.dev task checks for due scheduled emails every minute",
+        "Scheduled emails are sent at specified time in correct timezone",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "DOM-COMMS-002a"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "DOM_COMMS_002B_COMPLETE"
+    },
+    {
+      "id": "DOM-COMMS-002c",
+      "name": "Add Email Scheduling UI",
+      "description": "Add schedule send option to email composer and scheduled emails management",
+      "priority": 6,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Email composer dialog has 'Schedule Send' option with datetime picker using DateTimePicker",
+        "Timezone selector for scheduled time using TimezoneSelect",
+        "Scheduled emails list view in communications route using DataTable",
+        "Edit/cancel scheduled email actions with confirmation dialogs",
+        "Scheduled indicator badge on sent items that were scheduled using StatusBadge",
+        "Loading skeleton (ScheduledEmailsSkeleton) during list fetch",
+        "Empty state: 'No scheduled emails' with 'Compose Email' CTA",
+        "Error boundary with retry for scheduling operations",
+        "Keyboard navigation: Tab through schedule options, Enter to confirm",
+        "ARIA labels for datetime picker and timezone selector",
+        "Responsive: Full-width picker on mobile, inline on desktop",
+        "TypeScript compiles without errors",
+        "DateTimePicker has full keyboard navigation",
+        "Timezone selector follows accessible combobox pattern",
+        "Scheduled emails list reflects sort/filter in URL",
+        "Visible focus rings on all interactive elements"
+      ],
+      "uiPatterns": {
+        "baseComponents": [
+          {
+            "name": "DatePicker",
+            "source": "RE-UI",
+            "usage": "Date and time selection for scheduling",
+            "reference": "_reference/.reui-reference/public/docs/date-picker.md"
+          },
+          {
+            "name": "Select",
+            "source": "RE-UI",
+            "usage": "Timezone selector dropdown",
+            "reference": "_reference/.reui-reference/public/docs/select.md"
+          },
+          {
+            "name": "DataGrid",
+            "source": "RE-UI",
+            "usage": "Scheduled emails table with sort/filter",
+            "reference": "_reference/.reui-reference/public/docs/data-grid.md"
+          },
+          {
+            "name": "Dialog",
+            "source": "RE-UI",
+            "usage": "Email composer and confirmation dialogs",
+            "reference": "_reference/.reui-reference/public/docs/dialog.md"
+          },
+          {
+            "name": "Badge",
+            "source": "RE-UI",
+            "usage": "Status badges (pending/sent/cancelled)",
+            "reference": "_reference/.reui-reference/public/docs/badge.md"
+          }
+        ],
+        "compositePatterns": [
+          {
+            "name": "DateTimePicker",
+            "description": "Combined date + time + timezone picker",
+            "composition": "DatePicker (with time mode) + Select (timezone) in form layout"
+          },
+          {
+            "name": "ScheduledEmailsSkeleton",
+            "description": "DataGrid skeleton with shimmer rows",
+            "composition": "DataGrid with isLoading prop and skeleton rows"
+          }
+        ],
+        "layoutStrategy": "Dialog for composer, DataGrid with column controls for list view, inline form controls in desktop dialog"
+      },
+      "ui_spec": {
+        "component_type": "DateTimePicker with DataTable list",
+        "layout": {
+          "mobile": "Full-screen datetime picker, card list for scheduled",
+          "tablet": "Modal picker, table list",
+          "desktop": "Inline picker in composer, full DataTable"
+        },
+        "accessibility": {
+          "aria_labels": [
+            "schedule-send-toggle",
+            "datetime-picker",
+            "timezone-selector",
+            "scheduled-emails-list"
+          ],
+          "keyboard_nav": "Tab to picker, Arrow keys for date/time, Enter to confirm",
+          "screen_reader": "Scheduled date and time announced",
+          "focus_management": "Focus picker on schedule toggle, return to composer after set"
+        }
+      },
+      "dependencies": [
+        "DOM-COMMS-002b"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "DOM_COMMS_002C_COMPLETE"
+    },
+    {
+      "id": "DOM-COMMS-003a",
+      "name": "Add Email Campaigns Schema",
+      "description": "Create email_campaigns and campaign_recipients tables",
+      "priority": 7,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "email_campaigns table with id, organizationId, name, templateType, templateData, status, scheduledAt, sentCount, openCount, clickCount columns",
+        "campaign_recipients table with id, campaignId, contactId, email, status, sentAt, openedAt, clickedAt columns",
+        "Indexes for efficient campaign and recipient queries",
+        "Migration runs successfully",
+        "Types exported from lib/schema/index.ts",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "DOM_COMMS_003A_COMPLETE"
+    },
+    {
+      "id": "DOM-COMMS-003b",
+      "name": "Implement Campaign Recipient Selection",
+      "description": "Server functions for campaign creation with recipient filtering for battery customers",
+      "priority": 8,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "createCampaign server function with recipient selection criteria",
+        "getCampaignRecipients with filter by tags, status, customer type (installers, distributors, direct customers)",
+        "previewCampaignRecipients returns count and sample before send",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "DOM-COMMS-003a"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "DOM_COMMS_003B_COMPLETE"
+    },
+    {
+      "id": "DOM-COMMS-003c",
+      "name": "Implement Campaign Batch Sending",
+      "description": "Trigger.dev task for sending campaign emails in batches",
+      "priority": 9,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "sendCampaign Trigger.dev task sends in configurable batch sizes",
+        "Respects Resend rate limits (configurable delay between batches)",
+        "Updates campaign stats (sentCount) as batches complete",
+        "Handles failures gracefully with retry for individual recipients",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "DOM-COMMS-003b",
+        "DOM-COMMS-001b"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "DOM_COMMS_003C_COMPLETE"
+    },
+    {
+      "id": "DOM-COMMS-003d",
+      "name": "Add Campaign Management UI",
+      "description": "Create campaign management interface with preview and stats",
+      "priority": 10,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Campaign creation wizard with template selection using MultiStepWizard",
+        "Recipient filter builder (by tags, status, etc.) using FilterBuilder",
+        "Preview before sending shows recipient count and sample email using PreviewPanel",
+        "Campaign list with status badges using DataTable",
+        "Campaign detail view with sent/opened/clicked stats using CampaignDetailPanel",
+        "Progress indicator during batch sending",
+        "Loading skeleton (CampaignListSkeleton) during fetch",
+        "Empty state: 'No campaigns created' with 'Create Campaign' CTA",
+        "Error boundary with retry for campaign operations",
+        "Keyboard navigation through wizard steps and filter builder",
+        "ARIA labels for all controls and status indicators",
+        "Responsive: Full-screen wizard on mobile, modal on desktop",
+        "TypeScript compiles without errors",
+        "Wizard URL reflects current step state",
+        "FilterBuilder supports keyboard add/remove conditions",
+        "Recipient preview virtualized if >50 recipients",
+        "Batch progress uses aria-live for updates",
+        "Campaign send uses AlertDialog for confirmation",
+        "Full keyboard navigation throughout wizard"
+      ],
+      "uiPatterns": {
+        "baseComponents": [
+          {
+            "name": "Tabs",
+            "source": "RE-UI",
+            "usage": "Multi-step wizard navigation",
+            "reference": "_reference/.reui-reference/public/docs/tabs.md"
+          },
+          {
+            "name": "Filters",
+            "source": "RE-UI",
+            "usage": "Recipient filter builder",
+            "reference": "_reference/.reui-reference/public/docs/filters.md"
+          },
+          {
+            "name": "DataGrid",
+            "source": "RE-UI",
+            "usage": "Campaign list table",
+            "reference": "_reference/.reui-reference/public/docs/data-grid.md"
+          },
+          {
+            "name": "Card",
+            "source": "RE-UI",
+            "usage": "Campaign detail panel and preview",
+            "reference": "_reference/.reui-reference/public/docs/card.md"
+          },
+          {
+            "name": "Progress",
+            "source": "RE-UI",
+            "usage": "Batch sending progress indicator",
+            "reference": "_reference/.reui-reference/public/docs/progress.md"
+          },
+          {
+            "name": "Badge",
+            "source": "RE-UI",
+            "usage": "Campaign status badges",
+            "reference": "_reference/.reui-reference/public/docs/badge.md"
+          }
+        ],
+        "compositePatterns": [
+          {
+            "name": "MultiStepWizard",
+            "description": "Tabbed wizard with step validation and navigation",
+            "composition": "Tabs (wizard steps) + Form controls + Button group (prev/next/finish)"
+          },
+          {
+            "name": "FilterBuilder",
+            "description": "Dynamic filter UI with add/remove filter rows",
+            "composition": "Filters component + Combobox (field selector) + Input/Select (value) + Button (remove)"
+          },
+          {
+            "name": "PreviewPanel",
+            "description": "Email preview with recipient count and sample",
+            "composition": "Card > CardHeader (recipient count) + CardContent (email preview HTML)"
+          },
+          {
+            "name": "CampaignDetailPanel",
+            "description": "Campaign stats and recipient list",
+            "composition": "Card with stat grid + DataGrid (recipients) with expandable rows"
+          }
+        ],
+        "layoutStrategy": "Wizard in Dialog (mobile: fullscreen, desktop: centered modal), DataGrid for list view, side panel for detail"
+      },
+      "ui_spec": {
+        "component_type": "MultiStepWizard with FilterBuilder and DataTable",
+        "layout": {
+          "mobile": "Full-screen wizard steps, card list for campaigns",
+          "tablet": "Modal wizard, table list with expandable rows",
+          "desktop": "Side panel wizard, full DataTable with detail panel"
+        },
+        "accessibility": {
+          "aria_labels": [
+            "campaign-wizard",
+            "filter-builder",
+            "recipient-preview",
+            "campaign-list",
+            "campaign-stats"
+          ],
+          "keyboard_nav": "Tab through wizard, Arrow keys in filters, Enter to advance",
+          "screen_reader": "Step number announced, recipient count on preview",
+          "focus_management": "Focus first control in each step, return to list after create"
+        }
+      },
+      "dependencies": [
+        "DOM-COMMS-003c"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "DOM_COMMS_003D_COMPLETE"
+    },
+    {
+      "id": "DOM-COMMS-004a",
+      "name": "Add Scheduled Calls Schema",
+      "description": "Create scheduled_calls table for call scheduling",
+      "priority": 11,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "scheduled_calls table with id, organizationId, customerId, assigneeId, scheduledAt, reminderAt, notes, status columns",
+        "Status enum: pending, completed, cancelled, rescheduled",
+        "Indexes on assigneeId, scheduledAt, status",
+        "Migration runs successfully",
+        "Types exported from lib/schema/index.ts",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "DOM_COMMS_004A_COMPLETE"
+    },
+    {
+      "id": "DOM-COMMS-004b",
+      "name": "Implement Call Scheduling Service",
+      "description": "Server functions and Trigger.dev reminder task for scheduled calls",
+      "priority": 12,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "scheduleCall, getScheduledCalls, updateScheduledCall, cancelScheduledCall server functions",
+        "Trigger.dev task sends reminder notification before scheduled call",
+        "completeCall function logs call outcome to customer_activities",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "DOM-COMMS-004a"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "DOM_COMMS_004B_COMPLETE"
+    },
+    {
+      "id": "DOM-COMMS-004c",
+      "name": "Add Call Scheduling UI",
+      "description": "UI for scheduling follow-up calls for quote discussions, installation coordination, and technical support",
+      "priority": 13,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Schedule call button on customer detail page using ActionButton",
+        "Call scheduling dialog with datetime, assignee, notes, call purpose (quote follow-up, installation, technical support) using FormDialog",
+        "Snooze/reschedule options on scheduled call using ActionMenu",
+        "Log call outcome dialog after call completion using OutcomeDialog",
+        "Dashboard widget showing upcoming scheduled calls using UpcomingCallsWidget",
+        "Loading skeleton (CallsSkeleton) during list fetch",
+        "Empty state: 'No calls scheduled' with 'Schedule Call' CTA",
+        "Error boundary with retry for call operations",
+        "Keyboard navigation through form and action menus",
+        "ARIA labels for all interactive elements",
+        "Responsive: Full-width dialog on mobile, compact on desktop",
+        "TypeScript compiles without errors",
+        "FormDialog autofocuses first input on desktop",
+        "Snooze/reschedule dropdown has keyboard support",
+        "Upcoming calls widget has empty state with action",
+        "Overdue calls use color AND icon indicator",
+        "All icon-only buttons have aria-label"
+      ],
+      "uiPatterns": {
+        "baseComponents": [
+          {
+            "name": "Dialog",
+            "source": "RE-UI",
+            "usage": "Call scheduling and outcome dialogs",
+            "reference": "_reference/.reui-reference/public/docs/dialog.md"
+          },
+          {
+            "name": "Form",
+            "source": "RE-UI",
+            "usage": "Call scheduling form with validation",
+            "reference": "_reference/.reui-reference/public/docs/form.md"
+          },
+          {
+            "name": "DatePicker",
+            "source": "RE-UI",
+            "usage": "Schedule date/time selection",
+            "reference": "_reference/.reui-reference/public/docs/date-picker.md"
+          },
+          {
+            "name": "Select",
+            "source": "RE-UI",
+            "usage": "Assignee and call purpose selectors",
+            "reference": "_reference/.reui-reference/public/docs/select.md"
+          },
+          {
+            "name": "Textarea",
+            "source": "RE-UI",
+            "usage": "Call notes and outcome",
+            "reference": "_reference/.reui-reference/public/docs/textarea.md"
+          },
+          {
+            "name": "DropdownMenu",
+            "source": "RE-UI",
+            "usage": "Snooze/reschedule action menu",
+            "reference": "_reference/.reui-reference/public/docs/dropdown-menu.md"
+          },
+          {
+            "name": "Card",
+            "source": "RE-UI",
+            "usage": "Dashboard widget for upcoming calls",
+            "reference": "_reference/.reui-reference/public/docs/card.md"
+          }
+        ],
+        "compositePatterns": [
+          {
+            "name": "FormDialog",
+            "description": "Dialog with form controls and submit/cancel actions",
+            "composition": "Dialog > DialogContent > Form (react-hook-form) + Button group"
+          },
+          {
+            "name": "ActionMenu",
+            "description": "Dropdown menu with snooze/reschedule options",
+            "composition": "DropdownMenu with time interval options (15m, 30m, 1h, custom)"
+          },
+          {
+            "name": "OutcomeDialog",
+            "description": "Dialog for logging call outcome",
+            "composition": "Dialog > Form (outcome select + notes textarea) + completion button"
+          },
+          {
+            "name": "UpcomingCallsWidget",
+            "description": "Dashboard card with upcoming calls list",
+            "composition": "Card > CardHeader (title + count) + CardContent (list of calls with time/customer/action menu)"
+          }
+        ],
+        "layoutStrategy": "Dialog for scheduling (fullscreen mobile, centered desktop), Card widget on dashboard, inline action menu on hover"
+      },
+      "ui_spec": {
+        "component_type": "FormDialog with UpcomingCallsWidget",
+        "layout": {
+          "mobile": "Full-screen scheduling dialog, card list for upcoming",
+          "tablet": "Modal dialog, widget in sidebar",
+          "desktop": "Compact dialog, widget on dashboard"
+        },
+        "accessibility": {
+          "aria_labels": [
+            "schedule-call-button",
+            "call-form",
+            "snooze-menu",
+            "outcome-dialog",
+            "upcoming-calls-widget"
+          ],
+          "keyboard_nav": "Tab to button, Tab through form, Arrow keys in menus",
+          "screen_reader": "Scheduled time and customer announced",
+          "focus_management": "Focus form on open, return to trigger after close"
+        }
+      },
+      "dependencies": [
+        "DOM-COMMS-004b"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "DOM_COMMS_004C_COMPLETE"
+    },
+    {
+      "id": "DOM-COMMS-005",
+      "name": "Add Communication Preferences",
+      "description": "Track customer communication preferences",
+      "priority": 14,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "contacts.emailOptIn, smsOptIn boolean columns added (schema change)",
+        "Preference selection on contact form using Checkbox",
+        "Email sending respects preferences (check before send)",
+        "Unsubscribe link in emails with preference update endpoint",
+        "Preference history stored in activities for compliance",
+        "Preference report for audit using ReportTable",
+        "Loading state during preference update",
+        "Error handling with clear user feedback",
+        "Keyboard accessible checkbox controls",
+        "ARIA labels for preference toggles",
+        "Responsive: Form adapts to mobile layout",
+        "TypeScript compiles without errors",
+        "Preference toggles are keyboard accessible",
+        "Opt-out confirmation uses AlertDialog",
+        "Audit history table uses tabular-nums for dates",
+        "Visible focus rings on all interactive elements"
+      ],
+      "uiPatterns": {
+        "baseComponents": [
+          {
+            "name": "Checkbox",
+            "source": "RE-UI",
+            "usage": "Email and SMS opt-in toggles",
+            "reference": "_reference/.reui-reference/public/docs/checkbox.md"
+          },
+          {
+            "name": "Form",
+            "source": "RE-UI",
+            "usage": "Contact form with preference controls",
+            "reference": "_reference/.reui-reference/public/docs/form.md"
+          },
+          {
+            "name": "DataGrid",
+            "source": "RE-UI",
+            "usage": "Preference audit report table",
+            "reference": "_reference/.reui-reference/public/docs/data-grid.md"
+          },
+          {
+            "name": "Alert",
+            "source": "RE-UI",
+            "usage": "Error and success feedback",
+            "reference": "_reference/.reui-reference/public/docs/alert.md"
+          }
+        ],
+        "compositePatterns": [
+          {
+            "name": "PreferenceToggles",
+            "description": "Grouped checkbox controls with labels and descriptions",
+            "composition": "Form.Field (checkbox) with Label + description text for each preference"
+          },
+          {
+            "name": "ReportTable",
+            "description": "DataGrid with preference change history",
+            "composition": "DataGrid with columns: contact, preference, old value, new value, changed at, changed by"
+          }
+        ],
+        "layoutStrategy": "Inline checkboxes in contact form, separate preferences section in contact detail, full-page report table"
+      },
+      "ui_spec": {
+        "component_type": "Form with Checkbox preferences",
+        "layout": {
+          "mobile": "Full-width preference checkboxes in contact form",
+          "tablet": "Inline checkboxes with labels",
+          "desktop": "Preferences section in contact detail sidebar"
+        },
+        "accessibility": {
+          "aria_labels": [
+            "email-opt-in",
+            "sms-opt-in",
+            "preference-form",
+            "unsubscribe-link"
+          ],
+          "keyboard_nav": "Tab to checkboxes, Space to toggle",
+          "screen_reader": "Preference state announced on change",
+          "focus_management": "Maintain focus after toggle"
+        }
+      },
+      "dependencies": [],
+      "estimated_iterations": 4,
+      "completion_promise": "DOM_COMMS_005_COMPLETE"
+    },
+    {
+      "id": "DOM-COMMS-006",
+      "name": "Add Email Signature Management",
+      "description": "Personal and company email signatures",
+      "priority": 15,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "email_signatures table (id, userId, organizationId, name, content, isDefault) (schema change)",
+        "Personal signature per user with RichTextEditor",
+        "Company default signature with admin management",
+        "Signature selection in compose dialog using SignatureSelector",
+        "Rich text signature editor with formatting tools",
+        "Signature preview in composer",
+        "Loading skeleton during signature fetch",
+        "Empty state: 'No signature set' with 'Create Signature' CTA",
+        "Error boundary with retry for signature operations",
+        "Keyboard navigation through editor toolbar",
+        "ARIA labels for editor controls",
+        "Responsive: Full-width editor on mobile, side preview on desktop",
+        "TypeScript compiles without errors",
+        "RichTextEditor preserves focus on hydration",
+        "Save uses optimistic UI with rollback on error",
+        "Signature selector is keyboard navigable",
+        "Editor toolbar buttons have aria-label"
+      ],
+      "uiPatterns": {
+        "baseComponents": [
+          {
+            "name": "Editor (Tiptap)",
+            "source": "Midday UI",
+            "usage": "Rich text signature editor",
+            "reference": "_reference/.midday-reference/packages/ui/src/components/editor/index.tsx"
+          },
+          {
+            "name": "Select",
+            "source": "RE-UI",
+            "usage": "Signature selection dropdown in composer",
+            "reference": "_reference/.reui-reference/public/docs/select.md"
+          },
+          {
+            "name": "Card",
+            "source": "RE-UI",
+            "usage": "Signature editor container and preview",
+            "reference": "_reference/.reui-reference/public/docs/card.md"
+          },
+          {
+            "name": "Tabs",
+            "source": "RE-UI",
+            "usage": "Switch between editor and preview",
+            "reference": "_reference/.reui-reference/public/docs/tabs.md"
+          }
+        ],
+        "compositePatterns": [
+          {
+            "name": "RichTextEditor",
+            "description": "Tiptap editor with formatting toolbar",
+            "composition": "Editor component (Midday) with BubbleMenu for formatting (bold, italic, link, etc.)"
+          },
+          {
+            "name": "SignatureSelector",
+            "description": "Dropdown to choose personal or company signature",
+            "composition": "Select with options: Personal, Company Default, None"
+          },
+          {
+            "name": "EditorPreviewLayout",
+            "description": "Side-by-side editor and preview",
+            "composition": "Card with Tabs (Edit/Preview) or split view (desktop: 2 columns, mobile: stacked)"
+          }
+        ],
+        "layoutStrategy": "Two-column layout (editor left, preview right) on desktop, tabbed view on mobile, inline selector in composer"
+      },
+      "ui_spec": {
+        "component_type": "RichTextEditor with SignatureSelector",
+        "layout": {
+          "mobile": "Full-screen editor, preview below",
+          "tablet": "Editor with inline preview",
+          "desktop": "Two-column: editor left, preview right"
+        },
+        "accessibility": {
+          "aria_labels": [
+            "signature-editor",
+            "signature-selector",
+            "formatting-toolbar",
+            "preview-panel"
+          ],
+          "keyboard_nav": "Tab through toolbar, keyboard shortcuts for formatting",
+          "screen_reader": "Format applied announced",
+          "focus_management": "Focus editor on open, maintain during formatting"
+        }
+      },
+      "dependencies": [],
+      "estimated_iterations": 4,
+      "completion_promise": "DOM_COMMS_006_COMPLETE"
+    },
+    {
+      "id": "DOM-COMMS-007",
+      "name": "Add Custom Email Templates Management",
+      "description": "Add database-stored custom email templates with visual editor for battery business communications, complementing existing React Email templates",
+      "priority": 16,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "email_templates table with id, organizationId, name, category, subject, bodyHtml, variables, version, isActive columns (schema change)",
+        "CRUD server functions for email templates",
+        "Rich text editor for template body with variable insertion toolbar using TemplateEditor",
+        "Preview with sample data before saving using PreviewPanel",
+        "Template categories: quotes, orders, installations, warranty, support, custom using CategoryTabs",
+        "Clone existing template action",
+        "Template versioning with ability to view previous versions using VersionHistory",
+        "Loading skeleton (TemplateEditorSkeleton) during fetch",
+        "Empty state: 'No custom templates' with 'Create Template' CTA",
+        "Error boundary with retry for template operations",
+        "Keyboard navigation through editor and variable toolbar",
+        "ARIA labels for all editor controls",
+        "Responsive: Full-screen editor on mobile, split view on desktop",
+        "TypeScript compiles without errors",
+        "Variable insertion popover is keyboard accessible",
+        "Version history restore uses AlertDialog confirmation",
+        "Three-column layout collapses responsively on mobile",
+        "Template list virtualized if >50 templates",
+        "Editor supports keyboard shortcuts (Cmd/Ctrl+B, I, U)"
+      ],
+      "uiPatterns": {
+        "baseComponents": [
+          {
+            "name": "Editor (Tiptap)",
+            "source": "Midday UI",
+            "usage": "Template body editor with variables",
+            "reference": "_reference/.midday-reference/packages/ui/src/components/editor/index.tsx"
+          },
+          {
+            "name": "Tabs",
+            "source": "RE-UI",
+            "usage": "Category tabs and editor/preview tabs",
+            "reference": "_reference/.reui-reference/public/docs/tabs.md"
+          },
+          {
+            "name": "Card",
+            "source": "RE-UI",
+            "usage": "Template list items and editor container",
+            "reference": "_reference/.reui-reference/public/docs/card.md"
+          },
+          {
+            "name": "Popover",
+            "source": "RE-UI",
+            "usage": "Variable insertion menu",
+            "reference": "_reference/.reui-reference/public/docs/popover.md"
+          },
+          {
+            "name": "DataGrid",
+            "source": "RE-UI",
+            "usage": "Template list with version history",
+            "reference": "_reference/.reui-reference/public/docs/data-grid.md"
+          },
+          {
+            "name": "Badge",
+            "source": "RE-UI",
+            "usage": "Category and active/inactive badges",
+            "reference": "_reference/.reui-reference/public/docs/badge.md"
+          }
+        ],
+        "compositePatterns": [
+          {
+            "name": "TemplateEditor",
+            "description": "Rich text editor with variable insertion toolbar",
+            "composition": "Editor (Tiptap) + Popover (variable menu) + Toolbar (insert customer/order/product variables)"
+          },
+          {
+            "name": "CategoryTabs",
+            "description": "Tabbed interface for template categories",
+            "composition": "Tabs with category filtering (quotes, orders, installations, etc.)"
+          },
+          {
+            "name": "VersionHistory",
+            "description": "List of previous template versions with restore action",
+            "composition": "DataGrid with columns: version, modified by, modified at, restore button"
+          },
+          {
+            "name": "PreviewPanel",
+            "description": "Email preview with sample data substitution",
+            "composition": "Card > iframe or HTML preview with sample customer/order data injected into variables"
+          },
+          {
+            "name": "TemplateList",
+            "description": "Three-column layout with list, editor, preview",
+            "composition": "DataGrid (list) + TemplateEditor (center) + PreviewPanel (right) in resizable panels"
+          }
+        ],
+        "layoutStrategy": "Three-column layout on desktop (list 20%, editor 50%, preview 30%), tabbed view on mobile, resizable panels with drag handles"
+      },
+      "ui_spec": {
+        "component_type": "TemplateEditor with CategoryTabs and VersionHistory",
+        "layout": {
+          "mobile": "Full-screen editor with bottom action bar",
+          "tablet": "Editor with preview toggle",
+          "desktop": "Three-column: list, editor, preview"
+        },
+        "accessibility": {
+          "aria_labels": [
+            "template-editor",
+            "variable-toolbar",
+            "category-tabs",
+            "version-history",
+            "preview-panel"
+          ],
+          "keyboard_nav": "Tab through toolbar, Ctrl+V for variables, Tab to preview",
+          "screen_reader": "Template name and category announced, variable insertion confirmed",
+          "focus_management": "Focus editor on select, maintain during edits"
+        }
+      },
+      "dependencies": [],
+      "estimated_iterations": 5,
+      "completion_promise": "DOM_COMMS_007_COMPLETE"
+    },
+    {
+      "id": "DOM-COMMS-008",
+      "name": "Fix and Enhance Communications Timeline",
+      "description": "Fix bugs in existing communication-history.tsx and add filtering, search, export features for battery customer interactions",
+      "priority": 17,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "FIX: communication-history.tsx uses correct 'activity' variable throughout (not 'comm')",
+        "FIX: Remove references to non-existent 'communications' array",
+        "Filter by communication type (email, call, note, quote_sent, order_confirmed, installation_scheduled, system_commissioned, warranty_registered, support_ticket) using FilterBar",
+        "Filter by date range using DateRangePicker",
+        "Filter by participant/user using UserSelector",
+        "Search within communications text using SearchInput",
+        "Quick action: Reply to email (opens composer with recipient pre-filled)",
+        "Quick action: Log follow-up call using QuickActionButton",
+        "Export communication history as CSV/PDF using ExportMenu",
+        "Loading skeleton (TimelineSkeleton) during fetch",
+        "Empty state: 'No communications' with contextual message",
+        "Error boundary with retry for timeline operations",
+        "Keyboard navigation through timeline and filters",
+        "ARIA timeline role with proper labeling",
+        "Responsive: Compact timeline on mobile, expanded on desktop",
+        "TypeScript compiles without errors",
+        "Filter state reflected in URL",
+        "Export menu is keyboard accessible",
+        "Timeline items use semantic list structure",
+        "Quick actions have visible focus states",
+        "Full keyboard navigation support"
+      ],
+      "uiPatterns": {
+        "baseComponents": [
+          {
+            "name": "Filters",
+            "source": "RE-UI",
+            "usage": "Communication type and participant filters",
+            "reference": "_reference/.reui-reference/public/docs/filters.md"
+          },
+          {
+            "name": "DatePicker",
+            "source": "RE-UI",
+            "usage": "Date range filter with presets",
+            "reference": "_reference/.reui-reference/public/docs/date-picker.md"
+          },
+          {
+            "name": "Input",
+            "source": "RE-UI",
+            "usage": "Search input for text filtering",
+            "reference": "_reference/.reui-reference/public/docs/input.md"
+          },
+          {
+            "name": "Card",
+            "source": "RE-UI",
+            "usage": "Timeline item cards",
+            "reference": "_reference/.reui-reference/public/docs/card.md"
+          },
+          {
+            "name": "DropdownMenu",
+            "source": "RE-UI",
+            "usage": "Quick actions and export menu",
+            "reference": "_reference/.reui-reference/public/docs/dropdown-menu.md"
+          },
+          {
+            "name": "Badge",
+            "source": "RE-UI",
+            "usage": "Communication type indicators",
+            "reference": "_reference/.reui-reference/public/docs/badge.md"
+          },
+          {
+            "name": "Separator",
+            "source": "RE-UI",
+            "usage": "Timeline date separators",
+            "reference": "_reference/.reui-reference/public/docs/separator.md"
+          }
+        ],
+        "compositePatterns": [
+          {
+            "name": "Timeline",
+            "description": "Vertical timeline with date grouping",
+            "composition": "Flex column with Separator (date headers) + Card (timeline items) with left border line"
+          },
+          {
+            "name": "FilterBar",
+            "description": "Horizontal filter controls",
+            "composition": "Filters (type selector) + DatePicker (range) + Combobox (user) + Input (search)"
+          },
+          {
+            "name": "TimelineItem",
+            "description": "Individual communication card with quick actions",
+            "composition": "Card > Badge (type) + content + timestamp + DropdownMenu (actions)"
+          },
+          {
+            "name": "ExportMenu",
+            "description": "Dropdown menu with export format options",
+            "composition": "DropdownMenu with items: Export as CSV, Export as PDF"
+          },
+          {
+            "name": "TimelineSkeleton",
+            "description": "Loading skeleton for timeline",
+            "composition": "Stack of Card skeletons with shimmer effect"
+          }
+        ],
+        "layoutStrategy": "FilterBar at top (sticky on scroll), Timeline in main content area with infinite scroll, quick actions menu on hover/focus"
+      },
+      "ui_spec": {
+        "component_type": "Timeline with FilterBar and SearchInput",
+        "layout": {
+          "mobile": "Vertical timeline, collapsible filters, compact items",
+          "tablet": "Timeline with filter sidebar toggle",
+          "desktop": "Full timeline with persistent filter sidebar"
+        },
+        "accessibility": {
+          "aria_labels": [
+            "communication-timeline",
+            "type-filter",
+            "date-filter",
+            "search-input",
+            "export-menu"
+          ],
+          "keyboard_nav": "Tab through items, Tab to filters, Enter for actions",
+          "screen_reader": "Communication type, date, and summary announced",
+          "focus_management": "Focus first item on load, maintain on filter"
+        }
+      },
+      "dependencies": [],
+      "estimated_iterations": 4,
+      "completion_promise": "DOM_COMMS_008_COMPLETE"
+    },
+    {
+      "id": "COMMS-AUTO-001",
+      "name": "Email-to-Activity Bridge",
+      "description": "Automatically create activity record when email is sent via Resend. Links email to customer and opportunity context.",
+      "priority": 18,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "When email sent, create activity record in activities table",
+        "Activity type: 'email_sent'",
+        "Link to customer_id if sending to known customer email",
+        "Link to opportunity_id if email context includes opportunity",
+        "Store email subject as activity description",
+        "Include link to view full email in email_history"
+      ],
+      "layers": ["server"],
+      "dependencies": ["INT-RES-001-A"],
+      "estimated_iterations": 2,
+      "completion_promise": "COMMS_AUTO_001_COMPLETE"
+    },
+    {
+      "id": "COMMS-AUTO-002",
+      "name": "Activity Source Tracking",
+      "description": "Track how activities were created (manual vs auto-capture) for audit and analytics.",
+      "priority": 19,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Add `source` field to activities: 'manual', 'email', 'webhook', 'system'",
+        "Add `source_ref` field: ID of source record (email_id, etc.)",
+        "Filter activities by source in UI",
+        "Analytics: '% of activities auto-captured vs manual'"
+      ],
+      "layers": ["schema", "server"],
+      "dependencies": [],
+      "estimated_iterations": 1,
+      "completion_promise": "COMMS_AUTO_002_COMPLETE"
+    },
+    {
+      "id": "COMMS-AUTO-003",
+      "name": "Quick Log UI Enhancement",
+      "description": "Streamlined UI for manually logging calls and notes with minimal friction.",
+      "priority": 20,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "'Log Call' button accessible from customer card, opportunity detail",
+        "Minimal form: type (call/note/meeting), brief notes, duration (optional for calls)",
+        "Auto-link to current customer/opportunity context",
+        "Keyboard shortcut: Cmd+L opens log dialog",
+        "Most recent log type remembered as default"
+      ],
+      "layers": ["ui"],
+      "dependencies": ["COMMS-AUTO-002"],
+      "estimated_iterations": 2,
+      "completion_promise": "COMMS_AUTO_003_COMPLETE",
+      "ui_spec": {
+        "target_role": "sales",
+        "primary_device": "desktop",
+        "priority_actions": ["Save Log", "Cancel"],
+        "accessibility": {
+          "keyboard_navigation": "Tab through form, Enter to save",
+          "focus_management": "Auto-focus notes field on open"
+        },
+        "layout": {
+          "type": "modal-dialog",
+          "form_fields": "Type selector, notes textarea, optional duration",
+          "footer": "Cancel, Save buttons"
+        }
+      }
+    }
+  ],
+  "success_criteria": [
+    "Email engagement tracked",
+    "Scheduled emails supported",
+    "Bulk campaigns enabled",
+    "Call reminders reduce missed follow-ups",
+    "Preferences respected for compliance",
+    "Templates streamline communication",
+    "npm run typecheck passes",
+    "No communication functionality regressions"
+  ],
+  "out_of_scope": [
+    "Two-way email sync (inbox)",
+    "VoIP integration",
+    "SMS sending",
+    "Marketing automation"
+  ]
+}

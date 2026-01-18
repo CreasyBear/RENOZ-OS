@@ -1,0 +1,30 @@
+# Field Technician Role Optimization Progress
+# PRD: field-tech.prd.json
+# Started: 2026-01-17
+# Updated: 2026-01-17
+
+## Stories (10 total)
+
+- [ ] ROLE-FIELD-001: Enhance Mobile Touch Targets and Swipe Gestures
+- [ ] ROLE-FIELD-003a: Add Sync Conflict Detection on Server
+- [ ] ROLE-FIELD-003b: Add Sync Conflict Resolution UI
+- [ ] ROLE-FIELD-004: Quick Time Entry Mobile UI
+- [ ] ROLE-FIELD-005: Simple Punchlist Completion Mobile UI
+- [ ] ROLE-FIELD-006: Offline Photo Queuing Integration
+- [ ] ROLE-FIELD-007a: Add GPS Location Fields to Job Schema
+- [ ] ROLE-FIELD-007b: Capture GPS on Job Start and Complete
+- [ ] ROLE-FIELD-007c: Add Job Locations Map View
+- [ ] ROLE-FIELD-008: Today View Enhancements
+
+## Current Story
+Not started
+
+## Iteration Count
+Total: 0
+Current Story: 0
+
+## Blockers
+None
+
+## Notes
+- Progress tracking initialized

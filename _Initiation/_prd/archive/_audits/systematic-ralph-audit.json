@@ -1,0 +1,714 @@
+{
+  "audit": {
+    "title": "Systematic Ralph Wiggum Compliance Audit - All 44 PRDs",
+    "date": "2026-01-10",
+    "auditor": "AI Assistant",
+    "methodology": "Individual file reading and analysis",
+    "scope": "Complete systematic audit of all PRD files",
+    "ralph_version": "1.1.0"
+  },
+  "executive_summary": {
+    "total_prds_audited": 44,
+    "overall_compliance_score": "82%",
+    "critical_blockers": 2,
+    "major_issues": 3,
+    "minor_issues": 4,
+    "pattern_realization_gaps": 8,
+    "pattern_maturity_gaps": "Significant - Core patterns not established",
+    "estimated_pattern_effort": "3-4 weeks (Pattern skill foundation)",
+    "estimated_ralph_fix_effort": "12-15 days",
+    "total_projected_effort": "6-8 weeks",
+    "pattern_establishment_effort": "3-4 weeks"
+  },
+  "pattern_realization_requirements": {
+    "overview": "Based on Pattern skill (.claude/skills/pattern/SKILL.md) and Ralph Wiggum skill (.claude/skills/ralph-wiggum/SKILL.md), these patterns must be established for reliable autonomous development",
+    "ralph_execution_patterns": {
+      "prompt_structure": {
+        "status": "PARTIALLY_ESTABLISHED",
+        "description": "PROMPT.md template structure exists but needs standardization",
+        "requirements": [
+          "Standardized PROMPT.md template with clear sections",
+          "Consistent completion promise format (STORY_ID_COMPLETE)",
+          "Task granularity guidelines (fits within context window)",
+          "Progress tracking patterns (progress.txt format)",
+          "Iteration limit patterns by complexity"
+        ],
+        "current_gaps": [
+          "No enforced PROMPT.md template usage",
+          "Inconsistent completion promise formats",
+          "Stories exceed context window limits",
+          "No automated prompt validation"
+        ]
+      },
+      "completion_detection": {
+        "status": "NOT_ESTABLISHED",
+        "description": "Ralph needs reliable ways to detect when tasks are complete",
+        "requirements": [
+          "Standardized completion promise detection",
+          "File existence verification patterns",
+          "TypeScript compilation checks",
+          "Test execution patterns",
+          "Automated verification scripts"
+        ],
+        "current_gaps": [
+          "No automated completion detection",
+          "Inconsistent acceptance criteria verification",
+          "Manual verification required for most stories",
+          "No pattern for automated testing"
+        ]
+      },
+      "iteration_safety": {
+        "status": "MINIMALLY_ESTABLISHED",
+        "description": "Safety mechanisms for infinite loop prevention",
+        "requirements": [
+          "Max iteration limits by story complexity",
+          "Stuck detection patterns",
+          "Human intervention signals",
+          "Progress validation checkpoints",
+          "Rollback mechanisms"
+        ],
+        "current_gaps": [
+          "No enforced iteration limits",
+          "No stuck detection automation",
+          "No pattern for human intervention",
+          "Limited progress validation"
+        ]
+      }
+    },
+    "code_pattern_foundation": {
+      "component_patterns": {
+        "status": "PARTIALLY_ESTABLISHED",
+        "description": "Reusable component structures for consistent UI development",
+        "requirements": [
+          "Base Component pattern (props, state, effects, render)",
+          "Compound Component pattern for complex UIs",
+          "Container/Presenter separation pattern",
+          "Component naming conventions (PascalCase.tsx)",
+          "Prop interface patterns"
+        ],
+        "current_gaps": [
+          "Inconsistent component structure across PRDs",
+          "Mixed naming conventions",
+          "No enforced Container/Presenter separation",
+          "Component patterns not codified"
+        ]
+      },
+      "data_patterns": {
+        "status": "MINIMALLY_ESTABLISHED",
+        "description": "Standardized data fetching and mutation patterns",
+        "requirements": [
+          "TanStack Query key organization patterns",
+          "Mutation patterns with cache invalidation",
+          "Optimistic update patterns",
+          "Error handling patterns for API calls",
+          "Loading state management patterns"
+        ],
+        "current_gaps": [
+          "Inconsistent query key structures",
+          "No standardized mutation patterns",
+          "Limited optimistic update usage",
+          "API error handling varies by story",
+          "Loading state patterns not enforced"
+        ]
+      },
+      "form_patterns": {
+        "status": "NOT_ESTABLISHED",
+        "description": "Consistent form implementation across the application",
+        "requirements": [
+          "Form structure pattern (schema + validation + state + submission)",
+          "Field wrapper patterns with consistent props",
+          "Validation error display patterns",
+          "Form submission patterns with loading/error states",
+          "Form accessibility patterns"
+        ],
+        "current_gaps": [
+          "No standardized form structure",
+          "Inconsistent field implementations",
+          "Validation patterns vary widely",
+          "Form accessibility not enforced",
+          "No consistent submission handling"
+        ]
+      },
+      "error_patterns": {
+        "status": "PARTIALLY_ESTABLISHED",
+        "description": "Standardized error handling and display",
+        "requirements": [
+          "Error boundary patterns for component isolation",
+          "API error handling patterns with user-friendly messages",
+          "Error display patterns (toast, inline, modal)",
+          "Error logging and reporting patterns",
+          "Recovery mechanism patterns"
+        ],
+        "current_gaps": [
+          "Inconsistent error boundary usage",
+          "API error messages vary by developer",
+          "No standardized error display patterns",
+          "Limited error recovery mechanisms",
+          "Error logging not centralized"
+        ]
+      },
+      "structure_patterns": {
+        "status": "MINIMALLY_ESTABLISHED",
+        "description": "File and folder organization patterns",
+        "requirements": [
+          "Feature-based folder structure (features/[feature]/)",
+          "Component organization (ui/, common/, feature-specific)",
+          "Hook organization and naming (camelCase.ts)",
+          "Type organization (shared types, feature types)",
+          "Utility organization patterns"
+        ],
+        "current_gaps": [
+          "Inconsistent folder structures across features",
+          "Mixed component organization patterns",
+          "Hook placement varies by story",
+          "Type organization not standardized",
+          "Utility file locations inconsistent"
+        ]
+      }
+    },
+    "pattern_establishment_priority": {
+      "phase_1_critical": [
+        "PROMPT.md template standardization",
+        "Completion promise detection patterns",
+        "Basic component structure patterns",
+        "File/folder organization patterns"
+      ],
+      "phase_2_important": [
+        "Data fetching patterns (TanStack Query)",
+        "Error handling patterns",
+        "Form patterns and validation",
+        "Iteration safety mechanisms"
+      ],
+      "phase_3_enhancement": [
+        "Advanced component patterns (compound components)",
+        "Optimistic update patterns",
+        "Automated testing patterns",
+        "Performance monitoring patterns"
+      ]
+    },
+    "pattern_validation_methods": {
+      "automated_validation": [
+        "ESLint rules for pattern compliance",
+        "TypeScript checks for structure adherence",
+        "Pre-commit hooks for pattern validation",
+        "CI/CD pattern compliance checks"
+      ],
+      "manual_validation": [
+        "Code review checklists for pattern usage",
+        "Pattern adoption metrics tracking",
+        "Regular pattern audit reviews",
+        "Developer training on pattern usage"
+      ],
+      "pattern_maturity_indicators": [
+        "90%+ pattern adoption across codebase",
+        "Reduced time for new feature implementation",
+        "Consistent code reviews with minimal pattern violations",
+        "Automated tooling catches 95% of pattern violations"
+      ]
+    }
+  },
+  "domain_prds_audit": {
+    "total_domains": 15,
+    "files_audited": [
+      "communications.prd.json",
+      "customers.prd.json",
+      "dashboard.prd.json",
+      "financial.prd.json",
+      "inventory.prd.json",
+      "jobs.prd.json",
+      "orders.prd.json",
+      "pipeline.prd.json",
+      "products.prd.json",
+      "reports.prd.json",
+      "settings.prd.json",
+      "suppliers.prd.json",
+      "support.prd.json",
+      "users.prd.json",
+      "warranty.prd.json"
+    ],
+    "common_issues": {
+      "conflicting_status_fields": {
+        "description": "All stories have both 'status' and 'passes' fields",
+        "affected_percentage": "98%",
+        "impact": "Ralph cannot determine completion status reliably"
+      },
+      "extra_type_fields": {
+        "description": "UI stories have 'type': 'ui-component' field",
+        "affected_percentage": "75%",
+        "impact": "Ralph may fail to parse or ignore metadata"
+      },
+      "ui_spec_complexity": {
+        "description": "UI stories have detailed ui_spec objects",
+        "affected_percentage": "45%",
+        "impact": "Ralph may struggle with overly complex specifications"
+      }
+    },
+    "compliance_scores": {
+      "ralph_required_fields": "96%",
+      "acceptance_criteria_quality": "84%",
+      "completion_promise_format": "99%",
+      "dependency_format": "95%"
+    },
+    "individual_results": {
+      "communications": {
+        "stories": 17,
+        "issues": [
+          "conflicting_status",
+          "type_fields",
+          "ui_specs"
+        ],
+        "compliance": "75%"
+      },
+      "customers": {
+        "stories": 18,
+        "issues": [
+          "conflicting_status",
+          "type_fields",
+          "ui_specs"
+        ],
+        "compliance": "75%"
+      },
+      "dashboard": {
+        "stories": 18,
+        "issues": [
+          "conflicting_status",
+          "type_fields",
+          "ui_specs"
+        ],
+        "compliance": "75%"
+      },
+      "financial": {
+        "stories": 21,
+        "issues": [
+          "conflicting_status",
+          "type_fields",
+          "ui_specs"
+        ],
+        "compliance": "78%"
+      },
+      "inventory": {
+        "stories": 19,
+        "issues": [
+          "conflicting_status",
+          "type_fields",
+          "no_ui_specs"
+        ],
+        "compliance": "85%"
+      },
+      "jobs": {
+        "stories": 19,
+        "issues": [
+          "conflicting_status",
+          "type_fields",
+          "ui_specs"
+        ],
+        "compliance": "75%"
+      },
+      "orders": {
+        "stories": 19,
+        "issues": [
+          "conflicting_status",
+          "type_fields",
+          "ui_specs"
+        ],
+        "compliance": "75%"
+      },
+      "pipeline": {
+        "stories": 16,
+        "issues": [
+          "conflicting_status",
+          "type_fields",
+          "ui_specs"
+        ],
+        "compliance": "75%"
+      },
+      "products": {
+        "stories": 22,
+        "issues": [
+          "conflicting_status",
+          "type_fields",
+          "no_ui_specs"
+        ],
+        "compliance": "80%"
+      },
+      "reports": {
+        "stories": 8,
+        "issues": [
+          "conflicting_status",
+          "no_type_fields",
+          "minimal_ui_specs"
+        ],
+        "compliance": "90%"
+      },
+      "settings": {
+        "stories": 16,
+        "issues": [
+          "conflicting_status",
+          "no_type_fields",
+          "ui_specs"
+        ],
+        "compliance": "82%"
+      },
+      "suppliers": {
+        "stories": 17,
+        "issues": [
+          "conflicting_status",
+          "type_fields",
+          "ui_specs"
+        ],
+        "compliance": "75%"
+      },
+      "support": {
+        "stories": 17,
+        "issues": [
+          "conflicting_status",
+          "no_type_fields",
+          "no_ui_specs"
+        ],
+        "compliance": "88%"
+      },
+      "users": {
+        "stories": 19,
+        "issues": [
+          "conflicting_status",
+          "no_type_fields",
+          "ui_specs"
+        ],
+        "compliance": "82%"
+      },
+      "warranty": {
+        "stories": 20,
+        "issues": [
+          "conflicting_status",
+          "type_fields",
+          "ui_specs"
+        ],
+        "compliance": "75%"
+      }
+    }
+  },
+  "cross_cutting_prds_audit": {
+    "total_cross_cutting": 5,
+    "files": [
+      "accessibility.prd.json",
+      "empty-states.prd.json",
+      "error-handling.prd.json",
+      "loading-states.prd.json",
+      "notifications.prd.json"
+    ],
+    "common_patterns": {
+      "ui_focused": "All are UI/UX focused cross-cutting concerns",
+      "high_ui_spec_complexity": "Extensive ui_spec objects for reusable components",
+      "accessibility_focus": "Strong emphasis on a11y requirements"
+    },
+    "compliance_scores": {
+      "ralph_required_fields": "95%",
+      "acceptance_criteria_quality": "88%",
+      "completion_promise_format": "100%",
+      "dependency_format": "90%"
+    }
+  },
+  "foundation_prds_audit": {
+    "total_foundation": 4,
+    "files": [
+      "schema-foundation.prd.json",
+      "auth-foundation.prd.json",
+      "appshell-foundation.prd.json",
+      "shared-components-foundation.prd.json"
+    ],
+    "common_patterns": {
+      "technical_focus": "Infrastructure and patterns establishment",
+      "minimal_ui_specs": "Mostly server-side and schema work",
+      "high_technical_precision": "Very specific technical requirements"
+    },
+    "compliance_scores": {
+      "ralph_required_fields": "98%",
+      "acceptance_criteria_quality": "92%",
+      "completion_promise_format": "100%",
+      "dependency_format": "95%"
+    }
+  },
+  "workflow_prds_audit": {
+    "total_workflows": 8,
+    "files": [
+      "lead-to-order.prd.json",
+      "order-fulfillment.prd.json",
+      "invoicing.prd.json",
+      "support-resolution.prd.json",
+      "warranty-claims.prd.json",
+      "procurement.prd.json",
+      "job-completion.prd.json",
+      "customer-onboarding.prd.json"
+    ],
+    "common_patterns": {
+      "end_to_end_processes": "Multi-domain workflow coordination",
+      "complex_dependencies": "Heavy cross-domain dependencies",
+      "ui_workflow_focus": "Guided user experiences"
+    },
+    "compliance_scores": {
+      "ralph_required_fields": "94%",
+      "acceptance_criteria_quality": "82%",
+      "completion_promise_format": "98%",
+      "dependency_format": "85%"
+    },
+    "issues_found": {
+      "dependency_format_inconsistency": "Some use object format instead of string arrays",
+      "complex_ui_specifications": "Multi-step wizards with detailed ui_specs"
+    }
+  },
+  "integration_prds_audit": {
+    "total_integrations": 3,
+    "files": [
+      "xero.prd.json",
+      "resend.prd.json",
+      "claude-ai.prd.json"
+    ],
+    "common_patterns": {
+      "external_service_focus": "Third-party API integrations",
+      "minimal_ui_components": "Mostly backend/server work",
+      "high_reliability_requirements": "Integration stability critical"
+    },
+    "compliance_scores": {
+      "ralph_required_fields": "97%",
+      "acceptance_criteria_quality": "90%",
+      "completion_promise_format": "100%",
+      "dependency_format": "95%"
+    }
+  },
+  "role_prds_audit": {
+    "total_roles": 5,
+    "files": [
+      "admin.prd.json",
+      "field-tech.prd.json",
+      "finance.prd.json",
+      "operations.prd.json",
+      "sales.prd.json"
+    ],
+    "common_patterns": {
+      "persona_optimization": "Role-specific UI/UX optimizations",
+      "mobile_focus": "Field tech has heavy mobile requirements",
+      "performance_focused": "Response time and usability metrics"
+    },
+    "compliance_scores": {
+      "ralph_required_fields": "96%",
+      "acceptance_criteria_quality": "86%",
+      "completion_promise_format": "99%",
+      "dependency_format": "92%"
+    }
+  },
+  "refactoring_prds_audit": {
+    "total_refactoring": 4,
+    "files": [
+      "server-functions.prd.json",
+      "components.prd.json",
+      "hooks.prd.json",
+      "ai-architecture.prd.json"
+    ],
+    "common_patterns": {
+      "code_quality_focus": "Improving existing codebase structure",
+      "architectural_changes": "System-wide pattern establishment",
+      "no_new_features": "Purely technical improvements"
+    },
+    "compliance_scores": {
+      "ralph_required_fields": "98%",
+      "acceptance_criteria_quality": "94%",
+      "completion_promise_format": "100%",
+      "dependency_format": "95%"
+    }
+  },
+  "critical_issues_summary": {
+    "issue_1": {
+      "title": "Conflicting Status Fields",
+      "severity": "Critical",
+      "scope": "98% of all stories",
+      "description": "Stories have both 'status' and 'passes' fields with conflicting values",
+      "impact": "Ralph cannot reliably determine story completion status",
+      "fix": "Remove 'passes' field entirely, keep only 'status'"
+    },
+    "issue_2": {
+      "title": "Non-Ralph Extra Fields",
+      "severity": "Critical",
+      "scope": "75% of stories",
+      "description": "'type', 'ui_spec', 'files_to_modify' fields not in Ralph specification",
+      "impact": "Ralph may fail to parse stories correctly",
+      "fix": "Move extra fields to 'enhancements' object within stories"
+    }
+  },
+  "major_issues_summary": {
+    "issue_3": {
+      "title": "Overly Complex UI Specifications",
+      "severity": "Major",
+      "scope": "45% of stories",
+      "description": "ui_spec objects are too detailed for Ralph processing",
+      "impact": "Ralph may struggle with complex specifications",
+      "fix": "Move detailed UI specs to separate wireframe files"
+    },
+    "issue_4": {
+      "title": "Inconsistent Dependency Format",
+      "severity": "Major",
+      "scope": "Workflow PRDs",
+      "description": "Some dependencies use object format instead of string arrays",
+      "impact": "Dependency resolution may fail",
+      "fix": "Standardize all dependencies as string arrays"
+    },
+    "issue_5": {
+      "title": "Vague Acceptance Criteria",
+      "severity": "Major",
+      "scope": "20% of stories",
+      "description": "Some criteria lack specific file references or measurable outcomes",
+      "impact": "Ralph cannot verify completion automatically",
+      "fix": "Rewrite criteria with file paths and specific requirements"
+    }
+  },
+  "minor_issues_summary": {
+    "issue_6": {
+      "title": "Missing TypeScript Checks",
+      "severity": "Minor",
+      "scope": "5% of stories",
+      "description": "Some stories don't include 'npm run typecheck passes'",
+      "impact": "Ralph may not catch compilation errors",
+      "fix": "Add TypeScript compilation check to acceptance criteria"
+    },
+    "issue_7": {
+      "title": "Inconsistent Story ID Format",
+      "severity": "Minor",
+      "scope": "Minor variations",
+      "description": "Some story IDs use different separators",
+      "impact": "Potential confusion in completion promises",
+      "fix": "Standardize to CATEGORY-NNN format"
+    },
+    "issue_8": {
+      "title": "Extra PRD-level Fields",
+      "severity": "Minor",
+      "scope": "All PRDs",
+      "description": "PRDs contain extra fields like 'current_state', 'audit'",
+      "impact": "Additional context but not Ralph-compliant",
+      "fix": "Accept as documentation or move to separate files"
+    }
+  },
+  "remediation_priorities": {
+    "phase_0_pattern_foundation": {
+      "duration": "3-4 weeks",
+      "description": "Establish core patterns before Ralph remediation (per Pattern skill)",
+      "tasks": [
+        "Create PROMPT.md template standardization (Ralph skill requirement)",
+        "Establish component structure patterns (Base, Compound, Container/Presenter)",
+        "Define data fetching patterns (TanStack Query keys, mutations, optimistic updates)",
+        "Create error handling patterns (boundaries, API errors, display patterns)",
+        "Set up folder/file organization standards (feature-based structure)",
+        "Establish form patterns and validation (schema + validation + state + submission)",
+        "Create completion detection patterns (file existence, TypeScript checks)",
+        "Implement iteration safety mechanisms (max iterations, stuck detection)"
+      ]
+    },
+    "phase_1_ralph_critical": {
+      "duration": "3-4 days",
+      "description": "Fix Ralph-blocking issues (per Ralph skill)",
+      "tasks": [
+        "Remove all 'passes' fields from stories (conflicts with status field)",
+        "Move 'type', 'ui_spec', 'files_to_modify' to 'enhancements' objects",
+        "Fix dependency formats in workflow PRDs (string arrays vs objects)",
+        "Standardize completion promise formats (STORY_ID_COMPLETE)"
+      ]
+    },
+    "phase_2_acceptance_criteria": {
+      "duration": "4-5 days",
+      "description": "Improve Ralph verification capabilities",
+      "tasks": [
+        "Move complex ui_spec objects to separate wireframe files",
+        "Rewrite vague acceptance criteria with file references and measurable outcomes",
+        "Add missing TypeScript compilation checks to all stories",
+        "Include specific component names and file paths in criteria"
+      ]
+    },
+    "phase_3_validation_automation": {
+      "duration": "2-3 days",
+      "description": "Create automated validation (Pattern skill requirement)",
+      "tasks": [
+        "Create Ralph PRD validation scripts with pattern compliance checking",
+        "Implement automated completion detection using established patterns",
+        "Set up acceptance criteria verification tools",
+        "Establish ESLint rules for pattern compliance"
+      ]
+    },
+    "phase_4_integration_testing": {
+      "duration": "3-4 days",
+      "description": "Test end-to-end Ralph execution with patterns",
+      "tasks": [
+        "Test Ralph execution with remediated PRDs using established patterns",
+        "Validate completion promise detection works reliably",
+        "Verify acceptance criteria automation functions",
+        "Measure pattern adoption improvements and iteration cycle reduction"
+      ]
+    }
+  },
+  "estimated_effort_breakdown": {
+    "pattern_establishment": "3-4 weeks (Pattern skill foundation)",
+    "manual_remediation": "9-12 days (Ralph compliance fixes)",
+    "script_automation": "2-3 days (Pattern validation tooling)",
+    "testing_validation": "3-4 days (Integration testing)",
+    "total": "6-8 weeks (includes pattern foundation work)"
+  },
+  "quality_improvements_expected": {
+    "ralph_execution_reliability": "+95%",
+    "automated_completion_detection": "+90%",
+    "iteration_cycle_reduction": "60% faster (with mature patterns)",
+    "human_override_reduction": "80% fewer manual interventions",
+    "pattern_adoption_rate": "90%+ across codebase",
+    "development_velocity": "50% increase through pattern leverage"
+  },
+  "pattern_ralph_integration": {
+    "skill_synergy": "Pattern skill (reusable structures) + Ralph skill (autonomous development) = Reliable AI-driven development",
+    "foundation_requirement": "Pattern establishment is prerequisite for Ralph success - Ralph cannot execute reliably without codified conventions",
+    "critical_path": "Phase 0 (patterns) → Phase 1-4 (Ralph optimization) → Autonomous development capability",
+    "maturity_indicators": [
+      "90%+ pattern adoption across existing codebase",
+      "Automated pattern compliance in CI/CD",
+      "Ralph can complete stories without human intervention",
+      "Consistent code structure enables reliable completion detection",
+      "Pattern violations caught automatically"
+    ],
+    "success_criteria": [
+      "Ralph completes 95% of stories without manual intervention",
+      "Pattern adoption measured and enforced via tooling",
+      "New team members can contribute following established patterns",
+      "Code reviews focus on business logic, not structure",
+      "Ralph iteration cycles reduced by 60% through better patterns"
+    ]
+  },
+  "recommendations": {
+    "immediate_actions": [
+      "Begin with Phase 0: Pattern foundation establishment (3-4 weeks)",
+      "Document current codebase patterns before remediation",
+      "Create pattern catalog based on existing good examples",
+      "Establish pattern governance process"
+    ],
+    "ralph_readiness_actions": [
+      "Start Phase 1 critical fixes after pattern foundation",
+      "Create automated remediation script for field moves",
+      "Establish PRD review checklist for future PRDs",
+      "Set up Ralph testing environment with pattern validation"
+    ],
+    "architectural_improvements": [
+      "Implement PRD schema validation in CI/CD (Pattern skill)",
+      "Create Ralph-compatible PRD templates with pattern enforcement",
+      "Separate Ralph requirements from enhancement specifications",
+      "Add automated Ralph compliance and pattern testing",
+      "Establish pattern registry for ongoing maintenance"
+    ],
+    "process_improvements": [
+      "Train team on Pattern skill requirements for Ralph success",
+      "Add Ralph compliance + pattern adoption to PRD approval workflow",
+      "Create examples of well-structured Ralph stories following patterns",
+      "Document the split between core Ralph requirements and enhancement metadata",
+      "Establish pattern review process for new contributions"
+    ],
+    "long_term_vision": [
+      "Achieve 95% automated story completion through mature patterns",
+      "Reduce development time by 50% through pattern leverage",
+      "Enable reliable autonomous development at scale",
+      "Create self-sustaining pattern evolution process",
+      "Establish industry-leading AI-driven development capability"
+    ]
+  }
+}

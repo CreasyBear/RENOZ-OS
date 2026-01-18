@@ -1,0 +1,312 @@
+{
+  "integration": "resend",
+  "service": "Resend Email API",
+  "audit_date": "2026-01-09",
+  "implementation_percentage": 65,
+  "prd_current_state_validated": {
+    "implemented_verified": [
+      "Basic email sending via Resend - VERIFIED: lib/integrations/resend/client.ts, trigger/email-jobs.ts",
+      "Email templates (React Email) - VERIFIED: emails/templates/ with 5 templates (QuoteSent, OrderConfirmation, OrderShipped, WarrantyRegistered, IssueUpdate)",
+      "Email history tracking - VERIFIED: lib/schema/email-history.ts, src/server/functions/email-history.ts"
+    ],
+    "gaps_verified": [
+      "No delivery status webhooks - CONFIRMED: No resend webhook handler found",
+      "No bounce/complaint handling - CONFIRMED: No bounce tracking in schema or code",
+      "No email analytics dashboard - CONFIRMED: No analytics route or components",
+      "No domain verification status - CONFIRMED: No domain health checks",
+      "No rate limit monitoring - CONFIRMED: No rate limit tracking",
+      "No batch email support - PARTIAL: lib/email/service.ts has sendBulk but not integrated with Trigger.dev queuing",
+      "No email testing/preview - CONFIRMED: No preview endpoint or component",
+      "No suppression list management - CONFIRMED: No suppression table or API"
+    ]
+  },
+  "existing_implementation": {
+    "resend_client": "lib/integrations/resend/client.ts - React Email template rendering wrapper",
+    "email_service": "lib/email/service.ts - Alternative service with sendBulk capability",
+    "trigger_jobs": [
+      "trigger/email-jobs.ts - sendQuoteEmail, sendOrderConfirmation, sendShippingNotification, sendWarrantyConfirmation, sendIssueUpdate",
+      "trigger/po-email.ts - Purchase order emails",
+      "trigger/job-completion-email.ts - Job completion notifications",
+      "trigger/email-report.ts - Report emails"
+    ],
+    "server_functions": [
+      "src/server/functions/emails.ts - sendEmail, getEmailHistory",
+      "src/server/functions/email-history.ts - getEmailHistory, getEmailStatus, retryFailedEmail",
+      "src/server/functions/email-templates.ts - listEmailTemplates, getEmailTemplate (hardcoded)"
+    ],
+    "react_email_templates": [
+      "emails/templates/QuoteSent.tsx",
+      "emails/templates/OrderConfirmation.tsx",
+      "emails/templates/OrderShipped.tsx",
+      "emails/templates/WarrantyRegistered.tsx",
+      "emails/templates/IssueUpdate.tsx"
+    ],
+    "email_components": [
+      "emails/components/Footer.tsx",
+      "emails/components/EmailLayout.tsx",
+      "emails/components/Button.tsx"
+    ],
+    "schema": {
+      "email_history": {
+        "columns": ["id", "organizationId", "userId", "entityType", "entityId", "emailType", "recipientEmail", "recipientName", "subject", "status", "resendEmailId", "errorMessage", "sentAt", "deliveredAt", "failedAt", "createdAt"],
+        "status_values": ["pending", "sent", "delivered", "failed"],
+        "indexes": ["orgIdIdx", "entityIdx", "statusIdx", "createdAtIdx", "recipientEmailIdx"]
+      }
+    }
+  },
+  "stories": [
+    {
+      "id": "INT-RES-001",
+      "name": "Add Resend Webhooks",
+      "status": "not_implemented",
+      "validation": {
+        "webhook_endpoint_exists": false,
+        "event_handlers_exist": false,
+        "signature_verification_exists": false,
+        "trigger_integration_exists": false
+      },
+      "estimated_iterations": 4,
+      "adjusted_iterations": 5,
+      "adjustment_reason": "Need to create API route, webhook handler, signature verification, and Trigger.dev task for processing. Schema already supports delivery tracking (deliveredAt, status).",
+      "implementation_notes": [
+        "Create /api/webhooks/resend route",
+        "Handle events: email.delivered, email.opened, email.clicked, email.bounced, email.complained",
+        "Update email_history table with webhook data",
+        "Add Trigger.dev task for async webhook processing",
+        "Implement Resend webhook signature verification",
+        "Add webhook log table for debugging"
+      ],
+      "existing_code_to_leverage": [
+        "server/api/webhooks/xero.post.ts - Pattern for webhook handling",
+        "lib/schema/email-history.ts - Has deliveredAt, status columns ready"
+      ]
+    },
+    {
+      "id": "INT-RES-002",
+      "name": "Add Bounce/Complaint Handling",
+      "status": "not_implemented",
+      "validation": {
+        "bounce_tracking_exists": false,
+        "suppression_logic_exists": false,
+        "admin_notification_exists": false,
+        "bounce_report_ui_exists": false
+      },
+      "estimated_iterations": 4,
+      "adjusted_iterations": 5,
+      "adjustment_reason": "Requires new schema for suppression list, server functions, admin notification logic, and UI components.",
+      "implementation_notes": [
+        "Create email_suppression table (email, reason, bounceCount, suppressedAt)",
+        "Add bounce/complaint handlers to webhook processor (depends on INT-RES-001)",
+        "Auto-suppress after configurable bounce threshold",
+        "Complaint = immediate do-not-email flag",
+        "Admin notification via notification system when bounce rate exceeds threshold",
+        "Bounce report page in settings"
+      ],
+      "dependencies": ["INT-RES-001"],
+      "existing_code_to_leverage": [
+        "lib/utils/notifications.ts - Admin notification system",
+        "src/routes/settings/ - Pattern for settings pages"
+      ]
+    },
+    {
+      "id": "INT-RES-003",
+      "name": "Add Email Analytics Dashboard",
+      "status": "not_implemented",
+      "validation": {
+        "analytics_route_exists": false,
+        "metrics_calculation_exists": false,
+        "chart_components_exist": false
+      },
+      "estimated_iterations": 4,
+      "adjusted_iterations": 5,
+      "adjustment_reason": "Need aggregation queries, chart components, and new route. Schema already tracks sent/delivered/failed status.",
+      "implementation_notes": [
+        "Create /communications/analytics route",
+        "Aggregate metrics from email_history (sent, delivered rates)",
+        "Add open/click tracking from webhook events (depends on INT-RES-001)",
+        "Time period filtering (7d, 30d, 90d)",
+        "Template performance breakdown",
+        "Use existing chart components from dashboard"
+      ],
+      "dependencies": ["INT-RES-001"],
+      "existing_code_to_leverage": [
+        "src/components/domain/dashboard/widget-grid.tsx - Chart patterns",
+        "src/routes/communications/index.tsx - Communications module"
+      ]
+    },
+    {
+      "id": "INT-RES-004",
+      "name": "Add Domain Verification Status",
+      "status": "not_implemented",
+      "validation": {
+        "domain_check_api_exists": false,
+        "settings_ui_exists": false,
+        "alert_system_exists": false
+      },
+      "estimated_iterations": 3,
+      "adjusted_iterations": 4,
+      "adjustment_reason": "Requires Resend API calls for domain status, new settings section, and optional alert integration.",
+      "implementation_notes": [
+        "Add domain status section to organization settings",
+        "Call Resend domains.get API to check verification",
+        "Display SPF, DKIM, DMARC status indicators",
+        "Store last check timestamp and status",
+        "Optional: Scheduled job to check domain health periodically",
+        "Troubleshooting guidance with DNS record instructions"
+      ],
+      "existing_code_to_leverage": [
+        "src/routes/settings/organization.tsx - Add domain section",
+        "src/routes/settings/xero.tsx - Pattern for integration status display"
+      ]
+    },
+    {
+      "id": "INT-RES-005",
+      "name": "Add Batch Email Support",
+      "status": "partial",
+      "validation": {
+        "batch_api_exists": true,
+        "rate_limit_handling_exists": false,
+        "progress_tracking_exists": false,
+        "queue_system_exists": false
+      },
+      "estimated_iterations": 4,
+      "adjusted_iterations": 4,
+      "adjustment_reason": "Basic sendBulk exists in lib/email/service.ts but lacks proper queuing, rate limiting, and progress tracking.",
+      "implementation_notes": [
+        "Integrate batch sending with Trigger.dev for queue management",
+        "Implement rate limit tracking (per hour/day limits)",
+        "Add batch progress tracking (sent/pending/failed counts)",
+        "Priority queue for transactional vs marketing",
+        "Cancel batch capability via Trigger.dev job cancellation",
+        "Batch status dashboard component"
+      ],
+      "existing_code_to_leverage": [
+        "lib/email/service.ts - sendBulk method (enhance, don't replace)",
+        "trigger/email-jobs.ts - Pattern for Trigger.dev email tasks"
+      ]
+    },
+    {
+      "id": "INT-RES-006",
+      "name": "Add Email Testing/Preview",
+      "status": "not_implemented",
+      "validation": {
+        "preview_endpoint_exists": false,
+        "test_send_exists": false,
+        "viewport_preview_exists": false
+      },
+      "estimated_iterations": 4,
+      "adjusted_iterations": 4,
+      "adjustment_reason": "React Email already supports rendering - need preview API and UI components.",
+      "implementation_notes": [
+        "Create preview endpoint that renders template with sample/provided data",
+        "Add 'Send test email to me' functionality",
+        "Desktop/mobile viewport toggle using iframe resize",
+        "Variable validation (highlight missing variables)",
+        "Subject line and preheader preview",
+        "Optional: SpamAssassin-style spam score (may require external service)"
+      ],
+      "existing_code_to_leverage": [
+        "lib/integrations/resend/client.ts - render function for templates",
+        "emails/templates/*.tsx - Existing templates to preview",
+        "src/server/functions/email-templates.ts - Template listing"
+      ]
+    },
+    {
+      "id": "INT-RES-007",
+      "name": "Add Suppression List Management",
+      "status": "not_implemented",
+      "validation": {
+        "suppression_table_exists": false,
+        "management_ui_exists": false,
+        "import_export_exists": false
+      },
+      "estimated_iterations": 3,
+      "adjusted_iterations": 4,
+      "adjustment_reason": "Requires new schema, CRUD server functions, and settings UI. CSV import/export adds complexity.",
+      "implementation_notes": [
+        "Create email_suppression schema (depends on INT-RES-002 for bounce integration)",
+        "CRUD server functions for suppression management",
+        "Settings page with suppression list table",
+        "Add/remove with reason selection",
+        "CSV import with validation",
+        "CSV export functionality",
+        "Filter by suppression reason (bounce, complaint, unsubscribe, manual)"
+      ],
+      "dependencies": ["INT-RES-002"],
+      "existing_code_to_leverage": [
+        "src/routes/settings/import.tsx - CSV import pattern",
+        "src/components/domain/customers/bulk-import-dialog.tsx - Import dialog pattern"
+      ]
+    },
+    {
+      "id": "INT-RES-008",
+      "name": "Add Email Status Widget",
+      "status": "not_implemented",
+      "validation": {
+        "widget_component_exists": false,
+        "metrics_server_function_exists": false,
+        "dashboard_integration_exists": false
+      },
+      "estimated_iterations": 3,
+      "adjusted_iterations": 3,
+      "adjustment_reason": "Relatively straightforward widget leveraging existing dashboard widget patterns and email_history data.",
+      "implementation_notes": [
+        "Create EmailStatusWidget component",
+        "Server function to aggregate today's email metrics",
+        "Health indicator based on delivery rate thresholds",
+        "Quick links to analytics and error list",
+        "Trend comparison vs previous period",
+        "Alert badge when delivery issues detected",
+        "Add to dashboard widget grid"
+      ],
+      "dependencies": ["INT-RES-003"],
+      "existing_code_to_leverage": [
+        "src/components/domain/dashboard/widget-grid.tsx - Widget container pattern",
+        "src/components/domain/dashboard/*.tsx - Existing widget patterns"
+      ]
+    }
+  ],
+  "total_estimated_iterations": 29,
+  "total_adjusted_iterations": 34,
+  "critical_path": [
+    "INT-RES-001 (Webhooks) - Foundation for delivery tracking",
+    "INT-RES-002 (Bounce Handling) - Depends on webhooks",
+    "INT-RES-003 (Analytics) - Depends on webhooks for open/click data",
+    "INT-RES-007 (Suppression) - Depends on bounce handling",
+    "INT-RES-008 (Widget) - Depends on analytics"
+  ],
+  "parallel_tracks": [
+    "INT-RES-004 (Domain Verification) - Independent, can run parallel",
+    "INT-RES-005 (Batch Email) - Independent, can run parallel",
+    "INT-RES-006 (Testing/Preview) - Independent, can run parallel"
+  ],
+  "schema_changes_required": [
+    {
+      "table": "email_suppression",
+      "description": "New table for managing suppressed email addresses",
+      "columns": ["id", "organizationId", "email", "reason", "bounceCount", "originalBounceType", "suppressedAt", "removedAt", "removedReason", "createdAt"]
+    },
+    {
+      "table": "email_history",
+      "description": "Add columns for enhanced tracking",
+      "new_columns": ["openedAt", "clickedAt", "bounceType", "complaintType"]
+    },
+    {
+      "table": "email_webhook_log",
+      "description": "New table for webhook debugging",
+      "columns": ["id", "organizationId", "eventType", "payload", "processedAt", "errorMessage", "createdAt"]
+    },
+    {
+      "table": "email_batch",
+      "description": "New table for batch email tracking",
+      "columns": ["id", "organizationId", "name", "totalCount", "sentCount", "failedCount", "status", "priority", "startedAt", "completedAt", "cancelledAt", "createdAt"]
+    }
+  ],
+  "recommendations": [
+    "Start with INT-RES-001 (Webhooks) as it unblocks most other features",
+    "INT-RES-004, INT-RES-005, INT-RES-006 can be built in parallel with webhook implementation",
+    "Consider combining INT-RES-002 and INT-RES-007 as they share the suppression concept",
+    "Use existing Xero webhook pattern as reference for Resend webhooks",
+    "Leverage existing dashboard widget patterns for INT-RES-008"
+  ]
+}

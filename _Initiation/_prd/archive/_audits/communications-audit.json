@@ -1,0 +1,575 @@
+{
+  "prd_id": "DOM-COMMS",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "summary": {
+    "total_stories": 8,
+    "verified_gaps": 7,
+    "invalidated_gaps": 1,
+    "needs_atomization": 3,
+    "implementation_status": "Email sending via Resend fully implemented with templates (QuoteSent, OrderConfirmation, OrderShipped, WarrantyRegistered, IssueUpdate). Email history tracking implemented. Activity tracking implemented. Communications route exists with summary dashboard. Template editor exists for PDF document templates but not email templates. No open/click tracking, scheduling, bulk campaigns, call scheduling, communication preferences, or signature management implemented."
+  },
+  "codebase_findings": {
+    "schema_files": [
+      {
+        "path": "renoz-v2/lib/schema/email-history.ts",
+        "description": "Email history schema with organization, user, entity references, status tracking. Has openedAt/clickedAt fields NOT present - gap confirmed.",
+        "relevant_fields": ["id", "organizationId", "userId", "entityType", "entityId", "emailType", "recipientEmail", "recipientName", "subject", "status", "resendEmailId", "errorMessage", "sentAt", "deliveredAt", "failedAt", "createdAt"]
+      },
+      {
+        "path": "renoz-v2/lib/schema/activities.ts",
+        "description": "Activities schema for tracking business activities including email_sent, email_delivered, email_failed. Supports customer communications timeline.",
+        "relevant_fields": ["id", "organizationId", "userId", "type", "source", "priority", "entityType", "entityId", "metadata", "groupId", "status", "createdAt", "updatedAt"]
+      },
+      {
+        "path": "renoz-v2/lib/schema/customer-activities.ts",
+        "description": "Customer-specific activities for call, email, note, order, quote, warranty tracking.",
+        "relevant_fields": ["id", "customerId", "type", "description", "metadata", "createdByUserId", "createdAt"]
+      },
+      {
+        "path": "renoz-v2/lib/schema/contacts.ts",
+        "description": "Contacts schema - NO emailOptIn, smsOptIn columns exist. Gap confirmed for communication preferences.",
+        "relevant_fields": ["id", "customerId", "firstName", "lastName", "email", "phone", "mobile", "role", "isPrimary"]
+      }
+    ],
+    "server_functions": [
+      {
+        "path": "renoz-v2/src/server/functions/communications.ts",
+        "description": "Main communications server functions: sendTemplateEmail, getCommunicationHistory, getCommunicationSummary, getActivities, updateActivityStatus, bulkUpdateActivityStatus. Template rendering for quote, order_confirmation, warranty_notification.",
+        "functions": ["sendTemplateEmail", "getCommunicationHistory", "getCommunicationSummary", "createBusinessActivity", "getActivities", "updateActivityStatus", "bulkUpdateActivityStatus", "sendTestEmail"]
+      },
+      {
+        "path": "renoz-v2/src/server/functions/emails.ts",
+        "description": "Email server functions: sendEmail, getEmailHistory. Basic email sending via Resend.",
+        "functions": ["sendEmail", "getEmailHistory"]
+      },
+      {
+        "path": "renoz-v2/src/server/functions/email-templates.ts",
+        "description": "Email templates server functions. Currently returns hardcoded templates (quote-sent, order-confirmation, order-shipped). No DB storage.",
+        "functions": ["listEmailTemplates", "getEmailTemplate"]
+      },
+      {
+        "path": "renoz-v2/src/server/functions/email-history.ts",
+        "description": "Email history CRUD: getEmailHistory, getEmailStatus, retryFailedEmail. Supports retry of failed emails.",
+        "functions": ["getEmailHistory", "getEmailStatus", "retryFailedEmail"]
+      }
+    ],
+    "trigger_jobs": [
+      {
+        "path": "renoz-v2/trigger/email-jobs.ts",
+        "description": "Trigger.dev tasks for transactional emails: sendQuoteEmail, sendOrderConfirmation, sendShippingNotification, sendWarrantyConfirmation, sendIssueUpdate, createEmailNotification. Checks user preferences before sending.",
+        "tasks": ["sendQuoteEmail", "sendOrderConfirmation", "sendShippingNotification", "sendWarrantyConfirmation", "sendIssueUpdate", "createEmailNotification"]
+      }
+    ],
+    "email_templates_react": [
+      {
+        "path": "renoz-v2/emails/templates/QuoteSent.tsx",
+        "description": "React Email template for quotes"
+      },
+      {
+        "path": "renoz-v2/emails/templates/OrderConfirmation.tsx",
+        "description": "React Email template for order confirmations"
+      },
+      {
+        "path": "renoz-v2/emails/templates/OrderShipped.tsx",
+        "description": "React Email template for shipping notifications"
+      },
+      {
+        "path": "renoz-v2/emails/templates/WarrantyRegistered.tsx",
+        "description": "React Email template for warranty registration"
+      },
+      {
+        "path": "renoz-v2/emails/templates/IssueUpdate.tsx",
+        "description": "React Email template for issue updates"
+      }
+    ],
+    "components": [
+      {
+        "path": "renoz-v2/src/components/domain/communications/communication-history.tsx",
+        "description": "Communication history component for customer detail. Shows activities filtered by customer. Has broken references (uses 'comm' variable but iterates 'activity')."
+      },
+      {
+        "path": "renoz-v2/src/components/domain/communications/email-composer-dialog.tsx",
+        "description": "Email composer dialog with template selection (quote, order_confirmation, warranty_notification). Uses sendTemplateEmail."
+      },
+      {
+        "path": "renoz-v2/src/components/domain/email/email-status-badge.tsx",
+        "description": "Badge component for email status display"
+      },
+      {
+        "path": "renoz-v2/src/components/domain/email/email-history-dialog.tsx",
+        "description": "Dialog for viewing email history"
+      },
+      {
+        "path": "renoz-v2/src/components/shared/email-composer.tsx",
+        "description": "Shared email composer component"
+      }
+    ],
+    "routes": [
+      {
+        "path": "renoz-v2/src/routes/communications/index.tsx",
+        "description": "Communications hub route. Shows stats (total, sent, pending, failed), recent communications, email templates tab (placeholder cards), campaigns tab (placeholder), analytics tab (placeholder)."
+      },
+      {
+        "path": "renoz-v2/src/routes/settings/templates.tsx",
+        "description": "Document templates settings (PDF headers/footers for quotes and orders). NOT email templates - this is for PDF generation."
+      }
+    ],
+    "hooks": [
+      {
+        "path": "renoz-v2/src/hooks/use-communications.ts",
+        "description": "React Query hooks: useCommunicationSummary, useCommunicationHistory, useSendTemplateEmail, useCreateBusinessActivity, useActivities, useUpdateActivityStatus, useBulkUpdateActivityStatus, useUserPreferences, useUpdateUserPreferences"
+      }
+    ]
+  },
+  "stories_status": {
+    "DOM-COMMS-001": {
+      "name": "Add Email Open/Click Tracking",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "Gap confirmed - email_history schema lacks openedAt, clickedAt columns. No tracking pixel or link wrapping implementation exists. Requires schema change, server function for webhook handling, UI for stats display.",
+      "layers": ["schema", "server", "ui"],
+      "current_implementation": "email_history has status tracking but no open/click fields",
+      "estimated_iterations": 6,
+      "atomization_recommendation": {
+        "story_1": "Add openedAt, clickedAt, linkClicks columns to email_history schema (iterations: 2)",
+        "story_2": "Implement tracking pixel endpoint and link wrapper service (iterations: 3)",
+        "story_3": "Add open/click stats UI to email detail and template aggregate view (iterations: 3)"
+      }
+    },
+    "DOM-COMMS-002": {
+      "name": "Add Email Scheduling",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "Gap confirmed - no scheduled emails implementation exists. Requires new schema (scheduled_emails), Trigger.dev scheduled task, UI for compose and management.",
+      "layers": ["schema", "server", "trigger", "ui"],
+      "current_implementation": "Trigger.dev jobs exist for immediate sending only",
+      "estimated_iterations": 6,
+      "atomization_recommendation": {
+        "story_1": "Add scheduled_emails table with scheduledAt, timezone columns (iterations: 2)",
+        "story_2": "Create Trigger.dev scheduled email task and management functions (iterations: 3)",
+        "story_3": "Add schedule option to email composer and scheduled emails list UI (iterations: 3)"
+      }
+    },
+    "DOM-COMMS-003": {
+      "name": "Add Bulk Email Campaigns",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "Gap confirmed - campaigns tab shows 'Coming soon' placeholder. Requires new schema, batch sending logic, campaign management UI.",
+      "layers": ["schema", "server", "trigger", "ui"],
+      "current_implementation": "Communications route has placeholder campaigns tab",
+      "estimated_iterations": 8,
+      "atomization_recommendation": {
+        "story_1": "Add email_campaigns and campaign_recipients tables (iterations: 2)",
+        "story_2": "Implement campaign creation with recipient filtering server functions (iterations: 2)",
+        "story_3": "Add Trigger.dev task for batch sending with rate limits (iterations: 3)",
+        "story_4": "Create campaign management UI with preview and stats (iterations: 4)"
+      },
+      "dependencies_valid": true,
+      "depends_on": "DOM-COMMS-001 (tracking required for campaign stats)"
+    },
+    "DOM-COMMS-004": {
+      "name": "Add Call Scheduling",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "Gap confirmed - no scheduled_calls table or call scheduling implementation. customer_activities supports call logging but not scheduling/reminders.",
+      "layers": ["schema", "server", "trigger", "ui"],
+      "current_implementation": "customer_activities.type supports 'call' but only for logging completed calls",
+      "estimated_iterations": 6,
+      "atomization_recommendation": {
+        "story_1": "Add scheduled_calls table (scheduledAt, assigneeId, customerId, reminderAt) (iterations: 2)",
+        "story_2": "Create call scheduling server functions and Trigger.dev reminder task (iterations: 2)",
+        "story_3": "Add schedule call UI from customer detail and dashboard widget (iterations: 3)"
+      }
+    },
+    "DOM-COMMS-005": {
+      "name": "Add Communication Preferences",
+      "status": "valid",
+      "change": "none",
+      "reason": "Gap confirmed - contacts schema has no emailOptIn, smsOptIn columns. Trigger.dev email-jobs.ts already checks userPreferences but not contact preferences. Single-layer schema story plus server validation updates.",
+      "layers": ["schema", "server", "ui"],
+      "current_implementation": "userPreferences table exists and is checked by email jobs, but contact-level opt-in does not exist",
+      "estimated_iterations": 4,
+      "acceptance_criteria_assessment": {
+        "testable": true,
+        "complete": true,
+        "notes": "All criteria are testable. Schema migration, form update, sending validation, unsubscribe link, and preference history can all be verified."
+      }
+    },
+    "DOM-COMMS-006": {
+      "name": "Add Email Signature Management",
+      "status": "valid",
+      "change": "none",
+      "reason": "Gap confirmed - no email_signatures table or signature management. Relatively simple feature with schema, CRUD, and compose integration.",
+      "layers": ["schema", "server", "ui"],
+      "current_implementation": "None",
+      "estimated_iterations": 4,
+      "acceptance_criteria_assessment": {
+        "testable": true,
+        "complete": true,
+        "notes": "All criteria testable. Rich text editor may add complexity but 4 iterations appropriate."
+      }
+    },
+    "DOM-COMMS-007": {
+      "name": "Enhance Email Template Editor",
+      "status": "partially_invalid",
+      "change": "refine",
+      "reason": "Partially implemented - React Email templates exist (5 templates) with variable support. settings/templates route is for PDF templates, not email. Missing: DB-stored templates, visual editor, categories, versioning, clone action.",
+      "layers": ["schema", "server", "ui"],
+      "current_implementation": "5 React Email templates hardcoded, email-templates.ts returns hardcoded DEFAULT_TEMPLATES array",
+      "estimated_iterations": 5,
+      "refinement_notes": "Story should focus on DB-stored custom templates rather than replacing existing React Email templates. Variables already work in current templates. Versioning and clone add complexity.",
+      "acceptance_criteria_assessment": {
+        "testable": true,
+        "partially_implemented": ["Variable insertion - already supported in React Email templates"],
+        "not_implemented": ["Rich text template editor", "Template categories", "Template versioning", "Clone template action", "Preview with sample data in editor UI"]
+      }
+    },
+    "DOM-COMMS-008": {
+      "name": "Create Communications Timeline",
+      "status": "partially_invalid",
+      "change": "refine",
+      "reason": "Partially implemented - communication-history.tsx component exists on customer detail. Uses activities table filtered by entityType/entityId. Has bugs (uses 'comm' variable but iterates 'activity'). Missing: filter by type/date/participant, search, export, quick actions.",
+      "layers": ["ui"],
+      "current_implementation": "communication-history.tsx shows activities for customer with basic timeline UI, but has rendering bugs and limited features",
+      "estimated_iterations": 4,
+      "refinement_notes": "Fix existing bugs first. Then add filtering, search, export features. Most work is UI-only since activities schema already supports needed data.",
+      "acceptance_criteria_assessment": {
+        "testable": true,
+        "partially_implemented": ["Timeline combines emails, calls, notes (via activities table)", "Expandable detail for each item"],
+        "not_implemented": ["Filter by type, date, participant", "Quick actions: reply, log follow-up", "Search within communications", "Export communication history"],
+        "bugs": ["communication-history.tsx references 'comm' variable but iterates 'activity'", "References 'communications' array that doesn't exist"]
+      }
+    }
+  },
+  "recommended_stories": [
+    {
+      "original_id": "DOM-COMMS-001",
+      "split_into": [
+        {
+          "id": "DOM-COMMS-001A",
+          "name": "Add Email Tracking Schema",
+          "description": "Add openedAt, clickedAt, linkClicks columns to email_history table",
+          "layers": ["schema"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "email_history table has openedAt timestamp column",
+            "email_history table has clickedAt timestamp column",
+            "email_history table has linkClicks jsonb column for tracking individual link clicks",
+            "Migration runs successfully",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-COMMS-001B",
+          "name": "Implement Email Tracking Service",
+          "description": "Create tracking pixel endpoint and link wrapper service for email engagement tracking",
+          "layers": ["server", "trigger"],
+          "estimated_iterations": 3,
+          "acceptance_criteria": [
+            "GET /api/track/open/:emailId endpoint returns 1x1 transparent pixel and updates openedAt",
+            "GET /api/track/click/:emailId/:linkId endpoint updates clickedAt and redirects to original URL",
+            "Link wrapper function wraps all links in outgoing emails",
+            "Tracking pixel inserted into email HTML before sending",
+            "Privacy-compliant: tracking respects user preferences",
+            "TypeScript compiles without errors"
+          ],
+          "dependencies": ["DOM-COMMS-001A"]
+        },
+        {
+          "id": "DOM-COMMS-001C",
+          "name": "Add Email Tracking Stats UI",
+          "description": "Display open/click stats on email detail view and aggregate stats per template",
+          "layers": ["ui"],
+          "estimated_iterations": 3,
+          "acceptance_criteria": [
+            "Email history dialog shows openedAt, clickedAt timestamps when available",
+            "Communications route templates tab shows aggregate open/click rates",
+            "Stats update in real-time when new tracking events occur",
+            "TypeScript compiles without errors"
+          ],
+          "dependencies": ["DOM-COMMS-001B"]
+        }
+      ]
+    },
+    {
+      "original_id": "DOM-COMMS-002",
+      "split_into": [
+        {
+          "id": "DOM-COMMS-002A",
+          "name": "Add Scheduled Emails Schema",
+          "description": "Create scheduled_emails table for email scheduling",
+          "layers": ["schema"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "scheduled_emails table with id, organizationId, userId, recipientEmail, recipientName, subject, templateType, templateData, scheduledAt, timezone, status columns",
+            "Indexes on organizationId, scheduledAt, status",
+            "Migration runs successfully",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-COMMS-002B",
+          "name": "Implement Email Scheduling Service",
+          "description": "Create Trigger.dev scheduled task and CRUD server functions for scheduled emails",
+          "layers": ["server", "trigger"],
+          "estimated_iterations": 3,
+          "acceptance_criteria": [
+            "scheduleEmail server function creates scheduled email record",
+            "getScheduledEmails, cancelScheduledEmail, updateScheduledEmail server functions",
+            "Trigger.dev task checks for due scheduled emails every minute",
+            "Scheduled emails are sent at specified time in correct timezone",
+            "TypeScript compiles without errors"
+          ],
+          "dependencies": ["DOM-COMMS-002A"]
+        },
+        {
+          "id": "DOM-COMMS-002C",
+          "name": "Add Email Scheduling UI",
+          "description": "Add schedule send option to email composer and scheduled emails management",
+          "layers": ["ui"],
+          "estimated_iterations": 3,
+          "acceptance_criteria": [
+            "Email composer dialog has 'Schedule Send' option with datetime picker",
+            "Timezone selector for scheduled time",
+            "Scheduled emails list view in communications route",
+            "Edit/cancel scheduled email actions",
+            "Scheduled indicator badge on sent items that were scheduled",
+            "TypeScript compiles without errors"
+          ],
+          "dependencies": ["DOM-COMMS-002B"]
+        }
+      ]
+    },
+    {
+      "original_id": "DOM-COMMS-003",
+      "split_into": [
+        {
+          "id": "DOM-COMMS-003A",
+          "name": "Add Email Campaigns Schema",
+          "description": "Create email_campaigns and campaign_recipients tables",
+          "layers": ["schema"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "email_campaigns table with id, organizationId, name, templateType, templateData, status, scheduledAt, sentCount, openCount, clickCount columns",
+            "campaign_recipients table with id, campaignId, contactId, email, status, sentAt, openedAt, clickedAt columns",
+            "Indexes for efficient campaign and recipient queries",
+            "Migration runs successfully",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-COMMS-003B",
+          "name": "Implement Campaign Recipient Selection",
+          "description": "Server functions for campaign creation with recipient filtering",
+          "layers": ["server"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "createCampaign server function with recipient selection criteria",
+            "getCampaignRecipients with filter by tags, status, customer type",
+            "previewCampaignRecipients returns count and sample before send",
+            "TypeScript compiles without errors"
+          ],
+          "dependencies": ["DOM-COMMS-003A"]
+        },
+        {
+          "id": "DOM-COMMS-003C",
+          "name": "Implement Campaign Batch Sending",
+          "description": "Trigger.dev task for sending campaign emails in batches",
+          "layers": ["trigger"],
+          "estimated_iterations": 3,
+          "acceptance_criteria": [
+            "sendCampaign Trigger.dev task sends in configurable batch sizes",
+            "Respects Resend rate limits (configurable delay between batches)",
+            "Updates campaign stats (sentCount) as batches complete",
+            "Handles failures gracefully with retry for individual recipients",
+            "TypeScript compiles without errors"
+          ],
+          "dependencies": ["DOM-COMMS-003B", "DOM-COMMS-001B"]
+        },
+        {
+          "id": "DOM-COMMS-003D",
+          "name": "Add Campaign Management UI",
+          "description": "Create campaign management interface with preview and stats",
+          "layers": ["ui"],
+          "estimated_iterations": 4,
+          "acceptance_criteria": [
+            "Campaign creation wizard with template selection",
+            "Recipient filter builder (by tags, status, etc.)",
+            "Preview before sending shows recipient count and sample email",
+            "Campaign list with status badges",
+            "Campaign detail view with sent/opened/clicked stats",
+            "TypeScript compiles without errors"
+          ],
+          "dependencies": ["DOM-COMMS-003C"]
+        }
+      ]
+    },
+    {
+      "original_id": "DOM-COMMS-004",
+      "split_into": [
+        {
+          "id": "DOM-COMMS-004A",
+          "name": "Add Scheduled Calls Schema",
+          "description": "Create scheduled_calls table for call scheduling",
+          "layers": ["schema"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "scheduled_calls table with id, organizationId, customerId, assigneeId, scheduledAt, reminderAt, notes, status columns",
+            "Status enum: pending, completed, cancelled, rescheduled",
+            "Indexes on assigneeId, scheduledAt, status",
+            "Migration runs successfully",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-COMMS-004B",
+          "name": "Implement Call Scheduling Service",
+          "description": "Server functions and Trigger.dev reminder task for scheduled calls",
+          "layers": ["server", "trigger"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "scheduleCall, getScheduledCalls, updateScheduledCall, cancelScheduledCall server functions",
+            "Trigger.dev task sends reminder notification before scheduled call",
+            "completeCall function logs call outcome to customer_activities",
+            "TypeScript compiles without errors"
+          ],
+          "dependencies": ["DOM-COMMS-004A"]
+        },
+        {
+          "id": "DOM-COMMS-004C",
+          "name": "Add Call Scheduling UI",
+          "description": "UI for scheduling calls from customer detail and dashboard widget",
+          "layers": ["ui"],
+          "estimated_iterations": 3,
+          "acceptance_criteria": [
+            "Schedule call button on customer detail page",
+            "Call scheduling dialog with datetime, assignee, notes",
+            "Snooze/reschedule options on scheduled call",
+            "Log call outcome dialog after call completion",
+            "Dashboard widget showing upcoming scheduled calls",
+            "TypeScript compiles without errors"
+          ],
+          "dependencies": ["DOM-COMMS-004B"]
+        }
+      ]
+    },
+    {
+      "original_id": "DOM-COMMS-007",
+      "recommendation": "Refine original story",
+      "refined_story": {
+        "id": "DOM-COMMS-007-REFINED",
+        "name": "Add Custom Email Templates Management",
+        "description": "Add database-stored custom email templates with visual editor, complementing existing React Email templates",
+        "layers": ["schema", "server", "ui"],
+        "estimated_iterations": 5,
+        "acceptance_criteria": [
+          "email_templates table with id, organizationId, name, category, subject, bodyHtml, variables, version, isActive columns",
+          "CRUD server functions for email templates",
+          "Rich text editor for template body with variable insertion toolbar",
+          "Preview with sample data before saving",
+          "Template categories: sales, support, custom",
+          "Clone existing template action",
+          "Template versioning with ability to view previous versions",
+          "TypeScript compiles without errors"
+        ],
+        "notes": "Existing React Email templates remain for system emails. Custom templates for user-created emails."
+      }
+    },
+    {
+      "original_id": "DOM-COMMS-008",
+      "recommendation": "Refine and fix existing implementation",
+      "refined_story": {
+        "id": "DOM-COMMS-008-REFINED",
+        "name": "Fix and Enhance Communications Timeline",
+        "description": "Fix bugs in existing communication-history.tsx and add filtering, search, export features",
+        "layers": ["ui"],
+        "estimated_iterations": 4,
+        "acceptance_criteria": [
+          "FIX: communication-history.tsx uses correct 'activity' variable throughout (not 'comm')",
+          "FIX: Remove references to non-existent 'communications' array",
+          "Filter by communication type (email, call, note, quote, order, warranty)",
+          "Filter by date range",
+          "Filter by participant/user",
+          "Search within communications text",
+          "Quick action: Reply to email (opens composer with recipient pre-filled)",
+          "Quick action: Log follow-up call",
+          "Export communication history as CSV/PDF",
+          "TypeScript compiles without errors"
+        ]
+      }
+    }
+  ],
+  "atomization_notes": {
+    "DOM-COMMS-001": "Split into 3 stories: schema (2 iter), service (3 iter), UI (3 iter). Total 8 iterations but parallelizable.",
+    "DOM-COMMS-002": "Split into 3 stories: schema (2 iter), service (3 iter), UI (3 iter). Total 8 iterations but parallelizable.",
+    "DOM-COMMS-003": "Split into 4 stories due to complexity. Depends on DOM-COMMS-001 for tracking. Consider deferring until tracking implemented.",
+    "DOM-COMMS-004": "Split into 3 stories: schema (2 iter), service (2 iter), UI (3 iter). Total 7 iterations.",
+    "DOM-COMMS-005": "Keep as single story - 4 iterations acceptable, single responsibility.",
+    "DOM-COMMS-006": "Keep as single story - 4 iterations acceptable, single responsibility.",
+    "DOM-COMMS-007": "Refine scope - existing React Email templates already provide variable support. Focus on custom templates.",
+    "DOM-COMMS-008": "Refine to fix bugs first, then enhance. UI-only story."
+  },
+  "bugs_found": [
+    {
+      "file": "renoz-v2/src/components/domain/communications/communication-history.tsx",
+      "line": 247,
+      "issue": "Uses 'comm.id' but the map iterates 'activity'",
+      "fix": "Change 'comm.id' to 'activity.id'"
+    },
+    {
+      "file": "renoz-v2/src/components/domain/communications/communication-history.tsx",
+      "line": 280,
+      "issue": "References 'comm.user' but should be 'activity.metadata?.user'",
+      "fix": "Update to use activity metadata or remove user display"
+    },
+    {
+      "file": "renoz-v2/src/components/domain/communications/communication-history.tsx",
+      "line": 306,
+      "issue": "References 'communications.length' but should be 'customerActivities.length'",
+      "fix": "Change to 'customerActivities.length'"
+    }
+  ],
+  "priority_recommendation": [
+    {
+      "priority": 1,
+      "story": "DOM-COMMS-008-REFINED",
+      "reason": "Fix existing bugs first to ensure current functionality works. UI-only, quick win."
+    },
+    {
+      "priority": 2,
+      "story": "DOM-COMMS-005",
+      "reason": "Communication preferences are compliance-critical for email marketing regulations (CAN-SPAM, GDPR)."
+    },
+    {
+      "priority": 3,
+      "story": "DOM-COMMS-001A/B/C",
+      "reason": "Email tracking is foundational for DOM-COMMS-003 (bulk campaigns) and provides immediate value."
+    },
+    {
+      "priority": 4,
+      "story": "DOM-COMMS-006",
+      "reason": "Signature management is a quick win that improves email professionalism."
+    },
+    {
+      "priority": 5,
+      "story": "DOM-COMMS-002A/B/C",
+      "reason": "Email scheduling is commonly requested feature."
+    },
+    {
+      "priority": 6,
+      "story": "DOM-COMMS-004A/B/C",
+      "reason": "Call scheduling improves sales workflow."
+    },
+    {
+      "priority": 7,
+      "story": "DOM-COMMS-007-REFINED",
+      "reason": "Custom templates nice-to-have since React Email templates cover core use cases."
+    },
+    {
+      "priority": 8,
+      "story": "DOM-COMMS-003A/B/C/D",
+      "reason": "Bulk campaigns are complex and should wait until tracking (DOM-COMMS-001) is complete."
+    }
+  ]
+}

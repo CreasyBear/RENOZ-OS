@@ -1,0 +1,161 @@
+{
+  "audit_date": "2026-01-09",
+  "prd_id": "REF-SERVER",
+  "prd_path": "memory-bank/prd/refactoring/server-functions.prd.json",
+  "codebase_path": "renoz-v2/src/server/functions/",
+  "summary": {
+    "total_files": 46,
+    "files_over_400_lines": 19,
+    "max_file_size": 2885,
+    "prd_claims_verified": true
+  },
+  "findings": {
+    "file_sizes": {
+      "verified": true,
+      "details": {
+        "orders.ts": {
+          "prd_claim": "2700 lines",
+          "actual": 2885,
+          "status": "WORSE_THAN_CLAIMED",
+          "note": "Largest file, needs splitting"
+        },
+        "products.ts": {
+          "prd_claim": null,
+          "actual": 1238,
+          "status": "NOT_IN_PRD",
+          "note": "Should be added to split list"
+        },
+        "dashboard.ts": {
+          "prd_claim": "1000+ lines",
+          "actual": 1186,
+          "status": "VERIFIED",
+          "note": "Needs splitting as claimed"
+        },
+        "customers.ts": {
+          "prd_claim": null,
+          "actual": 1116,
+          "status": "NOT_IN_PRD",
+          "note": "Over 400 line limit, consider splitting"
+        },
+        "inventory.ts": {
+          "prd_claim": null,
+          "actual": 1043,
+          "status": "NOT_IN_PRD",
+          "note": "Over 400 line limit"
+        },
+        "issues.ts": {
+          "prd_claim": null,
+          "actual": 1034,
+          "status": "NOT_IN_PRD",
+          "note": "Over 400 line limit"
+        },
+        "warranties.ts": {
+          "prd_claim": null,
+          "actual": 990,
+          "status": "NOT_IN_PRD",
+          "note": "Over 400 line limit"
+        },
+        "purchase-orders.ts": {
+          "prd_claim": null,
+          "actual": 849,
+          "status": "NOT_IN_PRD",
+          "note": "Over 400 line limit"
+        },
+        "jobs.ts": {
+          "prd_claim": null,
+          "actual": 814,
+          "status": "NOT_IN_PRD",
+          "note": "Over 400 line limit"
+        },
+        "pipeline.ts": {
+          "prd_claim": "inconsistent handler signature",
+          "actual": 773,
+          "status": "VERIFIED",
+          "note": "Over limit, signature issue confirmed"
+        }
+      }
+    },
+    "pattern_issues": {
+      "ai-chat.ts": {
+        "prd_claim": "bypasses Zod validation",
+        "actual_status": "VERIFIED",
+        "actual_lines": 54,
+        "details": "Uses .inputValidator((data: unknown) => data) then ChatMessageSchema.parse(data) inside handler - should use .inputValidator(ChatMessageSchema) directly"
+      },
+      "pipeline.ts": {
+        "prd_claim": "inconsistent handler signature",
+        "actual_status": "VERIFIED",
+        "details": "Line 79: .handler(async (data: ListOpportunitiesInput)) instead of .handler(async ({ data }: { data: ListOpportunitiesInput })) - missing destructuring pattern"
+      }
+    },
+    "files_under_limit": [
+      { "file": "session.ts", "lines": 40 },
+      { "file": "ai-chat.ts", "lines": 54 },
+      { "file": "xero-webhook.ts", "lines": 74 },
+      { "file": "xero-tasks.ts", "lines": 87 },
+      { "file": "email-templates.ts", "lines": 95 },
+      { "file": "team-members.ts", "lines": 101 },
+      { "file": "audit-logs.ts", "lines": 121 },
+      { "file": "emails.ts", "lines": 128 },
+      { "file": "search.ts", "lines": 135 },
+      { "file": "jobs-public.ts", "lines": 148 },
+      { "file": "activity.ts", "lines": 171 },
+      { "file": "ai-tokens.ts", "lines": 177 },
+      { "file": "quote-accept.ts", "lines": 185 },
+      { "file": "email-history.ts", "lines": 201 },
+      { "file": "support-metrics.ts", "lines": 208 },
+      { "file": "auth.ts", "lines": 226 },
+      { "file": "batch-operations.ts", "lines": 228 },
+      { "file": "notifications.ts", "lines": 235 },
+      { "file": "entity-preview.ts", "lines": 254 },
+      { "file": "organizations.ts", "lines": 271 },
+      { "file": "test-seed.ts", "lines": 280 },
+      { "file": "categories.ts", "lines": 315 },
+      { "file": "invoices.ts", "lines": 320 },
+      { "file": "receive-goods.ts", "lines": 328 },
+      { "file": "customer-activities.ts", "lines": 329 },
+      { "file": "seed.ts", "lines": 359 },
+      { "file": "contacts.ts", "lines": 394 },
+      { "file": "addresses.ts", "lines": 406 },
+      { "file": "suppliers.ts", "lines": 406 }
+    ]
+  },
+  "recommended_story_changes": [
+    {
+      "story_id": "REF-SERVER-002",
+      "change": "Update orders.ts line count from 2700 to 2885",
+      "priority": "high"
+    },
+    {
+      "story_id": "NEW",
+      "change": "Add story to split products.ts (1238 lines)",
+      "priority": "high"
+    },
+    {
+      "story_id": "NEW",
+      "change": "Add story to split customers.ts (1116 lines)",
+      "priority": "medium"
+    },
+    {
+      "story_id": "NEW",
+      "change": "Add story to split inventory.ts (1043 lines)",
+      "priority": "medium"
+    },
+    {
+      "story_id": "REF-SERVER-005",
+      "change": "pipeline.ts handler signature confirmed - story valid",
+      "priority": "medium"
+    },
+    {
+      "story_id": "REF-SERVER-004",
+      "change": "ai-chat.ts validation bypass confirmed - story valid",
+      "priority": "low"
+    }
+  ],
+  "metrics": {
+    "total_lines_all_files": 23086,
+    "files_needing_split": 19,
+    "files_compliant": 27,
+    "compliance_percentage": 58.7
+  }
+}

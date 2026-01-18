@@ -1,0 +1,532 @@
+{
+  "id": "WF-INVOICING",
+  "name": "Invoicing Workflow",
+  "description": "Order-to-cash process from invoice generation through payment collection and Xero reconciliation.",
+  "created": "2026-01-09",
+  "priority": 3,
+  "phase": "workflow",
+  "dependencies": {
+    "phase": "Workflow",
+    "executionOrder": 3,
+    "schemaRequired": [
+      {
+        "table": "orders",
+        "status": "EXISTS"
+      },
+      {
+        "table": "customers",
+        "status": "EXISTS"
+      },
+      {
+        "table": "contacts",
+        "status": "EXISTS"
+      },
+      {
+        "table": "opportunities",
+        "status": "EXISTS"
+      },
+      {
+        "table": "email-history",
+        "status": "EXISTS"
+      },
+      {
+        "table": "notifications",
+        "status": "EXISTS"
+      }
+    ],
+    "schemaCreates": [
+      {
+        "table": "collection_activities",
+        "story": "WF-INV-004a"
+      }
+    ],
+    "serverFunctionsRequired": [
+      {
+        "function": "getOrder",
+        "status": "EXISTS",
+        "domain": "DOM-ORDERS"
+      },
+      {
+        "function": "listOrders",
+        "status": "EXISTS",
+        "domain": "DOM-ORDERS"
+      },
+      {
+        "function": "updateOrderStatus",
+        "status": "EXISTS",
+        "domain": "DOM-ORDERS"
+      },
+      {
+        "function": "getCustomer",
+        "status": "EXISTS",
+        "domain": "DOM-CUSTOMERS"
+      },
+      {
+        "function": "generateInvoice",
+        "status": "EXISTS",
+        "domain": "DOM-FINANCIAL"
+      },
+      {
+        "function": "recordPayment",
+        "status": "EXISTS",
+        "domain": "DOM-FINANCIAL"
+      },
+      {
+        "function": "syncInvoiceToXero",
+        "status": "EXISTS",
+        "domain": "DOM-FINANCIAL"
+      }
+    ],
+    "serverFunctionsCreates": [
+      {
+        "function": "autoInvoiceOnShipment",
+        "story": "WF-INV-001"
+      },
+      {
+        "function": "batchGenerateInvoices",
+        "story": "WF-INV-002"
+      },
+      {
+        "function": "getBankTransactions",
+        "story": "WF-INV-003a"
+      },
+      {
+        "function": "autoMatchPayments",
+        "story": "WF-INV-003b"
+      },
+      {
+        "function": "applyPaymentToInvoice",
+        "story": "WF-INV-003b"
+      },
+      {
+        "function": "getCollectionQueue",
+        "story": "WF-INV-004a"
+      },
+      {
+        "function": "logCollectionActivity",
+        "story": "WF-INV-004a"
+      },
+      {
+        "function": "getCollectionMetrics",
+        "story": "WF-INV-004c"
+      },
+      {
+        "function": "runMonthEndClose",
+        "story": "WF-INV-005"
+      },
+      {
+        "function": "getPaymentForecast",
+        "story": "WF-INV-006a"
+      },
+      {
+        "function": "analyzePaymentPatterns",
+        "story": "WF-INV-006b"
+      }
+    ],
+    "prdDependencies": [
+      {
+        "prdId": "DOM-ORDERS",
+        "status": "REQUIRED",
+        "reason": "Invoice generation from orders"
+      },
+      {
+        "prdId": "DOM-FINANCIAL",
+        "status": "REQUIRED",
+        "reason": "Core invoice and payment management"
+      },
+      {
+        "prdId": "DOM-CUSTOMERS",
+        "status": "REQUIRED",
+        "reason": "Customer billing information"
+      },
+      {
+        "prdId": "DOM-PIPELINE",
+        "status": "OPTIONAL",
+        "reason": "Forecast integration with pipeline"
+      },
+      {
+        "prdId": "INT-XERO",
+        "status": "REQUIRED",
+        "reason": "Xero sync and bank transaction import"
+      }
+    ],
+    "enables": [
+      {
+        "prdId": "WF-JOB",
+        "reason": "Job completion can trigger invoicing"
+      }
+    ]
+  },
+  "domains_involved": [
+    "orders",
+    "financial",
+    "customers"
+  ],
+  "references": {
+    "internal": [
+      "memory-bank/prd/domain/orders.prd.json",
+      "memory-bank/prd/domain/financial.prd.json"
+    ],
+    "external": [
+      "Xero API docs"
+    ]
+  },
+  "workflow_stages": [
+    "Order Shipped -> Generate Invoice -> Send Invoice -> Receive Payment -> Reconcile"
+  ],
+  "current_state": {
+    "implemented": [
+      "Invoice creation from order",
+      "Invoice PDF generation",
+      "Payment recording",
+      "Basic Xero sync"
+    ],
+    "gaps": [
+      "No auto-invoice on ship",
+      "No batch invoicing",
+      "No payment matching",
+      "Incomplete Xero sync",
+      "No collection workflow"
+    ]
+  },
+  "stories": [
+    {
+      "id": "WF-INV-001",
+      "name": "Add Auto-Invoice on Shipment",
+      "description": "Automatically generate invoice when order ships",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Option: auto-invoice on shipment (configurable)",
+        "Invoice generated when order status -> shipped",
+        "Invoice details from order data",
+        "Auto-send to customer (optional)",
+        "Push to Xero automatically",
+        "Skip if already invoiced",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "DOM-FIN-005"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_INV_001_COMPLETE"
+    },
+    {
+      "id": "WF-INV-002",
+      "name": "Add Batch Invoicing",
+      "description": "Generate invoices for multiple orders at once",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Select multiple shipped orders",
+        "Generate invoices in batch",
+        "Preview before generation",
+        "Progress indicator for large batches",
+        "Summary: created, errors",
+        "Batch send option",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-INV-001"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_INV_002_COMPLETE"
+    },
+    {
+      "id": "WF-INV-003a",
+      "name": "Import Bank Transactions from Xero",
+      "description": "Add getBankTransactions to XeroApiClient for payment matching",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "getBankTransactions method in XeroApiClient",
+        "Import bank transactions from Xero API",
+        "Store transactions in database for matching",
+        "Filter by date range",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "DOM-FIN-005"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_INV_003A_COMPLETE"
+    },
+    {
+      "id": "WF-INV-003b",
+      "name": "Auto-Match Payments to Invoices",
+      "description": "Matching algorithm by reference/amount to generate match suggestions",
+      "priority": 4,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Auto-match by reference/amount algorithm",
+        "Generate match suggestions for review",
+        "Handle partial payments",
+        "Unmatched payments queue for manual review",
+        "Apply payment to invoice",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-INV-003a"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_INV_003B_COMPLETE"
+    },
+    {
+      "id": "WF-INV-003c",
+      "name": "Payment Matching Review UI",
+      "description": "Review suggestions, apply payments, handle partials, unmatched queue",
+      "priority": 5,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Payment matching review page",
+        "Suggested matches list with accept/reject",
+        "Apply payment to invoice with confirmation",
+        "Partial payment handling UI",
+        "Unmatched payments queue view",
+        "ReconciliationTab implementation",
+        "Split view: transactions on left, invoices on right for matching",
+        "Drag-and-drop matching or click-to-select pairing",
+        "Progress indicator showing matched vs unmatched counts",
+        "Toast notification on successful match/apply",
+        "Confirmation dialog before applying payment",
+        "Loading state during match processing",
+        "Error handling with undo option",
+        "Responsive: stacked views on mobile, side-by-side on desktop",
+        "Breakpoints: mobile (<640px stacked), tablet (640-1024px tabs), desktop (>1024px split)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-INV-003b"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "WF_INV_003C_COMPLETE",
+      "ui_spec": {
+        "component_type": "SplitPane",
+        "workflow_visualization": "Two-column matching interface with transaction list and invoice list, connected by match lines",
+        "accessibility": {
+          "drag_drop_alternative": "Keyboard-based match action via Enter key",
+          "aria_live_regions": "Match confirmations and errors announced",
+          "focus_management": "Focus moves between lists logically",
+          "keyboard_navigation": "Arrow keys to navigate lists, Enter to match"
+        }
+      }
+    },
+    {
+      "id": "WF-INV-004a",
+      "name": "Collection Queue Backend",
+      "description": "collection_activities table, queue sorted by age, action logging",
+      "priority": 6,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "collection_activities table created",
+        "Collection queue server function with overdue invoices sorted by age",
+        "Collection action types: call, email, statement",
+        "Activity logging for collections",
+        "Escalation path configuration",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "DOM-FIN-006"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "WF_INV_004A_COMPLETE"
+    },
+    {
+      "id": "WF-INV-004b",
+      "name": "Collection Workflow UI",
+      "description": "Collection queue page, action buttons, activity history, escalation alerts",
+      "priority": 7,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Collection queue page for finance team",
+        "Action buttons: log call, send email, send statement",
+        "Activity history display on invoice",
+        "Escalation alerts after X days",
+        "Promise to pay tracking UI",
+        "Queue table sorted by days overdue with color-coded urgency",
+        "Workflow timeline showing collection activities per invoice",
+        "Step indicator for escalation path: Initial -> Follow-up -> Escalation -> Final Notice",
+        "Toast notifications for logged actions",
+        "Confirmation dialog before sending statements",
+        "Loading state during email/statement sending",
+        "Error handling with retry for failed sends",
+        "Responsive: card layout on mobile, table on desktop",
+        "Breakpoints: mobile (<640px), tablet (640-1024px), desktop (>1024px)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-INV-004a"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "WF_INV_004B_COMPLETE",
+      "ui_spec": {
+        "component_type": "DataTable",
+        "workflow_visualization": "Queue table with urgency indicators and inline timeline showing collection history",
+        "accessibility": {
+          "aria_labels": "Overdue status and actions clearly labeled",
+          "focus_management": "Focus returns to row after action",
+          "keyboard_navigation": "Full table and action keyboard support",
+          "color_alternatives": "Icons supplement color-coded urgency levels"
+        }
+      }
+    },
+    {
+      "id": "WF-INV-004c",
+      "name": "Collection Metrics and Reporting",
+      "description": "Effectiveness metrics, promise-to-pay tracking, dashboard widget",
+      "priority": 8,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Collection effectiveness metrics calculation",
+        "Promise-to-pay tracking and reporting",
+        "Dashboard widget for collection performance",
+        "Export collection activity report",
+        "KPI cards: total overdue, collected this period, DSO, success rate",
+        "Trend chart showing collection effectiveness over time",
+        "Progress bars for collection targets",
+        "Toast notification when export completes",
+        "Loading skeleton while metrics load",
+        "Error state with refresh option",
+        "Responsive: stacked KPIs on mobile, grid on desktop",
+        "Breakpoints: mobile (<640px), tablet (640-1024px), desktop (>1024px)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-INV-004b"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_INV_004C_COMPLETE",
+      "ui_spec": {
+        "component_type": "Dashboard",
+        "workflow_visualization": "Metrics dashboard with KPI cards, trend charts, and collection funnel",
+        "accessibility": {
+          "chart_alternatives": "Data tables available for all visualizations",
+          "aria_labels": "All metrics have descriptive labels",
+          "keyboard_navigation": "All controls keyboard accessible",
+          "screen_reader": "Key metrics announced on dashboard load"
+        }
+      }
+    },
+    {
+      "id": "WF-INV-005",
+      "name": "Add Month-End Close Process",
+      "description": "Guided month-end financial close",
+      "priority": 9,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Month-end checklist: uninvoiced orders, unmatched payments",
+        "Accrual identification",
+        "Reconciliation report",
+        "Close period lock (prevent backdated entries)",
+        "Close confirmation",
+        "Xero sync verification",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-INV-003c"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_INV_005_COMPLETE"
+    },
+    {
+      "id": "WF-INV-006a",
+      "name": "Invoice Due Date Forecast",
+      "description": "Forecast based on invoice due dates with weekly/monthly aggregation",
+      "priority": 10,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Forecast calculation based on invoice due dates",
+        "Weekly/monthly aggregation of expected payments",
+        "Server function for forecast data retrieval",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "DOM-FIN-003"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_INV_006A_COMPLETE"
+    },
+    {
+      "id": "WF-INV-006b",
+      "name": "Payment Pattern Analysis",
+      "description": "Calculate avg days late per customer, adjust forecast based on patterns",
+      "priority": 11,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Calculate average days late per customer",
+        "Factor in payment patterns to forecast",
+        "Historical data analysis for prediction",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-INV-006a"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_INV_006B_COMPLETE"
+    },
+    {
+      "id": "WF-INV-006c",
+      "name": "Forecast UI and Export",
+      "description": "Forecast view with chart, actual vs forecast comparison, export",
+      "priority": 12,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Weekly/monthly forecast view",
+        "Include expected orders from pipeline",
+        "Comparison to actual over time",
+        "Forecast chart visualization",
+        "Export forecast report",
+        "Timeline chart showing forecast vs actual cash flow",
+        "Period selector: weekly, monthly, quarterly views",
+        "Progress indicators for forecast confidence levels",
+        "Toast notification when export completes",
+        "Loading skeleton while forecast calculates",
+        "Error state with refresh option",
+        "Responsive: simplified chart on mobile, full on desktop",
+        "Breakpoints: mobile (<640px), tablet (640-1024px), desktop (>1024px)",
+        "Date range picker with quick presets",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-INV-006b",
+        "DOM-PIPE-001"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "WF_INV_006C_COMPLETE",
+      "ui_spec": {
+        "component_type": "Chart",
+        "workflow_visualization": "Area chart with forecast line and actual overlay, showing payment timing predictions",
+        "accessibility": {
+          "chart_alternatives": "Data table with forecast values available",
+          "aria_labels": "Chart describes forecast trend and key values",
+          "keyboard_navigation": "Period controls and export keyboard accessible",
+          "screen_reader": "Summary statistics announced on load"
+        }
+      }
+    }
+  ],
+  "success_criteria": [
+    "Auto-invoicing reduces manual work",
+    "Batch processing saves time",
+    "Payment matching automates reconciliation",
+    "Collection workflow improves DSO",
+    "Month-end close is systematic"
+  ],
+  "out_of_scope": [
+    "Payment gateway integration",
+    "Multi-currency handling",
+    "Complex revenue recognition"
+  ]
+}

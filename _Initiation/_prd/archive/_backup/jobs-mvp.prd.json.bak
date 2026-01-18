@@ -1,0 +1,1109 @@
+{
+  "id": "domain-jobs-mvp",
+  "name": "Jobs/Project Management - MVP",
+  "description": "Project and installation management system for lithium-ion battery OEM. MVP includes job lifecycle, Gantt scheduling, BOM, punchlists, time tracking, and mobile field access.",
+  "version": "1.0.0",
+  "phase": "mvp",
+  "priority": "P0",
+  "domain": "jobs",
+  "completion_promise": "JOBS_MVP_COMPLETE",
+  "max_iterations": 120,
+
+  "assumptions": {
+    "confirmed": [
+      "Job types: installation (single site), project (multi-phase), service (repair/maintenance)",
+      "Fixed price projects with internal margin tracking",
+      "Jobs relate to: Quote -> Order -> Job -> Site -> Customer",
+      "Four user types: Project Manager, Dispatcher, Installer/Technician, Finance",
+      "Mobile needs full CRUD access, not just read-only",
+      "Progress billing at milestones (Phase 2 feature)",
+      "Site entity needed, can default from customer address"
+    ],
+    "technical": [
+      "Gantt library: frappe-gantt or react-gantt-chart (evaluate during implementation)",
+      "File uploads via existing Supabase Storage patterns",
+      "Mobile: Responsive web app (not native) for MVP",
+      "Time tracking: Simple hours entry (not GPS-based)",
+      "Use existing TanStack patterns (Router, Query, Form, Table)"
+    ],
+    "business": [
+      "Labor rates are per-technician or per-skill-level",
+      "Overhead is percentage applied to material + labor",
+      "One job = one primary site (multi-site = multiple linked jobs)",
+      "Technicians can be assigned to multiple jobs concurrently"
+    ]
+  },
+
+  "dependencies": {
+    "requires": ["foundation/schema", "foundation/appshell", "domains/customers", "domains/products", "domains/inventory"],
+    "optional": ["domains/orders", "domains/pipeline"],
+    "blocks": ["workflows/job-completion", "workflows/order-fulfillment"],
+    "related": ["domains/support", "domains/financial"]
+  },
+
+  "existing_state": {
+    "route_exists": false,
+    "schema_exists": false,
+    "completion_estimate": "0%",
+    "known_gaps": ["No jobs route", "No site entity", "No project scheduling", "No BOM tracking", "No punchlist system"]
+  },
+
+  "entities": {
+    "new": [
+      {
+        "name": "Site",
+        "description": "Physical location where jobs are performed",
+        "fields": ["id", "organizationId", "customerId", "name", "addressLine1", "addressLine2", "city", "state", "postcode", "country", "contactName", "contactPhone", "contactEmail", "notes", "isActive", "createdAt", "updatedAt", "deletedAt"]
+      },
+      {
+        "name": "Job",
+        "description": "Core job/project entity",
+        "fields": ["id", "organizationId", "jobNumber", "type", "status", "customerId", "siteId", "orderId", "quoteId", "title", "description", "scheduledStartDate", "scheduledEndDate", "actualStartDate", "actualEndDate", "estimatedHours", "actualHours", "estimatedCost", "actualCost", "assignedPmId", "priority", "notes", "metadata", "createdAt", "updatedAt", "deletedAt", "createdByUserId", "updatedByUserId", "version"]
+      },
+      {
+        "name": "JobPhase",
+        "description": "Project phases/milestones",
+        "fields": ["id", "jobId", "name", "description", "sequence", "startDate", "endDate", "status", "billingPercentage", "createdAt", "updatedAt"]
+      },
+      {
+        "name": "JobTask",
+        "description": "Individual tasks within a job",
+        "fields": ["id", "jobId", "phaseId", "name", "description", "sequence", "dependencies", "assignedToUserId", "estimatedHours", "actualHours", "status", "startDate", "endDate", "completedAt", "completedByUserId", "notes", "createdAt", "updatedAt"]
+      },
+      {
+        "name": "JobBOM",
+        "description": "Bill of Materials line items",
+        "fields": ["id", "jobId", "productId", "productVariantId", "description", "quantityRequired", "quantityUsed", "unitCost", "totalCost", "isAllocated", "allocatedAt", "notes", "createdAt", "updatedAt"]
+      },
+      {
+        "name": "JobTimeEntry",
+        "description": "Time tracking entries",
+        "fields": ["id", "jobId", "taskId", "userId", "date", "hours", "laborRate", "laborCost", "description", "createdAt", "updatedAt"]
+      },
+      {
+        "name": "JobPunchlistItem",
+        "description": "Punchlist/checklist items",
+        "fields": ["id", "jobId", "taskId", "description", "status", "priority", "photos", "notes", "completedAt", "completedByUserId", "createdAt", "updatedAt"]
+      },
+      {
+        "name": "JobDocument",
+        "description": "Job-related file attachments",
+        "fields": ["id", "jobId", "name", "type", "url", "size", "uploadedByUserId", "createdAt"]
+      }
+    ],
+    "modified": []
+  },
+
+  "stories": [
+    {
+      "id": "JOB-001",
+      "name": "Site Entity Schema",
+      "description": "Create the Site entity schema and database migration",
+      "status": "pending",
+      "priority": "P0",
+      "category": "foundation",
+      "acceptance_criteria": [
+        "Site table exists in database with all fields",
+        "Foreign key to customers table",
+        "RLS policies applied (organizationId)",
+        "Soft delete pattern (deletedAt)",
+        "Audit fields present (createdAt, updatedAt)",
+        "TypeScript types generated and exported",
+        "Zod validation schema created"
+      ],
+      "technical_requirements": [
+        "Create migration in src/db/migrations/",
+        "Add to schema in src/db/schema/",
+        "Export types from src/db/types/",
+        "Create Zod schema in src/lib/validations/"
+      ],
+      "files_to_create": [
+        "src/db/schema/sites.ts",
+        "src/lib/validations/site.ts"
+      ],
+      "completion_promise": "<promise>JOB-001-SITE-SCHEMA-COMPLETE</promise>",
+      "estimated_iterations": 2
+    },
+    {
+      "id": "JOB-002",
+      "name": "Site CRUD Server Functions",
+      "description": "Create server functions for Site entity operations",
+      "status": "pending",
+      "priority": "P0",
+      "category": "foundation",
+      "dependencies": ["JOB-001"],
+      "acceptance_criteria": [
+        "createSite server function works",
+        "getSite server function works",
+        "listSites server function works (with customer filter)",
+        "updateSite server function works",
+        "deleteSite server function works (soft delete)",
+        "All functions use validation injection pattern",
+        "All functions enforce RLS via withRLSContext"
+      ],
+      "technical_requirements": [
+        "Create src/server/functions/sites.ts",
+        "Follow existing server function patterns",
+        "Use createServerFn() wrapper",
+        "Implement proper error handling"
+      ],
+      "files_to_create": [
+        "src/server/functions/sites.ts"
+      ],
+      "completion_promise": "<promise>JOB-002-SITE-CRUD-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-003",
+      "name": "Job Entity Schema",
+      "description": "Create the Job entity schema and database migration",
+      "status": "pending",
+      "priority": "P0",
+      "category": "foundation",
+      "dependencies": ["JOB-001"],
+      "acceptance_criteria": [
+        "Job table exists with all fields",
+        "Foreign keys to customers, sites, orders, quotes, users",
+        "Job type enum (installation, project, service)",
+        "Job status enum (draft, scheduled, in_progress, on_hold, completed, cancelled)",
+        "Job priority enum (low, medium, high, urgent)",
+        "RLS policies applied",
+        "OCC version field present",
+        "TypeScript types and Zod schema created"
+      ],
+      "technical_requirements": [
+        "Create migration file",
+        "Add to schema directory",
+        "Create enum types for status, type, priority",
+        "Export all types"
+      ],
+      "files_to_create": [
+        "src/db/schema/jobs.ts",
+        "src/lib/validations/job.ts"
+      ],
+      "completion_promise": "<promise>JOB-003-JOB-SCHEMA-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-004",
+      "name": "Job CRUD Server Functions",
+      "description": "Create server functions for Job entity operations",
+      "status": "pending",
+      "priority": "P0",
+      "category": "foundation",
+      "dependencies": ["JOB-003"],
+      "acceptance_criteria": [
+        "createJob server function works",
+        "getJob server function works (with relations)",
+        "listJobs server function works (with filters)",
+        "updateJob server function works (with OCC)",
+        "deleteJob server function works (soft delete)",
+        "Auto-generate jobNumber on create",
+        "Include customer, site, assignedPm in responses"
+      ],
+      "technical_requirements": [
+        "Create src/server/functions/jobs.ts",
+        "Implement job number generation (JOB-YYYY-NNNN format)",
+        "Join with related entities on fetch",
+        "Support filtering by status, type, customer, assignee"
+      ],
+      "files_to_create": [
+        "src/server/functions/jobs.ts"
+      ],
+      "completion_promise": "<promise>JOB-004-JOB-CRUD-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-005",
+      "name": "JobPhase and JobTask Schemas",
+      "description": "Create schemas for project phases and tasks",
+      "status": "pending",
+      "priority": "P0",
+      "category": "foundation",
+      "dependencies": ["JOB-003"],
+      "acceptance_criteria": [
+        "JobPhase table exists with all fields",
+        "JobTask table exists with all fields",
+        "Foreign keys properly configured",
+        "Task status enum (pending, in_progress, completed, blocked, skipped)",
+        "Dependencies stored as array of task IDs",
+        "TypeScript types and Zod schemas created"
+      ],
+      "technical_requirements": [
+        "Add to jobs schema file or create separate",
+        "Task dependencies as JSONB array",
+        "Sequence field for ordering"
+      ],
+      "files_to_create": [
+        "src/db/schema/job-phases.ts",
+        "src/db/schema/job-tasks.ts",
+        "src/lib/validations/job-task.ts"
+      ],
+      "completion_promise": "<promise>JOB-005-PHASE-TASK-SCHEMA-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-006",
+      "name": "JobPhase and JobTask CRUD",
+      "description": "Create server functions for phases and tasks",
+      "status": "pending",
+      "priority": "P0",
+      "category": "foundation",
+      "dependencies": ["JOB-005"],
+      "acceptance_criteria": [
+        "CRUD for JobPhase works",
+        "CRUD for JobTask works",
+        "Can reorder phases and tasks",
+        "Task completion updates actualHours",
+        "Task dependencies validated on create/update",
+        "Bulk create tasks works (for templates)"
+      ],
+      "technical_requirements": [
+        "Create src/server/functions/job-phases.ts",
+        "Create src/server/functions/job-tasks.ts",
+        "Implement reorder logic with sequence updates",
+        "Validate dependency cycles prevented"
+      ],
+      "files_to_create": [
+        "src/server/functions/job-phases.ts",
+        "src/server/functions/job-tasks.ts"
+      ],
+      "completion_promise": "<promise>JOB-006-PHASE-TASK-CRUD-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-007",
+      "name": "JobBOM Schema and CRUD",
+      "description": "Create Bill of Materials entity and operations",
+      "status": "pending",
+      "priority": "P0",
+      "category": "foundation",
+      "dependencies": ["JOB-003"],
+      "acceptance_criteria": [
+        "JobBOM table exists with all fields",
+        "Foreign keys to jobs, products, product_variants",
+        "CRUD server functions work",
+        "Can calculate total BOM cost",
+        "Can track quantity used vs required",
+        "Allocation status tracked"
+      ],
+      "technical_requirements": [
+        "Create schema and migration",
+        "Create src/server/functions/job-bom.ts",
+        "Include product details in list response",
+        "Calculate totals server-side"
+      ],
+      "files_to_create": [
+        "src/db/schema/job-bom.ts",
+        "src/server/functions/job-bom.ts",
+        "src/lib/validations/job-bom.ts"
+      ],
+      "completion_promise": "<promise>JOB-007-BOM-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-008",
+      "name": "JobTimeEntry Schema and CRUD",
+      "description": "Create time tracking entity and operations",
+      "status": "pending",
+      "priority": "P0",
+      "category": "foundation",
+      "dependencies": ["JOB-005"],
+      "acceptance_criteria": [
+        "JobTimeEntry table exists with all fields",
+        "Foreign keys to jobs, tasks, users",
+        "CRUD server functions work",
+        "Labor cost calculated from hours * rate",
+        "Can summarize time by job, task, user, date range",
+        "Default labor rate from user profile or config"
+      ],
+      "technical_requirements": [
+        "Create schema and migration",
+        "Create src/server/functions/job-time-entries.ts",
+        "Implement time summary aggregation",
+        "Auto-calculate labor cost on create/update"
+      ],
+      "files_to_create": [
+        "src/db/schema/job-time-entries.ts",
+        "src/server/functions/job-time-entries.ts",
+        "src/lib/validations/job-time-entry.ts"
+      ],
+      "completion_promise": "<promise>JOB-008-TIME-ENTRY-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-009",
+      "name": "JobPunchlistItem Schema and CRUD",
+      "description": "Create punchlist entity and operations",
+      "status": "pending",
+      "priority": "P0",
+      "category": "foundation",
+      "dependencies": ["JOB-003"],
+      "acceptance_criteria": [
+        "JobPunchlistItem table exists with all fields",
+        "Photos stored as JSONB array of URLs",
+        "Status enum (open, in_progress, completed, deferred)",
+        "Priority enum (low, medium, high)",
+        "CRUD server functions work",
+        "Can filter by status, job, task"
+      ],
+      "technical_requirements": [
+        "Create schema and migration",
+        "Create src/server/functions/job-punchlist.ts",
+        "Photos as array of storage URLs"
+      ],
+      "files_to_create": [
+        "src/db/schema/job-punchlist.ts",
+        "src/server/functions/job-punchlist.ts",
+        "src/lib/validations/job-punchlist.ts"
+      ],
+      "completion_promise": "<promise>JOB-009-PUNCHLIST-SCHEMA-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-010",
+      "name": "JobDocument Schema and CRUD",
+      "description": "Create job document/attachment entity",
+      "status": "pending",
+      "priority": "P1",
+      "category": "foundation",
+      "dependencies": ["JOB-003"],
+      "acceptance_criteria": [
+        "JobDocument table exists",
+        "Document type enum (drawing, spec, permit, photo, other)",
+        "CRUD server functions work",
+        "File upload to Supabase Storage works",
+        "Can list documents by job"
+      ],
+      "technical_requirements": [
+        "Create schema and migration",
+        "Create src/server/functions/job-documents.ts",
+        "Integrate with existing storage patterns"
+      ],
+      "files_to_create": [
+        "src/db/schema/job-documents.ts",
+        "src/server/functions/job-documents.ts"
+      ],
+      "completion_promise": "<promise>JOB-010-DOCUMENTS-COMPLETE</promise>",
+      "estimated_iterations": 2
+    },
+    {
+      "id": "JOB-011",
+      "name": "Jobs Route Structure",
+      "description": "Create the /jobs route with layout and navigation",
+      "status": "pending",
+      "priority": "P0",
+      "category": "ui",
+      "dependencies": ["JOB-004"],
+      "acceptance_criteria": [
+        "Route /jobs exists and renders without errors",
+        "Page title shows 'Jobs' or 'Project Management'",
+        "Breadcrumb shows Home > Jobs",
+        "Route added to main navigation",
+        "Pending state shows skeleton loader",
+        "Route is protected (requires auth)"
+      ],
+      "technical_requirements": [
+        "Create src/routes/jobs/index.tsx",
+        "Use TanStack Router file-based routing",
+        "Follow existing route patterns",
+        "Use AppShell layout"
+      ],
+      "files_to_create": [
+        "src/routes/jobs/index.tsx",
+        "src/routes/jobs/-components/"
+      ],
+      "completion_promise": "<promise>JOB-011-ROUTE-COMPLETE</promise>",
+      "estimated_iterations": 2
+    },
+    {
+      "id": "JOB-012",
+      "name": "Jobs Metrics Dashboard",
+      "description": "Add metrics cards showing job statistics",
+      "status": "pending",
+      "priority": "P0",
+      "category": "ui",
+      "dependencies": ["JOB-011"],
+      "acceptance_criteria": [
+        "Four MetricCard components in a row",
+        "Active Jobs shows count of in_progress jobs",
+        "Scheduled This Week shows upcoming jobs",
+        "Completed This Month shows count with trend",
+        "Total Value shows sum of estimated costs",
+        "All metrics fetch real data"
+      ],
+      "technical_requirements": [
+        "Create getJobMetrics server function",
+        "Use shared/metrics/ components",
+        "Calculate from jobs table with date filters"
+      ],
+      "files_to_create": [
+        "src/routes/jobs/-components/job-metrics.tsx"
+      ],
+      "completion_promise": "<promise>JOB-012-METRICS-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-013",
+      "name": "Jobs DataTable",
+      "description": "Create jobs list with DataTable and filtering",
+      "status": "pending",
+      "priority": "P0",
+      "category": "ui",
+      "dependencies": ["JOB-011"],
+      "acceptance_criteria": [
+        "DataTable displays jobs with columns: Job #, Customer, Site, Type, Status, Assigned PM, Scheduled Start, Priority",
+        "Status filter works",
+        "Type filter works",
+        "Assigned PM filter works",
+        "Date range filter works",
+        "Search by job number or customer name works",
+        "Row selection checkboxes work",
+        "Clicking row navigates to job detail"
+      ],
+      "technical_requirements": [
+        "Create src/components/domain/jobs/job-columns.tsx",
+        "Use shared/data-table/",
+        "Use useUrlFilters hook",
+        "Join with customers, sites, users"
+      ],
+      "files_to_create": [
+        "src/components/domain/jobs/job-columns.tsx",
+        "src/routes/jobs/-components/jobs-table.tsx"
+      ],
+      "completion_promise": "<promise>JOB-013-TABLE-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-014",
+      "name": "Job Detail Page",
+      "description": "Create job detail page with tabs for different sections",
+      "status": "pending",
+      "priority": "P0",
+      "category": "ui",
+      "dependencies": ["JOB-013"],
+      "acceptance_criteria": [
+        "Route /jobs/$jobId exists",
+        "Job header shows job number, status badge, customer, site",
+        "Tabs: Overview, Schedule, BOM, Punchlist, Time, Documents",
+        "Overview shows job details and summary",
+        "Quick actions: Edit, Change Status, Assign",
+        "Back navigation works"
+      ],
+      "technical_requirements": [
+        "Create src/routes/jobs/$jobId/index.tsx",
+        "Use ui/tabs.tsx for sections",
+        "Fetch job with all relations",
+        "Use nuqs for tab state in URL"
+      ],
+      "files_to_create": [
+        "src/routes/jobs/$jobId/index.tsx",
+        "src/routes/jobs/$jobId/-components/"
+      ],
+      "completion_promise": "<promise>JOB-014-DETAIL-PAGE-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-015",
+      "name": "Job Creation Dialog",
+      "description": "Create dialog for creating new jobs",
+      "status": "pending",
+      "priority": "P0",
+      "category": "ui",
+      "dependencies": ["JOB-011"],
+      "acceptance_criteria": [
+        "New Job button opens dialog",
+        "Customer selector with search",
+        "Site selector (filtered by customer, or create new)",
+        "Job type selector",
+        "Title and description fields",
+        "Scheduled start/end date pickers",
+        "Priority selector",
+        "Assigned PM selector",
+        "Optional link to order/quote",
+        "Save creates job and redirects to detail"
+      ],
+      "technical_requirements": [
+        "Create src/components/domain/jobs/create-job-dialog.tsx",
+        "Use TanStack Form",
+        "Customer search with existing patterns",
+        "Site creation inline if needed"
+      ],
+      "files_to_create": [
+        "src/components/domain/jobs/create-job-dialog.tsx"
+      ],
+      "completion_promise": "<promise>JOB-015-CREATE-DIALOG-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-016",
+      "name": "Job Edit Form",
+      "description": "Create form for editing job details",
+      "status": "pending",
+      "priority": "P0",
+      "category": "ui",
+      "dependencies": ["JOB-014"],
+      "acceptance_criteria": [
+        "Edit button opens edit mode or dialog",
+        "All job fields editable",
+        "Form validates before submit",
+        "OCC conflict handling",
+        "Cancel discards changes",
+        "Save updates job and refreshes"
+      ],
+      "technical_requirements": [
+        "Create src/components/domain/jobs/edit-job-form.tsx",
+        "Use TanStack Form with Zod validation",
+        "Handle optimistic concurrency"
+      ],
+      "files_to_create": [
+        "src/components/domain/jobs/edit-job-form.tsx"
+      ],
+      "completion_promise": "<promise>JOB-016-EDIT-FORM-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-017",
+      "name": "Job Status Workflow",
+      "description": "Implement job status transitions with validation",
+      "status": "pending",
+      "priority": "P0",
+      "category": "ui",
+      "dependencies": ["JOB-014"],
+      "acceptance_criteria": [
+        "Status dropdown shows current status",
+        "Valid transitions enforced (draft->scheduled->in_progress->completed)",
+        "Cannot skip statuses",
+        "Status change confirmation for critical transitions",
+        "Status change creates activity log",
+        "Visual status stepper shows workflow"
+      ],
+      "technical_requirements": [
+        "Create updateJobStatus server function",
+        "Define valid state machine transitions",
+        "Use shared/status-stepper.tsx if exists",
+        "Log status changes to activity"
+      ],
+      "files_to_create": [
+        "src/components/domain/jobs/job-status-workflow.tsx"
+      ],
+      "completion_promise": "<promise>JOB-017-STATUS-WORKFLOW-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-018",
+      "name": "Gantt Chart Integration",
+      "description": "Integrate Gantt chart library for project scheduling",
+      "status": "pending",
+      "priority": "P0",
+      "category": "ui",
+      "dependencies": ["JOB-006", "JOB-014"],
+      "acceptance_criteria": [
+        "Gantt chart renders in Schedule tab",
+        "Phases shown as summary bars",
+        "Tasks shown as individual bars",
+        "Dependencies visualized as arrows",
+        "Today marker visible",
+        "Zoom controls (day, week, month view)",
+        "Timeline scrolling works"
+      ],
+      "technical_requirements": [
+        "Evaluate and install Gantt library (frappe-gantt recommended)",
+        "Create GanttChart wrapper component",
+        "Transform job phases/tasks to Gantt format",
+        "Handle empty state"
+      ],
+      "files_to_create": [
+        "src/components/domain/jobs/gantt-chart.tsx",
+        "src/routes/jobs/$jobId/-components/schedule-tab.tsx"
+      ],
+      "completion_promise": "<promise>JOB-018-GANTT-CHART-COMPLETE</promise>",
+      "estimated_iterations": 5
+    },
+    {
+      "id": "JOB-019",
+      "name": "Gantt Drag-and-Drop",
+      "description": "Enable drag-and-drop rescheduling in Gantt",
+      "status": "pending",
+      "priority": "P1",
+      "category": "ui",
+      "dependencies": ["JOB-018"],
+      "acceptance_criteria": [
+        "Tasks can be dragged to new dates",
+        "Task duration can be resized",
+        "Dragging updates database",
+        "Dependent tasks can optionally shift",
+        "Undo available for recent changes",
+        "Optimistic updates with rollback on error"
+      ],
+      "technical_requirements": [
+        "Enable Gantt library drag handlers",
+        "Create batchUpdateTaskDates server function",
+        "Handle dependency cascade logic"
+      ],
+      "files_to_create": [],
+      "completion_promise": "<promise>JOB-019-GANTT-DRAG-DROP-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-020",
+      "name": "Task Management UI",
+      "description": "Create UI for managing tasks within a job",
+      "status": "pending",
+      "priority": "P0",
+      "category": "ui",
+      "dependencies": ["JOB-014"],
+      "acceptance_criteria": [
+        "Task list view in Schedule tab",
+        "Add task button and form",
+        "Edit task inline or dialog",
+        "Delete task with confirmation",
+        "Reorder tasks via drag or buttons",
+        "Mark task complete with timestamp",
+        "Assign task to technician",
+        "Set task dependencies"
+      ],
+      "technical_requirements": [
+        "Create TaskList component",
+        "Create TaskForm component",
+        "Use dnd-kit or similar for reordering",
+        "Dependency selector with existing tasks"
+      ],
+      "files_to_create": [
+        "src/components/domain/jobs/task-list.tsx",
+        "src/components/domain/jobs/task-form.tsx"
+      ],
+      "completion_promise": "<promise>JOB-020-TASK-UI-COMPLETE</promise>",
+      "estimated_iterations": 5
+    },
+    {
+      "id": "JOB-021",
+      "name": "Phase Management UI",
+      "description": "Create UI for managing project phases",
+      "status": "pending",
+      "priority": "P1",
+      "category": "ui",
+      "dependencies": ["JOB-020"],
+      "acceptance_criteria": [
+        "Phase list/accordion in Schedule tab",
+        "Add phase button and form",
+        "Edit phase details",
+        "Delete phase (with task handling)",
+        "Reorder phases",
+        "Tasks grouped under phases",
+        "Phase completion percentage shown"
+      ],
+      "technical_requirements": [
+        "Create PhaseList component",
+        "Create PhaseForm component",
+        "Calculate phase completion from tasks"
+      ],
+      "files_to_create": [
+        "src/components/domain/jobs/phase-list.tsx",
+        "src/components/domain/jobs/phase-form.tsx"
+      ],
+      "completion_promise": "<promise>JOB-021-PHASE-UI-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-022",
+      "name": "BOM Tab UI",
+      "description": "Create Bill of Materials management interface",
+      "status": "pending",
+      "priority": "P0",
+      "category": "ui",
+      "dependencies": ["JOB-007", "JOB-014"],
+      "acceptance_criteria": [
+        "BOM tab shows material list",
+        "Add product button with product picker",
+        "Quantity required editable",
+        "Unit cost shown (from product or override)",
+        "Line total calculated",
+        "BOM total displayed",
+        "Remove item works",
+        "Stock availability indicator"
+      ],
+      "technical_requirements": [
+        "Create BOMTab component",
+        "Product picker from existing products",
+        "Show inventory availability",
+        "Calculate totals client and server side"
+      ],
+      "files_to_create": [
+        "src/routes/jobs/$jobId/-components/bom-tab.tsx",
+        "src/components/domain/jobs/bom-line-item.tsx",
+        "src/components/domain/jobs/product-picker.tsx"
+      ],
+      "completion_promise": "<promise>JOB-022-BOM-UI-COMPLETE</promise>",
+      "estimated_iterations": 5
+    },
+    {
+      "id": "JOB-023",
+      "name": "BOM Usage Tracking",
+      "description": "Track actual material usage vs planned",
+      "status": "pending",
+      "priority": "P1",
+      "category": "ui",
+      "dependencies": ["JOB-022"],
+      "acceptance_criteria": [
+        "Quantity used field editable",
+        "Variance shown (used vs required)",
+        "Visual indicator for over/under usage",
+        "Can add unplanned materials used",
+        "Usage history logged"
+      ],
+      "technical_requirements": [
+        "Add usage update to BOM CRUD",
+        "Calculate and display variance",
+        "Handle unplanned additions"
+      ],
+      "files_to_create": [],
+      "completion_promise": "<promise>JOB-023-BOM-USAGE-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-024",
+      "name": "Punchlist Tab UI",
+      "description": "Create punchlist management interface",
+      "status": "pending",
+      "priority": "P0",
+      "category": "ui",
+      "dependencies": ["JOB-009", "JOB-014"],
+      "acceptance_criteria": [
+        "Punchlist tab shows items grouped by status",
+        "Add item button and form",
+        "Item shows description, priority, photos count",
+        "Mark item complete with one click",
+        "Filter by status",
+        "Sort by priority or date"
+      ],
+      "technical_requirements": [
+        "Create PunchlistTab component",
+        "Create PunchlistItemCard component",
+        "Group items by status (open, completed)"
+      ],
+      "files_to_create": [
+        "src/routes/jobs/$jobId/-components/punchlist-tab.tsx",
+        "src/components/domain/jobs/punchlist-item-card.tsx"
+      ],
+      "completion_promise": "<promise>JOB-024-PUNCHLIST-UI-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-025",
+      "name": "Punchlist Photo Upload",
+      "description": "Enable photo upload for punchlist items",
+      "status": "pending",
+      "priority": "P0",
+      "category": "ui",
+      "dependencies": ["JOB-024"],
+      "acceptance_criteria": [
+        "Add photo button on punchlist item",
+        "Camera capture on mobile",
+        "File picker on desktop",
+        "Multiple photos per item",
+        "Photo thumbnails displayed",
+        "Click thumbnail to view full size",
+        "Delete photo works"
+      ],
+      "technical_requirements": [
+        "Use Supabase Storage for uploads",
+        "Create PhotoUpload component",
+        "Handle mobile camera API",
+        "Compress images before upload"
+      ],
+      "files_to_create": [
+        "src/components/domain/jobs/photo-upload.tsx",
+        "src/components/domain/jobs/photo-gallery.tsx"
+      ],
+      "completion_promise": "<promise>JOB-025-PUNCHLIST-PHOTOS-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-026",
+      "name": "Time Tracking Tab UI",
+      "description": "Create time entry interface",
+      "status": "pending",
+      "priority": "P0",
+      "category": "ui",
+      "dependencies": ["JOB-008", "JOB-014"],
+      "acceptance_criteria": [
+        "Time tab shows time entries",
+        "Add time entry form (date, hours, task, notes)",
+        "Edit/delete entries",
+        "Total hours displayed",
+        "Total labor cost displayed",
+        "Filter by user, date range",
+        "Summary by task and by user"
+      ],
+      "technical_requirements": [
+        "Create TimeTab component",
+        "Create TimeEntryForm component",
+        "Calculate totals with labor rates"
+      ],
+      "files_to_create": [
+        "src/routes/jobs/$jobId/-components/time-tab.tsx",
+        "src/components/domain/jobs/time-entry-form.tsx"
+      ],
+      "completion_promise": "<promise>JOB-026-TIME-UI-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-027",
+      "name": "Documents Tab UI",
+      "description": "Create document management interface",
+      "status": "pending",
+      "priority": "P1",
+      "category": "ui",
+      "dependencies": ["JOB-010", "JOB-014"],
+      "acceptance_criteria": [
+        "Documents tab shows file list",
+        "Upload document button",
+        "Document type selector",
+        "File preview/download",
+        "Delete document",
+        "Group by type"
+      ],
+      "technical_requirements": [
+        "Create DocumentsTab component",
+        "Use existing file upload patterns",
+        "Handle various file types"
+      ],
+      "files_to_create": [
+        "src/routes/jobs/$jobId/-components/documents-tab.tsx"
+      ],
+      "completion_promise": "<promise>JOB-027-DOCUMENTS-UI-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-028",
+      "name": "Job Cost Summary",
+      "description": "Display job cost summary with estimates vs actuals",
+      "status": "pending",
+      "priority": "P0",
+      "category": "ui",
+      "dependencies": ["JOB-022", "JOB-026"],
+      "acceptance_criteria": [
+        "Cost summary card on Overview tab",
+        "Estimated cost vs actual cost",
+        "Material cost breakdown",
+        "Labor cost breakdown",
+        "Variance displayed with indicator",
+        "Margin calculation if quote linked"
+      ],
+      "technical_requirements": [
+        "Create JobCostSummary component",
+        "Create getJobCostSummary server function",
+        "Aggregate from BOM and time entries"
+      ],
+      "files_to_create": [
+        "src/components/domain/jobs/job-cost-summary.tsx"
+      ],
+      "completion_promise": "<promise>JOB-028-COST-SUMMARY-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-029",
+      "name": "Site Management UI",
+      "description": "Create site management in customer context",
+      "status": "pending",
+      "priority": "P1",
+      "category": "ui",
+      "dependencies": ["JOB-002"],
+      "acceptance_criteria": [
+        "Sites tab on customer detail page",
+        "List customer sites",
+        "Add site button and form",
+        "Edit site details",
+        "Default from customer address option",
+        "Site selector in job creation uses these"
+      ],
+      "technical_requirements": [
+        "Create SitesTab for customer detail",
+        "Create SiteForm component",
+        "Integrate with job creation"
+      ],
+      "files_to_create": [
+        "src/components/domain/customers/sites-tab.tsx",
+        "src/components/domain/jobs/site-form.tsx"
+      ],
+      "completion_promise": "<promise>JOB-029-SITE-UI-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-030",
+      "name": "Job Assignment",
+      "description": "Enable assigning technicians to jobs and tasks",
+      "status": "pending",
+      "priority": "P0",
+      "category": "ui",
+      "dependencies": ["JOB-014"],
+      "acceptance_criteria": [
+        "Assign PM dropdown on job",
+        "Assign technician to tasks",
+        "User picker shows installers only for tasks",
+        "Can assign multiple technicians to job",
+        "Assignment notification (future)"
+      ],
+      "technical_requirements": [
+        "User picker filtered by role",
+        "Update job assignedPmId",
+        "Update task assignedToUserId"
+      ],
+      "files_to_create": [
+        "src/components/domain/jobs/user-assignment.tsx"
+      ],
+      "completion_promise": "<promise>JOB-030-ASSIGNMENT-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-031",
+      "name": "Mobile Responsive Layout",
+      "description": "Ensure jobs UI works on mobile devices",
+      "status": "pending",
+      "priority": "P0",
+      "category": "mobile",
+      "dependencies": ["JOB-014"],
+      "acceptance_criteria": [
+        "Jobs list usable on mobile",
+        "Job detail tabs work on mobile",
+        "Forms usable on small screens",
+        "Touch-friendly buttons and inputs",
+        "Gantt chart scrollable on mobile"
+      ],
+      "technical_requirements": [
+        "Review all job components for mobile",
+        "Add responsive breakpoints",
+        "Test on mobile viewport"
+      ],
+      "files_to_create": [],
+      "completion_promise": "<promise>JOB-031-MOBILE-LAYOUT-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-032",
+      "name": "Mobile Punchlist Experience",
+      "description": "Optimize punchlist for field use on mobile",
+      "status": "pending",
+      "priority": "P0",
+      "category": "mobile",
+      "dependencies": ["JOB-025", "JOB-031"],
+      "acceptance_criteria": [
+        "Punchlist accessible from mobile quickly",
+        "One-tap photo capture from camera",
+        "Swipe to complete items",
+        "Offline-resilient (queue updates)",
+        "Large touch targets"
+      ],
+      "technical_requirements": [
+        "Optimize PunchlistTab for mobile",
+        "Camera API integration",
+        "Consider service worker for resilience"
+      ],
+      "files_to_create": [],
+      "completion_promise": "<promise>JOB-032-MOBILE-PUNCHLIST-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-033",
+      "name": "Mobile Time Entry",
+      "description": "Optimize time entry for field use",
+      "status": "pending",
+      "priority": "P0",
+      "category": "mobile",
+      "dependencies": ["JOB-026", "JOB-031"],
+      "acceptance_criteria": [
+        "Quick time entry from mobile",
+        "Pre-fill current date",
+        "Task picker scrollable",
+        "Hours input with +/- buttons",
+        "Submit confirms success"
+      ],
+      "technical_requirements": [
+        "Mobile-optimized TimeEntryForm",
+        "Simplified input for hours"
+      ],
+      "files_to_create": [],
+      "completion_promise": "<promise>JOB-033-MOBILE-TIME-COMPLETE</promise>",
+      "estimated_iterations": 2
+    },
+    {
+      "id": "JOB-034",
+      "name": "Job Bulk Operations",
+      "description": "Enable bulk actions on multiple jobs",
+      "status": "pending",
+      "priority": "P1",
+      "category": "ui",
+      "dependencies": ["JOB-013"],
+      "acceptance_criteria": [
+        "Bulk action bar appears when jobs selected",
+        "Bulk status change works",
+        "Bulk assign PM works",
+        "Bulk export to CSV works",
+        "Selection count displayed"
+      ],
+      "technical_requirements": [
+        "Use shared/bulk-action-bar.tsx",
+        "Create bulk server functions"
+      ],
+      "files_to_create": [],
+      "completion_promise": "<promise>JOB-034-BULK-OPS-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-035",
+      "name": "Job Search and Filters",
+      "description": "Advanced search and filter capabilities",
+      "status": "pending",
+      "priority": "P1",
+      "category": "ui",
+      "dependencies": ["JOB-013"],
+      "acceptance_criteria": [
+        "Search by job number, customer, site",
+        "Save filter presets",
+        "Clear all filters button",
+        "Filter count indicator",
+        "URL state persistence"
+      ],
+      "technical_requirements": [
+        "Extend filter panel",
+        "Saved filters in localStorage or DB"
+      ],
+      "files_to_create": [],
+      "completion_promise": "<promise>JOB-035-SEARCH-COMPLETE</promise>",
+      "estimated_iterations": 2
+    }
+  ],
+
+  "out_of_scope": [
+    "Progress billing / milestone invoicing (Phase 2)",
+    "Change order workflow (Phase 2)",
+    "Full variance analysis and reporting (Phase 2)",
+    "Resource leveling / capacity planning (Phase 3)",
+    "Job templates (Phase 3)",
+    "Task templates (Phase 3)",
+    "QA workflow / customer sign-off (Phase 3)",
+    "Forecasting analytics (Phase 3)",
+    "Offline-first mobile (native app)",
+    "GPS-based time tracking",
+    "Integration with external project management tools"
+  ],
+
+  "success_metrics": {
+    "job_creation": "PM can create job with BOM in < 5 minutes",
+    "scheduling": "Gantt displays with dependencies correctly",
+    "field_access": "Installer can update tasks and punchlist on mobile",
+    "time_tracking": "Hours logged with labor cost calculated",
+    "punchlist": "Photos upload successfully from mobile",
+    "cost_visibility": "Estimated vs actual cost visible at job level",
+    "no_regressions": "All existing tests pass"
+  },
+
+  "verification": {
+    "route_renders": "npm run dev -> navigate to /jobs",
+    "crud_works": "Can create, read, update, delete jobs",
+    "gantt_works": "Gantt chart renders with tasks",
+    "mobile_works": "UI functional on mobile viewport",
+    "data_integrity": "All foreign keys resolve correctly"
+  }
+}

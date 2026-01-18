@@ -1,0 +1,439 @@
+{
+  "id": "REF-HOOKS",
+  "name": "Hooks Architecture Refactoring",
+  "description": "Reorganize hooks, split large files, add barrel exports, remove duplicates. Creates discoverable, atomic hooks.",
+  "created": "2026-01-09",
+  "updated": "2026-01-09",
+  "priority": 3,
+  "phase": "refactoring",
+  "dependencies": {
+    "phase": "Refactoring",
+    "executionOrder": 7,
+    "schemaRequired": [],
+    "prdDependencies": [
+      {
+        "prdId": "REF-SERVER",
+        "status": "OPTIONAL",
+        "reason": "Query options refactoring may affect hooks that use them"
+      }
+    ],
+    "enables": [
+      {
+        "prdId": "REF-COMPONENTS",
+        "reason": "Refactored hooks provide cleaner imports for components"
+      },
+      {
+        "prdId": "DOM-*",
+        "reason": "Consistent hook patterns benefit domain implementations"
+      }
+    ]
+  },
+  "audit": {
+    "date": "2026-01-09",
+    "implementation_percentage": 64,
+    "audit_file": "memory-bank/prd/_audits/hooks-audit.json"
+  },
+  "references": {
+    "internal": [
+      "memory-bank/_meta/conventions.md - Import patterns",
+      "memory-bank/_meta/assumptions.md - TanStack Query state management"
+    ],
+    "external": [
+      "TanStack Query docs: query options patterns",
+      "React hooks best practices: single responsibility"
+    ]
+  },
+  "current_state": {
+    "total_hooks": 25,
+    "hooks_over_100_lines": 9,
+    "issues": [
+      "use-query-options.ts: 405 lines - not a hook, is query config",
+      "use-realtime.ts: 209 lines - over 100 line limit",
+      "use-url-filters.ts: 188 lines - over 100 line limit",
+      "use-global-shortcuts.ts: 154 lines - over 100 line limit",
+      "use-communications.ts: 9 hooks in 1 file (133 lines)",
+      "Two form draft hooks: use-form-draft.ts (102) + use-tanstack-form-draft.ts (113)",
+      "No barrel exports - imports are verbose",
+      "Package workarounds: 'as any' casts for TanStack issue",
+      "Inconsistent error handling across hooks"
+    ]
+  },
+  "target_state": {
+    "max_hook_size": 100,
+    "hooks_per_file": 1,
+    "barrel_exports": true,
+    "duplicate_hooks": 0,
+    "type_safety": "100%"
+  },
+  "stories": [
+    {
+      "id": "REF-HOOKS-001a",
+      "name": "Move Query Options to lib/queries",
+      "description": "Relocate use-query-options.ts - it's configuration, not a hook",
+      "priority": 1,
+      "status": "pending",
+      "type": "refactoring",
+      "passes": false,
+      "acceptance_criteria": [
+        "File src/hooks/use-query-options.ts moved to lib/queries/index.ts",
+        "Exports renamed: useCustomersQueryOptions -> customersQueryOptions (remove 'use' prefix)",
+        "All query options exported without 'use' prefix since they're not hooks",
+        "File < 400 lines after move",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "lib/queries/index.ts (create)",
+        "src/hooks/use-query-options.ts (delete)"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "REF_HOOKS_001A_COMPLETE"
+    },
+    {
+      "id": "REF-HOOKS-001b",
+      "name": "Update Query Options Imports",
+      "description": "Update all imports to use new lib/queries location",
+      "priority": 1,
+      "status": "pending",
+      "type": "refactoring",
+      "passes": false,
+      "acceptance_criteria": [
+        "All imports of use-query-options updated to lib/queries",
+        "Import style: import { customersQueryOptions } from '@/lib/queries'",
+        "At least 10 files updated",
+        "All queries continue to work",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "Multiple route and component files (search for use-query-options imports)"
+      ],
+      "dependencies": [
+        "REF-HOOKS-001a"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "REF_HOOKS_001B_COMPLETE"
+    },
+    {
+      "id": "REF-HOOKS-002a",
+      "name": "Split use-communications.ts: Query Hooks",
+      "description": "Extract communication query hooks into separate files",
+      "priority": 2,
+      "status": "pending",
+      "type": "refactoring",
+      "passes": false,
+      "acceptance_criteria": [
+        "File src/hooks/use-communication-summary.ts created (useCommunicationSummary hook)",
+        "File src/hooks/use-communication-history.ts created (useCommunicationHistory hook)",
+        "Each file contains exactly 1 hook",
+        "Each hook < 50 lines",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/hooks/use-communication-summary.ts (create)",
+        "src/hooks/use-communication-history.ts (create)"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "REF_HOOKS_002A_COMPLETE"
+    },
+    {
+      "id": "REF-HOOKS-002b",
+      "name": "Split use-communications.ts: Mutation Hooks",
+      "description": "Extract communication mutation hooks into separate files",
+      "priority": 2,
+      "status": "pending",
+      "type": "refactoring",
+      "passes": false,
+      "acceptance_criteria": [
+        "File src/hooks/use-send-template-email.ts created",
+        "File src/hooks/use-create-business-activity.ts created",
+        "File src/hooks/use-update-activity-status.ts created",
+        "File src/hooks/use-bulk-update-activity-status.ts created",
+        "Each file contains exactly 1 hook < 50 lines",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/hooks/use-send-template-email.ts (create)",
+        "src/hooks/use-create-business-activity.ts (create)",
+        "src/hooks/use-update-activity-status.ts (create)",
+        "src/hooks/use-bulk-update-activity-status.ts (create)"
+      ],
+      "dependencies": [
+        "REF-HOOKS-002a"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "REF_HOOKS_002B_COMPLETE"
+    },
+    {
+      "id": "REF-HOOKS-002c",
+      "name": "Split use-communications.ts: Activities Hook",
+      "description": "Extract activities hook and user preferences hooks",
+      "priority": 2,
+      "status": "pending",
+      "type": "refactoring",
+      "passes": false,
+      "acceptance_criteria": [
+        "File src/hooks/use-activities.ts created",
+        "File src/hooks/use-user-preferences-query.ts created (renamed to avoid conflict)",
+        "File src/hooks/use-update-user-preferences.ts created",
+        "Original use-communications.ts deleted",
+        "Each file contains exactly 1 hook < 50 lines",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/hooks/use-activities.ts (create)",
+        "src/hooks/use-user-preferences-query.ts (create)",
+        "src/hooks/use-update-user-preferences.ts (create)",
+        "src/hooks/use-communications.ts (delete)"
+      ],
+      "dependencies": [
+        "REF-HOOKS-002b"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "REF_HOOKS_002C_COMPLETE"
+    },
+    {
+      "id": "REF-HOOKS-003",
+      "name": "Remove Duplicate Form Draft Hook",
+      "description": "Consolidate into single TanStack Form draft solution",
+      "priority": 3,
+      "status": "pending",
+      "type": "refactoring",
+      "passes": false,
+      "acceptance_criteria": [
+        "Verify TanStack Form is primary form library (check package.json, usage)",
+        "Keep src/hooks/use-tanstack-form-draft.ts",
+        "Delete src/hooks/use-form-draft.ts (react-hook-form version)",
+        "Update any components using deleted hook to use TanStack version",
+        "Rename use-tanstack-form-draft.ts to use-form-draft.ts after deletion",
+        "Form draft functionality unchanged",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/hooks/use-form-draft.ts (delete)",
+        "src/hooks/use-tanstack-form-draft.ts (rename to use-form-draft.ts)"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "REF_HOOKS_003_COMPLETE"
+    },
+    {
+      "id": "REF-HOOKS-004a",
+      "name": "Create Hooks Barrel Export: Query Hooks",
+      "description": "Create barrel export for query-related hooks",
+      "priority": 4,
+      "status": "pending",
+      "type": "refactoring",
+      "passes": false,
+      "acceptance_criteria": [
+        "File src/hooks/index.ts created",
+        "Exports query hooks with category comment: // Query hooks",
+        "Includes: useCommunicationSummary, useCommunicationHistory, useActivities, etc.",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/hooks/index.ts (create)"
+      ],
+      "dependencies": [
+        "REF-HOOKS-001b",
+        "REF-HOOKS-002c",
+        "REF-HOOKS-003"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "REF_HOOKS_004A_COMPLETE"
+    },
+    {
+      "id": "REF-HOOKS-004b",
+      "name": "Create Hooks Barrel Export: All Categories",
+      "description": "Complete barrel export with all hook categories",
+      "priority": 4,
+      "status": "pending",
+      "type": "refactoring",
+      "passes": false,
+      "acceptance_criteria": [
+        "File src/hooks/index.ts exports all hooks",
+        "Grouped by category in comments: // Query hooks, // Mutation hooks, // Form hooks, // UI hooks, // Realtime hooks",
+        "At least 5 files updated to use barrel import: import { useDebounce, useUrlFilters } from '@/hooks'",
+        "memory-bank/_meta/conventions.md updated with import pattern",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/hooks/index.ts (modify)",
+        "memory-bank/_meta/conventions.md (modify)"
+      ],
+      "dependencies": [
+        "REF-HOOKS-004a"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "REF_HOOKS_004B_COMPLETE"
+    },
+    {
+      "id": "REF-HOOKS-005a",
+      "name": "Create useMutationWithToast Hook",
+      "description": "Create unified pattern for mutation hooks with error handling",
+      "priority": 5,
+      "status": "pending",
+      "type": "refactoring",
+      "passes": false,
+      "acceptance_criteria": [
+        "File src/hooks/use-mutation-with-toast.ts created",
+        "Wraps useMutation with: toast on success, toast on error, loading state",
+        "Consistent interface: { mutate, mutateAsync, isPending, error }",
+        "Configurable messages via options: successMessage, errorMessage",
+        "Hook < 80 lines",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/hooks/use-mutation-with-toast.ts (create)"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "REF_HOOKS_005A_COMPLETE"
+    },
+    {
+      "id": "REF-HOOKS-005b",
+      "name": "Apply useMutationWithToast Pattern",
+      "description": "Refactor existing mutations to use the wrapper",
+      "priority": 5,
+      "status": "pending",
+      "type": "refactoring",
+      "passes": false,
+      "acceptance_criteria": [
+        "At least 3 existing mutation usages refactored to use useMutationWithToast",
+        "Include: useSendTemplateEmail, useCreateBusinessActivity, useUpdateActivityStatus",
+        "Pattern documented in memory-bank/_meta/conventions.md",
+        "Toast behavior consistent across refactored mutations",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/hooks/use-send-template-email.ts (modify)",
+        "src/hooks/use-create-business-activity.ts (modify)",
+        "src/hooks/use-update-activity-status.ts (modify)",
+        "memory-bank/_meta/conventions.md (modify)"
+      ],
+      "dependencies": [
+        "REF-HOOKS-005a",
+        "REF-HOOKS-002b"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "REF_HOOKS_005B_COMPLETE"
+    },
+    {
+      "id": "REF-HOOKS-006",
+      "name": "Fix TanStack Package Type Workarounds",
+      "description": "Remove 'as any' casts or document as known issue",
+      "priority": 6,
+      "status": "pending",
+      "type": "refactoring",
+      "passes": false,
+      "acceptance_criteria": [
+        "All 'as any' casts in src/hooks/ reviewed",
+        "If fixable: remove cast and use proper types",
+        "If TanStack issue: add // TODO: TanStack issue #XXX comment with link",
+        "File memory-bank/issues/tanstack-types.md created tracking all type issues",
+        "No new type errors introduced",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "memory-bank/issues/tanstack-types.md (create)",
+        "Multiple hook files (as needed)"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "REF_HOOKS_006_COMPLETE"
+    },
+    {
+      "id": "REF-HOOKS-007a",
+      "name": "Extract useSearchState from use-url-filters",
+      "description": "Extract debounced search state logic for reuse",
+      "priority": 7,
+      "status": "pending",
+      "type": "refactoring",
+      "passes": false,
+      "acceptance_criteria": [
+        "File src/hooks/use-search-state.ts created",
+        "Extracts debounced search value management",
+        "Hook < 60 lines",
+        "Can be used independently of URL sync",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/hooks/use-search-state.ts (create)"
+      ],
+      "dependencies": [
+        "REF-HOOKS-004b"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "REF_HOOKS_007A_COMPLETE"
+    },
+    {
+      "id": "REF-HOOKS-007b",
+      "name": "Refactor use-url-filters to Compose",
+      "description": "Refactor use-url-filters to use extracted search state",
+      "priority": 7,
+      "status": "pending",
+      "type": "refactoring",
+      "passes": false,
+      "acceptance_criteria": [
+        "File src/hooks/use-url-filters.ts refactored",
+        "Composes useSearchState for search functionality",
+        "use-url-filters.ts < 100 lines",
+        "Both hooks independently usable",
+        "All filter functionality unchanged",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/hooks/use-url-filters.ts (modify)"
+      ],
+      "dependencies": [
+        "REF-HOOKS-007a"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "REF_HOOKS_007B_COMPLETE"
+    },
+    {
+      "id": "REF-HOOKS-008",
+      "name": "Create Hooks README",
+      "description": "Document hook patterns and categories",
+      "priority": 8,
+      "status": "pending",
+      "type": "documentation",
+      "passes": false,
+      "acceptance_criteria": [
+        "File src/hooks/README.md created",
+        "Documents hook categories: Query, Mutation, Form, UI, Realtime",
+        "Shows usage examples for each category",
+        "Explains when to create new hooks vs use existing",
+        "References memory-bank/_meta/conventions.md",
+        "Links to TanStack Query/Form docs"
+      ],
+      "files_to_modify": [
+        "src/hooks/README.md (create)"
+      ],
+      "dependencies": [
+        "REF-HOOKS-004b",
+        "REF-HOOKS-005b"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "REF_HOOKS_008_COMPLETE"
+    }
+  ],
+  "success_criteria": [
+    "All hooks < 100 lines",
+    "One hook per file (except intentional compositions)",
+    "Query options moved to lib/queries (not hooks)",
+    "Barrel export enables clean imports",
+    "Zero duplicate hooks",
+    "useMutationWithToast pattern established",
+    "README documents all patterns",
+    "npm run typecheck passes",
+    "No functionality regressions"
+  ],
+  "out_of_scope": [
+    "New hook functionality",
+    "State management architecture changes",
+    "New external dependencies",
+    "Splitting use-realtime.ts (209 lines) - future PRD",
+    "Splitting use-global-shortcuts.ts (154 lines) - future PRD"
+  ]
+}

@@ -1,0 +1,481 @@
+{
+  "id": "CC-LOADING",
+  "name": "Loading States",
+  "description": "Consistent loading state patterns across the Renoz application. Implements skeleton screens, progressive loading, spinner components, and Suspense boundaries to meet the < 2s page load and < 500ms subsequent navigation targets from assumptions.md.",
+  "created": "2026-01-09",
+  "priority": 1,
+  "phase": "cross-cutting",
+  "dependencies": {
+    "phase": "Cross-cutting",
+    "executionOrder": 2,
+    "schemaRequired": [],
+    "schemaCreates": [],
+    "serverFunctionsRequired": [],
+    "serverFunctionsCreates": [
+      {
+        "function": "Spinner",
+        "story": "CC-LOAD-001"
+      },
+      {
+        "function": "InlineSpinner",
+        "story": "CC-LOAD-001"
+      },
+      {
+        "function": "PageSpinner",
+        "story": "CC-LOAD-001"
+      },
+      {
+        "function": "TableLoadingOverlay",
+        "story": "CC-LOAD-004"
+      },
+      {
+        "function": "useFormLoadingState",
+        "story": "CC-LOAD-005"
+      },
+      {
+        "function": "NavigationProgress",
+        "story": "CC-LOAD-007"
+      }
+    ],
+    "prdDependencies": [
+      {
+        "prdId": "CC-A11Y",
+        "status": "RECOMMENDED",
+        "reason": "Loading states require accessible aria-live announcements and reduced-motion support"
+      }
+    ],
+    "enables": [
+      {
+        "prdId": "all",
+        "reason": "All domain PRDs use loading states for data fetching, form submissions, and navigation transitions"
+      },
+      {
+        "prdId": "CC-ERROR",
+        "reason": "Error handling retry progress uses Spinner components"
+      }
+    ]
+  },
+  "references": {
+    "internal": [
+      "memory-bank/_meta/conventions.md#component-states",
+      "memory-bank/_meta/assumptions.md#performance"
+    ],
+    "external": [
+      "https://tanstack.com/query/latest/docs/react/guides/suspense",
+      "https://react.dev/reference/react/Suspense"
+    ]
+  },
+  "current_state": {
+    "implemented": [
+      "Skeleton base component at src/components/ui/skeleton.tsx",
+      "Skeleton patterns (TableSkeleton, CardSkeleton, FormSkeleton, ListSkeleton) at src/components/ui/skeleton-patterns.tsx",
+      "LoadingState component with variants (table, list, card, page, inline)",
+      "Page-level skeletons (ListPageSkeleton, DetailPageSkeleton, DashboardSkeleton)",
+      "TanStack Router pendingComponent pattern on 35+ routes",
+      "Route loaders with ensureQueryData for SSR-compatible loading"
+    ],
+    "gaps": [
+      "No dedicated Spinner component library (ad-hoc Loader2 usage)",
+      "No overlay loading state for DataTable during pagination/sort/filter",
+      "No inline spinner in form submit buttons",
+      "No global navigation progress indicator"
+    ]
+  },
+  "stories": [
+    {
+      "id": "CC-LOAD-001",
+      "name": "Spinner Component Library",
+      "description": "Create a dedicated Spinner component library wrapping Loader2 with consistent styling. Include size variants and accessibility support.",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Spinner component wraps Loader2 with consistent styling",
+        "Size variants: sm (16px), md (24px), lg (32px), xl (48px)",
+        "InlineSpinner variant for buttons (includes text label support)",
+        "PageSpinner variant for full-page centered display",
+        "Accessible aria-label for screen readers",
+        "Export from index for easy imports",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "CC_LOAD_001_COMPLETE",
+      "layer": "ui",
+      "ui_spec": {
+        "reusable": true,
+        "component_type": "Spinner",
+        "component_variants": {
+          "Spinner": {
+            "description": "Base spinner component with size variants",
+            "props": [
+              "size: 'sm' | 'md' | 'lg' | 'xl'",
+              "className?: string",
+              "label?: string"
+            ]
+          },
+          "InlineSpinner": {
+            "description": "Spinner for inline contexts like buttons",
+            "props": [
+              "text?: string",
+              "position?: 'left' | 'right'"
+            ]
+          },
+          "PageSpinner": {
+            "description": "Full-page centered spinner with optional message",
+            "props": [
+              "message?: string"
+            ]
+          }
+        },
+        "component_structure": {
+          "base_spinner": {
+            "element": "Loader2 icon from lucide-react",
+            "animation": "animate-spin",
+            "color": "currentColor (inherits from parent)"
+          },
+          "inline_spinner": {
+            "wrapper": "inline-flex items-center gap-2",
+            "spinner": "Spinner size='sm'",
+            "text": "span with loading text"
+          },
+          "page_spinner": {
+            "wrapper": "flex items-center justify-center min-h-[200px]",
+            "content": "flex-col items-center gap-3",
+            "spinner": "Spinner size='lg'",
+            "message": "text-muted-foreground text-sm"
+          }
+        },
+        "animations": {
+          "spin": {
+            "standard": "rotate 1s linear infinite",
+            "reduced_motion": "opacity pulse 1.5s ease-in-out infinite"
+          },
+          "enter": "fade-in 100ms ease-out",
+          "exit": "fade-out 100ms ease-in"
+        },
+        "theme_compatibility": {
+          "light": {
+            "default": "text-muted-foreground",
+            "primary": "text-primary",
+            "destructive": "text-destructive"
+          },
+          "dark": {
+            "default": "text-muted-foreground (auto-adapts)",
+            "primary": "text-primary (auto-adapts)",
+            "destructive": "text-destructive (auto-adapts)"
+          }
+        },
+        "accessibility": {
+          "role": "status",
+          "aria_live": "polite",
+          "aria_label": {
+            "default": "Loading",
+            "custom": "Accepts label prop for context-specific message"
+          },
+          "screen_reader": {
+            "spinner_only": "aria-label='Loading' on spinner",
+            "with_text": "Text serves as accessible name, spinner aria-hidden='true'"
+          },
+          "announcements": {
+            "start": "Loading...",
+            "complete": "Content loaded"
+          }
+        },
+        "touch_targets": {
+          "note": "Spinners are decorative, no touch targets needed"
+        },
+        "responsive": {
+          "all": "Sizes remain consistent across breakpoints"
+        },
+        "size_tokens": {
+          "sm": "w-4 h-4 (16px)",
+          "md": "w-6 h-6 (24px)",
+          "lg": "w-8 h-8 (32px)",
+          "xl": "w-12 h-12 (48px)"
+        }
+      }
+    },
+    {
+      "id": "CC-LOAD-004",
+      "name": "Data Table Overlay Loading States",
+      "description": "Add overlay/subtle loading state for DataTable during subsequent operations (pagination, sorting, filtering). Initial skeleton already exists.",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Standardize subtle overlay loading state for table during pagination/filter/sort",
+        "Pagination controls show spinner during data fetch",
+        "Extract opacity transition pattern from customers/index.tsx into DataTable",
+        "Ensure table renders within 100ms for 100 rows (existing virtualizer supports this)",
+        "Empty data after loading shows empty state (not skeleton)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "CC-LOAD-001"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "CC_LOAD_004_COMPLETE",
+      "layer": "ui",
+      "ui_spec": {
+        "reusable": true,
+        "component_type": "TableLoadingOverlay",
+        "component_structure": {
+          "overlay": {
+            "container": "absolute inset-0 z-10",
+            "background": "bg-background/60 backdrop-blur-[1px]",
+            "spinner": "Spinner centered in overlay"
+          },
+          "table_wrapper": {
+            "container": "relative",
+            "table": "DataTable component",
+            "overlay": "TableLoadingOverlay when isRefetching"
+          },
+          "pagination_spinner": {
+            "location": "Next to pagination controls",
+            "spinner": "InlineSpinner size='sm'"
+          }
+        },
+        "animations": {
+          "overlay_enter": "fade-in 150ms ease-out",
+          "overlay_exit": "fade-out 100ms ease-in",
+          "content_dim": "opacity 0.5 transition 150ms",
+          "content_restore": "opacity 1 transition 100ms",
+          "reduced_motion": {
+            "overlay": "instant show/hide, no fade",
+            "content": "no opacity transition"
+          }
+        },
+        "theme_compatibility": {
+          "light": {
+            "overlay_bg": "bg-white/60",
+            "spinner": "text-muted-foreground"
+          },
+          "dark": {
+            "overlay_bg": "bg-background/70",
+            "spinner": "text-muted-foreground"
+          }
+        },
+        "accessibility": {
+          "aria_busy": "true on table container when loading",
+          "aria_live": "polite",
+          "announcements": {
+            "loading_start": "Loading table data",
+            "loading_complete": "Table data loaded, showing {n} rows",
+            "filter_applied": "Filter applied, showing {n} results",
+            "sort_applied": "Sorted by {column}, {direction}"
+          },
+          "focus_management": {
+            "during_load": "Keep focus on current element",
+            "after_load": "Maintain focus position in table"
+          }
+        },
+        "touch_targets": {
+          "pagination_buttons": "min-h-11 (44px)",
+          "page_size_select": "min-h-11"
+        },
+        "responsive": {
+          "mobile": "Overlay covers visible table area only",
+          "tablet_up": "Overlay covers full table including horizontal scroll"
+        },
+        "performance": {
+          "debounce_overlay": "Show overlay only if load > 100ms",
+          "virtualization": "Maintain TanStack Virtual integration"
+        }
+      }
+    },
+    {
+      "id": "CC-LOAD-005",
+      "name": "Form Submission Loading States",
+      "description": "Integrate Spinner component into form submission states. FormFooter has loading prop but lacks visual spinner.",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "FormFooter uses InlineSpinner when loading",
+        "Create useFormLoadingState hook or pattern for consistent field disabling",
+        "Document pattern in forms/README.md",
+        "Verify CustomerForm and similar forms follow pattern",
+        "Loading state clears on success or error",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "CC-LOAD-001"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "CC_LOAD_005_COMPLETE",
+      "layer": "ui",
+      "ui_spec": {
+        "reusable": true,
+        "component_type": "FormLoadingState",
+        "component_structure": {
+          "submit_button": {
+            "default": "Button with text",
+            "loading": "Button with InlineSpinner and 'Saving...' text",
+            "disabled": "true when loading"
+          },
+          "form_fields": {
+            "default": "enabled, editable",
+            "loading": "disabled with reduced opacity (0.7)"
+          },
+          "cancel_button": {
+            "default": "enabled",
+            "loading": "disabled"
+          }
+        },
+        "animations": {
+          "button_transition": {
+            "to_loading": "text swap with fade 100ms",
+            "spinner_enter": "fade-in 100ms",
+            "from_loading": "text swap with fade 100ms"
+          },
+          "field_disable": "opacity transition 150ms",
+          "reduced_motion": {
+            "button": "instant text swap, no fade",
+            "spinner": "opacity pulse instead of rotation"
+          }
+        },
+        "theme_compatibility": {
+          "light": {
+            "loading_button": "Same as default, opacity 0.9",
+            "disabled_fields": "bg-muted/50"
+          },
+          "dark": {
+            "loading_button": "Same as default, opacity 0.9",
+            "disabled_fields": "bg-muted/30"
+          }
+        },
+        "accessibility": {
+          "aria_busy": "true on form element when submitting",
+          "aria_disabled": "true on all form controls when loading",
+          "button_aria_label": {
+            "default": "Submit form (or specific action)",
+            "loading": "Submitting, please wait"
+          },
+          "announcements": {
+            "submit_start": "Saving changes...",
+            "submit_success": "Changes saved successfully",
+            "submit_error": "Error saving changes. Please try again."
+          },
+          "focus_management": {
+            "on_submit": "Keep focus on submit button",
+            "on_success": "Move focus based on context (close modal, navigate, or stay)",
+            "on_error": "Move focus to first error or error summary"
+          }
+        },
+        "touch_targets": {
+          "submit_button": "min-h-11 min-w-24 (44px height)",
+          "cancel_button": "min-h-11"
+        },
+        "responsive": {
+          "mobile": "Full-width buttons, stacked",
+          "tablet_up": "Inline buttons, right-aligned"
+        }
+      }
+    },
+    {
+      "id": "CC-LOAD-007",
+      "name": "Navigation Progress Indicator",
+      "description": "Add a subtle progress indicator in the header/app shell during route transitions to complement page skeletons.",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "NProgress-style bar at top of page during navigation",
+        "Or subtle spinner in sidebar/header",
+        "Uses TanStack Router's isTransitioning state",
+        "Does not flash for fast transitions (< 100ms)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "CC_LOAD_007_COMPLETE",
+      "layer": "ui",
+      "ui_spec": {
+        "reusable": true,
+        "component_type": "NavigationProgress",
+        "component_variants": {
+          "ProgressBar": {
+            "description": "NProgress-style bar at viewport top",
+            "location": "Fixed, top of viewport, above header"
+          },
+          "HeaderSpinner": {
+            "description": "Alternative: subtle spinner in header",
+            "location": "Header right section, near user menu"
+          }
+        },
+        "component_structure": {
+          "progress_bar": {
+            "container": "fixed top-0 left-0 right-0 z-50 h-1",
+            "bar": "h-full bg-primary",
+            "glow": "optional shadow-glow effect at leading edge"
+          },
+          "header_spinner": {
+            "container": "flex items-center",
+            "spinner": "Spinner size='sm'"
+          }
+        },
+        "animations": {
+          "progress_bar": {
+            "start": "width 0% to 30% over 300ms ease-out",
+            "continue": "width 30% to 80% over 5000ms ease-out (slow)",
+            "complete": "width 100% over 200ms, then fade-out 150ms",
+            "glow": "subtle pulse on leading edge"
+          },
+          "header_spinner": {
+            "enter": "fade-in scale-in 150ms",
+            "exit": "fade-out scale-out 100ms"
+          },
+          "reduced_motion": {
+            "progress_bar": "instant width change, opacity fade only",
+            "header_spinner": "opacity pulse instead of rotation"
+          }
+        },
+        "theme_compatibility": {
+          "light": {
+            "bar_color": "bg-primary",
+            "glow": "shadow-primary/30"
+          },
+          "dark": {
+            "bar_color": "bg-primary",
+            "glow": "shadow-primary/20"
+          }
+        },
+        "accessibility": {
+          "aria_hidden": "true (decorative indicator)",
+          "role": "none",
+          "screen_reader_handling": {
+            "note": "Route changes announced via page title changes and focus management",
+            "no_announcement": "Progress bar is purely visual feedback"
+          }
+        },
+        "touch_targets": {
+          "note": "No interactive elements"
+        },
+        "responsive": {
+          "all": "Full viewport width for progress bar"
+        },
+        "timing": {
+          "delay_show": "100ms (don't show for fast transitions)",
+          "minimum_display": "300ms (avoid flash)",
+          "max_duration": "10000ms (force complete if stuck)"
+        }
+      }
+    }
+  ],
+  "success_criteria": [
+    "Page load time < 2s for initial load",
+    "Subsequent navigation < 500ms",
+    "Table renders < 100ms for 100 rows",
+    "Users always see loading indication, never blank screens",
+    "Loading states match the structure of actual content",
+    "Screen readers correctly ignore loading placeholders"
+  ],
+  "out_of_scope": [
+    "Service worker caching strategies",
+    "Offline-first loading patterns",
+    "Prefetching strategies for predicted navigation",
+    "Loading analytics and performance monitoring"
+  ],
+  "domain_completion_promise": "CC_LOADING_COMPLETE"
+}

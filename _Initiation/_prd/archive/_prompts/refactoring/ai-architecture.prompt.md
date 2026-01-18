@@ -1,0 +1,119 @@
+# Task: Refactor AI Architecture
+
+## Context
+Read the PRD file to find the first story where `passes: false`.
+Read the progress file for learnings from previous iterations.
+Read `AGENTS.md` and conventions for project patterns.
+
+## Project Location
+/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack
+
+## PRD File
+/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/memory-bank/prd/refactoring/ai-architecture.prd.json
+
+## Progress File
+/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/memory-bank/prd/_progress/ref-ai.progress.txt
+
+## PRD ID
+REF-AI
+
+## Phase
+refactoring
+
+## Priority
+2
+
+## Dependencies
+- REF-SERVER (server function patterns)
+
+---
+
+## Pre-Flight Checks
+
+Before starting, verify:
+
+```bash
+# 1. TypeScript compiles
+npm run typecheck
+
+# 2. Verify REF-SERVER is complete
+grep "REF_SERVER_COMPLETE" memory-bank/prd/_progress/ref-server.progress.txt
+```
+
+---
+
+## Context Files
+
+### Required Reading (in order)
+
+1. **Progress File**: Check for learnings from previous iterations
+2. **PRD File**: Get current story and acceptance criteria
+3. **Conventions**: `memory-bank/_meta/conventions.md`
+
+### Reference Patterns
+
+| Pattern | Reference File |
+|---------|---------------|
+| AI integration | `src/lib/ai/` |
+| Server functions | `src/server/functions/ai.ts` |
+
+---
+
+## File Ownership
+
+YOU MAY modify:
+```
+src/lib/ai/**/*.ts
+src/server/functions/ai.ts
+src/server/functions/ai/**/*.ts
+```
+
+---
+
+## Workflow
+
+1. Find the first story where `passes: false`
+2. Check dependencies - all must have `passes: true`
+3. Refactor AI code per acceptance criteria
+4. Run `npm run typecheck` to verify
+5. If tests pass:
+   - Set `story.passes = true` in prd.json
+   - Append success to progress.txt
+   - Commit with message: "Complete [STORY-ID]: Story Title"
+6. If tests fail:
+   - Append learnings to progress.txt
+   - Do NOT modify prd.json
+   - Retry with fixes
+
+---
+
+## Refactoring Guidelines
+
+### DO
+- Separate prompt templates
+- Modularize AI providers
+- Abstract common patterns
+- Improve error handling
+
+### DON'T
+- Change AI APIs
+- Break existing AI features
+- Add new features (refactoring only)
+
+---
+
+## Completion Signals
+
+When the target story passes:
+```xml
+<promise>[STORY_ID]_COMPLETE</promise>
+```
+
+When ALL stories in this PRD have `passes: true`:
+```xml
+<promise>REF_AI_COMPLETE</promise>
+```
+
+---
+
+*Refactoring PRD - AI architecture organization*

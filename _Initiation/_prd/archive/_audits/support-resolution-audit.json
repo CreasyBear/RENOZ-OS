@@ -1,0 +1,487 @@
+{
+  "prd_id": "WF-SUPPORT",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Code",
+  "summary": {
+    "total_stories": 6,
+    "valid_gaps": 6,
+    "already_implemented": 0,
+    "needs_atomization": 3,
+    "estimated_total_iterations": 25,
+    "risk_level": "medium",
+    "notes": "This workflow PRD orchestrates support resolution across multiple domains. Strong foundation exists with issue CRUD, status workflow, activity tracking, and basic metrics. Email notifications on status change already implemented via Trigger.dev. All proposed workflow stories address genuine gaps - no triage queue, no auto-assignment, no resolution templates, limited customer communication automation, no feedback collection, and basic metrics only. Dependencies on support domain PRD stories (DOM-SUP-004, DOM-SUP-005, DOM-SUP-006) are critical path blockers."
+  },
+  "codebase_findings": {
+    "existing_issue_workflow": {
+      "statuses": ["open", "in_progress", "on_hold", "escalated", "resolved", "closed"],
+      "transitions": "Manual status changes with notes via changeStatus server function",
+      "activities_tracked": ["comment", "status_change", "assignment", "attachment"],
+      "notes": "Issue workflow exists but no formal triage step. All issues start as 'open' status."
+    },
+    "existing_assignment": {
+      "manual_assignment": true,
+      "server_function": "assignIssue",
+      "ui_component": "AssigneePicker in issue-form.tsx, assign dialog in $issueId.tsx",
+      "auto_assignment": false,
+      "notes": "Manual assignment only. No rules engine, no load balancing, no skill-based routing."
+    },
+    "existing_resolution": {
+      "resolution_workflow_component": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/support/resolution-workflow.tsx",
+      "resolution_types": ["closed", "replaced", "refunded", "repaired"],
+      "multi_step_wizard": true,
+      "notes": "3-step resolution workflow exists (type -> notes -> confirm). No resolution templates, just free-form notes."
+    },
+    "existing_communication": {
+      "email_on_status_change": true,
+      "email_jobs_path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/trigger/email-jobs.ts",
+      "sendIssueUpdate": "Triggers on status change with customer email, status change details",
+      "notes": "Email sent on status change. No auto-confirmation on creation, no template customization, no reopen via email link."
+    },
+    "existing_feedback": {
+      "csat_tracking": false,
+      "feedback_table": false,
+      "feedback_form": false,
+      "notes": "No feedback collection exists. Would depend on DOM-SUP-005 (Customer Satisfaction Tracking) from support domain PRD."
+    },
+    "existing_metrics": {
+      "server_functions": ["getIssueListMetrics", "getSupportMetrics", "getSupportListMetrics"],
+      "metrics_tracked": ["open_count", "urgent_count", "overdue_count", "resolved_this_week", "avg_resolution_days"],
+      "sparklines": true,
+      "notes": "Basic metrics exist. No triage time tracking, no first response time, no reopen rate, no team workload distribution. Depends on DOM-SUP-006 (Support Dashboard) for advanced metrics."
+    },
+    "components_relevant": {
+      "issue_form": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/support/issue-form.tsx",
+      "issue_columns": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/support/issue-columns.tsx",
+      "resolution_workflow": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/support/resolution-workflow.tsx",
+      "issue_detail": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/routes/support/issues/$issueId.tsx"
+    },
+    "domain_prd_dependencies": {
+      "DOM-SUP-004": {
+        "name": "Add Issue Templates",
+        "status": "pending",
+        "blocks": "WF-SUP-001 (Triage Workflow) - needs templates for triage checklist"
+      },
+      "DOM-SUP-005": {
+        "name": "Add Customer Satisfaction Tracking",
+        "status": "pending",
+        "blocks": "WF-SUP-005 (Post-Resolution Feedback) - needs issue_feedback table"
+      },
+      "DOM-SUP-006": {
+        "name": "Create Support Dashboard",
+        "status": "pending",
+        "blocks": "WF-SUP-006 (Workflow Metrics) - needs dashboard infrastructure"
+      }
+    }
+  },
+  "stories_status": [
+    {
+      "id": "WF-SUP-001",
+      "name": "Add Triage Workflow",
+      "gap_validated": true,
+      "gap_validation_notes": "No triage queue exists. Issues go directly to 'open' status. No triage checklist, no required fields enforcement before assignment. DOM-SUP-004 (Issue Templates) is a dependency for triage checklist.",
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Criteria are testable. 'Auto-suggest priority based on customer/type' requires customer tier info (verify if exists). 'Triage time tracked' needs new timestamp column.",
+      "crosses_layers": true,
+      "layers": ["schema", "server", "UI"],
+      "original_estimate": 4,
+      "audited_estimate": 5,
+      "estimate_notes": "Schema (triage columns: triageCompletedAt, triageCompletedBy, triageStatus) = 1 iteration, Server (triage queue filter, triage completion logic) = 2 iterations, UI (triage queue view, triage checklist form) = 2 iterations.",
+      "atomization_required": true,
+      "atomization_reason": "Triage workflow has multiple components. Split into: WF-SUP-001a (schema + server triage status), WF-SUP-001b (triage queue UI + auto-suggest).",
+      "dependency_status": {
+        "DOM-SUP-004": "pending - blocks triage checklist feature",
+        "mitigation": "Can implement basic triage without templates first, add checklist when DOM-SUP-004 complete"
+      }
+    },
+    {
+      "id": "WF-SUP-002",
+      "name": "Add Smart Assignment",
+      "gap_validated": true,
+      "gap_validation_notes": "Only manual assignment exists via assignIssue function. No assignment rules table, no load balancing, no skill-based routing. Complete gap.",
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Criteria are testable. 'Skill-based routing' needs user skills configuration (verify if exists). 'Assignment notification' can use existing email infrastructure.",
+      "crosses_layers": true,
+      "layers": ["schema", "server", "UI"],
+      "original_estimate": 5,
+      "audited_estimate": 6,
+      "estimate_notes": "Schema (assignment_rules table, user_skills table?) = 1 iteration, Server (rules engine, load balancing algorithm, round-robin fallback) = 3 iterations, UI (rules configuration, assignment preview) = 2 iterations.",
+      "atomization_required": true,
+      "atomization_reason": "Complex rules engine. Split into: WF-SUP-002a (schema + basic rules), WF-SUP-002b (load balancing + skill routing), WF-SUP-002c (rules UI + notification).",
+      "dependency_status": {
+        "WF-SUP-001": "required - triage must complete before assignment",
+        "mitigation": "Can develop in parallel with clear interface contract"
+      }
+    },
+    {
+      "id": "WF-SUP-003",
+      "name": "Add Resolution Templates",
+      "gap_validated": true,
+      "gap_validation_notes": "Resolution workflow has free-form notes only. No resolution_templates table, no template insertion, no personalization variables. Complete gap.",
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "All criteria testable. 'Template effectiveness tracking' requires usage and resolution outcome correlation.",
+      "crosses_layers": true,
+      "layers": ["schema", "server", "UI"],
+      "original_estimate": 4,
+      "audited_estimate": 4,
+      "estimate_notes": "Schema (resolution_templates table) = 1 iteration, Server (CRUD + template rendering with variables) = 1 iteration, UI (template management + insertion in resolution workflow) = 2 iterations.",
+      "atomization_required": false,
+      "atomization_reason": "Estimate within limits. Single Ralph loop can handle.",
+      "dependency_status": {
+        "none": "Independent of other stories"
+      }
+    },
+    {
+      "id": "WF-SUP-004",
+      "name": "Add Customer Communication Flow",
+      "gap_validated": true,
+      "gap_validation_notes": "Email on status change exists via sendIssueUpdate. Missing: auto-email on creation, template customization, communication history on issue. Partial implementation.",
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "'Reopen option via email link' needs secure token mechanism. Communication history may need new table or can extend issueActivities.",
+      "crosses_layers": true,
+      "layers": ["server", "UI"],
+      "original_estimate": 4,
+      "audited_estimate": 5,
+      "estimate_notes": "Server (email templates, creation email trigger, reopen token) = 2 iterations, UI (template customization, communication history display) = 2 iterations, Security (reopen token) = 1 iteration.",
+      "atomization_required": true,
+      "atomization_reason": "Secure reopen mechanism adds complexity. Split into: WF-SUP-004a (creation email + template customization), WF-SUP-004b (reopen mechanism + communication history).",
+      "dependency_status": {
+        "WF-SUP-003": "required - resolution templates before resolution email customization"
+      }
+    },
+    {
+      "id": "WF-SUP-005",
+      "name": "Add Post-Resolution Feedback",
+      "gap_validated": true,
+      "gap_validation_notes": "No feedback collection exists. Would need issue_feedback table from DOM-SUP-005. Complete gap with hard dependency.",
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Criteria align with DOM-SUP-005. This story orchestrates timing (24h delay) and workflow integration.",
+      "crosses_layers": true,
+      "layers": ["server", "UI"],
+      "original_estimate": 4,
+      "audited_estimate": 3,
+      "estimate_notes": "If DOM-SUP-005 is complete: Server (24h delay job, feedback linking) = 1 iteration, UI (workflow integration, feedback display) = 2 iterations. Without DOM-SUP-005: blocked.",
+      "atomization_required": false,
+      "atomization_reason": "Depends on DOM-SUP-005 for foundation. This story is the workflow orchestration layer.",
+      "dependency_status": {
+        "DOM-SUP-005": "HARD BLOCKER - must complete first",
+        "mitigation": "Cannot proceed until DOM-SUP-005 delivers issue_feedback table and rating form"
+      }
+    },
+    {
+      "id": "WF-SUP-006",
+      "name": "Add Support Workflow Metrics",
+      "gap_validated": true,
+      "gap_validation_notes": "Basic metrics exist but missing: triage time, first response time, reopen rate, team workload distribution. Depends on DOM-SUP-006 for dashboard UI.",
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "'Trend analysis and alerts' needs definition - what triggers alerts?",
+      "crosses_layers": true,
+      "layers": ["server", "UI"],
+      "original_estimate": 4,
+      "audited_estimate": 4,
+      "estimate_notes": "Server (new metric queries, trend calculations) = 2 iterations, UI (dashboard widgets, alerts) = 2 iterations. Assumes DOM-SUP-006 dashboard exists.",
+      "atomization_required": false,
+      "atomization_reason": "Estimate reasonable. Build incrementally on existing metrics functions.",
+      "dependency_status": {
+        "DOM-SUP-006": "HARD BLOCKER - must complete first",
+        "WF-SUP-001": "required - for triage time metrics",
+        "WF-SUP-002": "required - for assignment/workload metrics",
+        "mitigation": "Can build server-side metrics queries in parallel, UI blocked until DOM-SUP-006"
+      }
+    }
+  ],
+  "recommended_stories": [
+    {
+      "id": "WF-SUP-001a",
+      "name": "Triage Schema and Status",
+      "description": "Add triage status tracking columns and server logic for triage queue filtering.",
+      "priority": 1,
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "issues table has triageStatus column (pending, in_progress, completed)",
+        "issues table has triageCompletedAt timestamp column",
+        "issues table has triageCompletedBy user reference",
+        "New issues default to triageStatus='pending'",
+        "listIssues supports triageStatus filter",
+        "Server function completeTriage updates status and records timestamp",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "WF-SUP-001b",
+      "name": "Triage Queue UI and Auto-Suggest",
+      "description": "Triage queue view with priority auto-suggestion based on customer/type.",
+      "priority": 2,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "Triage queue view shows only triageStatus='pending' issues",
+        "Triage form enforces: type, priority, category before completion",
+        "Auto-suggest priority based on customer tier (if available) and issue type",
+        "Triage completion moves issue to assigned queue (triageStatus='completed')",
+        "Triage time displayed in issue detail (now - createdAt when pending)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["WF-SUP-001a"]
+    },
+    {
+      "id": "WF-SUP-002a",
+      "name": "Assignment Rules Schema and Basic Engine",
+      "description": "Create assignment_rules table and implement basic rule matching.",
+      "priority": 3,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "assignment_rules table (id, name, condition_type, condition_value, assigned_user_id, priority, organizationId)",
+        "Condition types: issue_type, customer_id, product_category",
+        "Server function evaluateAssignmentRules returns matching rule",
+        "Manual assignment override always takes precedence",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "WF-SUP-002b",
+      "name": "Load Balancing and Skill Routing",
+      "description": "Add workload-aware assignment and skill-based routing capability.",
+      "priority": 4,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "user_skills table (userId, skill, proficiency) - if not exists",
+        "Workload calculation: count of open issues per user",
+        "Load balancing distributes to user with lowest open count",
+        "Skill routing matches issue type/product to user skills",
+        "Round-robin fallback when no rules match",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["WF-SUP-002a"]
+    },
+    {
+      "id": "WF-SUP-002c",
+      "name": "Assignment Rules UI and Notification",
+      "description": "Rules configuration UI and assignment notification integration.",
+      "priority": 5,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "Assignment rules management page in settings",
+        "Rule CRUD with condition builder",
+        "Assignment notification email sent on auto-assign",
+        "Preview which user would be assigned for given criteria",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["WF-SUP-002b"]
+    },
+    {
+      "id": "WF-SUP-003",
+      "name": "Add Resolution Templates",
+      "description": "Pre-configured resolution responses with variable substitution.",
+      "priority": 6,
+      "estimated_iterations": 4,
+      "acceptance_criteria": [
+        "resolution_templates table (id, name, issue_type, description_template, steps_template, email_template, usageCount, organizationId)",
+        "Template CRUD server functions",
+        "Variable substitution: {customerName}, {issueNumber}, {productName}",
+        "Template selection in resolution workflow (step between type and notes)",
+        "Insert template content into resolution notes",
+        "Suggest templates based on issue type",
+        "Track template usage for effectiveness",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "WF-SUP-004a",
+      "name": "Creation Email and Template Customization",
+      "description": "Auto-email on issue creation and customizable email templates.",
+      "priority": 7,
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "email_templates table (id, type, subject_template, body_template, organizationId)",
+        "Email sent on issue creation (confirmation to customer)",
+        "Email sent on assignment change",
+        "Template customization UI in settings",
+        "Variable support in templates: {issueNumber}, {customerName}, {status}",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["WF-SUP-003"]
+    },
+    {
+      "id": "WF-SUP-004b",
+      "name": "Reopen Mechanism and Communication History",
+      "description": "Email-based issue reopen and communication history tracking.",
+      "priority": 8,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "Secure reopen token in resolution email (expires in 7 days)",
+        "Public reopen endpoint validates token and reopens issue",
+        "Communication history tracked in issueActivities (type='email_sent')",
+        "Communication timeline visible on issue detail page",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["WF-SUP-004a"]
+    },
+    {
+      "id": "WF-SUP-005",
+      "name": "Add Post-Resolution Feedback",
+      "description": "Orchestrate feedback request 24h after resolution.",
+      "priority": 9,
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "Trigger.dev job sends feedback request 24h after resolution",
+        "Feedback request includes unique rating link",
+        "Feedback linked to specific issue in issue_feedback table",
+        "Low rating (1-2) creates follow-up task/notification",
+        "CSAT score displayed on issue detail",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["DOM-SUP-005"],
+      "blocked_by": "DOM-SUP-005 must be completed first"
+    },
+    {
+      "id": "WF-SUP-006",
+      "name": "Add Support Workflow Metrics",
+      "description": "Comprehensive workflow metrics for support operations.",
+      "priority": 10,
+      "estimated_iterations": 4,
+      "acceptance_criteria": [
+        "Metric: average time to triage (triageCompletedAt - createdAt)",
+        "Metric: average time to first response (first activity - createdAt)",
+        "Metric: average time to assign (first assignment - triageCompletedAt)",
+        "Metric: resolution rate by type and priority",
+        "Metric: reopen rate (reopened issues / total resolved)",
+        "Team workload distribution chart",
+        "Trend analysis over selectable time period",
+        "Alert thresholds for SLA-like conditions",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["DOM-SUP-006", "WF-SUP-001a", "WF-SUP-002a"],
+      "blocked_by": "DOM-SUP-006 must provide dashboard infrastructure"
+    }
+  ],
+  "atomization_notes": {
+    "WF-SUP-001": {
+      "reason": "Triage requires new status tracking and UI queue view. Auto-suggest adds ML-like complexity.",
+      "recommended_splits": [
+        "WF-SUP-001a: Schema + server triage status (3 iterations)",
+        "WF-SUP-001b: Triage queue UI + auto-suggest (2 iterations)"
+      ]
+    },
+    "WF-SUP-002": {
+      "reason": "Assignment rules engine is complex with load balancing and skill routing. UI needs rule builder.",
+      "recommended_splits": [
+        "WF-SUP-002a: Schema + basic rules engine (2 iterations)",
+        "WF-SUP-002b: Load balancing + skill routing (2 iterations)",
+        "WF-SUP-002c: Rules UI + notification (2 iterations)"
+      ]
+    },
+    "WF-SUP-004": {
+      "reason": "Secure reopen mechanism is security-sensitive. Should be separate from basic email flow.",
+      "recommended_splits": [
+        "WF-SUP-004a: Creation email + template customization (3 iterations)",
+        "WF-SUP-004b: Reopen mechanism + communication history (2 iterations)"
+      ]
+    }
+  },
+  "dependency_graph": {
+    "nodes": ["WF-SUP-001a", "WF-SUP-001b", "WF-SUP-002a", "WF-SUP-002b", "WF-SUP-002c", "WF-SUP-003", "WF-SUP-004a", "WF-SUP-004b", "WF-SUP-005", "WF-SUP-006", "DOM-SUP-004", "DOM-SUP-005", "DOM-SUP-006"],
+    "edges": [
+      ["WF-SUP-001a", "WF-SUP-001b"],
+      ["WF-SUP-001b", "WF-SUP-002a"],
+      ["WF-SUP-002a", "WF-SUP-002b"],
+      ["WF-SUP-002b", "WF-SUP-002c"],
+      ["WF-SUP-003", "WF-SUP-004a"],
+      ["WF-SUP-004a", "WF-SUP-004b"],
+      ["DOM-SUP-005", "WF-SUP-005"],
+      ["DOM-SUP-006", "WF-SUP-006"],
+      ["WF-SUP-001a", "WF-SUP-006"],
+      ["WF-SUP-002a", "WF-SUP-006"],
+      ["DOM-SUP-004", "WF-SUP-001b"]
+    ],
+    "critical_path": ["WF-SUP-001a", "WF-SUP-001b", "WF-SUP-002a", "WF-SUP-002b", "WF-SUP-002c"],
+    "parallel_streams": [
+      ["WF-SUP-001a", "WF-SUP-002a", "WF-SUP-003"],
+      ["WF-SUP-004a", "WF-SUP-004b"],
+      ["WF-SUP-005 (after DOM-SUP-005)"],
+      ["WF-SUP-006 (after DOM-SUP-006)"]
+    ],
+    "external_blockers": [
+      {
+        "story": "WF-SUP-001b",
+        "blocked_by": "DOM-SUP-004 (Issue Templates)",
+        "severity": "soft - can proceed with basic triage"
+      },
+      {
+        "story": "WF-SUP-005",
+        "blocked_by": "DOM-SUP-005 (Customer Satisfaction Tracking)",
+        "severity": "hard - cannot proceed"
+      },
+      {
+        "story": "WF-SUP-006",
+        "blocked_by": "DOM-SUP-006 (Support Dashboard)",
+        "severity": "hard - cannot proceed with UI"
+      }
+    ]
+  },
+  "risks_and_mitigations": [
+    {
+      "risk": "Assignment rules engine complexity may grow unbounded",
+      "mitigation": "Start with simple condition types. Design for extensibility but implement incrementally.",
+      "severity": "medium"
+    },
+    {
+      "risk": "Load balancing algorithm may cause uneven distribution with varied issue complexity",
+      "mitigation": "Consider issue priority as weight factor. Monitor and adjust algorithm post-launch.",
+      "severity": "medium"
+    },
+    {
+      "risk": "Email reopen token security - must prevent enumeration attacks",
+      "mitigation": "Use cryptographically secure random tokens, rate limit attempts, expire quickly.",
+      "severity": "high"
+    },
+    {
+      "risk": "24h feedback delay job may miss issues if system is down",
+      "mitigation": "Use Trigger.dev's reliable scheduling. Implement retry logic.",
+      "severity": "low"
+    },
+    {
+      "risk": "Triage queue may bottleneck if volume is high",
+      "mitigation": "Design for bulk triage actions. Consider auto-triage for obvious cases.",
+      "severity": "medium"
+    },
+    {
+      "risk": "Hard dependencies on domain PRD stories may delay workflow completion",
+      "mitigation": "Prioritize DOM-SUP-004, DOM-SUP-005, DOM-SUP-006 in sprint planning. Consider parallel development with contracts.",
+      "severity": "high"
+    }
+  ],
+  "testing_requirements": [
+    "Unit tests for assignment rules matching logic",
+    "Unit tests for load balancing algorithm edge cases",
+    "Integration tests for triage -> assignment -> resolution flow",
+    "E2E test for email reopen token flow",
+    "Performance tests for assignment rules evaluation with many rules",
+    "Security tests for reopen token (enumeration, expiration)",
+    "Accessibility audit for triage queue and rules configuration UI"
+  ],
+  "implementation_order": [
+    {
+      "phase": 1,
+      "stories": ["WF-SUP-001a", "WF-SUP-002a", "WF-SUP-003"],
+      "rationale": "Independent schema and foundation work. Can be parallelized."
+    },
+    {
+      "phase": 2,
+      "stories": ["WF-SUP-001b", "WF-SUP-002b", "WF-SUP-004a"],
+      "rationale": "Build on phase 1. Triage UI, load balancing, email templates."
+    },
+    {
+      "phase": 3,
+      "stories": ["WF-SUP-002c", "WF-SUP-004b"],
+      "rationale": "Complete assignment rules UI, add reopen mechanism."
+    },
+    {
+      "phase": 4,
+      "stories": ["WF-SUP-005", "WF-SUP-006"],
+      "rationale": "Blocked by domain PRD stories. Schedule after DOM-SUP-005 and DOM-SUP-006 complete.",
+      "blockers": ["DOM-SUP-005", "DOM-SUP-006"]
+    }
+  ]
+}

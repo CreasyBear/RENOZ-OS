@@ -1,0 +1,13 @@
+import "dotenv/config";
+import { defineConfig } from "drizzle-kit";
+
+export default defineConfig({
+  schema: "./drizzle/schema/index.ts",
+  out: "./drizzle/migrations",
+  dialect: "postgresql",
+  dbCredentials: {
+    url: process.env.DATABASE_URL!,
+  },
+  // Match PostgreSQL snake_case conventions
+  casing: "snake_case",
+});

@@ -1,0 +1,756 @@
+{
+  "id": "WF-WARRANTY",
+  "name": "Warranty Claims Workflow",
+  "description": "End-to-end warranty claim process from initial claim through verification, processing, and resolution.",
+  "created": "2026-01-09",
+  "priority": 5,
+  "phase": "workflow",
+  "dependencies": {
+    "phase": "Workflow",
+    "executionOrder": 5,
+    "schemaRequired": [
+      {
+        "table": "warranties",
+        "status": "EXISTS"
+      },
+      {
+        "table": "issues",
+        "status": "EXISTS"
+      },
+      {
+        "table": "customers",
+        "status": "EXISTS"
+      },
+      {
+        "table": "contacts",
+        "status": "EXISTS"
+      },
+      {
+        "table": "products",
+        "status": "EXISTS"
+      },
+      {
+        "table": "orders",
+        "status": "EXISTS"
+      },
+      {
+        "table": "users",
+        "status": "EXISTS"
+      },
+      {
+        "table": "email-history",
+        "status": "EXISTS"
+      },
+      {
+        "table": "notifications",
+        "status": "EXISTS"
+      }
+    ],
+    "schemaCreates": [
+      {
+        "table": "warranty_claims",
+        "story": "WF-WAR-001a"
+      },
+      {
+        "table": "claim_approval_thresholds",
+        "story": "WF-WAR-003a"
+      }
+    ],
+    "serverFunctionsRequired": [
+      {
+        "function": "getWarranty",
+        "status": "EXISTS",
+        "domain": "DOM-WARRANTY"
+      },
+      {
+        "function": "getWarrantyBySerialNumber",
+        "status": "EXISTS",
+        "domain": "DOM-WARRANTY"
+      },
+      {
+        "function": "listWarranties",
+        "status": "EXISTS",
+        "domain": "DOM-WARRANTY"
+      },
+      {
+        "function": "getCustomer",
+        "status": "EXISTS",
+        "domain": "DOM-CUSTOMERS"
+      },
+      {
+        "function": "getProduct",
+        "status": "EXISTS",
+        "domain": "DOM-PRODUCTS"
+      },
+      {
+        "function": "createOrder",
+        "status": "EXISTS",
+        "domain": "DOM-ORDERS"
+      },
+      {
+        "function": "createJob",
+        "status": "EXISTS",
+        "domain": "DOM-JOBS"
+      },
+      {
+        "function": "createIssue",
+        "status": "EXISTS",
+        "domain": "DOM-SUPPORT"
+      }
+    ],
+    "serverFunctionsCreates": [
+      {
+        "function": "createWarrantyClaim",
+        "story": "WF-WAR-001b"
+      },
+      {
+        "function": "getWarrantyClaim",
+        "story": "WF-WAR-001b"
+      },
+      {
+        "function": "listWarrantyClaims",
+        "story": "WF-WAR-001b"
+      },
+      {
+        "function": "sendClaimConfirmation",
+        "story": "WF-WAR-001d"
+      },
+      {
+        "function": "verifyWarrantyClaim",
+        "story": "WF-WAR-002b"
+      },
+      {
+        "function": "approveWarrantyClaim",
+        "story": "WF-WAR-003b"
+      },
+      {
+        "function": "denyWarrantyClaim",
+        "story": "WF-WAR-003b"
+      },
+      {
+        "function": "createReplacementOrder",
+        "story": "WF-WAR-004a"
+      },
+      {
+        "function": "createRepairJob",
+        "story": "WF-WAR-004b"
+      },
+      {
+        "function": "createRefundCreditNote",
+        "story": "WF-WAR-004c"
+      },
+      {
+        "function": "generateReturnLabel",
+        "story": "WF-WAR-005a"
+      },
+      {
+        "function": "trackReturn",
+        "story": "WF-WAR-005a"
+      },
+      {
+        "function": "processReturnDisposition",
+        "story": "WF-WAR-005c"
+      },
+      {
+        "function": "getWarrantyClaimAnalytics",
+        "story": "WF-WAR-006a"
+      }
+    ],
+    "prdDependencies": [
+      {
+        "prdId": "DOM-WARRANTY",
+        "status": "REQUIRED",
+        "reason": "Core warranty registration and lookup"
+      },
+      {
+        "prdId": "DOM-SUPPORT",
+        "status": "REQUIRED",
+        "reason": "Issue tracking integration"
+      },
+      {
+        "prdId": "DOM-CUSTOMERS",
+        "status": "REQUIRED",
+        "reason": "Customer context for claims"
+      },
+      {
+        "prdId": "DOM-PRODUCTS",
+        "status": "REQUIRED",
+        "reason": "Product information for claims"
+      },
+      {
+        "prdId": "DOM-ORDERS",
+        "status": "OPTIONAL",
+        "reason": "Replacement order creation"
+      },
+      {
+        "prdId": "DOM-JOBS",
+        "status": "OPTIONAL",
+        "reason": "Repair job creation"
+      },
+      {
+        "prdId": "DOM-FINANCIAL",
+        "status": "OPTIONAL",
+        "reason": "Credit note for refunds"
+      },
+      {
+        "prdId": "DOM-INVENTORY",
+        "status": "OPTIONAL",
+        "reason": "Return disposition inventory updates"
+      }
+    ],
+    "enables": []
+  },
+  "domains_involved": [
+    "warranty",
+    "support",
+    "orders",
+    "inventory"
+  ],
+  "references": {
+    "internal": [
+      "memory-bank/prd/domain/warranty.prd.json",
+      "memory-bank/prd/domain/support.prd.json"
+    ]
+  },
+  "workflow_stages": [
+    "Claim Submitted -> Verify Warranty -> Assess Claim -> Approve/Deny -> Process Resolution"
+  ],
+  "current_state": {
+    "implemented": [
+      "Warranty lookup by serial number",
+      "Basic claim via issue with type='claim'",
+      "Resolution types exist (replaced, refunded, repaired)"
+    ],
+    "gaps": [
+      "No dedicated claim entity or intake form",
+      "No serial number lookup in claim form",
+      "No verification checklist",
+      "No approval routing by value",
+      "No resolution action creation (order/job/credit)",
+      "No product return handling",
+      "No claim analytics"
+    ]
+  },
+  "stories": [
+    {
+      "id": "WF-WAR-001a",
+      "name": "Warranty Claims Schema",
+      "description": "Create warranty_claims table with claim number generation",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "warranty_claims table created (id, claimNumber, warrantyId, customerId, status, claimType, claimReason, description, evidence JSONB, estimatedValue)",
+        "Claim number generation function: CLM-NNNNNN format",
+        "Claim status enum: submitted, verifying, verified, pending_approval, approved, denied, processing, resolved",
+        "Claim type enum: defect, malfunction, damage, missing_parts, other",
+        "Indexes on organizationId, warrantyId, customerId, status",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "WF_WAR_001A_COMPLETE"
+    },
+    {
+      "id": "WF-WAR-001b",
+      "name": "Warranty Claims Server Functions",
+      "description": "Implement claim CRUD with warranty lookup and validation",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "createWarrantyClaim function with warranty lookup by serial number",
+        "Auto-populate warranty details (product, customer, expiry) from warranty",
+        "Validate warranty is active and not expired at submission",
+        "Check for duplicate claims on same warranty",
+        "listWarrantyClaims with filters (status, customerId, warrantyId, dateRange)",
+        "getWarrantyClaim with full warranty context",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-WAR-001a"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "WF_WAR_001B_COMPLETE"
+    },
+    {
+      "id": "WF-WAR-001c",
+      "name": "Warranty Claim Intake UI",
+      "description": "Dedicated claim submission form with serial lookup",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "WarrantyClaimForm component with serial number lookup field",
+        "Serial lookup shows warranty details (product, expiry, customer, previous claims)",
+        "Claim type and reason selection dropdowns",
+        "Description field with minimum character requirement",
+        "Photo/document upload for evidence",
+        "Route at /support/claims/new",
+        "Claims list page at /support/claims with status filters",
+        "Multi-step form wizard: Enter Serial -> Review Warranty -> Describe Issue -> Upload Evidence -> Submit",
+        "Step progress indicator at top of wizard",
+        "Toast notification on successful claim submission with claim number",
+        "Confirmation dialog showing claim summary before submission",
+        "Loading state during serial lookup and form submission",
+        "Error handling: invalid serial, expired warranty, duplicate claim",
+        "Responsive: single column wizard on all sizes, image preview adapts",
+        "Breakpoints: mobile (<640px), tablet (640-1024px), desktop (>1024px)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-WAR-001b",
+        "DOM-WAR-006"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "WF_WAR_001C_COMPLETE",
+      "ui_spec": {
+        "component_type": "Wizard",
+        "workflow_visualization": "5-step horizontal stepper for claim intake with validation gates between steps",
+        "accessibility": {
+          "aria_live_regions": "Step validation results announced",
+          "focus_management": "Focus moves to first field of each step",
+          "keyboard_navigation": "Tab through fields, Enter to advance",
+          "form_validation": "Inline validation with clear error messages"
+        }
+      }
+    },
+    {
+      "id": "WF-WAR-001d",
+      "name": "Warranty Claim Customer Notification",
+      "description": "Send confirmation email on claim submission",
+      "priority": 4,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Claim submission confirmation email template",
+        "Includes: claim number (CLM-000001), warranty details, expected timeline",
+        "Confirmation to customer via Trigger.dev",
+        "Email history tracked on claim record",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-WAR-001c"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_WAR_001D_COMPLETE"
+    },
+    {
+      "id": "WF-WAR-002a",
+      "name": "Claim Verification Schema",
+      "description": "Add verification fields and checklist tracking",
+      "priority": 5,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "warranty_claims.verificationStatus enum: pending, passed, failed, escalated",
+        "warranty_claims.verificationChecklist JSONB with standard checks",
+        "warranty_claims.verificationNotes text field",
+        "warranty_claims.verifiedAt timestamp",
+        "warranty_claims.verifiedByUserId FK",
+        "Standard checklist items: warranty_active, coverage_valid, no_prior_claims, product_unmodified",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-WAR-001a"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "WF_WAR_002A_COMPLETE"
+    },
+    {
+      "id": "WF-WAR-002b",
+      "name": "Claim Verification Logic",
+      "description": "Implement verification workflow with auto-deny and escalation",
+      "priority": 6,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "verifyWarrantyClaim server function with checklist processing",
+        "Auto-deny if warranty expired",
+        "Check previous claims on same warranty",
+        "Verify product condition (not modified/abused)",
+        "Escalate ambiguous cases",
+        "Verification notes captured",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-WAR-002a",
+        "WF-WAR-001b"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_WAR_002B_COMPLETE"
+    },
+    {
+      "id": "WF-WAR-002c",
+      "name": "Claim Verification UI",
+      "description": "Verification checklist UI with pass/fail controls",
+      "priority": 7,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "ClaimVerificationChecklist component with checkbox items",
+        "Each item shows pass/fail/skip with reason",
+        "Warranty status displayed (active/expired)",
+        "Previous claims on warranty listed",
+        "Verify/Deny/Escalate action buttons",
+        "Verification notes required on deny/escalate",
+        "Checklist with visual pass/fail/skip indicators per item",
+        "Step progress: Review Checklist -> Add Notes -> Confirm Decision",
+        "Toast notification on verification completion",
+        "Confirmation dialog before deny/escalate with reason field",
+        "Loading state during verification submission",
+        "Error handling for incomplete checklist items",
+        "Responsive: checklist full-width on mobile, side panel on desktop",
+        "Breakpoints: mobile (<640px), tablet (640-1024px), desktop (>1024px)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-WAR-002b"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "WF_WAR_002C_COMPLETE",
+      "ui_spec": {
+        "component_type": "Checklist",
+        "workflow_visualization": "Interactive checklist with status toggles and inline notes per item",
+        "accessibility": {
+          "aria_labels": "Checklist items and their status clearly labeled",
+          "focus_management": "Focus moves through checklist items logically",
+          "keyboard_navigation": "Space to toggle, Tab to move between items",
+          "screen_reader": "Item status and required notes announced"
+        }
+      }
+    },
+    {
+      "id": "WF-WAR-003a",
+      "name": "Claim Approval Schema",
+      "description": "Add approval tracking to claims",
+      "priority": 8,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "warranty_claims.approvalStatus enum: not_required, pending, approved, denied, appealed",
+        "warranty_claims.approvalRequired boolean",
+        "warranty_claims.approvedAt timestamp",
+        "warranty_claims.approvedByUserId FK",
+        "warranty_claims.approvalNotes text field",
+        "warranty_claims.denialReason text field",
+        "claim_approval_thresholds table for configurable thresholds",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-WAR-001a"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "WF_WAR_003A_COMPLETE"
+    },
+    {
+      "id": "WF-WAR-003b",
+      "name": "Claim Approval Workflow",
+      "description": "Implement approval routing based on claim value",
+      "priority": 9,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Approval thresholds: <$500 auto, >$500 manager",
+        "Claims below threshold auto-approve after verification",
+        "approveWarrantyClaim function (requires manager role)",
+        "denyWarrantyClaim function with required reason",
+        "Approval notification to customer",
+        "Denial with reason and appeal option",
+        "Approval audit trail",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-WAR-003a",
+        "WF-WAR-002b"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_WAR_003B_COMPLETE"
+    },
+    {
+      "id": "WF-WAR-003c",
+      "name": "Claim Approval UI",
+      "description": "Approval queue and decision UI",
+      "priority": 10,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Approval queue for pending claims",
+        "Queue filters: date range, value range, claim type",
+        "Queue sortable by value, age, customer priority",
+        "Approve/deny with comments",
+        "Approval history visible on claim detail",
+        "Queue table with urgency indicators based on age and value",
+        "Step indicator: Submitted -> Verified -> Pending Approval -> Approved/Denied",
+        "Toast notification on approval/denial action",
+        "Confirmation dialog before approval/denial with notes field",
+        "Loading state during approval processing",
+        "Error handling with retry option",
+        "Responsive: card view on mobile, table on desktop",
+        "Breakpoints: mobile (<640px), tablet (640-1024px), desktop (>1024px)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-WAR-003b"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "WF_WAR_003C_COMPLETE",
+      "ui_spec": {
+        "component_type": "DataTable",
+        "workflow_visualization": "Queue table with inline status stepper and approval action buttons",
+        "accessibility": {
+          "aria_labels": "Claim details and actions clearly labeled",
+          "focus_management": "Focus returns to queue after action",
+          "keyboard_navigation": "Full table and action keyboard support",
+          "screen_reader": "Claim value and urgency announced"
+        }
+      }
+    },
+    {
+      "id": "WF-WAR-004a",
+      "name": "Replacement Order Resolution",
+      "description": "Create replacement order on replace resolution",
+      "priority": 11,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Resolution type: replace creates order for replacement product",
+        "Order linked to claim",
+        "Customer notification of replacement order",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-WAR-003b"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_WAR_004A_COMPLETE"
+    },
+    {
+      "id": "WF-WAR-004b",
+      "name": "Repair Job Resolution",
+      "description": "Create service job on repair resolution",
+      "priority": 12,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Resolution type: repair creates service job",
+        "Job linked to claim",
+        "Customer notification of repair scheduling",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-WAR-003b"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_WAR_004B_COMPLETE"
+    },
+    {
+      "id": "WF-WAR-004c",
+      "name": "Refund Credit Note Resolution",
+      "description": "Create credit note on refund resolution",
+      "priority": 13,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Resolution type: refund creates credit note",
+        "Credit note linked to claim",
+        "Customer notification of refund",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-WAR-003b"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_WAR_004C_COMPLETE"
+    },
+    {
+      "id": "WF-WAR-004d",
+      "name": "Resolution Workflow UI",
+      "description": "UI for selecting and processing resolution types",
+      "priority": 14,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Resolution types: repair, replace, refund",
+        "Resolution tracking until complete",
+        "Customer notification of resolution",
+        "Resolution selection workflow UI",
+        "Resolution wizard: Select Type -> Configure Details -> Review -> Process",
+        "Step indicator showing resolution progress",
+        "Toast notification on resolution action completion",
+        "Confirmation dialog with resolution summary before processing",
+        "Loading state during resolution creation",
+        "Error handling with clear messaging for failures",
+        "Resolution status timeline: Selected -> Processing -> Complete",
+        "Responsive: full-width wizard on mobile, modal on desktop",
+        "Breakpoints: mobile (<640px), tablet (640-1024px), desktop (>1024px)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-WAR-004a",
+        "WF-WAR-004b",
+        "WF-WAR-004c"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "WF_WAR_004D_COMPLETE",
+      "ui_spec": {
+        "component_type": "Wizard",
+        "workflow_visualization": "4-step resolution wizard with type selection cards and detail forms",
+        "accessibility": {
+          "aria_live_regions": "Step completion and resolution status announced",
+          "focus_management": "Focus follows wizard step progression",
+          "keyboard_navigation": "Card selection via arrow keys, Enter to proceed",
+          "screen_reader": "Resolution type and requirements clearly announced"
+        }
+      }
+    },
+    {
+      "id": "WF-WAR-005a",
+      "name": "Product Return Server Integration",
+      "description": "Server functions for return handling on claims",
+      "priority": 15,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Return label generation (manual)",
+        "Track return shipment",
+        "Link return to claim",
+        "Complete claim after return processed",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "DOM-SUP-003",
+        "WF-WAR-004d"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_WAR_005A_COMPLETE"
+    },
+    {
+      "id": "WF-WAR-005b",
+      "name": "Product Return Tracking UI",
+      "description": "UI for tracking product returns",
+      "priority": 16,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Return tracking display on claim",
+        "Return status updates",
+        "Return tracking timeline: Label Created -> Shipped -> In Transit -> Received -> Inspected",
+        "Status badge showing current return state",
+        "Toast notification on return status changes",
+        "Loading state while fetching tracking info",
+        "Error handling for tracking lookup failures",
+        "Responsive: timeline vertical on mobile, horizontal on desktop",
+        "Breakpoints: mobile (<640px), tablet (640-1024px), desktop (>1024px)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-WAR-005a"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "WF_WAR_005B_COMPLETE",
+      "ui_spec": {
+        "component_type": "Timeline",
+        "workflow_visualization": "Horizontal/vertical return tracking timeline with status nodes and timestamps",
+        "accessibility": {
+          "aria_live_regions": "Status updates announced",
+          "focus_management": "Focus on current status node",
+          "keyboard_navigation": "Timeline navigable via arrow keys",
+          "screen_reader": "Full status context with dates announced"
+        }
+      }
+    },
+    {
+      "id": "WF-WAR-005c",
+      "name": "Product Return Disposition",
+      "description": "Handle returned product disposition",
+      "priority": 17,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Receive and inspect returned item",
+        "Disposition: scrap, refurbish, return to supplier",
+        "Disposition updates inventory",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-WAR-005b"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_WAR_005C_COMPLETE"
+    },
+    {
+      "id": "WF-WAR-006a",
+      "name": "Warranty Claim Analytics Server",
+      "description": "Analytics queries for claim insights",
+      "priority": 18,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Claims by product/batch for quality issues",
+        "Claim rate over time (early warning)",
+        "Average claim cost by product",
+        "Root cause analysis categorization",
+        "Supplier quality correlation",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "DOM-WAR-008",
+        "WF-WAR-001b"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_WAR_006A_COMPLETE"
+    },
+    {
+      "id": "WF-WAR-006b",
+      "name": "Warranty Claim Analytics UI",
+      "description": "Analytics dashboard for warranty claims",
+      "priority": 19,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Claims analytics page",
+        "Claims by product chart",
+        "Claim rate trend chart",
+        "Export for quality review",
+        "Dashboard with KPI cards: total claims, approval rate, avg cost, processing time",
+        "Claims funnel: Submitted -> Verified -> Approved -> Resolved",
+        "Product quality heatmap showing claim concentration",
+        "Toast notification when export completes",
+        "Loading skeleton while analytics load",
+        "Error state with refresh option",
+        "Responsive: charts stack on mobile, grid on desktop",
+        "Breakpoints: mobile (<640px), tablet (640-1024px), desktop (>1024px)",
+        "Date range picker with presets",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-WAR-006a"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "WF_WAR_006B_COMPLETE",
+      "ui_spec": {
+        "component_type": "Dashboard",
+        "workflow_visualization": "Claims funnel chart with product breakdown and trend analysis",
+        "accessibility": {
+          "chart_alternatives": "Data tables available for all visualizations",
+          "aria_labels": "All metrics and charts have descriptive labels",
+          "keyboard_navigation": "All controls and filters keyboard accessible",
+          "screen_reader": "Key metrics announced on dashboard load"
+        }
+      }
+    }
+  ],
+  "success_criteria": [
+    "Claims follow structured process",
+    "Verification ensures valid claims only",
+    "Approval controls manage costs",
+    "Resolution options cover all scenarios",
+    "Analytics identify quality issues"
+  ],
+  "out_of_scope": [
+    "Supplier charge-back automation",
+    "Extended warranty sales workflow",
+    "Third-party warranty processing"
+  ]
+}

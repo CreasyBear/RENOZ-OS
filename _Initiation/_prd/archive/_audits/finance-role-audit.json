@@ -1,0 +1,426 @@
+{
+  "prd_id": "ROLE-FINANCE",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "summary": {
+    "total_stories": 8,
+    "verified_gaps": 5,
+    "invalidated_gaps": 0,
+    "partially_implemented": 3,
+    "implementation_status": "Foundation exists with financial dashboard having tabs (Invoices, Payments, Reconciliation, Reports), basic invoice listing with filters, and Xero integration for invoices. Missing: dedicated finance dashboard landing page, streamlined invoice generation workflow, full payment recording (commented out), Xero reconciliation view, AR aging dashboard, financial reports, payment reminder automation, and comprehensive Xero sync status monitoring."
+  },
+  "codebase_findings": {
+    "schema_files": [
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/lib/schema/orders.ts",
+        "description": "Orders table with invoice fields (invoiceStatus, invoiceNumber, issueDate, dueDate, invoiceNotes, pdfPath). Includes xeroInvoiceId and xeroSyncedAt for Xero integration. orderMilestones table exists for milestone billing.",
+        "key_fields": ["invoiceStatus", "invoiceNumber", "paymentStatus", "xeroInvoiceId", "xeroSyncedAt", "dueDate"]
+      }
+    ],
+    "server_functions": [
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/server/functions/financial.ts",
+        "description": "Financial overview metrics, invoice listing with filters. Payment functions (listPayments, recordPayment, recordStandalonePayment) are TODO commented out.",
+        "exports": ["getFinancialOverview", "listInvoices", "getInvoiceDetails"],
+        "todos": ["listPayments (commented)", "recordPayment (commented)", "recordStandalonePayment (commented)"]
+      },
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/server/functions/invoices.ts",
+        "description": "Invoice generation, status updates, PDF creation. INVOICE_STATUSES enum (draft, sent, overdue, paid, cancelled).",
+        "exports": ["generateInvoice", "updateInvoiceStatus", "getInvoice", "listInvoices", "sendInvoice"]
+      },
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/server/functions/xero.ts",
+        "description": "Xero OAuth, customer/product sync, invoice creation/sync. Full implementation with Trigger.dev task wrappers.",
+        "exports": ["getXeroConnectionStatus", "buildXeroAuthUrl", "connectXero", "disconnectXero", "syncCustomerToXero", "syncProductToXero", "createInvoiceFromOrder", "syncInvoiceStatus", "syncAllCustomersToXero", "syncAllProductsToXero"]
+      }
+    ],
+    "components": [
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/financial/financial-dashboard.tsx",
+        "description": "Main financial dashboard with 4 metrics (outstanding, overdue, paid this month, avg collection days) and tabs (Invoices, Payments, Reconciliation, Reports)."
+      },
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/financial/invoices-tab.tsx",
+        "description": "Invoice list with filters (search, status), bulk actions (send reminder, export, mark paid), pagination. Has 'Send Reminders' button but not implemented."
+      },
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/financial/invoice-detail-sidebar.tsx",
+        "description": "Invoice detail view with customer info, line items, totals. Has Send Reminder, Download PDF, Process Payment buttons."
+      },
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/financial/payments-tab.tsx",
+        "description": "Payment recording form with customer selector, amount, date, method, reference, notes. Uses mock data since recordPayment mutation is placeholder (commented in server)."
+      },
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/financial/reconciliation-tab.tsx",
+        "description": "Placeholder showing 'Bank Reconciliation - Coming Soon'. No implementation."
+      },
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/financial/reports-tab.tsx",
+        "description": "Placeholder showing 'Financial Reports - Coming Soon'. No implementation."
+      },
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/orders/xero-invoice-status.tsx",
+        "description": "Shows Xero invoice sync status on orders. Can create invoice and sync status with Xero."
+      }
+    ],
+    "routes": [
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/routes/financial/index.tsx",
+        "description": "Financial page with tab-based navigation. Loads overview metrics and invoice data via route loader. Payments tab uses mock data."
+      },
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/routes/settings/xero.tsx",
+        "description": "Xero integration settings with connection status, connect/disconnect, and bulk sync for customers/products."
+      },
+      {
+        "path": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/routes/index.tsx",
+        "description": "Main dashboard - no role-based routing. Admin role check only for onboarding wizard."
+      }
+    ],
+    "missing_functionality": [
+      "No role-based dashboard routing - Finance role gets same dashboard as others",
+      "No orders-ready-to-invoice list",
+      "No bulk invoice generation from orders",
+      "Payment recording server functions commented out",
+      "No payment-to-invoice matching/allocation",
+      "No Xero reconciliation view showing Renoz vs Xero totals",
+      "No AR aging buckets (30/60/90 days)",
+      "No payment reminder automation or templates",
+      "No Xero sync status widget/monitor",
+      "No financial reports (P&L, revenue by customer/product)"
+    ]
+  },
+  "stories_status": {
+    "ROLE-FIN-001": {
+      "name": "Finance Dashboard",
+      "status": "partially_implemented",
+      "change": "refine",
+      "reason": "Financial dashboard exists at /financial with metrics (outstanding, overdue, paid, avg collection days) and tabs. Missing: role-based default landing, revenue MTD widget, cash flow summary, invoices awaiting send widget, quick actions drawer.",
+      "layers": ["ui", "server"],
+      "estimated_iterations": {
+        "server": 2,
+        "ui": 3
+      },
+      "total_estimated_iterations": 5,
+      "existing_implementation": {
+        "route": "/financial/index.tsx",
+        "component": "financial-dashboard.tsx with MetricsSummary",
+        "metrics": ["outstandingInvoices", "overdueAmount", "paidThisMonth", "avgCollectionDays"],
+        "tabs": ["Invoices", "Payments", "Reconciliation", "Reports"]
+      },
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Dashboard structure exists. Need to add: role-based routing, revenue MTD, cash flow, invoices awaiting send, recent payments widget, quick actions."
+    },
+    "ROLE-FIN-002": {
+      "name": "Invoice Generation Dashboard",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "Invoice generation exists (generateInvoice function) but no streamlined workflow. No orders-ready-to-invoice list, no one-click invoice, no bulk generation, no preview before send.",
+      "layers": ["server", "ui"],
+      "estimated_iterations": {
+        "server": 2,
+        "ui": 3
+      },
+      "total_estimated_iterations": 4,
+      "dependencies_status": {
+        "DOM-FIN-001": "Credit notes not implemented - not blocking for basic invoice workflow"
+      },
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Need orders list with 'Ready to Invoice' status. One-click and bulk invoice generation. Preview modal. Xero push happens via existing triggerCreateInvoiceFromOrder."
+    },
+    "ROLE-FIN-003": {
+      "name": "Payment Recording Workflow",
+      "status": "partially_implemented",
+      "change": "refine",
+      "reason": "PaymentsTab UI exists with form but server functions are commented out. Need to uncomment and implement recordPayment, recordStandalonePayment. Auto-match and multi-invoice allocation need new logic.",
+      "layers": ["server", "ui"],
+      "estimated_iterations": {
+        "server": 3,
+        "ui": 2
+      },
+      "total_estimated_iterations": 4,
+      "existing_implementation": {
+        "ui": "payments-tab.tsx with PaymentRecordingForm",
+        "server": "recordPayment and recordStandalonePayment commented out in financial.ts",
+        "schema": "paymentStatus field on orders, but no dedicated payments table"
+      },
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "UI exists. Need to: uncomment server functions, add invoice reference auto-match, implement multi-invoice allocation, add credit/overpayment handling, implement Xero sync."
+    },
+    "ROLE-FIN-004": {
+      "name": "Xero Reconciliation View",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "ReconciliationTab is placeholder. No Xero comparison data, no discrepancy identification, no re-sync UI. Depends on INT-XERO-006 (Sync History and Logs) which is not implemented.",
+      "layers": ["server", "ui"],
+      "estimated_iterations": {
+        "server": 3,
+        "ui": 3
+      },
+      "total_estimated_iterations": 5,
+      "dependencies_status": {
+        "INT-XERO-006": "Sync History and Logs not implemented - will need parallel implementation or can proceed without full history"
+      },
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Can implement basic reconciliation view comparing Renoz totals vs Xero. Full sync history dependency can be simplified to last sync timestamps initially."
+    },
+    "ROLE-FIN-005": {
+      "name": "AR Aging Dashboard",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No AR aging implementation. getFinancialOverview has overdueAmount but no aging buckets. ReportsTab is placeholder. Can compute aging from orders data without new schema.",
+      "layers": ["server", "ui"],
+      "estimated_iterations": {
+        "server": 2,
+        "ui": 3
+      },
+      "total_estimated_iterations": 4,
+      "dependencies_status": {
+        "DOM-FIN-003": "AR Aging from financial domain - this is the same feature, can be implemented here"
+      },
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "No schema changes needed. Server function to compute buckets (current, 30, 60, 90+ days) from orders.requiredDate and paymentStatus. UI with table, drill-down, customer breakdown, trend chart, CSV export."
+    },
+    "ROLE-FIN-006": {
+      "name": "Financial Reports Quick Access",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "ReportsTab shows 'Coming Soon'. No financial reports exist. Depends on DOM-REPORTS-001 (Reports domain) which has basic structure but no financial reports.",
+      "layers": ["server", "ui"],
+      "estimated_iterations": {
+        "server": 3,
+        "ui": 3
+      },
+      "total_estimated_iterations": 5,
+      "dependencies_status": {
+        "DOM-REPORTS-001": "Reports domain has basic structure but financial reports (DOM-RPT-004) not implemented"
+      },
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Can implement financial reports independently. P&L from orders, revenue by customer/product, outstanding balances, payment history. Export functionality. Consider integrating with reports domain structure."
+    },
+    "ROLE-FIN-007": {
+      "name": "Payment Reminder Automation",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No reminder automation exists. SendInvoiceReminderSchema defined but no implementation. 'Send Reminders' button in UI not functional. No reminder templates or schedule configuration.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": {
+        "schema": 1,
+        "server": 3,
+        "ui": 2
+      },
+      "total_estimated_iterations": 4,
+      "dependencies_status": {
+        "INT-RES-001": "Resend webhooks not implemented - basic email sending works, reminders can use existing email infrastructure"
+      },
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Depends on email integration but basic Resend sending exists. Need: reminder_templates table (optional), reminder schedule config, Trigger.dev job for automation, reminder history on invoice, auto-stop when paid."
+    },
+    "ROLE-FIN-008": {
+      "name": "Xero Sync Status Monitor",
+      "status": "partially_implemented",
+      "change": "refine",
+      "reason": "Xero status shown in settings/xero.tsx with connection status and last sync. XeroInvoiceStatus component shows invoice sync. Missing: dashboard widget, pending syncs count, failed syncs with errors, sync log.",
+      "layers": ["server", "ui"],
+      "estimated_iterations": {
+        "server": 2,
+        "ui": 2
+      },
+      "total_estimated_iterations": 3,
+      "dependencies_status": {
+        "INT-XERO-005": "Sync Error Handling UI not implemented - need basic error tracking first"
+      },
+      "existing_implementation": {
+        "routes": ["settings/xero.tsx shows connection status, last sync"],
+        "components": ["xero-invoice-status.tsx shows per-order sync status"],
+        "functions": ["getXeroConnectionStatus returns connected, tenantName, connectedAt, expiresAt, lastSyncAt"]
+      },
+      "acceptance_criteria_testable": true,
+      "acceptance_criteria_notes": "Foundation exists. Need: dashboard widget, pending syncs count (query orders with xeroInvoiceId=null), failed syncs list, manual sync trigger button, sync log view."
+    }
+  },
+  "recommended_stories": [
+    "ROLE-FIN-001",
+    "ROLE-FIN-003",
+    "ROLE-FIN-008",
+    "ROLE-FIN-005",
+    "ROLE-FIN-002",
+    "ROLE-FIN-004",
+    "ROLE-FIN-007",
+    "ROLE-FIN-006"
+  ],
+  "recommended_stories_rationale": "Prioritize completing partially implemented features first: Finance Dashboard (ROLE-FIN-001) as the role landing page, Payment Recording (ROLE-FIN-003) to enable full payment workflow, and Xero Sync Monitor (ROLE-FIN-008) for visibility. Then AR Aging (ROLE-FIN-005) for immediate business value. Invoice Generation (ROLE-FIN-002) and Xero Reconciliation (ROLE-FIN-004) follow. Reminder Automation (ROLE-FIN-007) and Reports (ROLE-FIN-006) are lower priority due to dependencies.",
+  "atomization_notes": {
+    "ROLE-FIN-002": {
+      "suggested_split": [
+        {
+          "id": "ROLE-FIN-002-A",
+          "name": "Orders Ready to Invoice List",
+          "layers": ["server", "ui"],
+          "iterations": 2,
+          "scope": "Server function to list shipped/delivered orders without invoice, UI list component"
+        },
+        {
+          "id": "ROLE-FIN-002-B",
+          "name": "Invoice Generation Actions",
+          "layers": ["server", "ui"],
+          "iterations": 2,
+          "scope": "One-click invoice, bulk invoice, preview modal, Xero push integration"
+        }
+      ]
+    },
+    "ROLE-FIN-004": {
+      "suggested_split": [
+        {
+          "id": "ROLE-FIN-004-A",
+          "name": "Reconciliation Data Functions",
+          "layers": ["server"],
+          "iterations": 2,
+          "scope": "Get Renoz totals, get Xero totals via API, compute discrepancies"
+        },
+        {
+          "id": "ROLE-FIN-004-B",
+          "name": "Reconciliation View UI",
+          "layers": ["ui"],
+          "iterations": 3,
+          "scope": "Side-by-side comparison, discrepancy drill-down, re-sync buttons, last reconciliation timestamp"
+        }
+      ]
+    },
+    "ROLE-FIN-005": {
+      "suggested_split": [
+        {
+          "id": "ROLE-FIN-005-A",
+          "name": "AR Aging Server Function",
+          "layers": ["server"],
+          "iterations": 2,
+          "scope": "Compute aging buckets from orders, customer breakdown, totals per bucket"
+        },
+        {
+          "id": "ROLE-FIN-005-B",
+          "name": "AR Aging Dashboard UI",
+          "layers": ["ui"],
+          "iterations": 2,
+          "scope": "Buckets table, drill-down to invoices, customer AR view, trend chart, CSV export"
+        }
+      ]
+    },
+    "ROLE-FIN-006": {
+      "suggested_split": [
+        {
+          "id": "ROLE-FIN-006-A",
+          "name": "Financial Report Functions",
+          "layers": ["server"],
+          "iterations": 2,
+          "scope": "P&L summary, revenue by customer, revenue by product, outstanding balances, payment history queries"
+        },
+        {
+          "id": "ROLE-FIN-006-B",
+          "name": "Financial Reports UI",
+          "layers": ["ui"],
+          "iterations": 3,
+          "scope": "Report pages, date range selectors, charts, tables, CSV/PDF export"
+        }
+      ]
+    },
+    "ROLE-FIN-007": {
+      "suggested_split": [
+        {
+          "id": "ROLE-FIN-007-A",
+          "name": "Reminder Configuration",
+          "layers": ["schema", "server", "ui"],
+          "iterations": 2,
+          "scope": "Reminder schedule settings (7/14/30 days), email template selection, auto/manual mode"
+        },
+        {
+          "id": "ROLE-FIN-007-B",
+          "name": "Reminder Automation",
+          "layers": ["server"],
+          "iterations": 2,
+          "scope": "Trigger.dev job for scheduled reminders, reminder history on invoice, stop when paid"
+        }
+      ]
+    }
+  },
+  "implementation_gaps_detail": {
+    "role_based_routing": {
+      "status": "not_implemented",
+      "notes": "No role-based dashboard routing. Finance role should land on /financial by default. Currently all roles go to main dashboard."
+    },
+    "payment_recording": {
+      "status": "incomplete",
+      "ui_exists": true,
+      "server_function": "commented out (recordPayment, recordStandalonePayment)",
+      "notes": "PaymentsTab has UI but uses mock data. Server functions are TODO commented. No dedicated payments table."
+    },
+    "invoice_workflow": {
+      "status": "incomplete",
+      "notes": "generateInvoice exists but no streamlined UI for bulk generation or orders-ready-to-invoice list. Invoice creation tied to individual order view."
+    },
+    "xero_reconciliation": {
+      "status": "placeholder",
+      "notes": "ReconciliationTab shows 'Coming Soon'. No Xero comparison data fetching or discrepancy logic."
+    },
+    "ar_aging": {
+      "status": "not_started",
+      "notes": "No aging calculation. Only overdueAmount exists in getFinancialOverview. No buckets, no drill-down."
+    },
+    "financial_reports": {
+      "status": "placeholder",
+      "notes": "ReportsTab shows 'Coming Soon'. No financial reports implemented."
+    },
+    "payment_reminders": {
+      "status": "not_started",
+      "notes": "SendInvoiceReminderSchema exists but no implementation. UI buttons exist but do nothing. No reminder templates or automation."
+    },
+    "xero_sync_monitor": {
+      "status": "partial",
+      "notes": "Basic status in settings. Per-order XeroInvoiceStatus component works. No dashboard widget, no pending/failed counts."
+    }
+  },
+  "prd_corrections": {
+    "current_state": {
+      "implemented_accuracy": {
+        "correct": [
+          "Invoice creation via generateInvoice server function",
+          "Payment recording UI exists (but server commented out)",
+          "Basic Xero sync for invoices via triggerCreateInvoiceFromOrder"
+        ],
+        "needs_clarification": [
+          "Payment recording - UI exists but server function commented out, so not fully implemented"
+        ]
+      }
+    },
+    "dependencies_analysis": {
+      "DOM-FIN-001": "Credit Notes - not blocking, can proceed without",
+      "DOM-FIN-003": "AR Aging - same feature as ROLE-FIN-005, can be consolidated",
+      "INT-XERO-005": "Sync Error Handling - partial dependency, can implement basic error tracking",
+      "INT-XERO-006": "Sync History/Logs - can simplify to last sync timestamps initially",
+      "INT-RES-001": "Resend Webhooks - not blocking, basic email sending available",
+      "DOM-REPORTS-001": "Reports Domain - can implement financial reports independently"
+    }
+  },
+  "risk_assessment": {
+    "high_risk_stories": [],
+    "medium_risk_stories": [
+      {
+        "id": "ROLE-FIN-004",
+        "risk": "Xero API complexity for reconciliation data comparison",
+        "mitigation": "Start with basic totals comparison, add detail drill-down incrementally"
+      },
+      {
+        "id": "ROLE-FIN-007",
+        "risk": "Email deliverability and automation reliability",
+        "mitigation": "Leverage existing Resend integration, add manual approval option"
+      }
+    ],
+    "low_risk_stories": [
+      "ROLE-FIN-001",
+      "ROLE-FIN-003",
+      "ROLE-FIN-005",
+      "ROLE-FIN-008"
+    ]
+  }
+}

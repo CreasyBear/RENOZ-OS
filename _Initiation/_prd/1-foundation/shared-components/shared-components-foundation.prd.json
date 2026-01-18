@@ -1,0 +1,369 @@
+{
+  "id": "FOUND-SHARED",
+  "name": "Shared Components Foundation",
+  "description": "Establish component library for renoz-v3 using shadcn/ui as base, with reusable patterns for forms, tables, modals, and state displays.",
+  "created": "2026-01-09",
+  "updated": "2026-01-10",
+  "priority": 4,
+  "phase": "foundation",
+  "version": "MVP",
+  "stack": {
+    "components": "shadcn/ui",
+    "forms": "TanStack Form + Zod",
+    "tables": "TanStack Table",
+    "styling": "Tailwind CSS",
+    "runtime": "Bun"
+  },
+  "references": {
+    "internal": [
+      "_Initiation/_prd/_meta/conventions.md - Component patterns",
+      "src/components/ui/ - shadcn primitives",
+      "src/components/shared/ - Custom shared components"
+    ],
+    "external": [
+      "https://ui.shadcn.com/docs - shadcn/ui components",
+      "https://tanstack.com/table/latest/docs - TanStack Table",
+      "https://tanstack.com/form/latest/docs - TanStack Form",
+      "https://zod.dev/ - Zod validation"
+    ]
+  },
+  "current_state": {
+    "implemented": [],
+    "gaps": [
+      "No component library - greenfield implementation",
+      "Need shadcn/ui initialization",
+      "Need form field patterns",
+      "Need DataTable patterns",
+      "Need modal patterns",
+      "Need state display components"
+    ]
+  },
+  "stories": [
+    {
+      "id": "FOUND-SHARED-001",
+      "name": "Initialize shadcn/ui",
+      "description": "Setup shadcn/ui component library with Tailwind",
+      "priority": 1,
+      "status": "pending",
+      "type": "foundation",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "shadcn/ui initialized via CLI",
+        "components.json configured with correct paths",
+        "Tailwind CSS configured with shadcn preset",
+        "Base components installed: Button, Input, Label, Card, Dialog, DropdownMenu",
+        "CSS variables for theming in globals.css",
+        "cn() utility in src/lib/utils.ts",
+        "bun run typecheck passes",
+        "bun run test passes"
+      ],
+      "files_to_create": [
+        "src/components/ui/button.tsx",
+        "src/components/ui/input.tsx",
+        "src/components/ui/label.tsx",
+        "src/components/ui/card.tsx",
+        "src/components/ui/dialog.tsx",
+        "src/components/ui/dropdown-menu.tsx",
+        "src/lib/utils.ts",
+        "components.json"
+      ],
+      "files_to_modify": [
+        "src/styles/globals.css",
+        "tailwind.config.ts"
+      ],
+      "dependencies": [],
+      "completion_promise": "FOUND_SHARED_001_COMPLETE"
+    },
+    {
+      "id": "FOUND-SHARED-002",
+      "name": "Create Form Component Patterns",
+      "description": "Establish form field components using TanStack Form",
+      "priority": 2,
+      "status": "pending",
+      "type": "ui-component",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/components/shared/forms/form-field.tsx - base field wrapper with label, error, description",
+        "File src/components/shared/forms/text-field.tsx - text input field",
+        "File src/components/shared/forms/email-field.tsx - email input with validation",
+        "File src/components/shared/forms/currency-field.tsx - currency formatting",
+        "File src/components/shared/forms/select-field.tsx - dropdown select",
+        "File src/components/shared/forms/textarea-field.tsx - multiline text",
+        "File src/components/shared/forms/form-section.tsx - groups related fields",
+        "All fields integrate with TanStack Form's useField",
+        "All fields support Zod validation display",
+        "Pattern documented in forms README",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/shared/forms/form-field.tsx",
+        "src/components/shared/forms/text-field.tsx",
+        "src/components/shared/forms/email-field.tsx",
+        "src/components/shared/forms/currency-field.tsx",
+        "src/components/shared/forms/select-field.tsx",
+        "src/components/shared/forms/textarea-field.tsx",
+        "src/components/shared/forms/form-section.tsx",
+        "src/components/shared/forms/index.ts",
+        "src/components/shared/forms/README.md"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-SHARED-001"
+      ],
+      "completion_promise": "FOUND_SHARED_002_COMPLETE"
+    },
+    {
+      "id": "FOUND-SHARED-003",
+      "name": "Create DataTable Component",
+      "description": "Reusable table component using TanStack Table",
+      "priority": 3,
+      "status": "pending",
+      "type": "ui-component",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/components/shared/data-table/data-table.tsx - main table component",
+        "Props: data, columns, pagination, sorting, filtering, onRowClick",
+        "Built-in pagination controls",
+        "Column sorting with indicators",
+        "Column filtering support",
+        "Row selection with checkbox column",
+        "Renders <100ms for 100 rows",
+        "role='table' on container, role='row'/'cell' on data cells, aria-sort on sortable headers, keyboard focus with Tab",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/shared/data-table/data-table.tsx",
+        "src/components/shared/data-table/data-table-pagination.tsx",
+        "src/components/shared/data-table/index.ts"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-SHARED-001"
+      ],
+      "completion_promise": "FOUND_SHARED_003_COMPLETE"
+    },
+    {
+      "id": "FOUND-SHARED-004",
+      "name": "Create DataTable Column Presets",
+      "description": "Reusable column definitions for common data types",
+      "priority": 4,
+      "status": "pending",
+      "type": "ui-component",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/components/shared/data-table/column-presets.tsx created",
+        "Preset: currencyColumn(accessor, header?) - formats as currency",
+        "Preset: dateColumn(accessor, header?, format?) - formats date",
+        "Preset: statusColumn(accessor, header?, statusMap?) - renders status badge",
+        "Preset: actionsColumn(actions) - renders dropdown menu",
+        "Preset: entityLinkColumn(accessor, header?, getHref) - clickable link",
+        "Preset: checkboxColumn() - for row selection",
+        "Pattern documented in data-table README",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/shared/data-table/column-presets.tsx",
+        "src/components/shared/data-table/README.md"
+      ],
+      "files_to_modify": [
+        "src/components/shared/data-table/index.ts"
+      ],
+      "dependencies": [
+        "FOUND-SHARED-003"
+      ],
+      "completion_promise": "FOUND_SHARED_004_COMPLETE"
+    },
+    {
+      "id": "FOUND-SHARED-005",
+      "name": "Create Modal Components",
+      "description": "Generic modal patterns for dialogs and confirmations",
+      "priority": 5,
+      "status": "pending",
+      "type": "ui-component",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/components/shared/modals/confirmation-modal.tsx created",
+        "Props: title, message, confirmLabel, cancelLabel, onConfirm, onCancel, variant",
+        "Variant: 'danger' for destructive actions (red button)",
+        "Variant: 'default' for normal confirmations",
+        "File src/components/shared/modals/alert-modal.tsx created",
+        "Props: title, message, variant (info/warning/error/success)",
+        "File src/components/shared/modals/form-modal.tsx created",
+        "Props: title, children, onSubmit, onCancel, submitLabel, isSubmitting",
+        "All modals use Dialog primitive from shadcn/ui",
+        "All modals have consistent styling and accessibility",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/shared/modals/confirmation-modal.tsx",
+        "src/components/shared/modals/alert-modal.tsx",
+        "src/components/shared/modals/form-modal.tsx",
+        "src/components/shared/modals/index.ts"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-SHARED-001"
+      ],
+      "completion_promise": "FOUND_SHARED_005_COMPLETE"
+    },
+    {
+      "id": "FOUND-SHARED-006",
+      "name": "Create State Display Components",
+      "description": "Loading, error, and empty state components",
+      "priority": 6,
+      "status": "pending",
+      "type": "ui-component",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/components/shared/loading-state.tsx - spinner and skeleton variants",
+        "File src/components/shared/error-state.tsx - error message with retry button",
+        "File src/components/shared/empty-state.tsx - message, icon, optional action",
+        "File src/components/shared/query-state.tsx - unified wrapper for all states",
+        "QueryState props: isLoading, error, isEmpty, emptyMessage, children",
+        "QueryState renders: Skeleton during isLoading, AlertDestructive with message for isError, EmptyState for empty data array",
+        "Consistent styling across all states",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/shared/loading-state.tsx",
+        "src/components/shared/error-state.tsx",
+        "src/components/shared/empty-state.tsx",
+        "src/components/shared/query-state.tsx"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-SHARED-001"
+      ],
+      "completion_promise": "FOUND_SHARED_006_COMPLETE"
+    },
+    {
+      "id": "FOUND-SHARED-007",
+      "name": "Create Entity Components",
+      "description": "Reusable components for displaying entity data",
+      "priority": 7,
+      "status": "pending",
+      "type": "ui-component",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/components/shared/entity-avatar.tsx - avatar with initials/image",
+        "File src/components/shared/entity-card.tsx - preview card for entities",
+        "File src/components/shared/entity-combobox.tsx - searchable entity selector",
+        "EntityCombobox: generic for customers, products, etc.",
+        "EntityCombobox: async search with debounce",
+        "EntityCombobox: creates typed wrappers for specific entities",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/shared/entity-avatar.tsx",
+        "src/components/shared/entity-card.tsx",
+        "src/components/shared/entity-combobox.tsx"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-SHARED-001"
+      ],
+      "completion_promise": "FOUND_SHARED_007_COMPLETE"
+    },
+    {
+      "id": "FOUND-SHARED-008",
+      "name": "Create Status Badge Component",
+      "description": "Configurable badge for displaying status values",
+      "priority": 8,
+      "status": "pending",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "File src/components/shared/status-badge.tsx created",
+        "Props: status, variant (optional), statusConfig",
+        "Configurable status-to-color mapping",
+        "Built-in variants: success, warning, error, info, neutral",
+        "Supports custom status configurations per domain",
+        "Used for: order status, quote status, inventory alerts",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/shared/status-badge.tsx"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-SHARED-001"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "FOUND_SHARED_008_COMPLETE"
+    },
+    {
+      "id": "FOUND-SHARED-009",
+      "name": "Create Barrel Exports",
+      "description": "Index files for cleaner imports",
+      "priority": 9,
+      "status": "pending",
+      "type": "foundation",
+      "acceptance_criteria": [
+        "File src/components/shared/index.ts created",
+        "Exports all shared components with named exports",
+        "Organized by category: forms, data-table, modals, state",
+        "Import pattern: import { DataTable, FormSection, QueryState } from '~/components/shared'",
+        "Tree-shaking verified to work",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/shared/index.ts"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-SHARED-002",
+        "FOUND-SHARED-003",
+        "FOUND-SHARED-005",
+        "FOUND-SHARED-006"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "FOUND_SHARED_009_COMPLETE"
+    },
+    {
+      "id": "FOUND-SHARED-010",
+      "name": "Create Components README",
+      "description": "Document component architecture and patterns",
+      "priority": 10,
+      "status": "pending",
+      "type": "documentation",
+      "acceptance_criteria": [
+        "File src/components/README.md created",
+        "Documents: ui/ vs shared/ vs domain/ separation",
+        "Documents: component naming conventions",
+        "Shows: compound component patterns with examples",
+        "Lists: key shared components with usage examples",
+        "Covers: accessibility requirements (ARIA, keyboard nav)",
+        "References: shadcn/ui, TanStack Table, TanStack Form docs",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/README.md"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-SHARED-002",
+        "FOUND-SHARED-003"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "FOUND_SHARED_010_COMPLETE"
+    }
+  ],
+  "success_criteria": [
+    "shadcn/ui initialized with core components",
+    "Form field components integrate with TanStack Form",
+    "DataTable renders <100ms for 100 rows",
+    "DataTable column presets reduce configuration",
+    "Modal patterns reduce dialog boilerplate",
+    "Unified QueryState simplifies state handling",
+    "Entity components enable consistent entity display",
+    "README documents all patterns",
+    "Barrel exports enable clean imports",
+    "bun run typecheck passes"
+  ],
+  "out_of_scope": [
+    "Domain-specific components (domain PRDs add those)",
+    "Theme customization beyond defaults",
+    "Mobile-specific components",
+    "Animation library integration"
+  ],
+  "domain_completion_promise": "FOUND_SHARED_COMPLETE"
+}

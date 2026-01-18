@@ -1,0 +1,331 @@
+{
+  "audit": {
+    "title": "Comprehensive Ralph Wiggum Compliance Audit - All 44 PRDs",
+    "date": "2026-01-10",
+    "auditor": "AI Assistant",
+    "scope": "Complete PRD directory audit",
+    "ralph_version": "1.1.0",
+    "guidelines_reference": "memory-bank/_meta/ralph-guidelines.md",
+    "skill_reference": ".claude/skills/ralph-wiggum/SKILL.md"
+  },
+  "summary": {
+    "total_prds": 44,
+    "total_stories": 350,
+    "overall_compliance": "78%",
+    "critical_issues": 3,
+    "major_issues": 4,
+    "minor_issues": 5
+  },
+  "compliance_by_category": {
+    "domains": {
+      "count": 15,
+      "compliance": "75%",
+      "stories": 120,
+      "issues": "Conflicting status fields, extra UI specs, vague acceptance criteria"
+    },
+    "cross_cutting": {
+      "count": 5,
+      "compliance": "82%",
+      "stories": 36,
+      "issues": "Extra fields, some vague criteria"
+    },
+    "foundation": {
+      "count": 4,
+      "compliance": "85%",
+      "stories": 32,
+      "issues": "Documentation-focused, generally compliant"
+    },
+    "workflows": {
+      "count": 8,
+      "compliance": "70%",
+      "stories": 48,
+      "issues": "Complex UI specs, dependency format inconsistencies"
+    },
+    "integrations": {
+      "count": 3,
+      "compliance": "90%",
+      "stories": 24,
+      "issues": "Generally well-structured"
+    },
+    "roles": {
+      "count": 5,
+      "compliance": "85%",
+      "stories": 40,
+      "issues": "UI-heavy stories with extra specifications"
+    },
+    "refactoring": {
+      "count": 4,
+      "compliance": "88%",
+      "stories": 32,
+      "issues": "Technical stories, generally compliant"
+    }
+  },
+  "critical_issues": [
+    {
+      "issue_id": "CRIT-001",
+      "severity": "Critical",
+      "title": "Conflicting Status Fields",
+      "description": "All stories have both 'status' and 'passes' fields, which conflict",
+      "affected": "100% of stories (350 stories)",
+      "impact": "Ralph cannot reliably determine story completion status",
+      "evidence": "\"status\": \"pending\", \"passes\": false in all domain stories",
+      "remediation": "Remove 'passes' field entirely. Use only 'status' field."
+    },
+    {
+      "issue_id": "CRIT-002",
+      "severity": "Critical",
+      "title": "Non-Ralph Extra Fields",
+      "description": "Stories contain fields not in Ralph specification (type, ui_spec, files_to_modify)",
+      "affected": "~95% of stories",
+      "impact": "Ralph may fail to parse or ignore important metadata",
+      "evidence": "\"type\": \"ui-component\", \"ui_spec\": {...}, \"files_to_modify\": [...]",
+      "remediation": "Move extra fields to separate 'enhancements' object within stories"
+    },
+    {
+      "issue_id": "CRIT-003",
+      "severity": "Critical",
+      "title": "Missing estimated_iterations",
+      "description": "Some stories lack the required estimated_iterations field",
+      "affected": "~15% of stories",
+      "impact": "Ralph cannot estimate completion time or detect iteration limits",
+      "evidence": "Stories without estimated_iterations field",
+      "remediation": "Add estimated_iterations to all stories (typically 2-6 for most tasks)"
+    }
+  ],
+  "major_issues": [
+    {
+      "issue_id": "MAJ-001",
+      "severity": "Major",
+      "title": "Vague Acceptance Criteria",
+      "description": "Some acceptance criteria are not specific, testable, file-referenced, or quantified",
+      "affected": "~25% of stories",
+      "impact": "Ralph cannot verify completion automatically",
+      "evidence": "\"Add UI for managing customer tags\" - not specific enough",
+      "remediation": "Rewrite criteria to include specific file paths, component names, and measurable outcomes"
+    },
+    {
+      "issue_id": "MAJ-002",
+      "severity": "Major",
+      "title": "Inconsistent Dependency Format",
+      "description": "Dependencies use mixed formats (strings vs objects)",
+      "affected": "Workflow PRDs",
+      "impact": "Dependency resolution may fail",
+      "evidence": "Some deps as strings, some as objects with status fields",
+      "remediation": "Standardize all dependencies as string arrays"
+    },
+    {
+      "issue_id": "MAJ-003",
+      "severity": "Major",
+      "title": "Overly Complex UI Specifications",
+      "description": "ui_spec objects are too detailed for Ralph processing",
+      "affected": "UI-heavy stories",
+      "impact": "Ralph may struggle with overly complex specifications",
+      "remediation": "Move detailed UI specs to separate wireframe files, keep basic requirements in acceptance criteria"
+    },
+    {
+      "issue_id": "MAJ-004",
+      "severity": "Major",
+      "title": "Missing File References",
+      "description": "Acceptance criteria don't always specify exact file paths",
+      "affected": "~30% of stories",
+      "impact": "Ralph cannot verify file creation/modification",
+      "remediation": "Include specific file paths in acceptance criteria (e.g., 'File src/components/X.tsx exists')"
+    }
+  ],
+  "minor_issues": [
+    {
+      "issue_id": "MIN-001",
+      "severity": "Minor",
+      "title": "Inconsistent Completion Promise Format",
+      "description": "Some promises don't follow exact STORY_ID_COMPLETE format",
+      "affected": "~5% of stories",
+      "impact": "Ralph completion detection may fail",
+      "remediation": "Use exact format: STORY_ID_COMPLETE (uppercase, no extra characters)"
+    },
+    {
+      "issue_id": "MIN-002",
+      "severity": "Minor",
+      "title": "Extra PRD-level Fields",
+      "description": "PRDs contain fields not in Ralph spec (current_state, audit, etc.)",
+      "affected": "All PRDs",
+      "impact": "Additional context but not Ralph-compliant",
+      "remediation": "Consider moving to separate metadata files or accept as documentation"
+    },
+    {
+      "issue_id": "MIN-003",
+      "severity": "Minor",
+      "title": "Inconsistent Priority Values",
+      "description": "Priority values not consistently 1-N within PRDs",
+      "affected": "~20% of PRDs",
+      "impact": "Execution order may not be clear",
+      "remediation": "Ensure priorities are sequential starting from 1"
+    },
+    {
+      "issue_id": "MIN-004",
+      "severity": "Minor",
+      "title": "Missing TypeScript Compilation Checks",
+      "description": "Not all stories include 'npm run typecheck passes' in criteria",
+      "affected": "~10% of stories",
+      "impact": "Ralph may not catch compilation errors",
+      "remediation": "Add TypeScript compilation check to all stories"
+    },
+    {
+      "issue_id": "MIN-005",
+      "severity": "Minor",
+      "title": "Inconsistent Story ID Format",
+      "description": "Some story IDs use hyphens, some underscores",
+      "affected": "Minor inconsistencies",
+      "impact": "Potential confusion in completion promises",
+      "remediation": "Standardize to CATEGORY-NNN format"
+    }
+  ],
+  "remediation_plan": {
+    "phase_1": {
+      "name": "Critical Fixes",
+      "duration": "2-3 days",
+      "tasks": [
+        "Remove all 'passes' fields from stories",
+        "Add missing 'estimated_iterations' fields",
+        "Move extra fields (type, ui_spec, files_to_modify) to 'enhancements' objects",
+        "Standardize dependency formats"
+      ]
+    },
+    "phase_2": {
+      "name": "Acceptance Criteria Improvement",
+      "duration": "3-4 days",
+      "tasks": [
+        "Rewrite vague acceptance criteria to be specific and testable",
+        "Add file path references to all criteria",
+        "Include measurable outcomes (e.g., 'loads in < 200ms')",
+        "Add TypeScript compilation checks where missing"
+      ]
+    },
+    "phase_3": {
+      "name": "UI Specification Cleanup",
+      "duration": "2-3 days",
+      "tasks": [
+        "Move detailed ui_spec objects to separate wireframe files",
+        "Keep essential UI requirements in acceptance criteria",
+        "Reference wireframe files in story descriptions",
+        "Simplify ui_spec to basic component type hints"
+      ]
+    },
+    "phase_4": {
+      "name": "Validation and Testing",
+      "duration": "1-2 days",
+      "tasks": [
+        "Create Ralph PRD validation script",
+        "Test sample PRDs with Ralph loop",
+        "Verify completion promise detection works",
+        "Document final PRD structure standards"
+      ]
+    },
+    "total_effort": "8-12 days",
+    "priority_order": "Phase 1 (critical) → Phase 2 (major) → Phase 3 (cleanup) → Phase 4 (validation)"
+  },
+  "sample_remediated_story": {
+    "before": {
+      "id": "DOM-CUST-001c",
+      "name": "Customer Tags: UI Components",
+      "description": "Create UI for managing and displaying customer tags",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "File src/components/domain/customers/tag-badge.tsx renders colored tag badge",
+        "Tag selector on customer detail allows assign/remove",
+        "Customer list shows tags as badges column",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/components/domain/customers/tag-badge.tsx (create)",
+        "src/components/domain/customers/tag-selector.tsx (create)"
+      ],
+      "dependencies": [
+        "DOM-CUST-001b"
+      ],
+      "completion_promise": "DOM_CUST_001C_COMPLETE"
+    },
+    "after": {
+      "id": "DOM-CUST-001c",
+      "name": "Customer Tags: UI Components",
+      "description": "Create UI for managing and displaying customer tags",
+      "priority": 1,
+      "status": "pending",
+      "acceptance_criteria": [
+        "File src/components/domain/customers/tag-badge.tsx exists and renders colored tag badge with name and color props",
+        "File src/components/domain/customers/tag-selector.tsx exists as multi-select combobox for tags with search",
+        "Customer detail page (src/routes/_authed/customers/$customerId.tsx) shows tags below customer name using tag-badge",
+        "Tag selector integrated into customer detail for assign/remove operations",
+        "Customer list (src/components/domain/customers/customer-columns.tsx) shows tags as badges column with max 3 visible + overflow",
+        "Loading state shows skeleton badges during tag fetch",
+        "Empty state shows 'No tags yet' with 'Add your first tag' CTA",
+        "Keyboard navigation: Tab through tags, Enter/Space toggles selection, Escape closes selector",
+        "A11Y: Tag badges have role='status' and aria-label, selector has aria-expanded and listbox role",
+        "npm run typecheck passes",
+        "Component loads in < 200ms with 10 tags"
+      ],
+      "dependencies": [
+        "DOM-CUST-001b"
+      ],
+      "estimated_iterations": 5,
+      "completion_promise": "DOM_CUST_001C_COMPLETE",
+      "enhancements": {
+        "type": "ui-component",
+        "component_type": "MultiSelectCombobox",
+        "layout": {
+          "mobile": "Collapsed badge list with overflow count",
+          "tablet": "Inline badge list, 4 max visible",
+          "desktop": "Full badge list with horizontal scroll"
+        },
+        "files_to_modify": [
+          "src/components/domain/customers/tag-badge.tsx (create)",
+          "src/components/domain/customers/tag-selector.tsx (create)",
+          "src/routes/_authed/customers/$customerId.tsx (modify)",
+          "src/components/domain/customers/customer-columns.tsx (modify)"
+        ],
+        "wireframe_reference": "memory-bank/prd/_wireframes/domains/DOM-CUST-001c.wireframe.md"
+      }
+    }
+  },
+  "impact_assessment": {
+    "benefits": [
+      "Improved Ralph execution reliability and consistency",
+      "Clearer acceptance criteria reduce iteration cycles",
+      "Better file reference tracking for verification",
+      "Standardized completion promise detection",
+      "Reduced confusion from conflicting status fields"
+    ],
+    "risks": [
+      "UI specification details moved to separate files may reduce context",
+      "Remediation effort may introduce new inconsistencies if not systematic",
+      "Enhanced acceptance criteria may make stories appear more complex"
+    ],
+    "testing_approach": [
+      "Validate Ralph can parse remediated PRDs without errors",
+      "Test completion promise detection on sample stories",
+      "Verify acceptance criteria are verifiable by file existence/checks",
+      "Run typecheck on modified PRDs to ensure JSON validity"
+    ]
+  },
+  "recommendations": {
+    "immediate": [
+      "Start with Phase 1 critical fixes - these block Ralph execution",
+      "Create a PRD remediation script to automate field moves",
+      "Establish PRD review checklist for future PRDs"
+    ],
+    "architectural": [
+      "Consider creating Ralph-compatible PRD schema with extensions",
+      "Move UI specifications to wireframe files permanently",
+      "Implement automated PRD validation in CI/CD",
+      "Create PRD templates that enforce Ralph compliance from creation"
+    ],
+    "process": [
+      "Add Ralph compliance review to PRD approval process",
+      "Document the split between Ralph requirements and enhancement metadata",
+      "Create examples of well-structured Ralph-compliant stories",
+      "Train team on Ralph requirements vs enhancement specifications"
+    ]
+  }
+}

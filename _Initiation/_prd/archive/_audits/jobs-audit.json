@@ -1,0 +1,217 @@
+{
+  "prd_id": "DOM-JOBS",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "summary": {
+    "total_stories": 8,
+    "verified_gaps": 7,
+    "invalidated_gaps": 1,
+    "implementation_status": "Jobs/projects domain has solid foundation with job assignments, photo capture, signatures, public sign-off, status tracking, and installer mobile views. Gaps are real for: task management, BOM tracking, time tracking, punchlist/checklists, calendar view with drag-drop scheduling, job templates, and job costing reports. The mobile view (DOM-JOBS-006) is partially invalidated as basic installer mobile views already exist with GPS, photo capture, and completion wizard."
+  },
+  "codebase_findings": {
+    "schema_files": [
+      "renoz-v2/lib/schema/job-assignments.ts - jobAssignments table (id, orgId, orderId, installerId, scheduledDate, scheduledTime, estimatedDuration, status, startedAt, completedAt, signatureUrl, signedByName, signOffToken, notes)",
+      "renoz-v2/lib/schema/job-assignments.ts - jobPhotos table (id, jobAssignmentId, type, photoUrl, caption)"
+    ],
+    "server_functions": [
+      "renoz-v2/src/server/functions/jobs.ts - listMyJobs, listAllJobs, getJob, assignJob, startJob, addJobPhoto, captureSignature, completeJob, updateJob, getJobPhotos",
+      "renoz-v2/src/server/functions/jobs-public.ts - getJobPublic, captureSignaturePublic (token-based public sign-off)"
+    ],
+    "components": [
+      "renoz-v2/src/components/domain/jobs/completion-wizard.tsx - Multi-step job completion wizard",
+      "renoz-v2/src/components/domain/jobs/photo-capture.tsx - Before/during/after/issue photo capture",
+      "renoz-v2/src/components/domain/jobs/serial-verify.tsx - Serial number verification",
+      "renoz-v2/src/components/domain/jobs/signature-pad.tsx - Customer signature capture",
+      "renoz-v2/src/components/domain/jobs/report-issue.tsx - Issue reporting from field",
+      "renoz-v2/src/components/domain/jobs/message-office-dialog.tsx - Installer to office messaging",
+      "renoz-v2/src/components/domain/orders/assign-job-dialog.tsx - Job assignment from order"
+    ],
+    "routes": [
+      "renoz-v2/src/routes/installer/jobs/$jobId.tsx - Job detail page for installers (comprehensive with tabs, GPS, photos, signature, completion)",
+      "renoz-v2/src/routes/installer/today.tsx - Today's jobs dashboard for installers",
+      "renoz-v2/src/routes/installer/schedule.tsx - Weekly schedule view (list format, not calendar)",
+      "renoz-v2/src/routes/sign-off/$jobId.tsx - Public customer sign-off page (token-based)"
+    ],
+    "infrastructure": [
+      "renoz-v2/lib/offline/gps.ts - GPS tracking utilities (getCurrentLocation, isWithinRadius)",
+      "renoz-v2/lib/offline/sync-manager.ts - Offline sync manager exists",
+      "renoz-v2/lib/offline/db.ts - IndexedDB for offline storage",
+      "renoz-v2/public/manifest.json - PWA manifest present"
+    ]
+  },
+  "stories_status": {
+    "DOM-JOBS-001": {
+      "name": "Add Job Task Management",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No job_tasks table exists. No task management UI in job detail. Jobs have no internal breakdown of work.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 6,
+      "atomization_recommendation": "Split into: (1) Schema: job_tasks table, (2) Server: CRUD functions for tasks, (3) UI: Task list component, (4) UI: Drag-drop reorder"
+    },
+    "DOM-JOBS-002": {
+      "name": "Add Job BOM Tracking",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No job_materials table exists. No BOM tracking on jobs. Orders have order_items but jobs don't track material allocation/usage.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 6,
+      "atomization_recommendation": "Split into: (1) Schema: job_materials table, (2) Server: material allocation functions, (3) UI: BOM tab with product picker, (4) UI: Usage tracking vs planned"
+    },
+    "DOM-JOBS-003": {
+      "name": "Add Time Tracking",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No job_time_entries table exists. Jobs track startedAt/completedAt but no detailed time logging. No time reports.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 6,
+      "atomization_recommendation": "Split into: (1) Schema: job_time_entries table, (2) Server: timer start/stop/manual entry functions, (3) UI: Time entry component, (4) UI: Time report page"
+    },
+    "DOM-JOBS-004": {
+      "name": "Add Punchlist/Checklist",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No checklist tables exist. No template system. Jobs have completion wizard but no customizable checklists.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 7,
+      "atomization_recommendation": "Split into: (1) Schema: checklist_templates + job_checklists + job_checklist_items tables, (2) Server: template CRUD, (3) Server: checklist assignment functions, (4) UI: Template management in settings, (5) UI: Checklist component on job detail"
+    },
+    "DOM-JOBS-005": {
+      "name": "Add Job Scheduling Calendar",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "Existing schedule view is a list format (week view cards). No calendar visualization. No drag-drop scheduling. No technician filtering.",
+      "layers": ["ui"],
+      "estimated_iterations": 6,
+      "atomization_recommendation": "Split into: (1) UI: Calendar component integration (FullCalendar or similar), (2) UI: Jobs on calendar display, (3) UI: Drag-drop reschedule with server call, (4) UI: Technician filter, (5) UI: Unscheduled jobs sidebar"
+    },
+    "DOM-JOBS-006": {
+      "name": "Create Mobile Job View",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "ALREADY IMPLEMENTED: installer/jobs/$jobId.tsx has mobile-responsive job detail with: tabs for details/items/photos/signature, touch-friendly buttons, GPS location check, photo capture, completion wizard, report issue, message office, navigate to maps. PWA infrastructure exists (manifest.json, service worker, offline sync). This story is substantially complete.",
+      "layers": [],
+      "estimated_iterations": 0,
+      "existing_implementation": "renoz-v2/src/routes/installer/jobs/$jobId.tsx with InstallerShell layout, photo-capture, signature-pad, completion-wizard components"
+    },
+    "DOM-JOBS-007": {
+      "name": "Add Job Templates",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No job_templates table exists. Jobs are created manually from orders. No pre-configured job types with default tasks/BOM.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 5,
+      "atomization_recommendation": "Split into: (1) Schema: job_templates table, (2) Server: template CRUD functions, (3) Server: create job from template function, (4) UI: Template management page in settings, (5) UI: Template selection in assign job dialog",
+      "dependencies_note": "Depends on DOM-JOBS-001, DOM-JOBS-002, DOM-JOBS-004 being implemented first"
+    },
+    "DOM-JOBS-008": {
+      "name": "Add Job Costing Report",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No job costing calculations exist. Orders have amounts but no comparison to actual labor/material costs. No profitability tracking.",
+      "layers": ["server", "ui"],
+      "estimated_iterations": 5,
+      "atomization_recommendation": "Split into: (1) Server: job cost calculation logic (materials from BOM + labor from time entries), (2) Server: profit margin calculations, (3) UI: Job costing report page, (4) UI: Filters and export",
+      "dependencies_note": "Depends on DOM-JOBS-002 (BOM) and DOM-JOBS-003 (Time Tracking) being implemented first"
+    }
+  },
+  "recommended_stories": [
+    {
+      "id": "DOM-JOBS-001-A",
+      "name": "Job Tasks Schema & Server Functions",
+      "description": "Create job_tasks table and server CRUD functions",
+      "priority": 1,
+      "layers": ["schema", "server"],
+      "acceptance_criteria": [
+        "job_tasks table (id, jobId, title, description, status, assigneeId, dueDate, position)",
+        "Task status enum: pending, in_progress, completed, blocked",
+        "createTask, updateTask, deleteTask, reorderTasks server functions",
+        "TypeScript compiles without errors"
+      ],
+      "estimated_iterations": 3
+    },
+    {
+      "id": "DOM-JOBS-001-B",
+      "name": "Job Tasks UI Component",
+      "description": "Task list and management UI on job detail",
+      "priority": 2,
+      "layers": ["ui"],
+      "dependencies": ["DOM-JOBS-001-A"],
+      "acceptance_criteria": [
+        "Tasks tab on job detail page",
+        "Task list with status badges",
+        "Add/edit/delete task dialogs",
+        "Drag-drop reorder tasks",
+        "TypeScript compiles without errors"
+      ],
+      "estimated_iterations": 3
+    },
+    {
+      "id": "DOM-JOBS-003-A",
+      "name": "Time Tracking Schema & Server Functions",
+      "description": "Create time tracking tables and server functions",
+      "priority": 3,
+      "layers": ["schema", "server"],
+      "acceptance_criteria": [
+        "job_time_entries table (id, jobId, userId, startTime, endTime, description, isBillable)",
+        "startTimer, stopTimer, createManualEntry server functions",
+        "Calculate total hours per job/user",
+        "TypeScript compiles without errors"
+      ],
+      "estimated_iterations": 3
+    },
+    {
+      "id": "DOM-JOBS-003-B",
+      "name": "Time Tracking UI",
+      "description": "Timer and time entry UI on job detail",
+      "priority": 4,
+      "layers": ["ui"],
+      "dependencies": ["DOM-JOBS-003-A"],
+      "acceptance_criteria": [
+        "Time tab on job detail page",
+        "Start/stop timer button",
+        "Manual time entry form",
+        "Time entries list with totals",
+        "TypeScript compiles without errors"
+      ],
+      "estimated_iterations": 3
+    },
+    {
+      "id": "DOM-JOBS-005-A",
+      "name": "Job Calendar View Basic",
+      "description": "Calendar visualization for job scheduling",
+      "priority": 5,
+      "layers": ["ui"],
+      "acceptance_criteria": [
+        "Calendar route /dashboard/calendar or similar",
+        "Month and week view toggle",
+        "Jobs displayed on scheduled dates",
+        "Click job to navigate to detail",
+        "TypeScript compiles without errors"
+      ],
+      "estimated_iterations": 4
+    },
+    {
+      "id": "DOM-JOBS-005-B",
+      "name": "Calendar Drag-Drop Scheduling",
+      "description": "Drag-drop reschedule jobs on calendar",
+      "priority": 6,
+      "layers": ["ui", "server"],
+      "dependencies": ["DOM-JOBS-005-A"],
+      "acceptance_criteria": [
+        "Drag job to different date to reschedule",
+        "Server call to update scheduledDate",
+        "Technician filter dropdown",
+        "Unscheduled jobs sidebar",
+        "TypeScript compiles without errors"
+      ],
+      "estimated_iterations": 3
+    }
+  ],
+  "atomization_notes": {
+    "general_pattern": "Most stories cross schema+server+UI layers. Best practice is to split into: (1) Schema/Server story that creates tables and API, (2) UI story that builds the interface using the API.",
+    "dependency_chain": "DOM-JOBS-007 (Templates) and DOM-JOBS-008 (Costing) depend on other stories. Recommend implementing: Tasks > Time > BOM > Checklists > Templates > Costing > Calendar",
+    "mobile_view_note": "DOM-JOBS-006 is already implemented. The installer portal at /installer/* routes provides mobile-responsive views with touch targets, GPS, photo capture, and offline capabilities.",
+    "calendar_complexity": "DOM-JOBS-005 (Calendar) is UI-heavy. Consider using FullCalendar or react-big-calendar for the calendar component to reduce implementation time."
+  }
+}

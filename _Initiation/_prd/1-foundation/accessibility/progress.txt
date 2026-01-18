@@ -1,0 +1,58 @@
+# Accessibility Foundation Progress
+# PRD: accessibility.prd.json
+# Started: 2026-01-17
+# Updated: 2026-01-17
+
+## Stories (4 total)
+
+- [x] CC-A11Y-005: Form Accessibility Consistency ✓
+- [x] CC-A11Y-006: Color Contrast Compliance ✓
+- [x] CC-A11Y-007: Reduced Motion Support ✓
+- [x] CC-A11Y-008: Data Table Accessibility ✓
+
+## Current Story
+ALL STORIES COMPLETE - CC-A11Y PRD COMPLETE
+
+## Iteration Count
+Total: 4
+Current Story: 1
+
+## Blockers
+None
+
+## Notes
+- Progress tracking initialized
+- CC-A11Y-005 COMPLETE:
+  - Enhanced FormFieldWrapper with getFieldAriaProps() helper function
+  - Added AUTOCOMPLETE_ATTRIBUTES constant for standard autocomplete values
+  - Created ErrorSummary component with focus management and screen reader support
+  - Created FormFieldGroup component with fieldset/legend for grouped fields
+  - Added AddressFieldGroup, NameFieldGroup, DateRangeFieldGroup presets
+  - TypeScript compiles without errors
+- CC-A11Y-006 COMPLETE:
+  - Audited OKLCH color system - all text colors meet 4.5:1 contrast
+  - Light mode: foreground #242424 on white = 15.4:1, muted #737373 = 4.65:1
+  - Dark mode: foreground #fafafa on #242424 = 15.1:1, muted #a1a1aa = 6.2:1
+  - Verified status indicators use icon+text, not color alone
+  - Created comprehensive color-contrast.md documentation at src/styles/
+- CC-A11Y-007 COMPLETE:
+  - Created useReducedMotion() hook at src/hooks/use-reduced-motion.ts
+  - Added CSS @media (prefers-reduced-motion: reduce) block in styles.css
+  - Spin animations replaced with opacity pulse for reduced motion
+  - Skeleton shimmer uses opacity instead of translateX
+  - Bounce animations disabled entirely for reduced motion
+  - Helper functions: getAnimationDuration(), getAnimationClass()
+- CC-A11Y-008 COMPLETE:
+  - Added scope="col" (default) to TableHead component
+  - Added sortDirection prop for aria-sort on sortable columns
+  - Added labelledBy/describedBy props to Table for aria-labelledby/describedby
+  - Added selected prop to TableRow for aria-selected
+  - Documented row selection checkbox label patterns in JSDoc
+  - TypeScript compiles without errors
+
+## PRD COMPLETION
+CC-A11Y PRD is now COMPLETE. All 4 stories implemented:
+- Form accessibility with ErrorSummary, FormFieldGroup, getFieldAriaProps
+- Color contrast documentation and audit
+- Reduced motion CSS + useReducedMotion hook
+- Data table accessibility with scope, aria-sort, aria-selected

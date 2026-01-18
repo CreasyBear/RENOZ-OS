@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rls-policies.json",
+  "title": "Row-Level Security Policy Definitions",
+  "description": "Defines RLS policies for multi-tenant data isolation using Supabase Auth integration.",
+  "version": "1.0.0",
+  "lastUpdated": "2026-01-11",
+
+  "usage": {
+    "inPRD": "Specify rlsPolicy type for each table",
+    "inDrizzle": "Use pgPolicy() with sql template from policyTemplates",
+    "inMigration": "Helper functions must be created before policies"
+  },
+
+  "helperFunctions": {
+    "get_user_organization_id": {
+      "sql": "CREATE OR REPLACE FUNCTION get_user_organization_id() RETURNS uuid AS $$ SELECT (auth.jwt() ->> 'org_id')::uuid $$ LANGUAGE sql SECURITY DEFINER STABLE;",
+      "purpose": "Extract organization_id from Supabase JWT claims for RLS policies",
+      "notes": "The org_id claim must be added to JWT via Supabase custom claims"
+    },
+    "get_current_user_id": {
+      "sql": "CREATE OR REPLACE FUNCTION get_current_user_id() RETURNS uuid AS $$ SELECT auth.uid() $$ LANGUAGE sql SECURITY DEFINER STABLE;",
+      "purpose": "Get current authenticated user's ID for user-scoped tables"
+    },
+    "is_org_admin": {
+      "sql": "CREATE OR REPLACE FUNCTION is_org_admin() RETURNS boolean AS $$ SELECT EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role IN ('owner', 'admin')) $$ LANGUAGE sql SECURITY DEFINER STABLE;",
+      "purpose": "Check if current user is org owner or admin for elevated operations"
+    }
+  },
+
+  "policyTemplates": {
+    "standard": {
+      "description": "Most common policy - organization-scoped CRUD",
+      "forTables": "All business tables with organization_id column",
+      "policies": {
+        "select": {
+          "name": "{table}_select_policy",
+          "as": "permissive",
+          "for": "select",
+          "to": "authenticated",
+          "using": "organization_id = get_user_organization_id()"
+        },
+        "insert": {
+          "name": "{table}_insert_policy",
+          "as": "permissive",
+          "for": "insert",
+          "to": "authenticated",
+          "withCheck": "organization_id = get_user_organization_id()"
+        },
+        "update": {
+          "name": "{table}_update_policy",
+          "as": "permissive",
+          "for": "update",
+          "to": "authenticated",
+          "using": "organization_id = get_user_organization_id()"
+        },
+        "delete": {
+          "name": "{table}_delete_policy",
+          "as": "permissive",
+          "for": "delete",
+          "to": "authenticated",
+          "using": "organization_id = get_user_organization_id()"
+        }
+      }
+    },
+
+    "userScoped": {
+      "description": "Tables scoped to individual user (notifications, preferences)",
+      "forTables": "Tables with user_id instead of organization_id",
+      "policies": {
+        "select": {
+          "name": "{table}_select_policy",
+          "using": "user_id = get_current_user_id()"
+        },
+        "insert": {
+          "name": "{table}_insert_policy",
+          "withCheck": "user_id = get_current_user_id()"
+        },
+        "update": {
+          "name": "{table}_update_policy",
+          "using": "user_id = get_current_user_id()"
+        },
+        "delete": {
+          "name": "{table}_delete_policy",
+          "using": "user_id = get_current_user_id()"
+        }
+      }
+    },
+
+    "appendOnly": {
+      "description": "Insert-only tables (audit logs, movements)",
+      "forTables": "Tables that should never be updated or deleted",
+      "policies": {
+        "select": {
+          "name": "{table}_select_policy",
+          "using": "organization_id = get_user_organization_id()"
+        },
+        "insert": {
+          "name": "{table}_insert_policy",
+          "withCheck": "organization_id = get_user_organization_id()"
+        }
+      },
+      "notes": "No update or delete policies - data is immutable"
+    },
+
+    "adminOnly": {
+      "description": "Tables only org admins can modify (user management)",
+      "forTables": "Sensitive configuration tables",
+      "policies": {
+        "select": {
+          "name": "{table}_select_policy",
+          "using": "organization_id = get_user_organization_id()"
+        },
+        "insert": {
+          "name": "{table}_insert_policy",
+          "withCheck": "organization_id = get_user_organization_id() AND is_org_admin()"
+        },
+        "update": {
+          "name": "{table}_update_policy",
+          "using": "organization_id = get_user_organization_id() AND is_org_admin()"
+        },
+        "delete": {
+          "name": "{table}_delete_policy",
+          "using": "organization_id = get_user_organization_id() AND is_org_admin()"
+        }
+      }
+    },
+
+    "publicRead": {
+      "description": "Tables anyone can read but only org can modify",
+      "forTables": "Reference tables, public catalogs",
+      "policies": {
+        "select": {
+          "name": "{table}_select_policy",
+          "to": "authenticated",
+          "using": "true"
+        },
+        "insert": {
+          "name": "{table}_insert_policy",
+          "withCheck": "organization_id = get_user_organization_id()"
+        },
+        "update": {
+          "name": "{table}_update_policy",
+          "using": "organization_id = get_user_organization_id()"
+        },
+        "delete": {
+          "name": "{table}_delete_policy",
+          "using": "organization_id = get_user_organization_id()"
+        }
+      }
+    }
+  },
+
+  "tablesRequiringRLS": {
+    "standard": [
+      "customers",
+      "contacts",
+      "addresses",
+      "products",
+      "categories",
+      "orders",
+      "order_items",
+      "order_milestones",
+      "order_shipments",
+      "opportunities",
+      "opportunity_activities",
+      "quotes",
+      "quote_items",
+      "inventory_items",
+      "warehouses",
+      "warehouse_locations",
+      "suppliers",
+      "purchase_orders",
+      "purchase_order_items",
+      "warranties",
+      "issues",
+      "issue_activities",
+      "jobs",
+      "job_tasks",
+      "job_materials",
+      "job_time_entries",
+      "job_checklists",
+      "job_photos",
+      "job_notes",
+      "job_templates",
+      "custom_fields",
+      "custom_field_values",
+      "email_templates"
+    ],
+    "userScoped": [
+      "notifications",
+      "user_preferences",
+      "user_sessions",
+      "user_onboarding"
+    ],
+    "appendOnly": [
+      "activities",
+      "inventory_movements",
+      "email_history"
+    ],
+    "adminOnly": [
+      "users",
+      "user_groups",
+      "user_group_members",
+      "organization_settings"
+    ]
+  },
+
+  "drizzleExample": {
+    "description": "How to implement RLS in Drizzle schema",
+    "code": [
+      "import { pgPolicy, sql } from 'drizzle-orm/pg-core';",
+      "",
+      "export const customers = pgTable('customers', {",
+      "  // ... columns",
+      "}, (table) => [",
+      "  pgPolicy('customers_select_policy', {",
+      "    as: 'permissive',",
+      "    for: 'select',",
+      "    to: 'authenticated',",
+      "    using: sql`organization_id = get_user_organization_id()`,",
+      "  }),",
+      "  pgPolicy('customers_insert_policy', {",
+      "    as: 'permissive',",
+      "    for: 'insert',",
+      "    to: 'authenticated',",
+      "    withCheck: sql`organization_id = get_user_organization_id()`,",
+      "  }),",
+      "  // ... update and delete policies",
+      "]);"
+    ]
+  },
+
+  "migrationOrder": {
+    "description": "Order of operations when setting up RLS",
+    "steps": [
+      "1. Create helper functions (get_user_organization_id, etc.)",
+      "2. Run Drizzle migrations to create tables",
+      "3. Enable RLS on each table: ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;",
+      "4. Drizzle pgPolicy() creates the policies during migration",
+      "5. Verify with: SELECT * FROM pg_policies WHERE tablename = '{table}';"
+    ]
+  },
+
+  "testingRLS": {
+    "description": "How to test RLS policies work correctly",
+    "steps": [
+      "1. Create test users in different organizations",
+      "2. Use Supabase client to authenticate as each user",
+      "3. Verify user A cannot see user B's organization data",
+      "4. Verify insert/update/delete respect org boundaries",
+      "5. Test edge cases: NULL org_id, deleted users, etc."
+    ]
+  }
+}

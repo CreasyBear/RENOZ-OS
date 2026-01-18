@@ -1,0 +1,861 @@
+{
+  "id": "INT-XERO",
+  "name": "Xero Accounting Integration",
+  "description": "Bi-directional sync with Xero for accounting operations including contacts, invoices, payments, and bank feeds.",
+  "created": "2026-01-09",
+  "atomized": "2026-01-09",
+  "priority": 1,
+  "phase": "integration",
+  "service": "Xero",
+  "dependencies": {
+    "phase": "Integration",
+    "executionOrder": 1,
+    "schemaRequired": [
+      {
+        "table": "organizations",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "customers",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "contacts",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "addresses",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "products",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "orders",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      }
+    ],
+    "schemaCreates": [
+      {
+        "table": "credit_notes",
+        "story": "INT-XERO-003-A",
+        "description": "Credit notes with Xero ID tracking"
+      },
+      {
+        "table": "xero_webhook_logs",
+        "story": "INT-XERO-004-A",
+        "description": "Webhook event logging for debugging"
+      },
+      {
+        "table": "xero_sync_errors",
+        "story": "INT-XERO-005-A",
+        "description": "Sync error tracking and resolution"
+      },
+      {
+        "table": "xero_sync_logs",
+        "story": "INT-XERO-006-A",
+        "description": "Sync operation history and audit trail"
+      }
+    ],
+    "serverFunctionsRequired": [
+      {
+        "function": "getCustomers",
+        "status": "EXISTS",
+        "reason": "Customer data for sync to Xero contacts"
+      },
+      {
+        "function": "getCustomerById",
+        "status": "EXISTS",
+        "reason": "Individual customer lookup for sync"
+      },
+      {
+        "function": "getContacts",
+        "status": "EXISTS",
+        "reason": "Contact data for sync"
+      },
+      {
+        "function": "getProducts",
+        "status": "EXISTS",
+        "reason": "Product data for sync to Xero items"
+      },
+      {
+        "function": "getOrders",
+        "status": "EXISTS",
+        "reason": "Order data for invoice generation"
+      },
+      {
+        "function": "getOrderById",
+        "status": "EXISTS",
+        "reason": "Individual order lookup for invoice sync"
+      },
+      {
+        "function": "updateOrder",
+        "status": "EXISTS",
+        "reason": "Update order with Xero invoice ID"
+      }
+    ],
+    "serverFunctionsCreates": [
+      {
+        "function": "getXeroContacts",
+        "story": "INT-XERO-001-A",
+        "description": "Fetch contacts from Xero API"
+      },
+      {
+        "function": "searchXeroContacts",
+        "story": "INT-XERO-001-A",
+        "description": "Search Xero contacts by email/ABN"
+      },
+      {
+        "function": "pullContactsFromXero",
+        "story": "INT-XERO-001-A",
+        "description": "Trigger.dev task to import Xero contacts"
+      },
+      {
+        "function": "importXeroContact",
+        "story": "INT-XERO-001-B",
+        "description": "Import single Xero contact with matching"
+      },
+      {
+        "function": "autoSyncInvoiceOnShip",
+        "story": "INT-XERO-002-A",
+        "description": "Auto-push invoice when order ships"
+      },
+      {
+        "function": "getPartialPaymentStatus",
+        "story": "INT-XERO-002-B",
+        "description": "Detect partial payments from Xero"
+      },
+      {
+        "function": "createCreditNote",
+        "story": "INT-XERO-003-A",
+        "description": "CRUD for credit notes"
+      },
+      {
+        "function": "getCreditNotes",
+        "story": "INT-XERO-003-A",
+        "description": "Query credit notes"
+      },
+      {
+        "function": "syncCreditNoteToXero",
+        "story": "INT-XERO-003-B",
+        "description": "Sync credit note to Xero"
+      },
+      {
+        "function": "createXeroWebhookLog",
+        "story": "INT-XERO-004-A",
+        "description": "Log incoming webhooks"
+      },
+      {
+        "function": "getXeroWebhookLogs",
+        "story": "INT-XERO-004-B",
+        "description": "Query webhook logs"
+      },
+      {
+        "function": "retryWebhookProcessing",
+        "story": "INT-XERO-004-B",
+        "description": "Retry failed webhook"
+      },
+      {
+        "function": "createXeroSyncError",
+        "story": "INT-XERO-005-A",
+        "description": "Log sync errors"
+      },
+      {
+        "function": "getXeroSyncErrors",
+        "story": "INT-XERO-005-A",
+        "description": "Query sync errors"
+      },
+      {
+        "function": "resolveXeroSyncError",
+        "story": "INT-XERO-005-A",
+        "description": "Mark error as resolved"
+      },
+      {
+        "function": "retrySyncError",
+        "story": "INT-XERO-005-B",
+        "description": "Retry failed sync"
+      },
+      {
+        "function": "createXeroSyncLog",
+        "story": "INT-XERO-006-A",
+        "description": "Log sync operations"
+      },
+      {
+        "function": "getXeroSyncLogs",
+        "story": "INT-XERO-006-A",
+        "description": "Query sync history"
+      },
+      {
+        "function": "cleanupOldSyncLogs",
+        "story": "INT-XERO-006-A",
+        "description": "Retention policy enforcement"
+      },
+      {
+        "function": "getBulkSyncProgress",
+        "story": "INT-XERO-007-A",
+        "description": "Track bulk sync progress"
+      },
+      {
+        "function": "getXeroSyncStatus",
+        "story": "INT-XERO-008",
+        "description": "Dashboard widget data"
+      }
+    ],
+    "prdDependencies": [
+      {
+        "prdId": "DOM-FIN",
+        "status": "REQUIRED",
+        "reason": "Credit notes schema depends on financial domain (blocked_by: DOM-FIN-001)"
+      },
+      {
+        "prdId": "DOM-ORD",
+        "status": "REQUIRED",
+        "reason": "Xero syncs orders as invoices"
+      },
+      {
+        "prdId": "DOM-CUS",
+        "status": "REQUIRED",
+        "reason": "Xero syncs customers as contacts"
+      },
+      {
+        "prdId": "DOM-PRO",
+        "status": "REQUIRED",
+        "reason": "Xero syncs products as items"
+      }
+    ],
+    "enables": [
+      {
+        "prdId": "WF-INV",
+        "reason": "Invoicing workflow uses Xero sync for invoice creation and status tracking"
+      }
+    ]
+  },
+  "references": {
+    "internal": [
+      "memory-bank/prd/domain/financial.prd.json",
+      "memory-bank/prd/workflow/invoicing.prd.json"
+    ],
+    "external": [
+      "Xero API docs: https://developer.xero.com/documentation/",
+      "Xero OAuth 2.0 authentication",
+      "Xero Webhooks for real-time updates"
+    ]
+  },
+  "current_state": {
+    "implemented": [
+      "OAuth 2.0 connection setup with connect/disconnect flow",
+      "Customer sync (push) with addresses and contacts",
+      "Product sync to Xero Items (push)",
+      "Invoice creation (push) with line items and tax handling",
+      "Invoice status sync (pull) from Xero",
+      "Webhook endpoint with signature verification",
+      "Webhook event processing (INVOICE.UPDATE, CONTACT.UPDATE)",
+      "Scheduled hourly invoice status sync",
+      "Token encryption for secure storage",
+      "Token refresh logic (manual and auto)",
+      "Bulk sync for customers and products"
+    ],
+    "gaps": [
+      "No contact sync (pull) - cannot import existing Xero contacts",
+      "No email/ABN matching for duplicate prevention",
+      "No credit note sync",
+      "No webhook logs table for debugging",
+      "No sync error handling UI (errors logged but not persisted)",
+      "No sync history/logs table",
+      "No progress indicator for bulk operations",
+      "No dashboard widget for Xero status"
+    ]
+  },
+  "stories": [
+    {
+      "id": "INT-XERO-001-A",
+      "name": "Pull Contacts from Xero",
+      "description": "Add ability to retrieve and import contacts from Xero",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Add getContacts method to XeroApiClient",
+        "Add searchContacts method with email/ABN lookup",
+        "Create pullContactsFromXero Trigger.dev task",
+        "Pull existing Xero contacts for matching",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "layers": [
+        "server"
+      ],
+      "completion_promise": "INT_XERO_001_A_COMPLETE"
+    },
+    {
+      "id": "INT-XERO-001-B",
+      "name": "Contact Matching and Import UI",
+      "description": "Match contacts by email/ABN and provide import UI",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Match by email or ABN to avoid duplicates",
+        "Import existing contacts UI in settings",
+        "Match suggestions for existing Xero contacts",
+        "Handle Xero validation errors gracefully",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "INT-XERO-001-A"
+      ],
+      "estimated_iterations": 3,
+      "layers": [
+        "server",
+        "ui"
+      ],
+      "completion_promise": "INT_XERO_001_B_COMPLETE"
+    },
+    {
+      "id": "INT-XERO-002-A",
+      "name": "Automatic Invoice Push on Ship",
+      "description": "Automatically push invoice to Xero when order ships",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Hook into order status change workflow",
+        "Auto-trigger createInvoiceFromOrder on ship/deliver",
+        "Skip if invoice already exists in Xero",
+        "Optional: auto-send to customer",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "layers": [
+        "server"
+      ],
+      "completion_promise": "INT_XERO_002_A_COMPLETE"
+    },
+    {
+      "id": "INT-XERO-002-B",
+      "name": "Partial Payment and Invoice UI Polish",
+      "description": "Handle partial payments and improve invoice status display",
+      "priority": 4,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Detect partial payments from Xero",
+        "Show payment amount and remaining balance",
+        "Wire XeroInvoiceStatus into order detail properly",
+        "Xero invoice link on invoice detail",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "INT-XERO-002-A"
+      ],
+      "estimated_iterations": 3,
+      "layers": [
+        "server",
+        "ui"
+      ],
+      "completion_promise": "INT_XERO_002_B_COMPLETE"
+    },
+    {
+      "id": "INT-XERO-003-A",
+      "name": "Credit Notes Schema",
+      "description": "Create credit_notes table with Xero ID field",
+      "priority": 5,
+      "status": "pending",
+      "passes": false,
+      "blocked_by": [
+        "DOM-FIN-001"
+      ],
+      "acceptance_criteria": [
+        "credit_notes table created (id, orderId, invoiceId, amount, reason, xeroId, status)",
+        "xeroId field for tracking Xero credit note ID",
+        "Migration runs successfully",
+        "Types exported from lib/schema/index.ts",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "layers": [
+        "schema"
+      ],
+      "completion_promise": "INT_XERO_003_A_COMPLETE"
+    },
+    {
+      "id": "INT-XERO-003-B",
+      "name": "Credit Note Xero Sync",
+      "description": "Sync credit notes to Xero",
+      "priority": 6,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Add createCreditNote method to XeroApiClient",
+        "Create syncCreditNoteToXero Trigger.dev task",
+        "Link credit note to original invoice in Xero",
+        "Handle credit allocation to invoice",
+        "Track Xero credit note ID locally",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "INT-XERO-003-A"
+      ],
+      "estimated_iterations": 3,
+      "layers": [
+        "server"
+      ],
+      "completion_promise": "INT_XERO_003_B_COMPLETE"
+    },
+    {
+      "id": "INT-XERO-003-C",
+      "name": "Credit Note Sync UI",
+      "description": "Display credit note sync status with manual sync option",
+      "priority": 7,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Sync status indicator on credit note detail",
+        "Manual sync button for credit notes",
+        "Credit note appears in Xero correctly",
+        "Link to Xero credit note",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "INT-XERO-003-B"
+      ],
+      "estimated_iterations": 3,
+      "layers": [
+        "ui"
+      ],
+      "completion_promise": "INT_XERO_003_C_COMPLETE"
+    },
+    {
+      "id": "INT-XERO-004-A",
+      "name": "Webhook Logs Schema and Capture",
+      "description": "Create webhook_logs table and capture webhook events",
+      "priority": 8,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "xero_webhook_logs table (id, eventType, payload, processedAt, errorMessage, createdAt)",
+        "Log all incoming webhooks before processing",
+        "Capture processing errors with full context",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "layers": [
+        "schema",
+        "server"
+      ],
+      "completion_promise": "INT_XERO_004_A_COMPLETE"
+    },
+    {
+      "id": "INT-XERO-004-B",
+      "name": "Webhook Logs UI and Retry",
+      "description": "View webhook logs and retry failed processing",
+      "priority": 9,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Webhook log page in /settings/xero/webhooks",
+        "List webhooks with event type, status, timestamp",
+        "View webhook payload details",
+        "Retry failed webhook processing",
+        "Handle INVOICE.VOIDED event explicitly",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "INT-XERO-004-A"
+      ],
+      "estimated_iterations": 3,
+      "layers": [
+        "ui"
+      ],
+      "completion_promise": "INT_XERO_004_B_COMPLETE"
+    },
+    {
+      "id": "INT-XERO-005-A",
+      "name": "Sync Errors Schema and Capture",
+      "description": "Create sync errors table and capture errors in tasks",
+      "priority": 10,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "xero_sync_errors table (id, entityType, entityId, errorMessage, timestamp, resolved, resolvedAt)",
+        "Capture errors in all Trigger.dev sync tasks",
+        "CRUD server functions for sync errors",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "layers": [
+        "schema",
+        "server"
+      ],
+      "completion_promise": "INT_XERO_005_A_COMPLETE"
+    },
+    {
+      "id": "INT-XERO-005-B",
+      "name": "Sync Errors UI",
+      "description": "View and resolve sync errors in settings",
+      "priority": 11,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Sync errors page in /settings/xero/errors",
+        "List all failed sync operations",
+        "Error details: entity, message, timestamp",
+        "Retry failed sync action",
+        "Dismiss/ignore error option",
+        "Alert badge when new errors",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "INT-XERO-005-A"
+      ],
+      "estimated_iterations": 3,
+      "layers": [
+        "ui"
+      ],
+      "completion_promise": "INT_XERO_005_B_COMPLETE"
+    },
+    {
+      "id": "INT-XERO-006-A",
+      "name": "Sync Logs Schema and Capture",
+      "description": "Create sync logs table and log all sync operations",
+      "priority": 12,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "xero_sync_logs table (id, entityType, entityId, action, status, request, response, timestamp)",
+        "Log every sync operation with entity, action, status",
+        "Capture request/response for debugging",
+        "Retention policy (90 days) enforced via scheduled job",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "layers": [
+        "schema",
+        "server"
+      ],
+      "completion_promise": "INT_XERO_006_A_COMPLETE"
+    },
+    {
+      "id": "INT-XERO-006-B",
+      "name": "Sync History UI",
+      "description": "View sync activity history with filtering",
+      "priority": 13,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Sync history page in /settings/xero/history",
+        "Filter by: entity type, status, date range",
+        "Detail view shows request/response",
+        "Export sync log",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "INT-XERO-006-A"
+      ],
+      "estimated_iterations": 3,
+      "layers": [
+        "ui"
+      ],
+      "completion_promise": "INT_XERO_006_B_COMPLETE"
+    },
+    {
+      "id": "INT-XERO-007-A",
+      "name": "Bulk Sync Progress Tracking Server",
+      "description": "Add progress tracking for bulk sync operations",
+      "priority": 14,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Track progress in Trigger.dev task metadata",
+        "Summary report: synced, skipped, failed counts",
+        "Explicit batch throttling for rate limits",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "INT-XERO-005-A"
+      ],
+      "estimated_iterations": 3,
+      "layers": [
+        "server"
+      ],
+      "completion_promise": "INT_XERO_007_A_COMPLETE"
+    },
+    {
+      "id": "INT-XERO-007-B",
+      "name": "Bulk Sync Progress UI",
+      "description": "Display bulk sync progress and allow retry of failed items",
+      "priority": 15,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Progress indicator for bulk sync operations",
+        "Display synced/skipped/failed counts in real-time",
+        "Retry individual failed items",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "INT-XERO-007-A"
+      ],
+      "estimated_iterations": 3,
+      "layers": [
+        "ui"
+      ],
+      "completion_promise": "INT_XERO_007_B_COMPLETE"
+    },
+    {
+      "id": "INT-XERO-008",
+      "name": "Xero Dashboard Widget",
+      "description": "Add Xero status overview widget to dashboard",
+      "priority": 16,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Widget shows: connection status, last sync, pending syncs",
+        "Sync health indicator (green/yellow/red)",
+        "Error count badge from sync errors",
+        "Quick action: sync now, view errors",
+        "Link to Xero integration settings",
+        "Auto-refresh status",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "INT-XERO-005-B",
+        "INT-XERO-006-B"
+      ],
+      "estimated_iterations": 3,
+      "layers": [
+        "ui"
+      ],
+      "completion_promise": "INT_XERO_008_COMPLETE"
+    },
+    {
+      "id": "INT-XERO-009",
+      "name": "Xero Rate Limiter Infrastructure",
+      "description": "Redis-based rate limit tracker for Xero's 60 calls/minute limit with proactive throttling at 55 calls and exponential backoff.",
+      "priority": 17,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Create src/lib/xero/rate-limiter.ts with XeroRateLimiter class",
+        "Track API calls per minute using Redis counter with key: xero:rate:{orgId}",
+        "Counter expires after 60 seconds (auto-reset via Redis TTL)",
+        "Proactive throttling: shouldDelay flag at 55+ calls (safety margin)",
+        "Exponential backoff calculation: baseDelay * 2^(overage) up to maxDelay",
+        "getState() returns: callsUsed, callsRemaining, resetAt, shouldDelay, delayMs",
+        "recordCall() increments counter and returns allowed status",
+        "handleRateLimitResponse() parses Retry-After header or defaults to 60s",
+        "Fallback to Retry-After: 60 if header not present",
+        "Unit tests for rate limiter with mocked Redis",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "layers": ["server"],
+      "completion_promise": "INT_XERO_009_COMPLETE",
+      "creates_files": [
+        "src/lib/xero/rate-limiter.ts",
+        "src/lib/xero/types.ts"
+      ],
+      "remediation_source": "premortem-xero-integration"
+    },
+    {
+      "id": "INT-XERO-010",
+      "name": "Xero Circuit Breaker Pattern",
+      "description": "Circuit breaker to prevent cascade failures when Xero API is unavailable. States: CLOSED -> OPEN (after 5 failures) -> HALF_OPEN (after 30s) -> CLOSED (on success).",
+      "priority": 18,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Create src/lib/xero/circuit-breaker.ts with XeroCircuitBreaker class",
+        "Three states: CLOSED (normal), OPEN (failing), HALF_OPEN (testing)",
+        "CLOSED -> OPEN: After failureThreshold (default 5) consecutive failures",
+        "OPEN -> HALF_OPEN: After resetTimeoutMs (default 30000ms)",
+        "HALF_OPEN -> CLOSED: On successful request",
+        "HALF_OPEN -> OPEN: On failed request",
+        "canRequest() checks state and returns allowed status",
+        "recordSuccess() resets failure count or closes circuit from half-open",
+        "recordFailure() increments failures and opens circuit if threshold reached",
+        "Redis keys for state persistence: xero:circuit:{orgId}:state|failures|lastFailure",
+        "Failure keys expire after 5 minutes (300s TTL)",
+        "Unit tests for circuit breaker state transitions",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["INT-XERO-009"],
+      "estimated_iterations": 2,
+      "layers": ["server"],
+      "completion_promise": "INT_XERO_010_COMPLETE",
+      "creates_files": [
+        "src/lib/xero/circuit-breaker.ts"
+      ],
+      "remediation_source": "premortem-xero-integration"
+    },
+    {
+      "id": "INT-XERO-011",
+      "name": "Xero Job Queue with Trigger.dev",
+      "description": "Durable job queue for Xero sync operations with priority handling, retry configuration, and rate limit awareness.",
+      "priority": 19,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Create src/lib/xero/queue.ts with job types, priorities, and retry config",
+        "Job types: invoice-create, invoice-update, contact-create, contact-update, credit-note-create, payment-record, bulk-sync",
+        "Priority weights: high (100), normal (50), low (10)",
+        "Retry config per job type with exponential backoff arrays",
+        "Create trigger/jobs/xero/sync-invoice.ts - invoice sync with rate limiter and circuit breaker",
+        "Create trigger/jobs/xero/sync-contact.ts - contact sync job",
+        "Create trigger/jobs/xero/batch-sync.ts - batch operations with throttling",
+        "Jobs check circuit breaker before executing",
+        "Jobs check rate limiter and delay/reschedule if needed",
+        "Jobs record success/failure to circuit breaker",
+        "Sync logs created for all operations",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["INT-XERO-009", "INT-XERO-010"],
+      "estimated_iterations": 4,
+      "layers": ["server"],
+      "completion_promise": "INT_XERO_011_COMPLETE",
+      "creates_files": [
+        "src/lib/xero/queue.ts",
+        "trigger/jobs/xero/sync-invoice.ts",
+        "trigger/jobs/xero/sync-contact.ts",
+        "trigger/jobs/xero/batch-sync.ts"
+      ],
+      "remediation_source": "premortem-xero-integration"
+    },
+    {
+      "id": "INT-XERO-012",
+      "name": "Xero Webhook Signature Verification",
+      "description": "HMAC-SHA256 signature verification for incoming Xero webhooks with timing-safe comparison.",
+      "priority": 20,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Create src/lib/xero/webhook-verifier.ts with verifyXeroWebhookSignature()",
+        "Compute HMAC-SHA256 using webhook key from XERO_WEBHOOK_KEY env var",
+        "Use crypto.timingSafeEqual() for timing-safe comparison",
+        "Return structured result: { valid: boolean, error?: string }",
+        "Handle missing signature header gracefully",
+        "Handle missing webhook key configuration",
+        "Unit tests for signature verification with known test vectors",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 1,
+      "layers": ["server"],
+      "completion_promise": "INT_XERO_012_COMPLETE",
+      "creates_files": [
+        "src/lib/xero/webhook-verifier.ts"
+      ],
+      "remediation_source": "premortem-xero-integration"
+    },
+    {
+      "id": "INT-XERO-013",
+      "name": "Xero Webhook Endpoint and Processor",
+      "description": "Webhook endpoint handler with signature verification, async event processing, and revenue recognition triggers.",
+      "priority": 21,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Create src/server/api/webhooks/xero.ts - webhook endpoint handler",
+        "Verify signature before processing any events",
+        "Return 401 for invalid signatures with logging",
+        "Handle Intent to Receive (empty events array) with 200 response",
+        "Log webhook to xero_webhook_logs before processing",
+        "Respond with 200 immediately, process events asynchronously",
+        "Create src/lib/xero/webhook-processor.ts for event routing",
+        "Event handlers: INVOICE.PAID, INVOICE.UPDATED, INVOICE.VOIDED, CONTACT.UPDATED, CREDITNOTE.CREATED/UPDATED",
+        "INVOICE.PAID triggers revenue recognition for milestone-based orders",
+        "Processing errors logged but don't fail webhook response",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["INT-XERO-012", "INT-XERO-004-A"],
+      "estimated_iterations": 3,
+      "layers": ["server"],
+      "completion_promise": "INT_XERO_013_COMPLETE",
+      "creates_files": [
+        "src/server/api/webhooks/xero.ts",
+        "src/lib/xero/webhook-processor.ts"
+      ],
+      "remediation_source": "premortem-xero-integration"
+    },
+    {
+      "id": "INT-XERO-014",
+      "name": "Xero Resilience UI Dashboard",
+      "description": "Dashboard showing rate limit usage, circuit breaker status, and sync health indicators.",
+      "priority": 22,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Rate limit gauge showing current usage vs 60 calls/min",
+        "Circuit breaker status indicator (CLOSED=green, HALF_OPEN=yellow, OPEN=red)",
+        "Next attempt time shown when circuit is OPEN",
+        "Sync health score based on recent success rate",
+        "Manual circuit reset button for admin override",
+        "Rate limit history chart (last hour)",
+        "Integrate with existing Xero dashboard widget (INT-XERO-008)",
+        "Auto-refresh status every 10 seconds",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["INT-XERO-008", "INT-XERO-009", "INT-XERO-010"],
+      "estimated_iterations": 3,
+      "layers": ["ui"],
+      "completion_promise": "INT_XERO_014_COMPLETE",
+      "remediation_source": "premortem-xero-integration"
+    }
+  ],
+  "success_criteria": [
+    "Contacts sync bi-directionally",
+    "Invoices sync with payment status",
+    "Credit notes sync correctly",
+    "Webhooks provide real-time updates",
+    "Errors are visible and actionable",
+    "Sync history enables debugging",
+    "Rate limit compliance: Zero 429 errors under normal load",
+    "Sync reliability: >99% sync success rate within 5 retries",
+    "Circuit breaker prevents cascade failures during Xero outages",
+    "Webhook latency: Payment status updates within 30 seconds of Xero event",
+    "Error visibility: All sync errors surfaced in UI within 1 minute",
+    "Recovery time: Manual resync restores consistency within 5 minutes"
+  ],
+  "out_of_scope": [
+    "Full GL/account sync",
+    "Purchase order sync to Xero bills",
+    "Xero bank reconciliation",
+    "Multi-organization Xero support"
+  ],
+  "pattern_references": [
+    {
+      "file": "_Initiation/_meta/patterns/testing-standards.md",
+      "applies_to": "all stories",
+      "reason": "All stories must follow testing standards including TDD flow, coverage expectations (80% server functions, 90% utilities), and story-level testing requirements"
+    },
+    {
+      "file": "_Initiation/_meta/patterns/error-recovery.md",
+      "applies_to": "ALL stories - this integration is heavily error-recovery dependent",
+      "reason": "Pattern 1 (Sync Failure Recovery) is the PRIMARY pattern - exponential backoff, dead letter queue, 5 retry attempts. Pattern 5 (Payment Processing) for payment sync idempotency"
+    },
+    {
+      "file": "_Initiation/_meta/patterns/performance-benchmarks.md",
+      "applies_to": "INT-XERO-011 (Bulk Operations), INT-XERO-014 (Dashboard), all UI stories",
+      "reason": "Bulk sync operations must handle Year 3 invoice volume (6000). Dashboard must load <1s with materialized views for sync status"
+    },
+    {
+      "file": "_Initiation/_meta/patterns/ux-3-click-rule.md",
+      "applies_to": "INT-XERO-014 (Accounting Dashboard), INT-XERO-009 (Error Management UI)",
+      "reason": "Finance role: Sync Now button (1 click), view reconciliation (2 clicks). Error retry must be accessible from dashboard"
+    }
+  ]
+}

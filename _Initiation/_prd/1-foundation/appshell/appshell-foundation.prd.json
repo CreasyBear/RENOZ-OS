@@ -1,0 +1,611 @@
+{
+  "id": "FOUND-APPSHELL",
+  "name": "App Shell Foundation",
+  "description": "Implement layout system, routing, and navigation for renoz-v3. Includes AppShell component, PageLayout patterns, sidebar navigation, and route configuration.",
+  "created": "2026-01-09",
+  "updated": "2026-01-10",
+  "priority": 3,
+  "phase": "foundation",
+  "version": "MVP",
+  "stack": {
+    "router": "TanStack Router",
+    "framework": "TanStack Start",
+    "styling": "Tailwind CSS + shadcn/ui",
+    "runtime": "Bun"
+  },
+  "references": {
+    "internal": [
+      "_Initiation/_prd/_meta/conventions.md - Component patterns",
+      "_Initiation/_ralph/backend-patterns/realtime-patterns.md - Realtime subscriptions",
+      "_Initiation/_ralph/backend-patterns/ai-sdk-patterns.md - AI integration",
+      "src/routes/__root.tsx - Root route",
+      "src/components/layout/ - Layout components"
+    ],
+    "external": [
+      "https://tanstack.com/router/latest/docs/framework/react/guide/file-based-routing",
+      "https://tanstack.com/start/latest/docs/framework/react/guide/layouts",
+      "https://ui.shadcn.com/docs/components/sidebar",
+      "https://supabase.com/docs/guides/realtime - Supabase Realtime",
+      "https://sdk.vercel.ai/docs/introduction - AI SDK"
+    ]
+  },
+  "current_state": {
+    "implemented": [],
+    "gaps": [
+      "No layout system - greenfield implementation",
+      "Need root layout with auth check",
+      "Need sidebar navigation component",
+      "Need PageLayout variants for different page types",
+      "Need header with user menu",
+      "Need route configuration centralization"
+    ]
+  },
+  "stories": [
+    {
+      "id": "FOUND-APPSHELL-001",
+      "name": "Create Root Layout with Auth Guard",
+      "description": "Implement __root.tsx with authentication checking and layout",
+      "priority": 1,
+      "status": "pending",
+      "type": "route",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/routes/__root.tsx created",
+        "Uses createRootRoute from TanStack Router",
+        "Provides QueryClient via TanStack Query provider",
+        "Wraps children with html/body structure for SSR",
+        "Imports global styles",
+        "Error boundary component for route errors",
+        "Not found component for 404s",
+        "bun run typecheck passes",
+        "bun run test passes"
+      ],
+      "files_to_create": [
+        "src/routes/__root.tsx",
+        "src/components/error-boundary.tsx",
+        "src/components/not-found.tsx"
+      ],
+      "files_to_modify": [],
+      "dependencies": [],
+      "completion_promise": "FOUND_APPSHELL_001_COMPLETE"
+    },
+    {
+      "id": "FOUND-APPSHELL-002",
+      "name": "Create Authenticated Layout Route",
+      "description": "Layout route that wraps protected pages with AppShell",
+      "priority": 2,
+      "status": "pending",
+      "type": "route",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/routes/_authenticated.tsx created",
+        "Uses createFileRoute with beforeLoad auth check",
+        "Redirects to /login if not authenticated",
+        "Renders AppShell component wrapping children",
+        "All authenticated routes nested under _authenticated/",
+        "Public routes (login, etc.) remain at root level",
+        "bun run typecheck passes",
+        "bun run test passes"
+      ],
+      "files_to_create": [
+        "src/routes/_authenticated.tsx"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-APPSHELL-001",
+        "FOUND-AUTH-001"
+      ],
+      "completion_promise": "FOUND_APPSHELL_002_COMPLETE"
+    },
+    {
+      "id": "FOUND-APPSHELL-003",
+      "name": "Create AppShell Component",
+      "description": "Main application shell with sidebar and header",
+      "priority": 3,
+      "status": "pending",
+      "type": "ui-component",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/components/layout/app-shell.tsx created",
+        "Renders sidebar navigation on left",
+        "Renders header with user menu on top",
+        "Main content area takes remaining space",
+        "Responsive: sidebar collapsible on mobile",
+        "Uses shadcn/ui Sidebar component pattern",
+        "ARIA labels on nav items (aria-current='page'), keyboard navigation with Tab/Enter, role='navigation' on sidebar",
+        "bun run typecheck passes",
+        "bun run test passes"
+      ],
+      "files_to_create": [
+        "src/components/layout/app-shell.tsx",
+        "src/components/layout/index.ts"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-APPSHELL-001"
+      ],
+      "completion_promise": "FOUND_APPSHELL_003_COMPLETE"
+    },
+    {
+      "id": "FOUND-APPSHELL-004",
+      "name": "Create Sidebar Navigation",
+      "description": "Sidebar component with navigation items and collapse",
+      "priority": 4,
+      "status": "pending",
+      "type": "ui-component",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/components/layout/sidebar.tsx created",
+        "Navigation items: Dashboard, Customers, Pipeline, Orders, Products, Inventory",
+        "Each item has: icon, label, active state",
+        "Items configurable via ROUTE_METADATA",
+        "Collapse/expand toggle button",
+        "Collapsed state shows icons only",
+        "Active route highlighted",
+        "Settings and logout at bottom",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/sidebar-nav-item.tsx"
+      ],
+      "files_to_modify": [
+        "src/components/layout/app-shell.tsx"
+      ],
+      "dependencies": [
+        "FOUND-APPSHELL-003"
+      ],
+      "completion_promise": "FOUND_APPSHELL_004_COMPLETE"
+    },
+    {
+      "id": "FOUND-APPSHELL-005",
+      "name": "Create Header Component",
+      "description": "Top header with breadcrumbs and user menu",
+      "priority": 5,
+      "status": "pending",
+      "type": "ui-component",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/components/layout/header.tsx created",
+        "Displays breadcrumbs based on current route",
+        "User avatar dropdown with: Profile, Settings, Logout",
+        "Notification bell icon (placeholder)",
+        "Search trigger for command palette (Cmd+K hint)",
+        "Responsive: stacks on mobile",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/layout/header.tsx",
+        "src/components/layout/breadcrumbs.tsx",
+        "src/components/layout/user-menu.tsx"
+      ],
+      "files_to_modify": [
+        "src/components/layout/app-shell.tsx"
+      ],
+      "dependencies": [
+        "FOUND-APPSHELL-003"
+      ],
+      "completion_promise": "FOUND_APPSHELL_005_COMPLETE"
+    },
+    {
+      "id": "FOUND-APPSHELL-006",
+      "name": "Create PageLayout Component",
+      "description": "Reusable page container with layout variants",
+      "priority": 6,
+      "status": "pending",
+      "type": "ui-component",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/components/layout/page-layout.tsx created",
+        "Variant: 'container' - max-width with center alignment (default)",
+        "Variant: 'full-width' - no max-width, full horizontal space",
+        "Variant: 'narrow' - narrower max-width for forms",
+        "Variant: 'with-sidebar' - detail page with side panel",
+        "PageLayout.Header - optional page header with title/actions",
+        "PageLayout.Content - main content area",
+        "PageLayout.Sidebar - optional sidebar for detail views",
+        "Pattern documented in layout README",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/layout/page-layout.tsx"
+      ],
+      "files_to_modify": [
+        "src/components/layout/index.ts"
+      ],
+      "dependencies": [
+        "FOUND-APPSHELL-003"
+      ],
+      "completion_promise": "FOUND_APPSHELL_006_COMPLETE"
+    },
+    {
+      "id": "FOUND-APPSHELL-007",
+      "name": "Centralize Route Configuration",
+      "description": "Single source of truth for route definitions and metadata",
+      "priority": 7,
+      "status": "pending",
+      "type": "foundation",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/lib/routing/routes.ts created",
+        "Exports: PUBLIC_ROUTES array (login, signup, etc.)",
+        "Exports: ROUTE_METADATA record with title, icon, breadcrumb for each route",
+        "Exports: getRouteMetadata(path) helper",
+        "Sidebar uses ROUTE_METADATA for nav items",
+        "Breadcrumbs use ROUTE_METADATA for labels",
+        "Single source of truth for all route information",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/lib/routing/routes.ts",
+        "src/lib/routing/index.ts"
+      ],
+      "files_to_modify": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/breadcrumbs.tsx"
+      ],
+      "dependencies": [
+        "FOUND-APPSHELL-004",
+        "FOUND-APPSHELL-005"
+      ],
+      "completion_promise": "FOUND_APPSHELL_007_COMPLETE"
+    },
+    {
+      "id": "FOUND-APPSHELL-008",
+      "name": "Create Command Palette",
+      "description": "Cmd+K searchable command interface",
+      "priority": 8,
+      "status": "pending",
+      "type": "ui-component",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/components/layout/command-palette.tsx created",
+        "Opens on Cmd/Ctrl+K keyboard shortcut",
+        "Searchable list of navigation items",
+        "Searchable list of actions (Create Customer, etc.)",
+        "Uses shadcn/ui Command component",
+        "Recent commands/pages section",
+        "Keyboard navigation (arrow keys, enter)",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/layout/command-palette.tsx"
+      ],
+      "files_to_modify": [
+        "src/components/layout/app-shell.tsx"
+      ],
+      "dependencies": [
+        "FOUND-APPSHELL-007"
+      ],
+      "completion_promise": "FOUND_APPSHELL_008_COMPLETE"
+    },
+    {
+      "id": "FOUND-APPSHELL-009",
+      "name": "Create Dashboard Route",
+      "description": "Index page showing key metrics and quick actions",
+      "priority": 9,
+      "status": "pending",
+      "type": "route",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/routes/_authenticated/index.tsx created",
+        "Uses full-width PageLayout variant",
+        "Placeholder widgets for: Pipeline summary, Recent orders, Low stock alerts",
+        "Quick actions: Create Customer, Create Quote, View Orders",
+        "Loader fetches dashboard summary data",
+        "Loading skeleton during data fetch",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/routes/_authenticated/index.tsx"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-APPSHELL-006"
+      ],
+      "completion_promise": "FOUND_APPSHELL_009_COMPLETE"
+    },
+    {
+      "id": "FOUND-APPSHELL-010",
+      "name": "Create Layout README Documentation",
+      "description": "Document layout patterns and usage",
+      "priority": 10,
+      "status": "pending",
+      "type": "documentation",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/components/layout/README.md created",
+        "Documents: AppShell component and structure",
+        "Documents: PageLayout variants with examples",
+        "Documents: Adding new navigation items",
+        "Documents: Breadcrumb configuration",
+        "Documents: Command palette customization",
+        "Shows: typical route file structure",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/layout/README.md"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-APPSHELL-006"
+      ],
+      "completion_promise": "FOUND_APPSHELL_010_COMPLETE"
+    },
+    {
+      "id": "FOUND-APPSHELL-011",
+      "name": "Add Toast Notification Provider",
+      "description": "Global toast system for user feedback across the application",
+      "priority": 11,
+      "status": "pending",
+      "type": "ui-component",
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "File src/components/providers/toast-provider.tsx created",
+        "Uses Sonner or shadcn/ui toast component",
+        "Provider added to root layout",
+        "Toast variants: success, error, warning, info, loading",
+        "Auto-dismiss with configurable duration",
+        "Action buttons supported in toasts",
+        "Hook useToast() exported from src/hooks/use-toast.ts",
+        "Toast used in at least 2 mutation success/error handlers",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/providers/toast-provider.tsx",
+        "src/hooks/use-toast.ts"
+      ],
+      "files_to_modify": [
+        "src/routes/__root.tsx"
+      ],
+      "dependencies": [
+        "FOUND-APPSHELL-001"
+      ],
+      "completion_promise": "FOUND_APPSHELL_011_COMPLETE",
+      "blindspot_source": "backend-patterns - User feedback patterns"
+    },
+    {
+      "id": "FOUND-APPSHELL-012",
+      "name": "Add AI Chat Sidebar",
+      "description": "Global AI assistant accessible from any page",
+      "priority": 12,
+      "status": "pending",
+      "type": "ui-component",
+      "estimated_iterations": 4,
+      "acceptance_criteria": [
+        "File src/components/layout/ai-sidebar.tsx created",
+        "Toggle button in header (sparkles icon)",
+        "Slide-over panel from right side",
+        "Chat input with streaming response display",
+        "Context badge shows current page context",
+        "Conversation history persisted (local or Supabase)",
+        "Quick action suggestions based on page",
+        "Integration with AI SDK useChat hook",
+        "Keyboard shortcut (Cmd+Shift+A) to toggle",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/layout/ai-sidebar.tsx",
+        "src/components/layout/ai-chat-input.tsx",
+        "src/components/layout/ai-message-list.tsx"
+      ],
+      "files_to_modify": [
+        "src/components/layout/app-shell.tsx",
+        "src/components/layout/header.tsx"
+      ],
+      "dependencies": [
+        "FOUND-APPSHELL-003",
+        "INT-AI-001"
+      ],
+      "completion_promise": "FOUND_APPSHELL_012_COMPLETE",
+      "blindspot_source": "backend-patterns/ai-sdk-patterns.md - AI integration in UI"
+    },
+    {
+      "id": "FOUND-APPSHELL-013",
+      "name": "Add Realtime Update Hooks",
+      "description": "React hooks for Supabase realtime subscriptions with TanStack Query",
+      "priority": 13,
+      "status": "pending",
+      "type": "foundation",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/hooks/use-realtime-subscription.ts created",
+        "Generic useRealtimeSubscription hook for any channel",
+        "Auto-invalidates TanStack Query on updates",
+        "useEffect cleanup removes event listeners and timers; AbortController cancels pending requests",
+        "Connection status tracking (connected/disconnected)",
+        "File src/hooks/use-realtime-orders.ts - orders channel",
+        "File src/hooks/use-realtime-pipeline.ts - pipeline channel",
+        "Hooks used in dashboard for live updates",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/hooks/use-realtime-subscription.ts",
+        "src/hooks/use-realtime-orders.ts",
+        "src/hooks/use-realtime-pipeline.ts"
+      ],
+      "files_to_modify": [
+        "src/routes/_authenticated/index.tsx"
+      ],
+      "dependencies": [
+        "FOUND-APPSHELL-009"
+      ],
+      "completion_promise": "FOUND_APPSHELL_013_COMPLETE",
+      "blindspot_source": "backend-patterns/realtime-patterns.md - TanStack Query integration"
+    },
+    {
+      "id": "FOUND-APPSHELL-014",
+      "name": "Collapsible Sidebar with 3 Modes",
+      "description": "Implement sidebar collapse modes (offcanvas, icon, none) with keyboard shortcut and cookie persistence. Based on Square UI 727-line sidebar pattern.",
+      "priority": 14,
+      "status": "pending",
+      "type": "ui-component",
+      "estimated_iterations": 4,
+      "acceptance_criteria": [
+        "Sidebar supports collapsible='offcanvas' | 'icon' | 'none' prop",
+        "Icon mode collapses to 3rem width, shows icons only",
+        "Cmd+B / Ctrl+B keyboard shortcut toggles sidebar",
+        "State persisted in sidebar_state cookie (7 days expiry)",
+        "SidebarProvider context manages state: expanded | collapsed",
+        "SidebarRail edge component for hover/click toggle",
+        "Smooth 200ms transition animation",
+        "SIDEBAR_WIDTH constant: 16rem expanded, 3rem collapsed",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/layout/sidebar-provider.tsx",
+        "src/components/layout/sidebar-rail.tsx",
+        "src/hooks/use-sidebar.ts"
+      ],
+      "files_to_modify": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/app-shell.tsx"
+      ],
+      "dependencies": [
+        "FOUND-APPSHELL-004"
+      ],
+      "completion_promise": "FOUND_APPSHELL_014_COMPLETE",
+      "reference": "_reference/.square-ui-reference/templates-baseui/dashboard-4/components/ui/sidebar.tsx"
+    },
+    {
+      "id": "FOUND-APPSHELL-015",
+      "name": "Mobile Sheet Drawer",
+      "description": "Render sidebar as Sheet overlay on mobile (< 768px) with proper touch handling",
+      "priority": 15,
+      "status": "pending",
+      "type": "ui-component",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "useIsMobile hook with 768px breakpoint using matchMedia",
+        "Mobile (< 768px) renders Sheet overlay with 18rem width",
+        "Desktop (>= 768px) renders fixed sidebar with collapse modes",
+        "Sheet closes on tap outside or ESC key",
+        "SidebarTrigger works on both mobile and desktop",
+        "openMobile state managed separately from desktop collapsed state",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/hooks/use-mobile.ts"
+      ],
+      "files_to_modify": [
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/app-shell.tsx"
+      ],
+      "dependencies": [
+        "FOUND-APPSHELL-014"
+      ],
+      "completion_promise": "FOUND_APPSHELL_015_COMPLETE",
+      "reference": "_reference/.square-ui-reference/templates-baseui/dashboard-4/components/ui/sidebar.tsx"
+    },
+    {
+      "id": "FOUND-APPSHELL-016",
+      "name": "Role-Based Navigation Hiding",
+      "description": "Filter navigation items based on user permissions. Hide features users cannot access.",
+      "priority": 16,
+      "status": "pending",
+      "type": "foundation",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "NavItem type includes requiredPermission and requiredRole fields",
+        "hasPermission(user, permission) utility function (from auth foundation)",
+        "Sidebar filters nav items based on user permissions via useMemo",
+        "Hidden items don't appear in command palette",
+        "Route guards redirect unauthorized access with toast notification",
+        "ROUTE_METADATA extended with permission requirements",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/lib/auth/permissions.ts"
+      ],
+      "files_to_modify": [
+        "src/lib/routing/routes.ts",
+        "src/components/layout/sidebar.tsx",
+        "src/components/layout/command-palette.tsx"
+      ],
+      "dependencies": [
+        "FOUND-APPSHELL-007",
+        "FOUND-AUTH-003"
+      ],
+      "completion_promise": "FOUND_APPSHELL_016_COMPLETE"
+    },
+    {
+      "id": "FOUND-APPSHELL-017",
+      "name": "Multi-Org Switcher",
+      "description": "Dropdown for switching between organizations in sidebar header. Users may belong to multiple orgs.",
+      "priority": 17,
+      "status": "pending",
+      "type": "ui-component",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "OrgSwitcher component in SidebarHeader using DropdownMenu",
+        "Shows current org name and logo (Avatar)",
+        "Lists all orgs user has access to",
+        "Current org stored in cookie or localStorage",
+        "Org switch preserves current route path",
+        "ChevronDown indicator for dropdown",
+        "'Create Organization' option at bottom with separator",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/layout/org-switcher.tsx",
+        "src/hooks/use-current-org.ts"
+      ],
+      "files_to_modify": [
+        "src/components/layout/sidebar.tsx"
+      ],
+      "dependencies": [
+        "FOUND-APPSHELL-004",
+        "FOUND-AUTH-002"
+      ],
+      "completion_promise": "FOUND_APPSHELL_017_COMPLETE",
+      "reference": "_reference/.square-ui-reference/templates-baseui/dashboard-4/components/ui/sidebar.tsx"
+    },
+    {
+      "id": "FOUND-APPSHELL-018",
+      "name": "Keyboard Shortcuts Modal",
+      "description": "Dialog displaying all available keyboard shortcuts, opened with Cmd+/",
+      "priority": 18,
+      "status": "pending",
+      "type": "ui-component",
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "Dialog opens with Cmd+/ (or Ctrl+/ on Windows)",
+        "Shortcuts grouped by category (Navigation, Actions, AI)",
+        "Keyboard shortcut badges styled like kbd element",
+        "Shortcut definitions from centralized config",
+        "Searchable shortcut list",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/components/layout/keyboard-shortcuts-modal.tsx",
+        "src/lib/keyboard-shortcuts.ts"
+      ],
+      "files_to_modify": [
+        "src/components/layout/app-shell.tsx"
+      ],
+      "dependencies": [
+        "FOUND-APPSHELL-008"
+      ],
+      "completion_promise": "FOUND_APPSHELL_018_COMPLETE"
+    }
+  ],
+  "success_criteria": [
+    "Root layout provides QueryClient and error handling",
+    "Authenticated layout wraps protected routes with AppShell",
+    "Sidebar navigation shows all MVP domains",
+    "Header shows breadcrumbs and user menu",
+    "PageLayout variants cover all page types",
+    "Command palette enables quick navigation",
+    "Route configuration centralized",
+    "Dashboard shows placeholder widgets",
+    "README documents all patterns",
+    "bun run typecheck passes"
+  ],
+  "out_of_scope": [
+    "Domain-specific navigation (domain PRDs add those)",
+    "Mobile-specific layouts (V1)",
+    "Theme customization (V1)",
+    "Multi-language routing"
+  ],
+  "domain_completion_promise": "FOUND_APPSHELL_COMPLETE"
+}

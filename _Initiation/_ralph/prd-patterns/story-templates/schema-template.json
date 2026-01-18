@@ -1,0 +1,65 @@
+{
+  "template_name": "Schema Story Template",
+  "description": "For database schema changes and migrations",
+  "usage": "Copy this template and customize for schema stories",
+  "template": {
+    "id": "DOMAIN-NNNa",
+    "name": "Feature Name: Schema",
+    "description": "Create database schema for [feature description]",
+    "priority": 1,
+    "status": "pending",
+    "acceptance_criteria": [
+      "File lib/schema/[feature].ts exists with [table_name] table definition",
+      "Table includes [list key columns: id (uuid), name (varchar), orgId (uuid FK), createdAt, updatedAt]",
+      "[List additional columns with types and constraints]",
+      "Proper RLS policies following existing schema patterns (org_id context)",
+      "[List any additional indexes needed]",
+      "Migration file created in drizzle/migrations/ with proper up/down",
+      "Types exported: [Feature], [Feature]Insert, [Feature]Update",
+      "[List any additional types or enums needed]",
+      "npm run db:generate succeeds without errors",
+      "npm run typecheck passes"
+    ],
+    "dependencies": [],
+    "estimated_iterations": 3,
+    "completion_promise": "DOMAIN_NNNA_COMPLETE",
+    "enhancements": {
+      "type": "schema",
+      "migration_type": "create_table | alter_table | add_index",
+      "related_tables": [
+        "List any related tables"
+      ],
+      "data_migration_notes": "Any special data migration considerations"
+    }
+  },
+  "customization_guide": {
+    "id": "Replace DOMAIN with domain code (CUST, ORD, etc.), NNN with sequential number, 'a' for schema stories",
+    "name": "Make descriptive but concise",
+    "description": "Explain what schema entities are being created",
+    "acceptance_criteria": [
+      "Start each criterion with 'File' to specify exact file paths",
+      "List all columns with data types and constraints",
+      "Include RLS policy requirements",
+      "Specify exact type exports needed",
+      "Always include db:generate and typecheck checks"
+    ],
+    "estimated_iterations": "Typically 2-4 for schema stories",
+    "completion_promise": "Must follow STORY_ID_COMPLETE format (uppercase, underscores)"
+  },
+  "examples": [
+    {
+      "id": "DOM-CUST-001a",
+      "name": "Customer Tags: Schema",
+      "acceptance_criteria": [
+        "File lib/schema/customer-tags.ts exists with customerTags table (id uuid, name varchar(50), color varchar(7), description text nullable, orgId uuid FK, createdAt, updatedAt)",
+        "File lib/schema/customer-tags.ts exports customerTagAssignments table (customerId uuid FK, tagId uuid FK, assignedAt, assignedBy uuid FK)",
+        "Both tables have proper indexes (tagId, customerId, orgId)",
+        "RLS policies created for both tables following lib/schema/*.ts patterns",
+        "Types exported: CustomerTag, CustomerTagAssignment, NewCustomerTag",
+        "Migration file created in drizzle/migrations/",
+        "npm run db:generate succeeds",
+        "npm run typecheck passes"
+      ]
+    }
+  ]
+}

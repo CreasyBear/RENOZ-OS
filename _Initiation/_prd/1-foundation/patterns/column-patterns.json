@@ -1,0 +1,188 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "column-patterns.json",
+  "title": "Standard Column Pattern Definitions",
+  "description": "Defines standard columns that tables must include based on their category. All PRDs must specify which category their tables belong to.",
+  "version": "1.0.0",
+  "lastUpdated": "2026-01-11",
+
+  "usage": {
+    "inPRD": "Specify tableCategory for each table. All columns from that category are automatically included.",
+    "inDrizzle": "Use helper functions from drizzle/schema/patterns.ts that implement these patterns.",
+    "validation": "PRD validation script checks that all required columns are present"
+  },
+
+  "patterns": {
+    "baseColumns": {
+      "description": "Every table must have these columns",
+      "columns": {
+        "id": {
+          "type": "uuid",
+          "constraints": "PRIMARY KEY DEFAULT gen_random_uuid()",
+          "drizzleHelper": "idColumn"
+        },
+        "createdAt": {
+          "type": "timestamptz",
+          "constraints": "NOT NULL DEFAULT NOW()",
+          "drizzleHelper": "timestampColumns.createdAt"
+        },
+        "updatedAt": {
+          "type": "timestamptz",
+          "constraints": "NOT NULL DEFAULT NOW()",
+          "notes": "Auto-updated via Drizzle $onUpdate() or DB trigger",
+          "drizzleHelper": "timestampColumns.updatedAt"
+        }
+      }
+    },
+
+    "tenantColumns": {
+      "description": "Multi-tenancy anchor - required for RLS to function",
+      "columns": {
+        "organizationId": {
+          "type": "uuid",
+          "constraints": "NOT NULL REFERENCES organizations(id) ON DELETE CASCADE",
+          "notes": "Every business table needs this for data isolation",
+          "drizzleHelper": "organizationColumn"
+        }
+      }
+    },
+
+    "auditColumns": {
+      "description": "Track who created/modified records",
+      "columns": {
+        "createdBy": {
+          "type": "uuid",
+          "constraints": "REFERENCES users(id) ON DELETE SET NULL",
+          "notes": "Nullable for system-created records",
+          "drizzleHelper": "auditColumns.createdBy"
+        },
+        "updatedBy": {
+          "type": "uuid",
+          "constraints": "REFERENCES users(id) ON DELETE SET NULL",
+          "notes": "Updated on every modification",
+          "drizzleHelper": "auditColumns.updatedBy"
+        }
+      }
+    },
+
+    "mutableColumns": {
+      "description": "For entities that can be soft-deleted or need optimistic locking",
+      "columns": {
+        "deletedAt": {
+          "type": "timestamptz",
+          "constraints": "NULL",
+          "notes": "Soft delete - set timestamp instead of DELETE",
+          "drizzleHelper": "softDeleteColumn.deletedAt"
+        },
+        "version": {
+          "type": "integer",
+          "constraints": "NOT NULL DEFAULT 1",
+          "notes": "Increment on update for optimistic locking",
+          "drizzleHelper": "versionColumn.version"
+        }
+      }
+    }
+  },
+
+  "tableCategories": {
+    "business": {
+      "description": "Core business entities (customers, orders, products, opportunities)",
+      "includesPatterns": ["baseColumns", "tenantColumns", "auditColumns", "mutableColumns"],
+      "examples": ["customers", "orders", "products", "opportunities", "suppliers"]
+    },
+
+    "junction": {
+      "description": "Many-to-many relationship tables",
+      "includesPatterns": ["baseColumns", "tenantColumns"],
+      "examples": ["customerTagAssignments", "productCategories", "userGroupMembers"]
+    },
+
+    "appendOnly": {
+      "description": "Immutable audit/history tables - never updated or deleted",
+      "includesPatterns": ["baseColumns", "tenantColumns", "auditColumns"],
+      "notes": "No deletedAt or version - records are permanent",
+      "examples": ["activities", "inventoryMovements", "orderMilestones", "emailHistory"]
+    },
+
+    "system": {
+      "description": "System-level tables not scoped to organization",
+      "includesPatterns": ["baseColumns"],
+      "notes": "No tenantColumns - used for global data",
+      "examples": ["organizations"]
+    },
+
+    "userScoped": {
+      "description": "Tables scoped to user rather than organization",
+      "includesPatterns": ["baseColumns"],
+      "customColumns": {
+        "userId": {
+          "type": "uuid",
+          "constraints": "NOT NULL REFERENCES users(id) ON DELETE CASCADE"
+        }
+      },
+      "notes": "RLS uses user_id instead of organization_id",
+      "examples": ["notifications", "userPreferences", "userSessions"]
+    }
+  },
+
+  "columnTypes": {
+    "currency": {
+      "postgresType": "numeric(12,2)",
+      "drizzleHelper": "currencyColumn(name)",
+      "notes": "For monetary values - avoids floating point issues"
+    },
+    "unitCost": {
+      "postgresType": "numeric(10,4)",
+      "drizzleHelper": "unitCostColumn(name)",
+      "notes": "Higher precision for unit costs that get multiplied"
+    },
+    "quantity": {
+      "postgresType": "numeric(10,2)",
+      "drizzleHelper": "quantityColumn(name)",
+      "notes": "For fractional quantities (e.g., 1.5 meters)"
+    },
+    "percentage": {
+      "postgresType": "numeric(5,2)",
+      "notes": "For tax rates, discounts (e.g., 10.00 = 10%)"
+    }
+  },
+
+  "indexPatterns": {
+    "tenantFirst": {
+      "description": "All query indexes should include organization_id first",
+      "pattern": "(organization_id, <filter_column>)",
+      "examples": [
+        "(organization_id, status)",
+        "(organization_id, created_at DESC)",
+        "(organization_id, customer_id)"
+      ]
+    },
+    "fullTextSearch": {
+      "description": "GIN indexes for text search columns",
+      "pattern": "GIN(to_tsvector('english', <column>))",
+      "examples": [
+        "customers: company_name, name",
+        "products: name, sku",
+        "contacts: first_name, last_name, email"
+      ]
+    }
+  },
+
+  "foreignKeyPatterns": {
+    "cascadeDelete": {
+      "usage": "When child must be deleted with parent",
+      "constraint": "ON DELETE CASCADE",
+      "examples": ["order_items → orders", "contacts → customers"]
+    },
+    "setNull": {
+      "usage": "When child can exist without parent reference",
+      "constraint": "ON DELETE SET NULL",
+      "examples": ["orders.assigned_to → users"]
+    },
+    "restrict": {
+      "usage": "When deletion should be prevented if children exist",
+      "constraint": "ON DELETE RESTRICT",
+      "examples": ["products with active orders"]
+    }
+  }
+}

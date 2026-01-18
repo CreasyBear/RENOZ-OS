@@ -1,0 +1,354 @@
+{
+  "prd_id": "CC-ERROR",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "summary": {
+    "total_stories": 8,
+    "verified_gaps": 2,
+    "invalidated_gaps": 5,
+    "new_gaps_found": 1,
+    "implementation_status": "partially_complete"
+  },
+  "codebase_findings": {
+    "error_classes_implemented": {
+      "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/server/errors.ts",
+      "classes": [
+        "AppError (base class with code, statusCode, message, details)",
+        "UnauthorizedError (401)",
+        "PermissionDeniedError (403)",
+        "NotFoundError (404)",
+        "ValidationError (400) with field support",
+        "ContextualValidationError with ErrorContext",
+        "ConflictError (409)",
+        "ConcurrencyError with full ConcurrencyConflictDetails (entityType, entityId, expectedVersion, actualVersion, currentState, attemptedChanges, lastModifiedBy, lastModifiedAt)",
+        "BusinessLogicError (422)",
+        "RateLimitError (429) with retryAfter"
+      ],
+      "helpers": [
+        "isAppError() type guard",
+        "toSafeError() converter"
+      ]
+    },
+    "error_boundary_implemented": {
+      "global_boundary": {
+        "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/layout/error-boundary.tsx",
+        "features": [
+          "Catches rendering errors in children",
+          "User-friendly Card UI with AlertTriangle icon",
+          "Try Again button (resets error state)",
+          "Go Home button (navigates to /)",
+          "Sentry integration for error logging",
+          "onError callback prop",
+          "Custom fallback support"
+        ]
+      },
+      "widget_boundary": {
+        "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/dashboard/widget-error-boundary.tsx",
+        "features": [
+          "Per-widget error isolation",
+          "Auto-retry for network errors (2 second delay)",
+          "Max 3 retry attempts",
+          "Retry button with loading state",
+          "Reset button",
+          "Widget ID display for debugging"
+        ]
+      },
+      "auth_error_boundary": {
+        "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/auth/auth-error-display.tsx",
+        "features": [
+          "AuthErrorBoundary class component",
+          "Specialized auth error display with severity-based styling",
+          "Recovery action buttons (Retry, Login, Refresh, Contact Support)",
+          "Auto-dismiss for low-severity errors"
+        ]
+      },
+      "root_integration": {
+        "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/routes/__root.tsx",
+        "notes": "ErrorBoundary wraps Outlet in RootLayout, Toaster included for toast notifications"
+      }
+    },
+    "error_message_mapping_implemented": {
+      "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/lib/error-handling.ts",
+      "features": [
+        "formatError() transforms AppError to user-friendly format",
+        "Severity levels (error, warning, info)",
+        "Recovery actions with type navigation support",
+        "Related entities with link generation"
+      ],
+      "auth_error_transformation": {
+        "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/lib/auth/error-transformation.ts",
+        "features": [
+          "AuthErrorCategory enum (RATE_LIMIT, NETWORK, SESSION_EXPIRED, etc.)",
+          "RecoveryAction enum (RETRY, LOGIN, REFRESH, CONTACT_SUPPORT, WAIT)",
+          "transformAuthError() with context-aware messages",
+          "isRetryableError() classification",
+          "getRecoveryActionLabel() and getRecoveryActionDescription()"
+        ]
+      }
+    },
+    "form_error_display_implemented": {
+      "form_ui": {
+        "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/ui/form.tsx",
+        "features": [
+          "FormMessage component for field errors",
+          "FormControl with aria-describedby and aria-invalid",
+          "FormLabel with error state styling"
+        ]
+      },
+      "form_field_wrapper": {
+        "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/shared/form-field-wrapper.tsx",
+        "features": [
+          "Label with required indicator",
+          "Error message with icon and role=alert",
+          "aria-live=polite for screen reader announcements",
+          "Description text support"
+        ]
+      }
+    },
+    "api_error_handler_implemented": {
+      "hook": {
+        "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/hooks/use-error-handler.ts",
+        "features": [
+          "handleError() for mutations/submissions",
+          "Form integration with setError()",
+          "Auto-focus first error field",
+          "Toast integration via showErrorToast()",
+          "Entity navigation for recovery actions"
+        ]
+      },
+      "toast_utilities": {
+        "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/lib/error-handling.ts",
+        "features": [
+          "showErrorToast() with retry and view entity actions",
+          "showCriticalError() for prominent errors",
+          "extractFieldError() for form integration"
+        ]
+      }
+    },
+    "error_logging_implemented": {
+      "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/lib/monitoring/sentry.ts",
+      "features": [
+        "captureException() with context",
+        "captureMessage() with level",
+        "addBreadcrumb() for debugging context",
+        "setUser() / clearUser() for user context",
+        "Lazy initialization",
+        "Development/production filtering",
+        "Error filtering (ResizeObserver, Non-Error promise, NetworkError)",
+        "Session replay on errors"
+      ]
+    },
+    "retry_mechanisms_implemented": {
+      "rate_limit_resilience": {
+        "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/lib/auth/rate-limit-resilience.ts",
+        "features": [
+          "RateLimitResilienceManager class",
+          "Exponential backoff with jitter (1s base, 8s max)",
+          "Circuit breaker pattern (5 failures, 60s timeout)",
+          "3 max retries",
+          "executeWithResilience() wrapper"
+        ]
+      },
+      "widget_auto_retry": {
+        "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/dashboard/widget-error-boundary.tsx",
+        "features": [
+          "Auto-retry on network errors after 2s",
+          "Max 3 retry attempts",
+          "User-cancelable via retry/reset buttons"
+        ]
+      }
+    },
+    "concurrency_conflict_ui_implemented": {
+      "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/domain/shared/concurrency-conflict-dialog.tsx",
+      "features": [
+        "Side-by-side diff comparison (current vs user changes)",
+        "Checkbox selection for merge",
+        "Last modified info (user, timestamp)",
+        "Cancel / Reload / Merge / Overwrite actions",
+        "Keyboard navigation with Dialog primitive"
+      ]
+    },
+    "toast_notification_system": {
+      "sonner_integration": {
+        "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/ui/sonner.tsx",
+        "features": [
+          "Themed Toaster with success/info/warning/error icons",
+          "System theme integration"
+        ]
+      },
+      "root_toaster": {
+        "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/routes/__root.tsx",
+        "notes": "Toaster included in RootLayout"
+      }
+    },
+    "not_found_component": {
+      "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/shared/not-found.tsx",
+      "features": [
+        "404 visual display",
+        "Go Back / Go to Dashboard buttons",
+        "Search suggestion (Cmd+K)",
+        "Quick links to main sections"
+      ]
+    },
+    "error_state_component": {
+      "location": "/Users/joelchan/Documents/Coding/App-Dev/live/renoz-crm-tanstack/renoz-v2/src/components/shared/error-state.tsx",
+      "features": [
+        "Page and inline variants",
+        "Retry and back navigation buttons",
+        "Accessible (role=alert, aria-live=assertive)"
+      ]
+    }
+  },
+  "gap_verification": {
+    "no_error_boundary_components": {
+      "claimed": true,
+      "actual": false,
+      "evidence": "ErrorBoundary exists at src/components/layout/error-boundary.tsx with Try Again, Go Home actions, Sentry logging. WidgetErrorBoundary provides widget-level isolation with auto-retry. AuthErrorBoundary in src/components/auth/auth-error-display.tsx."
+    },
+    "no_global_error_handler": {
+      "claimed": true,
+      "actual": false,
+      "evidence": "Global ErrorBoundary wraps Outlet in __root.tsx. Sentry captures unhandled exceptions. useErrorHandler hook provides mutation error handling."
+    },
+    "no_user_friendly_error_mapping": {
+      "claimed": true,
+      "actual": false,
+      "evidence": "formatError() in src/lib/error-handling.ts maps AppError codes to user-friendly titles and messages. transformAuthError() provides specialized auth error messages."
+    },
+    "no_error_logging_infrastructure": {
+      "claimed": true,
+      "actual": false,
+      "evidence": "Sentry integration at lib/monitoring/sentry.ts with captureException, captureMessage, breadcrumbs, user context. Console logging in development."
+    },
+    "no_retry_mechanisms": {
+      "claimed": true,
+      "actual": false,
+      "evidence": "RateLimitResilienceManager implements exponential backoff with circuit breaker. WidgetErrorBoundary has auto-retry for network errors."
+    },
+    "no_offline_error_handling": {
+      "claimed": true,
+      "actual": true,
+      "evidence": "No specific offline error handling patterns found beyond network error detection in existing code. lib/offline/ contains sync-manager but no dedicated offline error UI."
+    },
+    "no_form_level_error_display": {
+      "claimed": true,
+      "actual": false,
+      "evidence": "FormFieldWrapper and form.tsx provide accessible field-level error display with aria-describedby, role=alert, aria-live. useErrorHandler integrates server errors with forms."
+    }
+  },
+  "stories_status": {
+    "CC-ERR-001": {
+      "name": "Implement AppError Class Hierarchy",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "FULLY IMPLEMENTED: AppError class hierarchy exists at src/server/errors.ts with AppError, UnauthorizedError, PermissionDeniedError, NotFoundError, ValidationError, ContextualValidationError, ConflictError, ConcurrencyError (with full conflict details), BusinessLogicError, RateLimitError. All criteria met including field-level ValidationError and ConcurrencyConflictDetails.",
+      "layers": ["server"],
+      "estimated_iterations": 0
+    },
+    "CC-ERR-002": {
+      "name": "Create Error Boundary Components",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "FULLY IMPLEMENTED: RouteErrorBoundary equivalent exists at src/components/layout/error-boundary.tsx. WidgetErrorBoundary provides component isolation with retry. Both display user-friendly messages, include Try Again/Go Home actions, log to Sentry, use consistent styling.",
+      "layers": ["ui"],
+      "estimated_iterations": 0
+    },
+    "CC-ERR-003": {
+      "name": "User-Friendly Error Message Mapping",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "FULLY IMPLEMENTED: formatError() at src/lib/error-handling.ts maps error codes to titles/messages. transformAuthError() handles auth-specific errors with recovery suggestions. All specified codes covered.",
+      "layers": ["ui"],
+      "estimated_iterations": 0
+    },
+    "CC-ERR-004": {
+      "name": "Form Error Display Pattern",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "FULLY IMPLEMENTED: FormFieldWrapper and FormMessage provide field-level errors. Uses destructive color tokens. aria-describedby, role=alert, aria-live=polite for accessibility. useErrorHandler maps server errors to form fields.",
+      "layers": ["ui"],
+      "estimated_iterations": 0
+    },
+    "CC-ERR-005": {
+      "name": "API Error Handler Utility",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "FULLY IMPLEMENTED: useErrorHandler hook at src/hooks/use-error-handler.ts wraps mutations, transforms errors, shows toasts, handles form integration. showErrorToast() provides toast-displayable format with retry actions.",
+      "layers": ["ui"],
+      "estimated_iterations": 0
+    },
+    "CC-ERR-006": {
+      "name": "Error Logging Infrastructure",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "FULLY IMPLEMENTED: Sentry integration at lib/monitoring/sentry.ts with captureException, captureMessage, addBreadcrumb, setUser. Filters sensitive data. Console logging in dev, structured in prod.",
+      "layers": ["server", "ui"],
+      "estimated_iterations": 0
+    },
+    "CC-ERR-007": {
+      "name": "Retry Mechanism for Transient Failures",
+      "status": "valid",
+      "change": "adjust_scope",
+      "reason": "PARTIALLY IMPLEMENTED: RateLimitResilienceManager provides exponential backoff and circuit breaker for auth. WidgetErrorBoundary has widget-level retry. MISSING: TanStack Query retry configuration across app, user-visible retry progress indicator, user-cancelable retry UI for general mutations (not just widgets).",
+      "layers": ["ui"],
+      "estimated_iterations": 3
+    },
+    "CC-ERR-008": {
+      "name": "Concurrency Conflict Resolution UI",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "FULLY IMPLEMENTED: ConcurrencyConflictDialog at src/components/domain/shared/concurrency-conflict-dialog.tsx shows diff view, allows merge selection, displays last modifier info. Has Cancel/Reload/Merge/Overwrite actions with keyboard navigation.",
+      "layers": ["ui"],
+      "estimated_iterations": 0
+    }
+  },
+  "recommended_stories": [
+    "CC-ERR-007 (scoped down)"
+  ],
+  "new_gaps_found": {
+    "CC-ERR-009": {
+      "name": "Offline Error Handling and Feedback",
+      "description": "Implement user feedback when the app detects offline state. Show connection status, queue failed operations, and notify users when operations will retry.",
+      "priority": 2,
+      "acceptance_criteria": [
+        "Offline detection hook that monitors navigator.onLine",
+        "Visual indicator in header/status bar when offline",
+        "Toast notification when going offline/online",
+        "Failed operations queued for retry when back online",
+        "User can view pending operations queue",
+        "Clear feedback when queued operations succeed/fail on reconnection"
+      ],
+      "layers": ["ui"],
+      "estimated_iterations": 4
+    }
+  },
+  "atomization_notes": {
+    "CC-ERR-007": {
+      "reason": "Story should be scoped down since most retry infrastructure exists. Focus only on missing pieces.",
+      "suggested_scope": "Add TanStack Query retry configuration defaults, add user-visible retry progress for mutations, add cancel button for in-progress retries",
+      "original_scope_covered": [
+        "Exponential backoff (implemented in RateLimitResilienceManager)",
+        "Rate limit retry-after (implemented in RateLimitError)",
+        "Auto-retry for network errors (implemented in WidgetErrorBoundary)"
+      ]
+    }
+  },
+  "implementation_summary": {
+    "fully_implemented": [
+      "AppError class hierarchy with all specified error types",
+      "Error boundary components (route-level and widget-level)",
+      "User-friendly error message mapping",
+      "Form error display with accessibility",
+      "API error handler utility (useErrorHandler hook)",
+      "Error logging with Sentry",
+      "Concurrency conflict resolution dialog"
+    ],
+    "partially_implemented": [
+      "Retry mechanisms (auth-specific and widget-specific exist, needs generalization)"
+    ],
+    "not_implemented": [
+      "Offline error handling and user feedback"
+    ],
+    "recommendation": "This PRD is 87% complete. Only CC-ERR-007 (scoped down) and new gap CC-ERR-009 need implementation. Consider creating a focused follow-up PRD for offline resilience that combines CC-ERR-009 with lib/offline infrastructure completion."
+  }
+}

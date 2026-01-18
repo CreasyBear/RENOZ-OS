@@ -1,0 +1,266 @@
+{
+  "id": "phase-0-jobs",
+  "name": "Field Operations Page",
+  "description": "Create /jobs route for job management, assignments, and dispatcher coordination",
+  "phase": 0,
+  "priority": "P0",
+  "domain": "jobs",
+  "wireframe": "memory-bank/ADR/audit/wireframes/field-operations.md",
+  "efficiency_impact": "100%",
+  "dependencies": [],
+  "completion_promise": "JOBS_PAGE_COMPLETE",
+  "max_iterations": 30,
+
+  "stories": [
+    {
+      "id": "JOB-001",
+      "name": "Create Jobs Route Structure",
+      "description": "Create the /jobs route for dispatcher view of field operations",
+      "status": "pending",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Route /jobs exists and renders without errors",
+        "Page title shows 'Field Operations'",
+        "Breadcrumb shows Home > Jobs",
+        "Pending state shows skeleton loader",
+        "Route is protected (requires auth)"
+      ],
+      "technical_requirements": [
+        "Create src/routes/jobs/index.tsx using TanStack Router",
+        "Follow existing route patterns from /orders",
+        "Add route to app navigation if not present",
+        "Use AppShell layout"
+      ],
+      "completion_promise": "<promise>JOB-001-ROUTE-STRUCTURE-COMPLETE</promise>",
+      "estimated_iterations": 2
+    },
+    {
+      "id": "JOB-002",
+      "name": "Jobs Metrics Dashboard",
+      "description": "Add metrics row showing active jobs, completed this week, on-time rate, avg duration",
+      "status": "pending",
+      "priority": "P0",
+      "dependencies": ["JOB-001"],
+      "acceptance_criteria": [
+        "Four MetricCard components display in a row",
+        "Active Jobs Today shows count of jobs with status not completed",
+        "Completed This Week shows count with trend",
+        "On-Time Completion shows percentage",
+        "Avg Duration shows hours with trend",
+        "All metrics fetch real data from job_assignments table"
+      ],
+      "technical_requirements": [
+        "Create getJobMetrics server function in src/server/functions/jobs.ts",
+        "Use shared/metrics/ components",
+        "Calculate metrics from job_assignments table",
+        "Use TanStack Query for data fetching"
+      ],
+      "completion_promise": "<promise>JOB-002-METRICS-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-003",
+      "name": "Jobs DataTable with Filtering",
+      "description": "Create main jobs table with comprehensive filtering",
+      "status": "pending",
+      "priority": "P0",
+      "dependencies": ["JOB-001"],
+      "acceptance_criteria": [
+        "DataTable displays jobs with columns: Job ID, Customer, Type, Technician, Status, Priority, Scheduled",
+        "Status filter works (Scheduled, Assigned, En Route, In Progress, Completed)",
+        "Technician filter works (dropdown of installers)",
+        "Priority filter works (High, Medium, Low, Emergency)",
+        "Date range filter works",
+        "Search by job ID or customer name works",
+        "Row selection checkboxes work"
+      ],
+      "technical_requirements": [
+        "Create src/components/domain/jobs/job-columns.tsx",
+        "Use shared/data-table/ with column definitions",
+        "Create listJobsForDispatcher server function",
+        "Use useUrlFilters hook for filter state",
+        "Join with customers, users (installers) tables"
+      ],
+      "completion_promise": "<promise>JOB-003-JOBS-TABLE-COMPLETE</promise>",
+      "estimated_iterations": 5
+    },
+    {
+      "id": "JOB-004",
+      "name": "Job Detail Sidebar",
+      "description": "Create sidebar showing full job details and assignment information",
+      "status": "pending",
+      "priority": "P0",
+      "dependencies": ["JOB-003"],
+      "acceptance_criteria": [
+        "Sidebar opens when job row is clicked",
+        "Shows job header (ID, type, priority badge)",
+        "Shows customer info (name, address, phone)",
+        "Shows scheduled time and estimated duration",
+        "Shows assigned technician info (name, phone, status)",
+        "Shows job notes and special instructions",
+        "Action buttons: View Map, Contact Tech, Update Status, Complete"
+      ],
+      "technical_requirements": [
+        "Create src/components/domain/jobs/job-detail-sidebar.tsx",
+        "Use shared/detail-sidebar.tsx pattern",
+        "Use ui/sheet.tsx for sidebar container",
+        "Create getJobDetails server function"
+      ],
+      "completion_promise": "<promise>JOB-004-JOB-DETAIL-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-005",
+      "name": "Technician Assignment Dialog",
+      "description": "Create dialog for assigning technicians to jobs",
+      "status": "pending",
+      "priority": "P0",
+      "dependencies": ["JOB-003"],
+      "acceptance_criteria": [
+        "Dialog opens from unassigned job or reassign action",
+        "Shows list of available technicians",
+        "Shows technician workload (jobs today)",
+        "Shows technician availability status",
+        "Selecting technician and confirming assigns job",
+        "Notification sent to technician on assignment"
+      ],
+      "technical_requirements": [
+        "Create src/components/domain/jobs/technician-assignment-dialog.tsx",
+        "Create listAvailableTechnicians server function",
+        "Create assignTechnicianToJob server function",
+        "Filter users by userType = 'installer'",
+        "Calculate daily workload per technician"
+      ],
+      "completion_promise": "<promise>JOB-005-ASSIGNMENT-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-006",
+      "name": "Job Status Update Actions",
+      "description": "Enable dispatcher to update job status",
+      "status": "pending",
+      "priority": "P0",
+      "dependencies": ["JOB-004"],
+      "acceptance_criteria": [
+        "Status dropdown in job detail shows current status",
+        "Can change status: Scheduled -> Assigned -> En Route -> In Progress -> Completed",
+        "Status change updates database and refreshes UI",
+        "Status change creates activity log entry",
+        "Cannot skip statuses (must follow workflow)"
+      ],
+      "technical_requirements": [
+        "Create updateJobStatus server function",
+        "Use shared/status-stepper.tsx for visual workflow",
+        "Validate status transitions",
+        "Create job activity record on status change"
+      ],
+      "completion_promise": "<promise>JOB-006-STATUS-UPDATE-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-007",
+      "name": "Bulk Job Operations",
+      "description": "Add bulk action bar for multi-job operations",
+      "status": "pending",
+      "priority": "P1",
+      "dependencies": ["JOB-003"],
+      "acceptance_criteria": [
+        "Bulk action bar appears when jobs selected",
+        "Bulk Assign Technician action works",
+        "Bulk Change Priority action works",
+        "Bulk Export to CSV action works",
+        "Selection count displayed",
+        "Clear selection button works"
+      ],
+      "technical_requirements": [
+        "Use shared/bulk-action-bar.tsx",
+        "Create bulkAssignTechnician server function",
+        "Create bulkUpdateJobPriority server function",
+        "Create exportJobsToCsv server function"
+      ],
+      "completion_promise": "<promise>JOB-007-BULK-OPERATIONS-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-008",
+      "name": "Create New Job Dialog",
+      "description": "Enable creating new jobs from dispatcher view",
+      "status": "pending",
+      "priority": "P1",
+      "dependencies": ["JOB-001"],
+      "acceptance_criteria": [
+        "New Job button opens creation dialog",
+        "Customer selector (search existing customers)",
+        "Job type selector (Install, Repair, Service, Other)",
+        "Scheduled date and time picker",
+        "Estimated duration input",
+        "Priority selector",
+        "Notes/instructions field",
+        "Optional technician assignment",
+        "Save creates job and optionally assigns"
+      ],
+      "technical_requirements": [
+        "Create src/components/domain/jobs/create-job-dialog.tsx",
+        "Use TanStack Form for form handling",
+        "Create createJob server function",
+        "Link to order if job is from order fulfillment"
+      ],
+      "completion_promise": "<promise>JOB-008-CREATE-JOB-COMPLETE</promise>",
+      "estimated_iterations": 4
+    }
+  ],
+
+  "success_metrics": {
+    "route_renders": "Page loads without errors",
+    "data_displayed": "Real job data from job_assignments table",
+    "assignment_works": "Can assign technicians to jobs",
+    "status_works": "Can update job status through workflow",
+    "efficiency_gain": "Dispatchers can coordinate field operations (was 100% missing)"
+  },
+
+  "existing_components_to_use": [
+    "shared/data-table/",
+    "shared/metrics/",
+    "shared/bulk-action-bar.tsx",
+    "shared/detail-sidebar.tsx",
+    "shared/status-stepper.tsx",
+    "domain/jobs/ (existing job components)",
+    "installer/ (existing installer views for reference)"
+  ],
+
+  "server_functions_to_create": [
+    "getJobMetrics",
+    "listJobsForDispatcher",
+    "getJobDetails",
+    "listAvailableTechnicians",
+    "assignTechnicianToJob",
+    "updateJobStatus",
+    "bulkAssignTechnician",
+    "bulkUpdateJobPriority",
+    "createJob"
+  ],
+
+  "job_statuses": [
+    "scheduled",
+    "assigned",
+    "en_route",
+    "in_progress",
+    "completed",
+    "cancelled"
+  ],
+
+  "job_priorities": [
+    "emergency",
+    "high",
+    "medium",
+    "low"
+  ],
+
+  "job_types": [
+    "install",
+    "repair",
+    "service",
+    "warranty_claim",
+    "other"
+  ]
+}

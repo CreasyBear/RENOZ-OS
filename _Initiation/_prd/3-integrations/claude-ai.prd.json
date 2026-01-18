@@ -1,0 +1,519 @@
+{
+  "id": "INT-CLAUDE",
+  "name": "Claude AI Integration",
+  "description": "AI assistant integration using Claude API with tools for querying data, performing actions, and generating insights across the CRM.",
+  "created": "2026-01-09",
+  "atomized": "2026-01-09",
+  "priority": 3,
+  "phase": "integration",
+  "service": "Claude/Anthropic",
+  "dependencies": {
+    "phase": "Integration",
+    "executionOrder": 3,
+    "schemaRequired": [
+      {
+        "table": "organizations",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "users",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "ai-conversations",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "customers",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "contacts",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "orders",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "products",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "opportunities",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      }
+    ],
+    "schemaCreates": [
+      {
+        "table": "ai_usage_logs",
+        "story": "INT-AI-005-A",
+        "description": "Track AI API usage, tokens, and costs per user/org"
+      },
+      {
+        "table": "ai_audit_logs",
+        "story": "INT-AI-007-A",
+        "description": "Audit trail for all AI tool calls (queries and mutations)"
+      }
+    ],
+    "serverFunctionsRequired": [
+      {
+        "function": "getOrders",
+        "status": "EXISTS",
+        "reason": "AI query tool for order data"
+      },
+      {
+        "function": "getOrderById",
+        "status": "EXISTS",
+        "reason": "AI query tool for individual orders"
+      },
+      {
+        "function": "getCustomers",
+        "status": "EXISTS",
+        "reason": "AI query tool for customer data"
+      },
+      {
+        "function": "getCustomerById",
+        "status": "EXISTS",
+        "reason": "AI query tool for individual customers"
+      },
+      {
+        "function": "getProducts",
+        "status": "EXISTS",
+        "reason": "AI query tool for product data"
+      },
+      {
+        "function": "getOpportunities",
+        "status": "EXISTS",
+        "reason": "AI query tool for sales pipeline"
+      },
+      {
+        "function": "createCustomer",
+        "status": "EXISTS",
+        "reason": "AI mutation tool for customer creation"
+      },
+      {
+        "function": "createOpportunity",
+        "status": "EXISTS",
+        "reason": "AI mutation tool for opportunity creation"
+      },
+      {
+        "function": "getAIConversations",
+        "status": "EXISTS",
+        "reason": "List conversations for UI"
+      },
+      {
+        "function": "getAIConversationById",
+        "status": "EXISTS",
+        "reason": "Load conversation history"
+      },
+      {
+        "function": "updateAIConversation",
+        "status": "EXISTS",
+        "reason": "Rename conversation"
+      },
+      {
+        "function": "deleteAIConversation",
+        "status": "EXISTS",
+        "reason": "Delete conversation"
+      }
+    ],
+    "serverFunctionsCreates": [
+      {
+        "function": "generateAIReport",
+        "story": "INT-AI-004-A",
+        "description": "Trigger.dev task for scheduled AI reports"
+      },
+      {
+        "function": "getAIReports",
+        "story": "INT-AI-004-B",
+        "description": "Query generated reports"
+      },
+      {
+        "function": "scheduleAIReport",
+        "story": "INT-AI-004-B",
+        "description": "Create scheduled report configuration"
+      },
+      {
+        "function": "logAIUsage",
+        "story": "INT-AI-005-A",
+        "description": "Log AI API call usage and tokens"
+      },
+      {
+        "function": "getAIUsageByPeriod",
+        "story": "INT-AI-005-A",
+        "description": "Aggregate usage stats by time period"
+      },
+      {
+        "function": "getAIUsageByUser",
+        "story": "INT-AI-005-A",
+        "description": "Usage breakdown by user"
+      },
+      {
+        "function": "getAIUsageByTool",
+        "story": "INT-AI-005-A",
+        "description": "Usage breakdown by tool"
+      },
+      {
+        "function": "getAICostProjection",
+        "story": "INT-AI-005-B",
+        "description": "Project costs based on usage trends"
+      },
+      {
+        "function": "createAIPersona",
+        "story": "INT-AI-006",
+        "description": "Create custom AI persona"
+      },
+      {
+        "function": "getAIPersonas",
+        "story": "INT-AI-006",
+        "description": "List available personas"
+      },
+      {
+        "function": "updateAIPersona",
+        "story": "INT-AI-006",
+        "description": "Update persona configuration"
+      },
+      {
+        "function": "logAIAudit",
+        "story": "INT-AI-007-A",
+        "description": "Log AI tool calls for audit"
+      },
+      {
+        "function": "getAIAuditLogs",
+        "story": "INT-AI-007-A",
+        "description": "Query AI audit logs with filters"
+      },
+      {
+        "function": "exportAIAuditLogs",
+        "story": "INT-AI-007-B",
+        "description": "Export audit logs"
+      },
+      {
+        "function": "getAIRateLimits",
+        "story": "INT-AI-008",
+        "description": "Get current rate limit status for user"
+      },
+      {
+        "function": "updateAIRateLimits",
+        "story": "INT-AI-008",
+        "description": "Admin update rate limits per user/role"
+      }
+    ],
+    "prdDependencies": [
+      {
+        "prdId": "REF-AI",
+        "status": "REQUIRED",
+        "reason": "AI architecture refactoring provides base AI infrastructure (blocked_by: REF-AI-002, REF-AI-004)"
+      },
+      {
+        "prdId": "DOM-CUS",
+        "status": "REQUIRED",
+        "reason": "AI queries customer data"
+      },
+      {
+        "prdId": "DOM-ORD",
+        "status": "REQUIRED",
+        "reason": "AI queries order data"
+      },
+      {
+        "prdId": "DOM-PRO",
+        "status": "REQUIRED",
+        "reason": "AI queries product data"
+      },
+      {
+        "prdId": "DOM-OPP",
+        "status": "REQUIRED",
+        "reason": "AI queries and creates opportunities"
+      }
+    ],
+    "enables": [
+      {
+        "prdId": "WF-LEAD",
+        "reason": "AI assists with lead qualification and opportunity creation"
+      },
+      {
+        "prdId": "WF-SUPP",
+        "reason": "AI assists with customer support and issue triage"
+      }
+    ]
+  },
+  "references": {
+    "internal": [
+      "memory-bank/prd/refactoring/ai-architecture.prd.json",
+      "lib/ai/ - Current AI implementation"
+    ],
+    "external": [
+      "Anthropic Claude API docs",
+      "AI SDK docs: https://sdk.vercel.ai/",
+      "Agent SDK patterns"
+    ]
+  },
+  "current_state": {
+    "implemented": [
+      "Basic chat interface",
+      "Query tools (orders, customers, products)",
+      "Mutation tools (create customer, opportunity)",
+      "Artifact generation (dashboards)",
+      "Conversation persistence backend (ai_conversations table and memory module)",
+      "Page context extraction (context.ts with getPageContext)",
+      "Context-aware suggestions (getSuggestedPrompts with role/time awareness)"
+    ],
+    "gaps": [
+      "No conversation UI (list, rename, delete) - backend exists",
+      "No scheduled AI tasks",
+      "No AI usage analytics",
+      "No custom prompts/personas",
+      "No AI actions audit",
+      "No rate limiting visibility"
+    ]
+  },
+  "stories": [
+    {
+      "id": "INT-AI-001",
+      "name": "Add Conversation Persistence UI",
+      "description": "UI for managing AI conversations - backend already complete",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Conversation list in AI sidebar showing recent conversations",
+        "Click conversation to load history and resume",
+        "Rename conversation inline or via menu",
+        "Delete conversation with confirmation",
+        "New conversation button clears current and starts fresh",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "layers": [
+        "ui"
+      ],
+      "completion_promise": "INT_AI_001_COMPLETE"
+    },
+    {
+      "id": "INT-AI-004-A",
+      "name": "Create AI Report Trigger.dev Job",
+      "description": "Create background job for generating AI-powered reports",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "blocked_by": [
+        "REF-AI-002"
+      ],
+      "acceptance_criteria": [
+        "Trigger.dev task: generateAIReport",
+        "Report types: daily_summary, weekly_trends, anomaly_detection",
+        "Job queries data and generates insights using AI",
+        "Report stored in database with status tracking",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "layers": [
+        "server"
+      ],
+      "completion_promise": "INT_AI_004_A_COMPLETE"
+    },
+    {
+      "id": "INT-AI-004-B",
+      "name": "Create AI Reports UI and Scheduling",
+      "description": "UI for scheduling reports and viewing report history",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "New route /settings/ai-reports (or /ai/reports)",
+        "Schedule report form: type, frequency, recipients",
+        "Report history table with view/download",
+        "Email delivery on schedule",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "INT-AI-004-A"
+      ],
+      "estimated_iterations": 3,
+      "layers": [
+        "ui"
+      ],
+      "completion_promise": "INT_AI_004_B_COMPLETE"
+    },
+    {
+      "id": "INT-AI-005-A",
+      "name": "Create AI Usage Tracking Schema and Server",
+      "description": "Track AI API calls, tokens, and costs",
+      "priority": 4,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "ai_usage_logs table: id, orgId, userId, timestamp, model, inputTokens, outputTokens, cost, toolName, success",
+        "Server function to log usage after each AI call",
+        "Aggregation function: usageByPeriod, usageByUser, usageByTool",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "layers": [
+        "schema",
+        "server"
+      ],
+      "completion_promise": "INT_AI_005_A_COMPLETE"
+    },
+    {
+      "id": "INT-AI-005-B",
+      "name": "Create AI Usage Dashboard",
+      "description": "Admin UI for viewing AI usage and costs",
+      "priority": 5,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "New route /settings/ai-usage",
+        "Charts: usage over time, tokens by user, cost trends",
+        "Table: top queries, most used tools",
+        "Cost projection based on current usage",
+        "Budget alerts configuration",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "INT-AI-005-A"
+      ],
+      "estimated_iterations": 3,
+      "layers": [
+        "ui"
+      ],
+      "completion_promise": "INT_AI_005_B_COMPLETE"
+    },
+    {
+      "id": "INT-AI-006",
+      "name": "Add Custom AI Personas",
+      "description": "Role-based AI behavior customization",
+      "priority": 6,
+      "status": "pending",
+      "passes": false,
+      "blocked_by": [
+        "REF-AI-004"
+      ],
+      "acceptance_criteria": [
+        "Personas: Sales Assistant, Operations Helper, Analytics Expert",
+        "Each persona has tailored system prompt",
+        "Persona affects tool availability",
+        "User can switch personas",
+        "Default persona per role",
+        "Admin can customize personas",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "layers": [
+        "server",
+        "ui"
+      ],
+      "completion_promise": "INT_AI_006_COMPLETE"
+    },
+    {
+      "id": "INT-AI-007-A",
+      "name": "AI Actions Audit Schema and Logging",
+      "description": "Create audit table and capture all AI tool calls",
+      "priority": 7,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "ai_audit_logs table: id, userId, orgId, conversationId, toolName, params, result, success, timestamp",
+        "Log all AI tool calls (query and mutation) automatically",
+        "Server function to query audit logs with filters",
+        "Retention policy (configurable days)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "layers": [
+        "schema",
+        "server"
+      ],
+      "completion_promise": "INT_AI_007_A_COMPLETE"
+    },
+    {
+      "id": "INT-AI-007-B",
+      "name": "AI Actions Audit UI",
+      "description": "View AI actions in audit log",
+      "priority": 8,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "AI audit log page in /settings/ai-audit",
+        "Filter by: tool type, user, success/failure, date range",
+        "Audit shows: user, conversation, tool, params, result",
+        "Separate from general audit log",
+        "Export audit log",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "INT-AI-007-A"
+      ],
+      "estimated_iterations": 3,
+      "layers": [
+        "ui"
+      ],
+      "completion_promise": "INT_AI_007_B_COMPLETE"
+    },
+    {
+      "id": "INT-AI-008",
+      "name": "Add AI Rate Limit Management",
+      "description": "Control and display AI usage limits",
+      "priority": 9,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Per-user rate limits for AI",
+        "Rate limit visible in AI UI",
+        "Warning when approaching limit",
+        "Admin can adjust limits per user/role",
+        "Rate limit reset timing shown",
+        "Graceful degradation on limit hit",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "INT-AI-005-A"
+      ],
+      "estimated_iterations": 3,
+      "layers": [
+        "server",
+        "ui"
+      ],
+      "completion_promise": "INT_AI_008_COMPLETE"
+    }
+  ],
+  "invalidated_stories": [
+    {
+      "id": "INT-AI-002",
+      "name": "Add Page Context Injection",
+      "reason": "Already implemented. context.ts provides getPageContext, getPageContextForDisplay, entity awareness, and UI context badge."
+    },
+    {
+      "id": "INT-AI-003",
+      "name": "Add Proactive AI Suggestions",
+      "reason": "Already implemented. getSuggestedPrompts provides context-aware, role-aware, time-aware suggestions. suggestion.tsx displays quick action buttons."
+    }
+  ],
+  "success_criteria": [
+    "Conversations persist across sessions",
+    "Scheduled reports automate insights",
+    "Usage analytics manage costs",
+    "Personas tailor AI to roles",
+    "Actions audit provides accountability"
+  ],
+  "out_of_scope": [
+    "Fine-tuned models",
+    "Voice interface",
+    "Image understanding",
+    "Custom tool creation UI"
+  ]
+}

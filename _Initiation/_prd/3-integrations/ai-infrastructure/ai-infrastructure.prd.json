@@ -1,0 +1,943 @@
+{
+  "id": "INT-AI-INFRA",
+  "name": "AI Infrastructure System",
+  "description": "Hybrid AI architecture combining Vercel AI SDK (interactive chat) with Anthropic Agent SDK (autonomous workflows). Implements hub-spoke agent topology with Haiku triage routing to Sonnet specialists, three-tier memory (Redis working, Postgres session/long-term), draft-approve pattern for mutations, and cost-aware execution.",
+  "created": "2026-01-13",
+  "updated": "2026-01-13",
+  "priority": 1,
+  "phase": "integration",
+  "version": "1.0",
+  "business_value": {
+    "ai_assisted_operations": true,
+    "cost_optimization": true,
+    "autonomous_workflows": true,
+    "description": "Foundation AI infrastructure enabling conversational CRM assistance, autonomous background workflows, and intelligent data insights"
+  },
+  "system_requirements": {
+    "infrastructure": {
+      "redis": {
+        "description": "Working memory storage for ephemeral context",
+        "purpose": "Current page context, pending approvals, session state",
+        "ttl_strategy": {
+          "current_page": "session",
+          "recent_actions": "1 hour",
+          "pending_approvals": "24 hours"
+        },
+        "connection": "REDIS_URL environment variable",
+        "required": true
+      },
+      "vercel_ai_sdk": {
+        "description": "Chat interface and streaming responses",
+        "packages": ["ai", "@ai-sdk/anthropic"],
+        "patterns": ["useChat", "streamText", "generateObject"],
+        "required": true
+      },
+      "anthropic_agent_sdk": {
+        "description": "Autonomous background workflows",
+        "patterns": ["query()", "agent loop", "MCP tools"],
+        "use_cases": ["bulk operations", "report generation", "integrations"],
+        "required": true
+      }
+    },
+    "database": {
+      "aiConversations": {
+        "description": "Chat conversation history and agent handoff tracking",
+        "fields": {
+          "id": "uuid PRIMARY KEY DEFAULT gen_random_uuid()",
+          "userId": "uuid NOT NULL REFERENCES users(id)",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "messages": "jsonb NOT NULL DEFAULT '[]'::jsonb",
+          "metadata": "jsonb DEFAULT '{}'::jsonb",
+          "activeAgent": "text",
+          "agentHistory": "jsonb DEFAULT '[]'::jsonb",
+          "lastMessageAt": "timestamp DEFAULT NOW()",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()",
+          "updatedAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "organizationId",
+          "userId",
+          "lastMessageAt",
+          "activeAgent"
+        ],
+        "rls": "users can only see own org's conversations"
+      },
+      "aiApprovals": {
+        "description": "Human-in-the-loop approval queue for AI-drafted actions",
+        "fields": {
+          "id": "uuid PRIMARY KEY DEFAULT gen_random_uuid()",
+          "conversationId": "uuid REFERENCES ai_conversations(id)",
+          "userId": "uuid NOT NULL REFERENCES users(id)",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "action": "text NOT NULL",
+          "agent": "text NOT NULL",
+          "actionData": "jsonb NOT NULL",
+          "status": "text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'expired'))",
+          "approvedBy": "uuid REFERENCES users(id)",
+          "approvedAt": "timestamp",
+          "rejectionReason": "text",
+          "executedAt": "timestamp",
+          "executionResult": "jsonb",
+          "expiresAt": "timestamp NOT NULL",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "organizationId",
+          "userId",
+          "status",
+          "expiresAt"
+        ],
+        "rls": "users can only see own org's approvals"
+      },
+      "aiAgentTasks": {
+        "description": "Background task queue for autonomous agent workflows",
+        "fields": {
+          "id": "uuid PRIMARY KEY DEFAULT gen_random_uuid()",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "userId": "uuid NOT NULL REFERENCES users(id)",
+          "taskType": "text NOT NULL",
+          "agent": "text NOT NULL",
+          "input": "jsonb NOT NULL",
+          "context": "jsonb",
+          "status": "text NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'completed', 'failed'))",
+          "progress": "integer DEFAULT 0 CHECK (progress >= 0 AND progress <= 100)",
+          "currentStep": "text",
+          "result": "jsonb",
+          "error": "jsonb",
+          "tokensUsed": "integer DEFAULT 0",
+          "costCents": "integer DEFAULT 0",
+          "queuedAt": "timestamp DEFAULT NOW()",
+          "startedAt": "timestamp",
+          "completedAt": "timestamp"
+        },
+        "indexes": [
+          "organizationId",
+          "userId",
+          "status",
+          "taskType",
+          "queuedAt"
+        ],
+        "rls": "users can only see own org's tasks"
+      },
+      "aiCostTracking": {
+        "description": "Token usage and cost metrics per conversation/task",
+        "fields": {
+          "id": "uuid PRIMARY KEY DEFAULT gen_random_uuid()",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "userId": "uuid REFERENCES users(id)",
+          "conversationId": "uuid REFERENCES ai_conversations(id)",
+          "taskId": "uuid REFERENCES ai_agent_tasks(id)",
+          "model": "text NOT NULL",
+          "feature": "text",
+          "inputTokens": "integer NOT NULL",
+          "outputTokens": "integer NOT NULL",
+          "cacheReadTokens": "integer DEFAULT 0",
+          "cacheWriteTokens": "integer DEFAULT 0",
+          "costCents": "integer NOT NULL",
+          "date": "date NOT NULL",
+          "createdAt": "timestamp DEFAULT NOW()"
+        },
+        "indexes": [
+          "organizationId",
+          "userId",
+          "date",
+          "model",
+          "feature"
+        ],
+        "rls": "users can see own org's cost data; admins see all"
+      }
+    },
+    "api_endpoints": {
+      "chat": {
+        "stream": {
+          "method": "POST",
+          "path": "/api/ai/chat",
+          "body": {
+            "messages": "Message[]",
+            "context": "{ currentView: string, orgId: string, userId: string }"
+          },
+          "response": "DataStreamResponse",
+          "description": "Streaming chat endpoint using Vercel AI SDK"
+        }
+      },
+      "agent": {
+        "dispatch": {
+          "method": "POST",
+          "path": "/api/ai/agent",
+          "body": {
+            "taskType": "string",
+            "agent": "string",
+            "input": "any",
+            "context": "AgentContext"
+          },
+          "response": {
+            "taskId": "string",
+            "status": "'queued'",
+            "statusUrl": "string"
+          },
+          "description": "Queue background agent task"
+        },
+        "status": {
+          "method": "GET",
+          "path": "/api/ai/agent/:taskId/status",
+          "response": {
+            "task": "AiAgentTask",
+            "progress": "number",
+            "currentStep": "string?"
+          },
+          "description": "Get task status and progress"
+        }
+      },
+      "approve": {
+        "action": {
+          "method": "POST",
+          "path": "/api/ai/approve",
+          "body": {
+            "approvalId": "string",
+            "action": "'approve' | 'reject'",
+            "rejectionReason": "string?"
+          },
+          "response": {
+            "success": "boolean",
+            "result": "any?"
+          },
+          "description": "Approve or reject AI-drafted action"
+        },
+        "list": {
+          "method": "GET",
+          "path": "/api/ai/approvals",
+          "query_params": ["status", "limit"],
+          "response": {
+            "approvals": "AiApproval[]",
+            "total": "number"
+          },
+          "description": "List pending approvals for current user"
+        }
+      },
+      "cost": {
+        "usage": {
+          "method": "GET",
+          "path": "/api/ai/cost",
+          "query_params": ["dateFrom", "dateTo", "groupBy"],
+          "response": {
+            "usage": "CostRecord[]",
+            "totalCents": "number",
+            "budgetRemaining": "number",
+            "budgetLimit": "number"
+          },
+          "description": "Get AI usage and cost metrics"
+        },
+        "budget": {
+          "method": "GET",
+          "path": "/api/ai/cost/budget",
+          "response": {
+            "dailyLimitCents": "number",
+            "dailyUsedCents": "number",
+            "monthlyLimitCents": "number",
+            "monthlyUsedCents": "number"
+          },
+          "description": "Get current budget status"
+        }
+      }
+    },
+    "ui_components": {
+      "chatPanel": {
+        "description": "Global AI chat sidebar using useChat hook",
+        "features": [
+          "Streaming message display",
+          "Context injection from current page",
+          "Agent handoff visualization",
+          "Tool invocation display",
+          "Artifact rendering integration"
+        ],
+        "location": "src/components/ai/chat-panel.tsx"
+      },
+      "approvalModal": {
+        "description": "Human-in-the-loop approval dialog for AI actions",
+        "features": [
+          "Draft preview with JSON display",
+          "Approve/Reject/Edit actions",
+          "Expiry countdown",
+          "Processing state indicator"
+        ],
+        "location": "src/components/ai/approval-modal.tsx"
+      },
+      "costIndicator": {
+        "description": "Real-time AI cost display badge",
+        "features": [
+          "Session cost display",
+          "Budget percentage indicator",
+          "Warning states at thresholds"
+        ],
+        "location": "src/components/ai/cost-indicator.tsx"
+      },
+      "artifactRenderer": {
+        "description": "Progressive streaming artifact display",
+        "features": [
+          "Loading skeleton during fetch",
+          "Data display when ready",
+          "Analysis overlay when complete"
+        ],
+        "location": "src/components/ai/artifact-renderer.tsx"
+      }
+    },
+    "agents": {
+      "triage": {
+        "model": "claude-3-5-haiku-20241022",
+        "temperature": 0.1,
+        "maxTurns": 1,
+        "purpose": "Route requests to specialist agents, never respond directly",
+        "toolChoice": "forced handoff_to_agent",
+        "location": "src/lib/ai/agents/triage.ts"
+      },
+      "customer": {
+        "model": "claude-sonnet-4-20250514",
+        "temperature": 0.3,
+        "maxTurns": 10,
+        "purpose": "Customer lookups, contact management, relationship insights",
+        "tools": ["get_customer", "search_customers", "update_customer_notes", "send_email_draft"],
+        "location": "src/lib/ai/agents/customer.ts"
+      },
+      "order": {
+        "model": "claude-sonnet-4-20250514",
+        "temperature": 0.3,
+        "maxTurns": 10,
+        "purpose": "Order queries, invoice status, quote creation",
+        "tools": ["get_orders", "get_invoices", "create_order_draft", "create_quote_draft"],
+        "location": "src/lib/ai/agents/order.ts"
+      },
+      "analytics": {
+        "model": "claude-sonnet-4-20250514",
+        "temperature": 0.3,
+        "maxTurns": 10,
+        "purpose": "Reports, metrics, trends, forecasting",
+        "tools": ["run_report", "get_metrics", "get_trends"],
+        "location": "src/lib/ai/agents/analytics.ts"
+      },
+      "quote": {
+        "model": "claude-sonnet-4-20250514",
+        "temperature": 0.3,
+        "maxTurns": 10,
+        "purpose": "Product configuration, pricing, system design",
+        "tools": ["configure_system", "calculate_price", "check_compatibility"],
+        "location": "src/lib/ai/agents/quote.ts"
+      }
+    },
+    "memory": {
+      "working": {
+        "backend": "Redis",
+        "ttl": "session to 24 hours",
+        "contents": ["currentPage", "activeCustomer", "draftInProgress", "pendingApprovals"],
+        "location": "src/lib/ai/memory/redis-provider.ts"
+      },
+      "session": {
+        "backend": "Postgres (ai_conversations)",
+        "ttl": "30 days",
+        "contents": ["conversation history", "tool calls", "agent handoffs"],
+        "location": "src/lib/ai/memory/drizzle-provider.ts"
+      },
+      "longTerm": {
+        "backend": "Postgres + pgvector",
+        "ttl": "permanent",
+        "contents": ["learned preferences", "user corrections", "pattern insights"],
+        "embedding": "bge-large-en-v1.5 (1024 dim)",
+        "location": "src/lib/ai/memory/drizzle-provider.ts"
+      }
+    },
+    "business_rules": {
+      "draft_approve_pattern": {
+        "required_for": ["create_order", "send_email", "sync_to_xero", "delete_*", "bulk_*"],
+        "auto_approve": ["read_*", "get_*", "search_*", "update_notes"],
+        "expiry": "24 hours default"
+      },
+      "cost_controls": {
+        "daily_org_limit": "AI_COST_LIMIT_DAILY_CENTS env var",
+        "daily_user_limit": "AI_COST_LIMIT_USER_CENTS env var",
+        "enforcement": "pre-execution budget check",
+        "degradation": "fallback to cheaper model when budget tight"
+      },
+      "rate_limiting": {
+        "chat": "20 messages per minute per user",
+        "agent": "5 tasks per hour per user",
+        "backend": "Upstash Ratelimit"
+      }
+    },
+    "environment_variables": {
+      "required": [
+        "ANTHROPIC_API_KEY",
+        "REDIS_URL"
+      ],
+      "optional": [
+        "AI_COST_LIMIT_DAILY_CENTS (default: 10000)",
+        "AI_COST_LIMIT_USER_CENTS (default: 2000)",
+        "AI_MEMORY_TTL_SECONDS (default: 86400)"
+      ]
+    }
+  },
+  "stories": [
+    {
+      "id": "AI-INFRA-001",
+      "name": "AI Conversations Schema",
+      "description": "Create database schema for AI conversation history with agent handoff tracking",
+      "type": "schema",
+      "acceptance_criteria": [
+        "Table ai_conversations exists in drizzle/schema/_ai/ai-conversations.ts",
+        "Fields: id (uuid PK), userId (uuid FK users), organizationId (uuid FK organizations), messages (jsonb), metadata (jsonb), activeAgent (text), agentHistory (jsonb), lastMessageAt (timestamp), createdAt, updatedAt",
+        "Index on organizationId for RLS filtering",
+        "Index on userId for user queries",
+        "Index on lastMessageAt for recent conversations",
+        "RLS policy: SELECT/INSERT/UPDATE/DELETE restricted to rows where organizationId matches user's org",
+        "TypeScript type AiConversation exported from drizzle/schema/_ai/index.ts",
+        "Migration file exists in drizzle/migrations/ with timestamp prefix"
+      ],
+      "files_to_modify": [
+        "drizzle/schema/_ai/ai-conversations.ts",
+        "drizzle/schema/_ai/index.ts",
+        "drizzle/migrations/XXX_ai_conversations.ts"
+      ],
+      "dependencies": [],
+      "completion_promise": "AI_INFRA_001_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-002",
+      "name": "AI Approvals Schema",
+      "description": "Create database schema for human-in-the-loop approval queue",
+      "type": "schema",
+      "acceptance_criteria": [
+        "Table ai_approvals exists in drizzle/schema/_ai/ai-approvals.ts",
+        "Fields: id (uuid PK), conversationId (uuid FK ai_conversations nullable), userId (uuid FK users), organizationId (uuid FK organizations), action (text NOT NULL), agent (text NOT NULL), actionData (jsonb NOT NULL), status (text CHECK IN pending/approved/rejected/expired), approvedBy (uuid FK users nullable), approvedAt (timestamp nullable), rejectionReason (text nullable), executedAt (timestamp nullable), executionResult (jsonb nullable), expiresAt (timestamp NOT NULL), createdAt (timestamp)",
+        "Index on (organizationId, status) for pending approval queries",
+        "Index on expiresAt for expiry cron job",
+        "RLS policy: users see own org's approvals only",
+        "TypeScript type AiApproval exported",
+        "Migration file exists with proper timestamp"
+      ],
+      "files_to_modify": [
+        "drizzle/schema/_ai/ai-approvals.ts",
+        "drizzle/schema/_ai/index.ts",
+        "drizzle/migrations/XXX_ai_approvals.ts"
+      ],
+      "dependencies": ["AI-INFRA-001"],
+      "completion_promise": "AI_INFRA_002_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-003",
+      "name": "AI Agent Tasks Schema",
+      "description": "Create database schema for background agent task queue",
+      "type": "schema",
+      "acceptance_criteria": [
+        "Table ai_agent_tasks exists in drizzle/schema/_ai/ai-agent-tasks.ts",
+        "Fields: id (uuid PK), organizationId (uuid FK), userId (uuid FK), taskType (text NOT NULL), agent (text NOT NULL), input (jsonb NOT NULL), context (jsonb nullable), status (text CHECK IN queued/running/completed/failed), progress (integer 0-100), currentStep (text nullable), result (jsonb nullable), error (jsonb nullable with message/code fields), tokensUsed (integer default 0), costCents (integer default 0), queuedAt, startedAt, completedAt (all timestamps)",
+        "Index on (organizationId, status) for queue queries",
+        "Index on queuedAt for FIFO processing",
+        "RLS policy: users see own org's tasks only",
+        "TypeScript types AiAgentTask and AiTaskStatus exported",
+        "Migration file exists"
+      ],
+      "files_to_modify": [
+        "drizzle/schema/_ai/ai-agent-tasks.ts",
+        "drizzle/schema/_ai/index.ts",
+        "drizzle/migrations/XXX_ai_agent_tasks.ts"
+      ],
+      "dependencies": ["AI-INFRA-001"],
+      "completion_promise": "AI_INFRA_003_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-004",
+      "name": "AI Cost Tracking Schema",
+      "description": "Create database schema for token usage and cost metrics",
+      "type": "schema",
+      "acceptance_criteria": [
+        "Table ai_cost_tracking exists in drizzle/schema/_ai/ai-cost-tracking.ts",
+        "Fields: id (uuid PK), organizationId (uuid FK NOT NULL), userId (uuid FK nullable), conversationId (uuid FK nullable), taskId (uuid FK nullable), model (text NOT NULL), feature (text nullable), inputTokens (integer NOT NULL), outputTokens (integer NOT NULL), cacheReadTokens (integer default 0), cacheWriteTokens (integer default 0), costCents (integer NOT NULL), date (date NOT NULL), createdAt (timestamp)",
+        "Index on (organizationId, date) for daily reports",
+        "Index on (userId, date) for user budgets",
+        "Index on model for model-specific analytics",
+        "RLS policy: users see own org's costs; admins see all in org",
+        "TypeScript type AiCostRecord exported",
+        "Migration file exists"
+      ],
+      "files_to_modify": [
+        "drizzle/schema/_ai/ai-cost-tracking.ts",
+        "drizzle/schema/_ai/index.ts",
+        "drizzle/migrations/XXX_ai_cost_tracking.ts"
+      ],
+      "dependencies": ["AI-INFRA-001"],
+      "completion_promise": "AI_INFRA_004_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-005",
+      "name": "Haiku Triage Router",
+      "description": "Implement triage agent that routes to specialists using forced tool choice",
+      "type": "server",
+      "acceptance_criteria": [
+        "Triage agent defined in src/lib/ai/agents/triage.ts",
+        "Uses model claude-3-5-haiku-20241022 (imported from @ai-sdk/anthropic)",
+        "temperature set to 0.1 for deterministic routing",
+        "maxTurns set to 1 (routes only, never responds directly)",
+        "modelSettings.toolChoice set to { type: 'tool', toolName: 'handoff_to_agent' }",
+        "handoff_to_agent tool defined with parameters: targetAgent (enum of specialist names), reason (string)",
+        "System prompt in src/lib/ai/prompts/triage.md contains domain mapping (customer→customerAgent, order→orderAgent, analytics→analyticsAgent, quote→quoteAgent)",
+        "handoffs array includes references to customerAgent, orderAgent, analyticsAgent, quoteAgent",
+        "Agent registry in src/lib/ai/agents/index.ts exports triageAgent and all specialists"
+      ],
+      "files_to_modify": [
+        "src/lib/ai/agents/triage.ts",
+        "src/lib/ai/agents/index.ts",
+        "src/lib/ai/prompts/triage.md",
+        "src/lib/ai/tools/handoff.ts"
+      ],
+      "dependencies": ["AI-INFRA-001"],
+      "completion_promise": "AI_INFRA_005_COMPLETE",
+      "estimated_iterations": 4,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-006",
+      "name": "Specialist Agent Configuration",
+      "description": "Configure customer, order, analytics, and quote specialist agents",
+      "type": "server",
+      "acceptance_criteria": [
+        "customerAgent in src/lib/ai/agents/customer.ts uses claude-sonnet-4-20250514, temperature 0.3, maxTurns 10",
+        "orderAgent in src/lib/ai/agents/order.ts uses claude-sonnet-4-20250514, temperature 0.3, maxTurns 10",
+        "analyticsAgent in src/lib/ai/agents/analytics.ts uses claude-sonnet-4-20250514, temperature 0.3, maxTurns 10",
+        "quoteAgent in src/lib/ai/agents/quote.ts uses claude-sonnet-4-20250514, temperature 0.3, maxTurns 10",
+        "Each agent has system prompt in src/lib/ai/prompts/{agent-name}.md",
+        "Each agent has tools array with only tools it needs (least privilege)",
+        "COMMON_AGENT_RULES constant in src/lib/ai/prompts/shared.ts injected into all agent prompts",
+        "All agents exported from src/lib/ai/agents/index.ts"
+      ],
+      "files_to_modify": [
+        "src/lib/ai/agents/customer.ts",
+        "src/lib/ai/agents/order.ts",
+        "src/lib/ai/agents/analytics.ts",
+        "src/lib/ai/agents/quote.ts",
+        "src/lib/ai/prompts/customer.md",
+        "src/lib/ai/prompts/order.md",
+        "src/lib/ai/prompts/analytics.md",
+        "src/lib/ai/prompts/quote.md",
+        "src/lib/ai/prompts/shared.ts"
+      ],
+      "dependencies": ["AI-INFRA-005"],
+      "completion_promise": "AI_INFRA_006_COMPLETE",
+      "estimated_iterations": 4,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-007",
+      "name": "Approval Modal UI",
+      "description": "Create human-in-the-loop approval dialog component",
+      "type": "ui",
+      "acceptance_criteria": [
+        "ApprovalModal component exists in src/components/ai/approval-modal.tsx",
+        "Uses Dialog from @/components/ui/dialog",
+        "Props: approval (AiApproval type), onApprove (callback), onReject (callback), isOpen (boolean), onOpenChange (callback)",
+        "Header displays 'AI Action Requires Approval' text and AlertTriangle icon from lucide-react",
+        "Body shows approval.action and approval.agent",
+        "Draft preview uses pre tag with JSON.stringify(approval.actionData.draft, null, 2)",
+        "Approve button calls POST /api/ai/approve with { approvalId, action: 'approve' }",
+        "Reject button opens rejection reason input, then calls POST /api/ai/approve with { approvalId, action: 'reject', rejectionReason }",
+        "Shows Spinner from @/components/ui/spinner during API call",
+        "Disables buttons during processing",
+        "Displays error toast on API failure using useToast hook",
+        "ARIA: role='alertdialog', aria-labelledby on title, aria-describedby on description"
+      ],
+      "files_to_modify": [
+        "src/components/ai/approval-modal.tsx",
+        "src/components/ai/index.ts"
+      ],
+      "dependencies": ["AI-INFRA-002"],
+      "completion_promise": "AI_INFRA_007_COMPLETE",
+      "estimated_iterations": 4,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-008",
+      "name": "Cost Indicator UI",
+      "description": "Create real-time AI cost display badge component",
+      "type": "ui",
+      "acceptance_criteria": [
+        "CostIndicator component exists in src/components/ai/cost-indicator.tsx",
+        "Props: sessionCostCents (number), budgetLimitCents (number), className (string optional)",
+        "Displays cost formatted as currency using Intl.NumberFormat with style: 'currency', currency: 'USD'",
+        "Shows percentage of budget used (sessionCostCents / budgetLimitCents * 100)",
+        "Badge color changes: default (< 50%), bg-yellow-100 (50-80%), bg-red-100 (> 80%)",
+        "Tooltip on hover shows 'AI Usage: $X.XX of $Y.YY budget'",
+        "Uses Badge from @/components/ui/badge",
+        "Uses Tooltip from @/components/ui/tooltip",
+        "ARIA: aria-label describes cost status for screen readers"
+      ],
+      "files_to_modify": [
+        "src/components/ai/cost-indicator.tsx",
+        "src/components/ai/index.ts"
+      ],
+      "dependencies": ["AI-INFRA-004"],
+      "completion_promise": "AI_INFRA_008_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-009",
+      "name": "Artifact Renderer UI",
+      "description": "Create progressive streaming artifact display component",
+      "type": "ui",
+      "acceptance_criteria": [
+        "ArtifactRenderer component exists in src/components/ai/artifact-renderer.tsx",
+        "Props: artifactId (string), onComplete (callback optional)",
+        "Uses useArtifact hook from src/hooks/use-artifact.ts that fetches from /api/ai/artifacts/:id",
+        "Displays Skeleton from @/components/ui/skeleton when stage is 'loading'",
+        "Displays data content when stage is 'data_ready'",
+        "Displays analysis overlay when stage is 'analysis_ready'",
+        "Shows Spinner next to content when isStreaming is true",
+        "Card layout with CardHeader (title), CardContent (data), CardFooter (actions)",
+        "Error boundary catches rendering errors, displays 'Failed to load artifact' with retry button",
+        "ARIA: aria-live='polite' on container for screen reader updates"
+      ],
+      "files_to_modify": [
+        "src/components/ai/artifact-renderer.tsx",
+        "src/components/ai/index.ts",
+        "src/hooks/use-artifact.ts"
+      ],
+      "dependencies": [],
+      "completion_promise": "AI_INFRA_009_COMPLETE",
+      "estimated_iterations": 4,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-010",
+      "name": "AI Chat Panel Widget",
+      "description": "Create global AI chat sidebar with streaming messages",
+      "type": "ui",
+      "acceptance_criteria": [
+        "AIChatPanel component exists in src/components/ai/chat-panel.tsx",
+        "Uses useChat hook from 'ai/react' with api: '/api/ai/chat'",
+        "Passes context object with currentView (window.location.pathname), orgId, userId",
+        "Messages rendered in scrollable container with flex-1 overflow-y-auto",
+        "User messages aligned right with bg-blue-100, assistant messages aligned left with bg-gray-100",
+        "Shows Spinner when isLoading is true",
+        "Input uses form with onSubmit={handleSubmit}",
+        "Input disabled when isLoading",
+        "Placeholder text: 'Ask about customers, orders, or analytics...'",
+        "Renders ApprovalModal when message.toolInvocations contains type: 'approval_required'",
+        "Renders ArtifactRenderer when message.artifactId is present",
+        "Panel toggleable via button in app header",
+        "ARIA: role='complementary', aria-label='AI Assistant'"
+      ],
+      "files_to_modify": [
+        "src/components/ai/chat-panel.tsx",
+        "src/components/ai/index.ts",
+        "src/components/layout/app-header.tsx"
+      ],
+      "dependencies": ["AI-INFRA-007", "AI-INFRA-008", "AI-INFRA-009", "AI-INFRA-013"],
+      "completion_promise": "AI_INFRA_010_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-011",
+      "name": "AI Agent Trigger.dev Integration",
+      "description": "Integrate AI agent tasks with existing Trigger.dev infrastructure for reliable background processing",
+      "type": "server",
+      "acceptance_criteria": [
+        "File src/trigger/jobs/ai-agent-task.ts defines Trigger.dev job 'ai-agent-task'",
+        "Job triggered via trigger.invoke() from POST /api/ai/agent route",
+        "Job payload includes: taskId, taskType, agent, input, context, userId, orgId",
+        "On job start: UPDATE ai_agent_tasks SET status='running', startedAt=NOW()",
+        "Uses Trigger.dev io.runTask() for each agent step with automatic checkpointing",
+        "Progress updates via io.logger.info() and UPDATE ai_agent_tasks SET currentStep=?, progress=?",
+        "Agent instantiated via getAgentByType(agent) from src/lib/ai/agents/index.ts",
+        "Agent executed with tools from src/lib/ai/tools/index.ts based on agent type",
+        "On success: UPDATE ai_agent_tasks SET status='completed', result=jsonb, completedAt=NOW(), tokensUsed, costCents",
+        "On failure: UPDATE ai_agent_tasks SET status='failed', error={ message, code, stack }, completedAt=NOW()",
+        "Retries up to 3 times with exponential backoff via job config: { retry: { maxAttempts: 3, factor: 2 } }",
+        "Job cancellable via Trigger.dev dashboard or API",
+        "File src/app/api/ai/agent/route.ts exports POST handler that inserts task and invokes job",
+        "File src/app/api/ai/agent/[taskId]/status/route.ts exports GET handler returning task status",
+        "Cost tracking via trackCost() after agent completion",
+        "Job registered in src/trigger/index.ts"
+      ],
+      "files_to_modify": [
+        "src/trigger/jobs/ai-agent-task.ts",
+        "src/trigger/index.ts",
+        "src/app/api/ai/agent/route.ts",
+        "src/app/api/ai/agent/[taskId]/status/route.ts",
+        "src/lib/ai/agents/index.ts"
+      ],
+      "dependencies": ["AI-INFRA-003", "AI-INFRA-006", "AI-INFRA-014"],
+      "completion_promise": "AI_INFRA_011_COMPLETE",
+      "estimated_iterations": 5,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-012",
+      "name": "Memory Persistence Layer",
+      "description": "Implement three-tier memory system with Redis and Postgres providers",
+      "type": "server",
+      "acceptance_criteria": [
+        "RedisMemoryProvider in src/lib/ai/memory/redis-provider.ts",
+        "Redis provider methods: get(key), set(key, value, ttl), delete(key)",
+        "Redis key pattern: 'working:{orgId}:{userId}:{field}'",
+        "WorkingMemory interface: { userId, orgId, currentPage, recentActions, pendingApprovals }",
+        "DrizzleMemoryProvider in src/lib/ai/memory/drizzle-provider.ts",
+        "Drizzle provider methods: getConversation(id), saveMessage(conversationId, message), getRecentConversations(userId, limit)",
+        "Memory provider factory in src/lib/ai/memory/index.ts exports getMemoryProvider()",
+        "Redis connection uses REDIS_URL environment variable",
+        "Graceful fallback to in-memory Map when Redis unavailable (logs warning)",
+        "injectMemoryContext(agent, context) function prepends working memory to agent system prompt",
+        "All providers implement MemoryProvider interface"
+      ],
+      "files_to_modify": [
+        "src/lib/ai/memory/redis-provider.ts",
+        "src/lib/ai/memory/drizzle-provider.ts",
+        "src/lib/ai/memory/index.ts",
+        "src/lib/ai/memory/types.ts"
+      ],
+      "dependencies": ["AI-INFRA-001", "AI-INFRA-004"],
+      "completion_promise": "AI_INFRA_012_COMPLETE",
+      "estimated_iterations": 4,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-013",
+      "name": "Chat Streaming API Route",
+      "description": "Implement streaming chat endpoint using Vercel AI SDK with triage-to-specialist handoffs",
+      "type": "server",
+      "acceptance_criteria": [
+        "File src/app/api/ai/chat/route.ts exports async POST handler",
+        "Parses messages array and context object from request.json()",
+        "Validates auth via getSession() from @/lib/auth, returns 401 if unauthenticated",
+        "Rate limit check via aiRateLimiters.chat.limit(), returns 429 with Retry-After header if exceeded",
+        "Budget check via checkBudget(orgId, userId, estimatedCost), returns 402 if budget exceeded",
+        "Creates or retrieves conversation via getOrCreateConversation(userId, orgId, context.conversationId)",
+        "Injects memory context via injectMemoryContext(triageAgent, workingMemory)",
+        "Calls streamText() with triageAgent for initial routing",
+        "onToolCall handler executes handoff_to_agent by switching to specialist agent",
+        "onStepFinish tracks token usage via trackCost(usage, conversationId)",
+        "Persists messages to ai_conversations via saveMessage(conversationId, message)",
+        "Returns result.toDataStreamResponse() with conversationId in metadata",
+        "Error responses use standardized { error: string, code: string } format"
+      ],
+      "files_to_modify": [
+        "src/app/api/ai/chat/route.ts",
+        "src/lib/ai/chat/index.ts",
+        "src/lib/ai/chat/conversation.ts"
+      ],
+      "dependencies": ["AI-INFRA-005", "AI-INFRA-012", "AI-INFRA-018", "AI-INFRA-019"],
+      "completion_promise": "AI_INFRA_013_COMPLETE",
+      "estimated_iterations": 5,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-014",
+      "name": "AI Tool Implementations",
+      "description": "Implement tools for all specialist agents following Vercel AI SDK patterns",
+      "type": "server",
+      "acceptance_criteria": [
+        "File src/lib/ai/tools/customer-tools.ts exports getCustomer, searchCustomers, updateCustomerNotes tools",
+        "File src/lib/ai/tools/order-tools.ts exports getOrders, getInvoices, createOrderDraft, createQuoteDraft tools",
+        "File src/lib/ai/tools/analytics-tools.ts exports runReport, getMetrics, getTrends tools",
+        "File src/lib/ai/tools/quote-tools.ts exports configureSystem, calculatePrice, checkCompatibility tools",
+        "Each tool uses z.object() from zod for parameters schema",
+        "Each tool has description string explaining when to use it",
+        "getCustomer returns { customer, _meta: { hasOverdueInvoices, daysSinceLastContact, churnRisk, suggestedActions } }",
+        "searchCustomers uses pg_trgm similarity search on name, email fields",
+        "createOrderDraft returns { type: 'approval_required', action: 'create_order', draft, approvalId }",
+        "createQuoteDraft returns { type: 'approval_required', action: 'create_quote', draft, approvalId }",
+        "All draft-creating tools insert row into ai_approvals with expiresAt = NOW() + 24 hours",
+        "Tool errors return { error: string, suggestion: string } for actionable feedback",
+        "All tools exported from src/lib/ai/tools/index.ts",
+        "TypeScript types ToolResult and ApprovalRequiredResult exported from src/lib/ai/tools/types.ts"
+      ],
+      "files_to_modify": [
+        "src/lib/ai/tools/customer-tools.ts",
+        "src/lib/ai/tools/order-tools.ts",
+        "src/lib/ai/tools/analytics-tools.ts",
+        "src/lib/ai/tools/quote-tools.ts",
+        "src/lib/ai/tools/index.ts",
+        "src/lib/ai/tools/types.ts"
+      ],
+      "dependencies": ["AI-INFRA-002", "AI-INFRA-006"],
+      "completion_promise": "AI_INFRA_014_COMPLETE",
+      "estimated_iterations": 6,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-015",
+      "name": "Approval Execution Engine",
+      "description": "Implement execution logic for approved AI actions with transaction safety",
+      "type": "server",
+      "acceptance_criteria": [
+        "File src/lib/ai/approvals/executor.ts exports executeAction(approvalId: string, userId: string)",
+        "File src/lib/ai/approvals/handlers.ts exports action handler registry",
+        "Action registry maps action names to handler functions: { create_order: createOrderHandler, create_quote: createQuoteHandler, send_email: sendEmailHandler, delete_record: deleteRecordHandler }",
+        "executeAction fetches approval from ai_approvals, validates status is 'pending'",
+        "executeAction validates approvalId belongs to user's organization",
+        "Execution wrapped in database transaction via db.transaction()",
+        "Handler receives (actionData, context: { userId, orgId, approvalId })",
+        "On success: UPDATE ai_approvals SET status='approved', approvedBy=userId, approvedAt=NOW(), executedAt=NOW(), executionResult=result",
+        "On failure: UPDATE ai_approvals SET executionResult={ error: message, code } (status remains 'pending' for retry)",
+        "Creates notification via notifications.create({ type: 'ai_action_completed', ... })",
+        "File src/app/api/ai/approve/route.ts exports POST handler calling executeAction or rejectAction",
+        "rejectAction(approvalId, userId, reason) updates status='rejected', rejectionReason=reason",
+        "Returns { success: boolean, result?: any, error?: string }"
+      ],
+      "files_to_modify": [
+        "src/lib/ai/approvals/executor.ts",
+        "src/lib/ai/approvals/handlers.ts",
+        "src/lib/ai/approvals/index.ts",
+        "src/app/api/ai/approve/route.ts"
+      ],
+      "dependencies": ["AI-INFRA-002", "AI-INFRA-014"],
+      "completion_promise": "AI_INFRA_015_COMPLETE",
+      "estimated_iterations": 5,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-016",
+      "name": "Artifacts Streaming API",
+      "description": "Implement streaming artifact endpoint for progressive data loading",
+      "type": "server",
+      "acceptance_criteria": [
+        "File src/app/api/ai/artifacts/[id]/route.ts exports GET handler",
+        "Validates auth via getSession(), returns 401 if unauthenticated",
+        "Fetches artifact metadata from ai_conversations or ai_agent_tasks based on artifactId prefix",
+        "Returns streaming response with stages: 'loading' -> 'data_ready' -> 'analysis_ready'",
+        "Stage transitions sent as Server-Sent Events (SSE) with event: 'stage', data: { stage, content }",
+        "Data stage includes raw data payload",
+        "Analysis stage includes AI-generated insights about the data",
+        "Connection kept alive with heartbeat every 15 seconds",
+        "Error responses use SSE event: 'error', data: { message, code }",
+        "Client can close connection, server cleans up gracefully"
+      ],
+      "files_to_modify": [
+        "src/app/api/ai/artifacts/[id]/route.ts",
+        "src/lib/ai/artifacts/streamer.ts"
+      ],
+      "dependencies": ["AI-INFRA-001"],
+      "completion_promise": "AI_INFRA_016_COMPLETE",
+      "estimated_iterations": 4,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-017",
+      "name": "Approval Expiry Cron Job",
+      "description": "Implement scheduled job to expire stale approvals and notify users",
+      "type": "server",
+      "acceptance_criteria": [
+        "File src/trigger/jobs/expire-approvals.ts defines Trigger.dev scheduled job",
+        "Job runs every hour via cronTrigger('0 * * * *')",
+        "Queries ai_approvals WHERE status='pending' AND expiresAt < NOW()",
+        "Updates matching rows: SET status='expired'",
+        "Creates notification for each affected user: { type: 'ai_approval_expired', approvalId, action }",
+        "Logs count of expired approvals to console",
+        "Job registered in src/trigger/index.ts exports",
+        "Job idempotent - safe to run multiple times"
+      ],
+      "files_to_modify": [
+        "src/trigger/jobs/expire-approvals.ts",
+        "src/trigger/index.ts"
+      ],
+      "dependencies": ["AI-INFRA-002"],
+      "completion_promise": "AI_INFRA_017_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-018",
+      "name": "AI Rate Limiting",
+      "description": "Implement rate limiting for AI endpoints using Upstash Ratelimit",
+      "type": "server",
+      "acceptance_criteria": [
+        "File src/lib/ai/ratelimit.ts exports aiRateLimiters object",
+        "Chat limiter: Ratelimit.slidingWindow(20, '1m') - 20 messages per minute per user",
+        "Agent limiter: Ratelimit.slidingWindow(5, '1h') - 5 tasks per hour per user",
+        "Uses Upstash Redis via UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN env vars",
+        "Rate limit key format: 'ai:{type}:{userId}' for user-scoped limits",
+        "checkRateLimit(type: 'chat' | 'agent', userId: string) returns { success: boolean, reset: number }",
+        "When limit exceeded, returns 429 status with Retry-After header set to reset timestamp",
+        "Error response body: { error: 'Rate limit exceeded', retryAfter: number }",
+        "Graceful degradation: if Redis unavailable, log warning and allow request"
+      ],
+      "files_to_modify": [
+        "src/lib/ai/ratelimit.ts"
+      ],
+      "dependencies": [],
+      "completion_promise": "AI_INFRA_018_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "AI-INFRA-019",
+      "name": "Cost Budget Enforcement",
+      "description": "Implement pre-execution budget checks to prevent cost overruns",
+      "type": "server",
+      "acceptance_criteria": [
+        "File src/lib/ai/utils/budget.ts exports checkBudget(orgId, userId, estimatedCostCents)",
+        "Queries ai_cost_tracking for daily totals: SUM(costCents) WHERE organizationId=orgId AND date=today",
+        "Queries user daily total: SUM(costCents) WHERE userId=userId AND date=today",
+        "Reads limits from env: AI_COST_LIMIT_DAILY_CENTS (default 10000), AI_COST_LIMIT_USER_CENTS (default 2000)",
+        "Returns { allowed: boolean, reason?: string, suggestion?: string }",
+        "If org limit exceeded: reason='Organization daily budget exceeded', suggestion='Contact admin to increase limit'",
+        "If user limit exceeded: reason='Personal daily budget exceeded', suggestion='Wait until tomorrow or contact admin'",
+        "File src/lib/ai/utils/cost.ts exports trackCost(usage, conversationId?, taskId?)",
+        "trackCost inserts row into ai_cost_tracking with calculated costCents based on model pricing",
+        "Model pricing constant: COST_PER_1K_TOKENS = { 'claude-3-5-haiku': { input: 0.1, output: 0.5 }, 'claude-sonnet-4': { input: 0.3, output: 1.5 } }",
+        "Budget check called in chat and agent API routes before AI invocation"
+      ],
+      "files_to_modify": [
+        "src/lib/ai/utils/budget.ts",
+        "src/lib/ai/utils/cost.ts"
+      ],
+      "dependencies": ["AI-INFRA-004"],
+      "completion_promise": "AI_INFRA_019_COMPLETE",
+      "estimated_iterations": 4,
+      "status": "pending"
+    }
+  ],
+  "cross_prd_dependencies": {
+    "note": "This PRD requires foundation PRDs to be complete before execution",
+    "required_prds": ["FOUND-AUTH", "FOUND-SCHEMA", "FOUND-SHARED", "FOUND-APPSHELL", "FOUND-REALTIME", "CC-NOTIFY"],
+    "rationale": "Schema patterns, auth context, UI primitives, app shell layout, Trigger.dev for background jobs, notifications for approval/completion alerts"
+  },
+  "success_criteria": [
+    "All 4 AI database tables created with proper RLS policies",
+    "Triage agent routes requests to specialists in 1 turn using Haiku",
+    "4 specialist agents configured with domain-specific tools",
+    "12 AI tools implemented across customer, order, analytics, quote domains",
+    "Chat API route streams responses with tool calling and memory injection",
+    "Chat panel renders streaming messages and connects to API",
+    "Approval modal displays for mutations, calls execution engine on approve",
+    "Approval execution engine processes approved actions transactionally",
+    "Artifacts API streams progressive loading stages",
+    "Cost indicator shows session usage and budget percentage",
+    "Rate limiting enforced on chat (20/min) and agent (5/hr) endpoints",
+    "Budget enforcement blocks requests when org/user limits exceeded",
+    "Background tasks processed via Trigger.dev with retry and progress tracking",
+    "Expired approvals cleaned up hourly via cron job",
+    "Redis working memory persists across page navigations",
+    "TypeScript compiles with no errors",
+    "All 19 stories have testable and specific acceptance criteria"
+  ],
+  "out_of_scope": [
+    "Anthropic Agent SDK supervisor patterns (future expansion)",
+    "MCP tool definitions (separate PRD)",
+    "External integrations (Xero, Resend - separate PRD)",
+    "Voice interface",
+    "Mobile-specific AI UI",
+    "AI fine-tuning or training",
+    "Multi-modal (image) processing"
+  ],
+  "migration_notes": {
+    "redis_setup": "Requires REDIS_URL environment variable. Upstash Redis recommended for serverless.",
+    "schema_order": "Run AI schema migrations after FOUND-SCHEMA completes",
+    "feature_flags": "Consider feature flag for gradual AI rollout per organization"
+  }
+}

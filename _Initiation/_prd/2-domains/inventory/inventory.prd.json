@@ -1,0 +1,1779 @@
+{
+  "id": "DOM-INVENTORY",
+  "name": "Warehouse Management System",
+  "description": "Complete warehouse operations and inventory control platform providing real-time stock visibility, automated replenishment, multi-location tracking, cycle counting, cost accounting, and operational intelligence across the entire supply chain.",
+  "created": "2026-01-10",
+  "updated": "2026-01-10",
+  "priority": 4,
+  "phase": "core-operations",
+  "version": "1.0",
+  "business_value": {
+    "inventory_accuracy": true,
+    "operational_efficiency": true,
+    "cost_optimization": true,
+    "description": "Advanced warehouse management enabling accurate inventory control and operational excellence"
+  },
+  "system_requirements": {
+    "database": {
+      "inventoryItems": {
+        "description": "Core inventory tracking with serial number support",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "productId": "uuid NOT NULL REFERENCES products(id)",
+          "serialNumber": "varchar(100) UNIQUE",
+          "batchNumber": "varchar(100)",
+          "locationId": "uuid REFERENCES warehouseLocations(id)",
+          "binLocation": "varchar(50)",
+          "quantityOnHand": "integer NOT NULL DEFAULT 0 CHECK (quantityOnHand >= 0)",
+          "quantityAllocated": "integer NOT NULL DEFAULT 0 CHECK (quantityAllocated >= 0)",
+          "quantityAvailable": "integer GENERATED ALWAYS AS (quantityOnHand - quantityAllocated) STORED",
+          "unitCost": "decimal(10,4)",
+          "receivedAt": "timestamp",
+          "expiryDate": "date",
+          "qualityStatus": "enum('good', 'damaged', 'expired', 'quarantined') DEFAULT 'good'",
+          "inventoryStatus": "enum('available', 'allocated', 'sold', 'damaged', 'returned', 'quarantined') DEFAULT 'available'",
+          "reservedUntil": "timestamp",
+          "lastMovementAt": "timestamp",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()",
+          "updatedAt": "timestamp NOT NULL DEFAULT NOW()",
+          "createdBy": "uuid REFERENCES users(id)",
+          "updatedBy": "uuid REFERENCES users(id)",
+          "version": "integer NOT NULL DEFAULT 1"
+        },
+        "indexes": [
+          "organizationId",
+          "productId",
+          "serialNumber",
+          "locationId",
+          "qualityStatus",
+          "inventoryStatus",
+          "reservedUntil",
+          "lastMovementAt",
+          "CREATE INDEX idx_inventoryItems_org_status ON inventoryItems(organizationId, inventoryStatus)",
+          "CREATE INDEX idx_inventoryItems_org_created ON inventoryItems(organizationId, createdAt DESC)"
+        ],
+        "constraints": [
+          "quantityAllocated <= quantityOnHand"
+        ]
+      },
+      "inventoryMovements": {
+        "description": "Complete audit trail of all inventory transactions",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "inventoryItemId": "uuid NOT NULL REFERENCES inventoryItems(id)",
+          "movementType": "enum('receive', 'allocate', 'deallocate', 'pick', 'ship', 'adjust', 'return', 'transfer') NOT NULL",
+          "quantity": "integer NOT NULL",
+          "previousQuantity": "integer NOT NULL",
+          "newQuantity": "integer NOT NULL",
+          "referenceId": "uuid",
+          "referenceType": "enum('purchase_order', 'sales_order', 'adjustment', 'transfer', 'count', 'return')",
+          "reason": "varchar(255)",
+          "notes": "text",
+          "performedBy": "uuid NOT NULL REFERENCES users(id)",
+          "performedAt": "timestamp NOT NULL DEFAULT NOW()",
+          "costImpact": "decimal(10,2)",
+          "locationId": "uuid REFERENCES warehouseLocations(id)",
+          "metadata": "jsonb DEFAULT '{}'"
+        },
+        "indexes": [
+          "organizationId",
+          "inventoryItemId",
+          "movementType",
+          "performedAt",
+          "referenceId",
+          "locationId"
+        ],
+        "constraints": [
+          "quantity != 0",
+          "newQuantity = previousQuantity + quantity"
+        ]
+      },
+      "warehouseLocations": {
+        "description": "Multi-level warehouse location hierarchy",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "locationCode": "varchar(20) NOT NULL",
+          "name": "varchar(100) NOT NULL",
+          "locationType": "enum('warehouse', 'zone', 'aisle', 'rack', 'shelf', 'bin') NOT NULL",
+          "parentId": "uuid REFERENCES warehouseLocations(id)",
+          "capacity": "integer",
+          "isActive": "boolean DEFAULT true",
+          "attributes": "jsonb DEFAULT '{}'",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()",
+          "updatedAt": "timestamp NOT NULL DEFAULT NOW()",
+          "createdBy": "uuid REFERENCES users(id)",
+          "updatedBy": "uuid REFERENCES users(id)",
+          "version": "integer NOT NULL DEFAULT 1"
+        },
+        "indexes": [
+          "organizationId",
+          "locationCode",
+          "locationType",
+          "parentId",
+          "isActive",
+          "CREATE INDEX idx_warehouseLocations_org_status ON warehouseLocations(organizationId, isActive)",
+          "CREATE INDEX idx_warehouseLocations_org_created ON warehouseLocations(organizationId, createdAt DESC)"
+        ],
+        "constraints": [
+          "capacity >= 0 OR capacity IS NULL"
+        ]
+      },
+      "stockCounts": {
+        "description": "Cycle counting and stock reconciliation",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "countCode": "varchar(20) UNIQUE NOT NULL",
+          "status": "enum('draft', 'in_progress', 'completed', 'cancelled') DEFAULT 'draft'",
+          "countType": "enum('full', 'cycle', 'spot', 'annual') DEFAULT 'cycle'",
+          "locationId": "uuid REFERENCES warehouseLocations(id)",
+          "assignedTo": "uuid REFERENCES users(id)",
+          "startedAt": "timestamp",
+          "completedAt": "timestamp",
+          "approvedBy": "uuid REFERENCES users(id)",
+          "approvedAt": "timestamp",
+          "notes": "text",
+          "varianceThreshold": "decimal(5,2) DEFAULT 5.00",
+          "createdBy": "uuid NOT NULL REFERENCES users(id)",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()",
+          "updatedAt": "timestamp NOT NULL DEFAULT NOW()",
+          "updatedBy": "uuid REFERENCES users(id)",
+          "version": "integer NOT NULL DEFAULT 1"
+        },
+        "indexes": [
+          "organizationId",
+          "status",
+          "countType",
+          "locationId",
+          "assignedTo",
+          "startedAt",
+          "CREATE INDEX idx_stockCounts_org_status ON stockCounts(organizationId, status)",
+          "CREATE INDEX idx_stockCounts_org_created ON stockCounts(organizationId, createdAt DESC)"
+        ],
+        "constraints": [
+          "varianceThreshold >= 0 AND varianceThreshold <= 100"
+        ]
+      },
+      "stockCountItems": {
+        "description": "Individual items in a stock count",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "stockCountId": "uuid NOT NULL REFERENCES stockCounts(id)",
+          "inventoryItemId": "uuid NOT NULL REFERENCES inventoryItems(id)",
+          "expectedQuantity": "integer NOT NULL",
+          "countedQuantity": "integer",
+          "variance": "integer GENERATED ALWAYS AS (countedQuantity - expectedQuantity) STORED",
+          "varianceReason": "varchar(255)",
+          "countedBy": "uuid REFERENCES users(id)",
+          "countedAt": "timestamp",
+          "reviewedBy": "uuid REFERENCES users(id)",
+          "reviewedAt": "timestamp",
+          "notes": "text",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()",
+          "updatedAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "stockCountId",
+          "inventoryItemId",
+          "countedBy"
+        ],
+        "unique": [
+          "stockCountId",
+          "inventoryItemId"
+        ]
+      },
+      "inventoryCostLayers": {
+        "description": "FIFO cost layer tracking for accurate valuation",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "inventoryItemId": "uuid NOT NULL REFERENCES inventoryItems(id)",
+          "receivedAt": "timestamp NOT NULL",
+          "quantityReceived": "integer NOT NULL CHECK (quantityReceived > 0)",
+          "quantityRemaining": "integer NOT NULL CHECK (quantityRemaining >= 0)",
+          "unitCost": "decimal(10,4) NOT NULL CHECK (unitCost >= 0)",
+          "totalCost": "decimal(12,4) GENERATED ALWAYS AS (quantityRemaining * unitCost) STORED",
+          "referenceId": "uuid",
+          "referenceType": "enum('purchase_order', 'adjustment', 'transfer')",
+          "expiryDate": "date",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "organizationId",
+          "inventoryItemId",
+          "receivedAt",
+          "quantityRemaining"
+        ],
+        "constraints": [
+          "quantityRemaining <= quantityReceived"
+        ]
+      },
+      "inventoryForecasts": {
+        "description": "Demand forecasting and safety stock calculations",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "productId": "uuid NOT NULL REFERENCES products(id)",
+          "forecastDate": "date NOT NULL",
+          "forecastPeriod": "enum('daily', 'weekly', 'monthly') NOT NULL",
+          "demandQuantity": "decimal(10,2) NOT NULL",
+          "forecastAccuracy": "decimal(5,2)",
+          "safetyStockLevel": "integer",
+          "reorderPoint": "integer",
+          "recommendedOrderQuantity": "integer",
+          "confidenceLevel": "decimal(5,2)",
+          "calculatedAt": "timestamp NOT NULL DEFAULT NOW()",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "organizationId",
+          "productId",
+          "forecastDate",
+          "forecastPeriod"
+        ],
+        "unique": [
+          "organizationId",
+          "productId",
+          "forecastDate",
+          "forecastPeriod"
+        ]
+      },
+      "inventoryAlerts": {
+        "description": "Automated inventory alert configuration and tracking",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "alertType": "enum('low_stock', 'out_of_stock', 'overstock', 'expiry', 'slow_moving', 'forecast_deviation') NOT NULL",
+          "productId": "uuid REFERENCES products(id)",
+          "locationId": "uuid REFERENCES warehouseLocations(id)",
+          "threshold": "jsonb NOT NULL",
+          "isActive": "boolean DEFAULT true",
+          "notificationChannels": "text[] DEFAULT '{}'",
+          "escalationUsers": "uuid[] DEFAULT '{}'",
+          "lastTriggeredAt": "timestamp",
+          "createdBy": "uuid NOT NULL REFERENCES users(id)",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()",
+          "updatedAt": "timestamp NOT NULL DEFAULT NOW()",
+          "updatedBy": "uuid REFERENCES users(id)",
+          "version": "integer NOT NULL DEFAULT 1"
+        },
+        "indexes": [
+          "organizationId",
+          "alertType",
+          "productId",
+          "locationId",
+          "isActive",
+          "lastTriggeredAt",
+          "CREATE INDEX idx_inventoryAlerts_org_status ON inventoryAlerts(organizationId, isActive)",
+          "CREATE INDEX idx_inventoryAlerts_org_created ON inventoryAlerts(organizationId, createdAt DESC)"
+        ],
+        "constraints": [
+          "threshold IS NOT NULL"
+        ]
+      }
+    },
+    "api_endpoints": {
+      "inventory": {
+        "list": {
+          "method": "GET",
+          "path": "/api/inventory",
+          "query_params": [
+            "page",
+            "limit",
+            "productId",
+            "locationId",
+            "status",
+            "search",
+            "sortBy",
+            "sortDir"
+          ],
+          "response": {
+            "items": "InventoryItem[]",
+            "total": "number",
+            "page": "number",
+            "limit": "number",
+            "totals": {
+              "totalValue": "number",
+              "totalItems": "number",
+              "lowStockCount": "number"
+            }
+          },
+          "description": "List inventory items with advanced filtering and aggregation"
+        },
+        "get": {
+          "method": "GET",
+          "path": "/api/inventory/:id",
+          "response": {
+            "item": "InventoryItem",
+            "movements": "InventoryMovement[]",
+            "costLayers": "InventoryCostLayer[]",
+            "forecasts": "InventoryForecast[]",
+            "location": "WarehouseLocation"
+          },
+          "description": "Get complete inventory item details with history"
+        },
+        "adjust": {
+          "method": "POST",
+          "path": "/api/inventory/:id/adjust",
+          "body": {
+            "quantity": "number",
+            "reason": "string",
+            "notes": "string?",
+            "costImpact": "number?"
+          },
+          "response": {
+            "item": "InventoryItem",
+            "movement": "InventoryMovement"
+          },
+          "description": "Adjust inventory quantity with audit trail"
+        },
+        "transfer": {
+          "method": "POST",
+          "path": "/api/inventory/:id/transfer",
+          "body": {
+            "quantity": "number",
+            "fromLocationId": "uuid",
+            "toLocationId": "uuid",
+            "notes": "string?"
+          },
+          "response": {
+            "item": "InventoryItem",
+            "movement": "InventoryMovement"
+          },
+          "description": "Transfer inventory between locations"
+        },
+        "allocate": {
+          "method": "POST",
+          "path": "/api/inventory/:id/allocate",
+          "body": {
+            "quantity": "number",
+            "referenceId": "uuid",
+            "referenceType": "string",
+            "reservedUntil": "date?"
+          },
+          "response": {
+            "item": "InventoryItem",
+            "movement": "InventoryMovement"
+          },
+          "description": "Allocate inventory for orders or reservations"
+        },
+        "receive": {
+          "method": "POST",
+          "path": "/api/inventory/receive",
+          "body": {
+            "productId": "uuid",
+            "quantity": "number",
+            "unitCost": "number",
+            "locationId": "uuid?",
+            "serialNumber": "string?",
+            "batchNumber": "string?",
+            "expiryDate": "date?",
+            "referenceId": "uuid",
+            "referenceType": "string"
+          },
+          "response": {
+            "item": "InventoryItem",
+            "movement": "InventoryMovement",
+            "costLayer": "InventoryCostLayer"
+          },
+          "description": "Receive inventory with cost layer creation"
+        }
+      },
+      "locations": {
+        "list": {
+          "method": "GET",
+          "path": "/api/locations",
+          "query_params": [
+            "parentId",
+            "type",
+            "active",
+            "search"
+          ],
+          "response": {
+            "locations": "WarehouseLocation[]",
+            "hierarchy": "LocationHierarchy[]"
+          },
+          "description": "Get warehouse location hierarchy"
+        },
+        "create": {
+          "method": "POST",
+          "path": "/api/locations",
+          "body": {
+            "locationCode": "string",
+            "name": "string",
+            "locationType": "LocationType",
+            "parentId": "uuid?",
+            "capacity": "number?",
+            "attributes": "Record<string, any>?"
+          },
+          "response": {
+            "location": "WarehouseLocation"
+          },
+          "description": "Create warehouse location"
+        },
+        "update": {
+          "method": "PUT",
+          "path": "/api/locations/:id",
+          "body": {
+            "locationCode": "string?",
+            "name": "string?",
+            "capacity": "number?",
+            "isActive": "boolean?",
+            "attributes": "Record<string, any>?"
+          },
+          "response": {
+            "location": "WarehouseLocation"
+          },
+          "description": "Update location information"
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "/api/locations/:id",
+          "response": {
+            "success": "boolean"
+          },
+          "description": "Delete location (if empty)"
+        },
+        "getContents": {
+          "method": "GET",
+          "path": "/api/locations/:id/contents",
+          "response": {
+            "items": "InventoryItem[]",
+            "utilization": "number"
+          },
+          "description": "Get inventory contents of location"
+        }
+      },
+      "stockCounts": {
+        "list": {
+          "method": "GET",
+          "path": "/api/stock-counts",
+          "query_params": [
+            "status",
+            "type",
+            "locationId",
+            "assignedTo",
+            "dateFrom",
+            "dateTo"
+          ],
+          "response": {
+            "counts": "StockCount[]",
+            "total": "number"
+          },
+          "description": "List stock counts with filtering"
+        },
+        "create": {
+          "method": "POST",
+          "path": "/api/stock-counts",
+          "body": {
+            "countType": "CountType",
+            "locationId": "uuid?",
+            "assignedTo": "uuid?",
+            "notes": "string?"
+          },
+          "response": {
+            "count": "StockCount"
+          },
+          "description": "Create new stock count"
+        },
+        "get": {
+          "method": "GET",
+          "path": "/api/stock-counts/:id",
+          "response": {
+            "count": "StockCount",
+            "items": "StockCountItem[]",
+            "progress": "CountProgress"
+          },
+          "description": "Get stock count details and progress"
+        },
+        "start": {
+          "method": "POST",
+          "path": "/api/stock-counts/:id/start",
+          "response": {
+            "count": "StockCount",
+            "items": "StockCountItem[]"
+          },
+          "description": "Start stock count and generate count sheet"
+        },
+        "updateItem": {
+          "method": "PUT",
+          "path": "/api/stock-counts/:countId/items/:itemId",
+          "body": {
+            "countedQuantity": "number",
+            "varianceReason": "string?",
+            "notes": "string?"
+          },
+          "response": {
+            "item": "StockCountItem"
+          },
+          "description": "Update counted quantity for item"
+        },
+        "complete": {
+          "method": "POST",
+          "path": "/api/stock-counts/:id/complete",
+          "body": {
+            "notes": "string?"
+          },
+          "response": {
+            "count": "StockCount",
+            "adjustments": "InventoryMovement[]"
+          },
+          "description": "Complete stock count and create adjustments"
+        },
+        "cancel": {
+          "method": "DELETE",
+          "path": "/api/stock-counts/:id",
+          "response": {
+            "success": "boolean"
+          },
+          "description": "Cancel stock count"
+        }
+      },
+      "valuation": {
+        "getInventoryValue": {
+          "method": "GET",
+          "path": "/api/inventory/valuation",
+          "query_params": [
+            "locationId",
+            "productId",
+            "valuationMethod"
+          ],
+          "response": {
+            "totalValue": "number",
+            "byLocation": "LocationValuation[]",
+            "byProduct": "ProductValuation[]",
+            "valuationMethod": "string",
+            "asOf": "date"
+          },
+          "description": "Get inventory valuation using FIFO or other methods"
+        },
+        "getCostOfGoodsSold": {
+          "method": "GET",
+          "path": "/api/inventory/cogs",
+          "query_params": [
+            "productId",
+            "quantity",
+            "date"
+          ],
+          "response": {
+            "cogs": "number",
+            "costLayers": "InventoryCostLayer[]",
+            "remainingLayers": "InventoryCostLayer[]"
+          },
+          "description": "Calculate cost of goods sold using FIFO"
+        },
+        "getCostLayers": {
+          "method": "GET",
+          "path": "/api/inventory/:itemId/cost-layers",
+          "response": {
+            "layers": "InventoryCostLayer[]"
+          },
+          "description": "Get cost layers for inventory item"
+        }
+      },
+      "forecasting": {
+        "getForecast": {
+          "method": "GET",
+          "path": "/api/inventory/forecast",
+          "query_params": [
+            "productId",
+            "period",
+            "days"
+          ],
+          "response": {
+            "forecasts": "InventoryForecast[]",
+            "recommendations": "ReorderRecommendation[]"
+          },
+          "description": "Get demand forecasts and reorder recommendations"
+        },
+        "calculateSafetyStock": {
+          "method": "GET",
+          "path": "/api/inventory/safety-stock",
+          "query_params": [
+            "productId",
+            "serviceLevel"
+          ],
+          "response": {
+            "safetyStock": "number",
+            "reorderPoint": "number",
+            "recommendedOrderQuantity": "number"
+          },
+          "description": "Calculate safety stock levels"
+        },
+        "updateForecast": {
+          "method": "POST",
+          "path": "/api/inventory/forecast",
+          "body": {
+            "forecasts": "InventoryForecastInput[]"
+          },
+          "response": {
+            "forecasts": "InventoryForecast[]"
+          },
+          "description": "Update forecast data"
+        }
+      },
+      "alerts": {
+        "list": {
+          "method": "GET",
+          "path": "/api/inventory/alerts",
+          "query_params": [
+            "type",
+            "active",
+            "triggered"
+          ],
+          "response": {
+            "alerts": "InventoryAlert[]",
+            "activeCount": "number"
+          },
+          "description": "List inventory alerts and their status"
+        },
+        "create": {
+          "method": "POST",
+          "path": "/api/inventory/alerts",
+          "body": {
+            "alertType": "AlertType",
+            "productId": "uuid?",
+            "locationId": "uuid?",
+            "threshold": "Record<string, any>",
+            "notificationChannels": "string[]",
+            "escalationUsers": "uuid[]"
+          },
+          "response": {
+            "alert": "InventoryAlert"
+          },
+          "description": "Create inventory alert"
+        },
+        "update": {
+          "method": "PUT",
+          "path": "/api/inventory/alerts/:id",
+          "body": {
+            "threshold": "Record<string, any>?",
+            "isActive": "boolean?",
+            "notificationChannels": "string[]?",
+            "escalationUsers": "uuid[]?"
+          },
+          "response": {
+            "alert": "InventoryAlert"
+          },
+          "description": "Update alert configuration"
+        },
+        "getTriggered": {
+          "method": "GET",
+          "path": "/api/inventory/alerts/triggered",
+          "response": {
+            "alerts": "TriggeredAlert[]",
+            "count": "number"
+          },
+          "description": "Get currently triggered alerts"
+        }
+      },
+      "analytics": {
+        "dashboard": {
+          "method": "GET",
+          "path": "/api/inventory/dashboard",
+          "response": {
+            "metrics": "InventoryMetrics",
+            "alerts": "TriggeredAlert[]",
+            "forecasts": "InventoryForecast[]",
+            "topMoving": "ProductMovement[]"
+          },
+          "description": "Get inventory dashboard data"
+        },
+        "movements": {
+          "method": "GET",
+          "path": "/api/inventory/movements",
+          "query_params": [
+            "dateFrom",
+            "dateTo",
+            "type",
+            "productId",
+            "locationId",
+            "userId"
+          ],
+          "response": {
+            "movements": "InventoryMovement[]",
+            "total": "number",
+            "summary": "MovementSummary"
+          },
+          "description": "Get inventory movement history with analytics"
+        },
+        "aging": {
+          "method": "GET",
+          "path": "/api/inventory/aging",
+          "query_params": [
+            "locationId",
+            "ageBuckets"
+          ],
+          "response": {
+            "aging": "InventoryAging[]",
+            "summary": "AgingSummary",
+            "recommendations": "AgingRecommendation[]"
+          },
+          "description": "Get inventory aging analysis"
+        },
+        "turnover": {
+          "method": "GET",
+          "path": "/api/inventory/turnover",
+          "query_params": [
+            "period",
+            "productId"
+          ],
+          "response": {
+            "turnover": "InventoryTurnover[]",
+            "metrics": "TurnoverMetrics",
+            "benchmarks": "IndustryBenchmarks"
+          },
+          "description": "Get inventory turnover analysis"
+        }
+      }
+    },
+    "ui_components": {
+      "inventoryDashboard": {
+        "description": "Central inventory operations dashboard",
+        "widgets": [
+          {
+            "name": "Stock Overview",
+            "metrics": [
+              "total_value",
+              "total_items",
+              "locations_count"
+            ]
+          },
+          {
+            "name": "Stock Alerts",
+            "alerts": [
+              "low_stock",
+              "expired",
+              "slow_moving"
+            ]
+          },
+          {
+            "name": "Recent Movements",
+            "timeline": [
+              "last_24h",
+              "last_7d",
+              "last_30d"
+            ]
+          },
+          {
+            "name": "Top Moving Products",
+            "charts": [
+              "by_quantity",
+              "by_value"
+            ]
+          },
+          {
+            "name": "Location Utilization",
+            "heatmap": [
+              "capacity",
+              "occupancy"
+            ]
+          },
+          {
+            "name": "Forecast Accuracy",
+            "trends": [
+              "forecast_vs_actual",
+              "accuracy_percentage"
+            ]
+          }
+        ],
+        "quickActions": [
+          "Receive Inventory",
+          "Create Stock Count",
+          "Adjust Stock",
+          "Transfer Items",
+          "View Reports"
+        ],
+        "alertsPanel": {
+          "realTime": "Live alerts with priority levels",
+          "escalation": "Automatic escalation for critical alerts",
+          "acknowledgment": "Alert acknowledgment and resolution tracking"
+        }
+      },
+      "inventoryBrowser": {
+        "description": "Advanced inventory search and browsing",
+        "filters": [
+          {
+            "name": "Product",
+            "type": "search",
+            "operators": [
+              "contains",
+              "starts_with",
+              "exact"
+            ]
+          },
+          {
+            "name": "Location",
+            "type": "hierarchy",
+            "multiSelect": true
+          },
+          {
+            "name": "Quantity",
+            "type": "range",
+            "units": [
+              "on_hand",
+              "available",
+              "allocated"
+            ]
+          },
+          {
+            "name": "Status",
+            "type": "multiselect",
+            "options": [
+              "good",
+              "damaged",
+              "expired",
+              "quarantined"
+            ]
+          },
+          {
+            "name": "Age",
+            "type": "range",
+            "units": [
+              "days",
+              "weeks",
+              "months"
+            ]
+          },
+          {
+            "name": "Value",
+            "type": "range",
+            "currency": true
+          }
+        ],
+        "views": [
+          {
+            "name": "List",
+            "columns": [
+              "product",
+              "location",
+              "quantity",
+              "value",
+              "status",
+              "last_movement"
+            ]
+          },
+          {
+            "name": "Grid",
+            "cards": [
+              "product_image",
+              "key_metrics",
+              "location",
+              "actions"
+            ]
+          },
+          {
+            "name": "Map",
+            "visualization": [
+              "warehouse_layout",
+              "item_placement",
+              "density"
+            ]
+          }
+        ],
+        "actions": [
+          "View Details",
+          "Adjust Quantity",
+          "Transfer Location",
+          "Create Count",
+          "View History",
+          "Print Labels"
+        ]
+      },
+      "itemDetail": {
+        "description": "Comprehensive inventory item management",
+        "overview": {
+          "basic": [
+            "product_info",
+            "current_stock",
+            "location",
+            "value"
+          ],
+          "status": [
+            "quality_status",
+            "expiry_date",
+            "batch_info",
+            "serial_tracking"
+          ],
+          "metrics": [
+            "turnover_rate",
+            "days_on_hand",
+            "forecast_accuracy"
+          ]
+        },
+        "tabs": [
+          {
+            "name": "Movements",
+            "timeline": [
+              "full_history",
+              "filters",
+              "export"
+            ]
+          },
+          {
+            "name": "Cost Layers",
+            "fifo": [
+              "layer_details",
+              "depletion_tracking",
+              "valuation"
+            ]
+          },
+          {
+            "name": "Forecasts",
+            "demand": [
+              "historical",
+              "predicted",
+              "recommendations"
+            ]
+          },
+          {
+            "name": "Quality",
+            "tracking": [
+              "inspections",
+              "issues",
+              "resolutions"
+            ]
+          }
+        ],
+        "actions": [
+          "Adjust Stock",
+          "Transfer Location",
+          "Quality Update",
+          "Create Reservation",
+          "Print Barcode",
+          "View Related Items"
+        ]
+      },
+      "locationManagement": {
+        "description": "Warehouse location hierarchy management",
+        "hierarchy": {
+          "visualization": [
+            "tree_view",
+            "floor_plan",
+            "capacity_heatmap"
+          ],
+          "navigation": [
+            "breadcrumb",
+            "search",
+            "filter_by_type"
+          ]
+        },
+        "locationDetail": {
+          "configuration": [
+            "capacity",
+            "attributes",
+            "restrictions"
+          ],
+          "contents": [
+            "current_inventory",
+            "utilization",
+            "movements"
+          ],
+          "analytics": [
+            "throughput",
+            "accuracy",
+            "efficiency"
+          ]
+        },
+        "bulkOperations": [
+          "Bulk Location Creation",
+          "Capacity Updates",
+          "Attribute Assignment",
+          "Location Transfers"
+        ]
+      },
+      "stockCounting": {
+        "description": "Cycle counting and stock reconciliation",
+        "countPlanning": {
+          "strategies": [
+            "full_inventory",
+            "cycle_count",
+            "spot_checks",
+            "annual_audit"
+          ],
+          "scheduling": [
+            "frequency",
+            "location_priority",
+            "product_priority"
+          ],
+          "assignment": [
+            "user_assignment",
+            "team_assignment",
+            "automation"
+          ]
+        },
+        "countExecution": {
+          "interface": [
+            "count_sheet",
+            "barcode_scanning",
+            "voice_picking"
+          ],
+          "progress": [
+            "completion_percentage",
+            "time_remaining",
+            "variance_tracking"
+          ],
+          "validation": [
+            "reason_codes",
+            "approval_workflow",
+            "discrepancy_resolution"
+          ]
+        },
+        "countAnalysis": {
+          "variance": [
+            "by_location",
+            "by_product",
+            "by_counter",
+            "trends"
+          ],
+          "accuracy": [
+            "error_rates",
+            "root_causes",
+            "improvement_actions"
+          ],
+          "reporting": [
+            "count_summary",
+            "variance_analysis",
+            "audit_trail"
+          ]
+        }
+      },
+      "receivingInterface": {
+        "description": "Purchase order receiving and putaway",
+        "receiptPlanning": {
+          "expected": [
+            "purchase_orders",
+            "scheduled_deliveries",
+            "advance_shipments"
+          ],
+          "preparation": [
+            "location_assignment",
+            "receiving_checklist",
+            "quality_criteria"
+          ]
+        },
+        "receiptExecution": {
+          "scanning": [
+            "po_lookup",
+            "item_verification",
+            "quantity_confirmation"
+          ],
+          "quality": [
+            "inspection_checklist",
+            "damage_reporting",
+            "acceptance_criteria"
+          ],
+          "putaway": [
+            "location_assignment",
+            "label_printing",
+            "confirmation"
+          ]
+        },
+        "receiptTracking": {
+          "progress": [
+            "received_vs_ordered",
+            "quality_status",
+            "putaway_completion"
+          ],
+          "issues": [
+            "discrepancies",
+            "quality_failures",
+            "location_conflicts"
+          ],
+          "analytics": [
+            "receiving_accuracy",
+            "processing_time",
+            "quality_rates"
+          ]
+        }
+      },
+      "forecastingInterface": {
+        "description": "Demand forecasting and inventory planning",
+        "forecastConfiguration": {
+          "methods": [
+            "moving_average",
+            "exponential_smoothing",
+            "regression",
+            "machine_learning"
+          ],
+          "parameters": [
+            "period_length",
+            "seasonality",
+            "trend_factors",
+            "accuracy_weights"
+          ]
+        },
+        "forecastVisualization": {
+          "charts": [
+            "historical_demand",
+            "forecast_projection",
+            "confidence_intervals"
+          ],
+          "scenarios": [
+            "best_case",
+            "worst_case",
+            "most_likely",
+            "custom"
+          ],
+          "comparison": [
+            "forecast_vs_actual",
+            "method_comparison",
+            "accuracy_metrics"
+          ]
+        },
+        "planningInterface": {
+          "safety_stock": [
+            "calculation",
+            "adjustment",
+            "scenario_planning"
+          ],
+          "reorder_points": [
+            "automatic_calculation",
+            "manual_override",
+            "alert_setup"
+          ],
+          "order_quantities": [
+            "economic_order_quantity",
+            "minimum_order",
+            "supplier_constraints"
+          ]
+        }
+      },
+      "alertsManagement": {
+        "description": "Inventory alerts configuration and monitoring",
+        "alertConfiguration": {
+          "types": [
+            "low_stock",
+            "out_of_stock",
+            "overstock",
+            "expiry",
+            "slow_moving"
+          ],
+          "thresholds": [
+            "percentage",
+            "absolute",
+            "time_based",
+            "trend_based"
+          ],
+          "escalation": [
+            "notification_channels",
+            "user_groups",
+            "time_delays"
+          ]
+        },
+        "alertDashboard": {
+          "active": [
+            "priority_sorting",
+            "acknowledgment",
+            "resolution_tracking"
+          ],
+          "historical": [
+            "alert_history",
+            "response_times",
+            "false_positive_analysis"
+          ],
+          "analytics": [
+            "alert_frequency",
+            "resolution_efficiency",
+            "preventive_actions"
+          ]
+        },
+        "alertActions": [
+          "Acknowledge Alert",
+          "Create Purchase Order",
+          "Adjust Stock",
+          "Update Forecast",
+          "Escalate to Manager"
+        ]
+      }
+    },
+    "business_rules": {
+      "inventory_accuracy": {
+        "stock_counting": "Regular cycle counts with variance analysis and corrective actions",
+        "receiving_accuracy": "100% accuracy target for goods receipt with quality inspection",
+        "movement_tracking": "Every inventory movement recorded with audit trail",
+        "adjustment_approval": "Stock adjustments require approval and justification",
+        "serial_tracking": "Serialized items tracked individually throughout lifecycle"
+      },
+      "location_management": {
+        "hierarchy_design": "Logical warehouse layout with zone/aisle/rack/shelf/bin structure",
+        "capacity_planning": "Location capacity limits enforced with utilization monitoring",
+        "picking_efficiency": "ABC classification for product placement optimization",
+        "safety_compliance": "Hazardous material segregation and access controls",
+        "layout_optimization": "Regular review and optimization of warehouse layout"
+      },
+      "valuation_methodology": {
+        "fifo_costing": "First-in, first-out cost layer tracking for accurate valuation",
+        "cost_accuracy": "Unit costs updated on every receipt with landed cost calculation",
+        "valuation_consistency": "Consistent valuation method across all reporting periods",
+        "cost_allocation": "Proper allocation of freight, duty, and other costs to inventory",
+        "revaluation": "Periodic revaluation for obsolete or damaged inventory"
+      },
+      "demand_forecasting": {
+        "historical_analysis": "Multi-year historical data analysis for trend identification",
+        "seasonal_patterns": "Seasonal demand patterns incorporated into forecasts",
+        "accuracy_measurement": "Forecast accuracy tracked and improved over time",
+        "safety_stock": "Service level-based safety stock calculations",
+        "forecast_horizons": "Short-term (daily/weekly) and long-term (monthly/quarterly) forecasts"
+      },
+      "alert_management": {
+        "threshold_configuration": "Configurable alert thresholds based on business rules",
+        "escalation_procedures": "Multi-level escalation for critical inventory alerts",
+        "alert_prioritization": "Priority-based alert routing and response requirements",
+        "false_positive_reduction": "Alert optimization to reduce unnecessary notifications",
+        "alert_effectiveness": "Alert response tracking and effectiveness measurement"
+      },
+      "quality_assurance": {
+        "receiving_inspection": "Quality inspection required for all goods receipts",
+        "condition_tracking": "Item condition tracked throughout warehouse lifecycle",
+        "expiry_management": "Automatic alerts for expiring inventory with disposal procedures",
+        "damage_reporting": "Standardized damage reporting with root cause analysis",
+        "quality_metrics": "Quality performance metrics and continuous improvement"
+      },
+      "allocation_reservation": {
+        "order_allocation": "Automatic allocation of available inventory to confirmed orders",
+        "reservation_expiration": "Automatic release of expired reservations",
+        "backorder_management": "Backorder processing with allocation priority",
+        "allocation_optimization": "Optimized allocation based on order priority and shipping dates",
+        "reservation_visibility": "Clear visibility of allocated vs available inventory"
+      }
+    },
+    "integrations": {
+      "procurement_system": {
+        "purchase_order_receipt": "Automatic inventory receipt from approved purchase orders",
+        "supplier_performance": "Supplier delivery metrics integration",
+        "cost_integration": "Landed cost calculation from procurement data",
+        "quality_feedback": "Quality issues communicated back to suppliers"
+      },
+      "order_management": {
+        "inventory_allocation": "Real-time inventory allocation for order placement",
+        "availability_checking": "Stock availability validation during ordering",
+        "backorder_processing": "Automatic backorder creation and fulfillment",
+        "allocation_release": "Automatic deallocation on order cancellation"
+      },
+      "financial_system": {
+        "inventory_valuation": "Real-time inventory valuation for balance sheet",
+        "cost_of_goods_sold": "Accurate COGS calculation using FIFO costing",
+        "inventory_adjustments": "Financial impact of inventory adjustments",
+        "month_end_processing": "Automated inventory valuation for period-end reporting"
+      },
+      "reporting_analytics": {
+        "inventory_metrics": "Comprehensive inventory KPIs and reporting",
+        "forecast_accuracy": "Forecast vs actual analysis and reporting",
+        "alert_analytics": "Alert effectiveness and response time analytics",
+        "warehouse_efficiency": "Warehouse productivity and efficiency metrics"
+      },
+      "mobile_devices": {
+        "receiving_app": "Mobile receiving with barcode scanning",
+        "picking_app": "Mobile picking with location guidance",
+        "counting_app": "Mobile stock counting with offline capability",
+        "transfer_app": "Mobile inventory transfers between locations"
+      },
+      "automation_systems": {
+        "barcode_integration": "Barcode label generation and scanning",
+        "rfid_tracking": "RFID tag integration for automated tracking",
+        "conveyor_systems": "Automated material handling system integration",
+        "robot_integration": "Robotic picking and putaway system interfaces"
+      }
+    },
+    "performance_requirements": {
+      "response_times": {
+        "inventory_lookup": "< 100 milliseconds",
+        "stock_adjustment": "< 500 milliseconds",
+        "location_transfer": "< 1 second",
+        "stock_count_update": "< 2 seconds",
+        "analytics_queries": "< 3 seconds"
+      },
+      "scalability": {
+        "inventory_records": "1M+ inventory items with sub-second queries",
+        "movement_throughput": "1000+ movements per minute",
+        "concurrent_users": "100+ warehouse operators",
+        "location_hierarchy": "Unlimited location depth with fast navigation",
+        "forecast_computation": "1000+ product forecasts in < 5 minutes"
+      },
+      "reliability": {
+        "data_accuracy": "100% inventory accuracy target",
+        "system_availability": "99.9% uptime for warehouse operations",
+        "audit_completeness": "100% movement audit trail",
+        "backup_frequency": "Real-time backup with instant recovery",
+        "disaster_recovery": "4-hour RTO, 1-hour RPO for critical operations"
+      },
+      "accuracy": {
+        "stock_accuracy": "> 99.5% inventory accuracy",
+        "receiving_accuracy": "> 99.9% receipt accuracy",
+        "count_accuracy": "> 99.0% count accuracy",
+        "valuation_accuracy": "100% cost accuracy with FIFO",
+        "forecast_accuracy": "> 85% forecast accuracy"
+      }
+    }
+  },
+  "stories": [
+    {
+      "id": "INV-CORE-SCHEMA",
+      "name": "Warehouse Core Schema",
+      "description": "Create complete warehouse management database schema with all tables and relationships",
+      "type": "schema",
+      "acceptance_criteria": [
+        "Complete inventoryItems table with all tracking fields",
+        "inventoryMovements table with comprehensive audit trail",
+        "warehouseLocations table with hierarchical relationships",
+        "stockCounts and stockCountItems for cycle counting",
+        "inventoryCostLayers for FIFO valuation",
+        "inventoryForecasts and inventoryAlerts tables",
+        "All foreign key relationships and proper indexing",
+        "RLS policies for organization data isolation",
+        "TypeScript types exported for all entities"
+      ],
+      "files_to_modify": [
+        "src/lib/schema/inventory-items.ts",
+        "src/lib/schema/inventory-movements.ts",
+        "src/lib/schema/warehouse-locations.ts",
+        "src/lib/schema/stock-counts.ts",
+        "src/lib/schema/inventory-cost-layers.ts",
+        "src/lib/schema/inventory-forecasts.ts",
+        "src/lib/schema/inventory-alerts.ts",
+        "src/lib/schema/index.ts",
+        "drizzle/migrations/011_inventory.ts"
+      ],
+      "_schema_note": "warehouseLocations and inventoryMovements are defined in 007_inventory-core.ts - do NOT recreate. 011_inventory.ts adds FK constraint only.",
+      "completion_promise": "INV_CORE_SCHEMA_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending"
+    },
+    {
+      "id": "INV-CORE-API",
+      "name": "Warehouse Core API",
+      "description": "Implement comprehensive warehouse operations and inventory management endpoints",
+      "type": "server-function",
+      "acceptance_criteria": [
+        "Complete inventory CRUD with advanced filtering",
+        "Stock adjustment and movement tracking APIs",
+        "Location management with hierarchy support",
+        "Stock counting lifecycle management",
+        "Inventory valuation and cost layer APIs",
+        "Forecasting and alert management endpoints",
+        "All endpoints include proper error handling and RLS",
+        "Comprehensive Zod validation schemas"
+      ],
+      "files_to_modify": [
+        "src/server/functions/inventory.ts",
+        "src/server/functions/locations.ts",
+        "src/server/functions/stock-counts.ts",
+        "src/server/functions/valuation.ts",
+        "src/server/functions/forecasting.ts",
+        "src/server/functions/alerts.ts",
+        "src/lib/schemas/inventory.ts"
+      ],
+      "dependencies": [
+        "INV-CORE-SCHEMA"
+      ],
+      "completion_promise": "INV_CORE_API_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "INV-DASHBOARD-UI",
+      "name": "Warehouse Operations Dashboard",
+      "description": "Central warehouse operations dashboard with real-time metrics and alerts",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Responsive dashboard with key inventory metrics",
+        "Real-time stock alerts and notifications",
+        "Recent inventory movements timeline",
+        "Top moving products analysis",
+        "Location utilization heatmaps",
+        "Quick action buttons for common operations",
+        "Mobile-responsive design with touch interactions",
+        "Skeleton loaders mirror final widget layout (no CLS)",
+        "Each widget has empty state with clear next action",
+        "Charts use color-blind-friendly palette (not color-only)",
+        "Real-time metrics use aria-live='polite' for updates",
+        "All icon-only buttons have aria-label"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/inventory/dashboard.tsx",
+        "src/components/domain/inventory/dashboard-widgets.tsx",
+        "src/components/domain/inventory/alerts-panel.tsx",
+        "src/components/domain/inventory/quick-actions.tsx"
+      ],
+      "dependencies": [
+        "INV-CORE-API"
+      ],
+      "completion_promise": "INV_DASHBOARD_UI_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "INV-BROWSER-UI",
+      "name": "Inventory Browser Interface",
+      "description": "Advanced inventory search, filtering, and browsing with multiple view modes",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Advanced filtering by product, location, quantity, status, age, value",
+        "Multiple view modes: list, grid, map visualization",
+        "Real-time search with autocomplete",
+        "Bulk selection and operations",
+        "Export capabilities with custom column selection",
+        "Saved filter sets and search history",
+        "Responsive design adapting to screen size",
+        "List virtualized if >50 items using @tanstack/react-virtual",
+        "URL reflects filters, view mode, and pagination state",
+        "Full keyboard navigation for all views (list/grid/map)",
+        "Bulk select checkbox hit area spans full row",
+        "Visible focus rings on all interactive elements"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/inventory/index.tsx",
+        "src/components/domain/inventory/inventory-browser.tsx",
+        "src/components/domain/inventory/filter-panel.tsx",
+        "src/components/domain/inventory/view-modes.tsx"
+      ],
+      "dependencies": [
+        "INV-CORE-API"
+      ],
+      "completion_promise": "INV_BROWSER_UI_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "INV-ITEM-DETAIL-UI",
+      "name": "Inventory Item Detail Interface",
+      "description": "Comprehensive inventory item management with complete history and analytics",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Tabbed interface: Overview, Movements, Cost Layers, Forecasts, Quality",
+        "Complete item information display with status indicators",
+        "Movement history with filtering and export",
+        "Cost layer visualization with FIFO tracking",
+        "Demand forecasting with accuracy metrics",
+        "Quality tracking and inspection history",
+        "Bulk operations for related items",
+        "Tabs support keyboard arrow navigation",
+        "Movement history uses tabular-nums for quantity alignment",
+        "Currency values use Intl.NumberFormat for locale-awareness",
+        "Focus properly managed when switching tabs"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/inventory/$itemId.tsx",
+        "src/components/domain/inventory/item-detail.tsx",
+        "src/components/domain/inventory/item-tabs.tsx",
+        "src/components/domain/inventory/movements-tab.tsx"
+      ],
+      "dependencies": [
+        "INV-CORE-API"
+      ],
+      "completion_promise": "INV_ITEM_DETAIL_UI_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "INV-LOCATION-MANAGEMENT",
+      "name": "Location Management System",
+      "description": "Warehouse location hierarchy management with capacity planning and optimization",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Location hierarchy tree visualization",
+        "Location creation and configuration",
+        "Capacity planning and utilization tracking",
+        "Bulk location operations and updates",
+        "Location content viewing and management",
+        "Location performance analytics",
+        "Import/export location hierarchies"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/settings/locations.tsx",
+        "src/components/domain/locations/location-tree.tsx",
+        "src/components/domain/locations/location-editor.tsx",
+        "src/components/domain/locations/capacity-manager.tsx"
+      ],
+      "dependencies": [
+        "INV-CORE-API"
+      ],
+      "completion_promise": "INV_LOCATION_MANAGEMENT_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "INV-STOCK-COUNTING",
+      "name": "Stock Counting System",
+      "description": "Complete cycle counting workflow with planning, execution, and variance analysis",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Count planning with strategy selection and scheduling",
+        "Count execution with progress tracking and data entry",
+        "Variance analysis and adjustment creation",
+        "Count approval workflow with discrepancy review",
+        "Count reporting and accuracy analytics",
+        "Mobile-optimized counting interface",
+        "Barcode scanning integration",
+        "Barcode/quantity inputs do not block paste",
+        "Variance highlighting uses color AND icon (not color-only)",
+        "URL tracks current counting progress/bin state",
+        "AlertDialog used for count submission confirmation"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/inventory/counts/index.tsx",
+        "src/routes/_authed/inventory/counts/$countId.tsx",
+        "src/components/domain/counting/count-planner.tsx",
+        "src/components/domain/counting/count-execution.tsx",
+        "src/components/domain/counting/variance-analysis.tsx"
+      ],
+      "dependencies": [
+        "INV-CORE-API"
+      ],
+      "completion_promise": "INV_STOCK_COUNTING_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "INV-RECEIVING-INTERFACE",
+      "name": "Goods Receiving Interface",
+      "description": "Purchase order receiving with quality inspection and putaway management",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Expected receipts dashboard with scheduling",
+        "Receipt creation with PO reference and item verification",
+        "Quality inspection workflow with defect tracking",
+        "Location assignment and putaway instructions",
+        "Receipt confirmation and inventory updates",
+        "Partial receipt handling and backorder creation",
+        "Receipt history and performance analytics",
+        "AlertDialog used for quality rejection confirmation",
+        "Putaway suggestions are keyboard navigable",
+        "Search inputs debounce and show loading state",
+        "Form validates after blur, not blocking typing"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/inventory/receiving/index.tsx",
+        "src/components/domain/receiving/receipt-creation.tsx",
+        "src/components/domain/receiving/quality-inspection.tsx",
+        "src/components/domain/receiving/putaway-manager.tsx"
+      ],
+      "dependencies": [
+        "INV-CORE-API"
+      ],
+      "completion_promise": "INV_RECEIVING_INTERFACE_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "INV-FORECASTING-SYSTEM",
+      "name": "Demand Forecasting System",
+      "description": "Advanced demand forecasting with safety stock calculations and reorder optimization",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Forecast configuration with method selection",
+        "Historical data analysis and trend visualization",
+        "Forecast accuracy tracking and improvement",
+        "Safety stock and reorder point calculations",
+        "Forecast vs actual performance monitoring",
+        "Scenario planning and what-if analysis",
+        "Bulk forecast updates and adjustments",
+        "Charts honor prefers-reduced-motion",
+        "Date range picker has full keyboard support",
+        "Safety stock calculations use tabular-nums",
+        "Empty forecast state has clear action"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/inventory/forecasting.tsx",
+        "src/components/domain/forecasting/forecast-config.tsx",
+        "src/components/domain/forecasting/forecast-visualization.tsx",
+        "src/components/domain/forecasting/safety-stock-calc.tsx"
+      ],
+      "dependencies": [
+        "INV-CORE-API"
+      ],
+      "completion_promise": "INV_FORECASTING_SYSTEM_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "INV-ALERTS-MANAGEMENT",
+      "name": "Inventory Alerts Management",
+      "description": "Comprehensive inventory alerts configuration and real-time monitoring",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Alert type configuration with custom thresholds",
+        "Multi-channel notification setup (email, SMS, in-app)",
+        "Escalation rules and user assignment",
+        "Real-time alert dashboard with priority sorting",
+        "Alert acknowledgment and resolution tracking",
+        "Alert effectiveness analytics and optimization",
+        "Alert history and trend analysis",
+        "Alert list virtualized if >50 items",
+        "Severity indicators use icon AND color (not color-only)",
+        "Threshold inputs validate after blur, not blocking typing",
+        "Keyboard accessible alert configuration"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/settings/inventory-alerts.tsx",
+        "src/components/domain/alerts/alert-config.tsx",
+        "src/components/domain/alerts/alert-dashboard.tsx",
+        "src/components/domain/alerts/alert-analytics.tsx"
+      ],
+      "dependencies": [
+        "INV-CORE-API"
+      ],
+      "completion_promise": "INV_ALERTS_MANAGEMENT_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "INV-ANALYTICS-REPORTING",
+      "name": "Warehouse Analytics and Reporting",
+      "description": "Comprehensive warehouse analytics with operational intelligence and reporting",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Inventory valuation and turnover analysis",
+        "Movement analytics and throughput metrics",
+        "Location efficiency and utilization reports",
+        "Forecast accuracy and planning performance",
+        "Quality metrics and defect analysis",
+        "Cost analysis and landed cost reporting",
+        "Custom report builder and scheduled reports"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/reports/inventory/index.tsx",
+        "src/components/domain/reports/inventory-valuation.tsx",
+        "src/components/domain/reports/movement-analytics.tsx",
+        "src/components/domain/reports/warehouse-efficiency.tsx"
+      ],
+      "dependencies": [
+        "INV-CORE-API"
+      ],
+      "completion_promise": "INV_ANALYTICS_REPORTING_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "INV-INTEGRATION-API",
+      "name": "Warehouse System Integration Layer",
+      "description": "Integration hooks and utilities for warehouse system usage throughout the application",
+      "type": "server-function",
+      "acceptance_criteria": [
+        "Inventory availability hooks for order processing",
+        "Stock allocation and reservation management",
+        "Cost calculation utilities for financial integration",
+        "Alert broadcasting for real-time notifications",
+        "Location optimization algorithms",
+        "Forecast integration with procurement planning",
+        "Quality tracking integration with supplier management"
+      ],
+      "files_to_modify": [
+        "src/contexts/inventory-context.tsx",
+        "src/hooks/use-inventory.ts",
+        "src/hooks/use-locations.ts",
+        "src/lib/inventory-utils.ts",
+        "src/lib/forecast-engine.ts"
+      ],
+      "dependencies": [
+        "INV-CORE-API"
+      ],
+      "completion_promise": "INV_INTEGRATION_API_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "INV-MOBILE-INTERFACE",
+      "name": "Mobile Warehouse Interface",
+      "description": "Mobile-optimized warehouse operations for handheld devices",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Mobile receiving interface with barcode scanning",
+        "Mobile picking interface with location guidance",
+        "Mobile stock counting with offline capability",
+        "Mobile inventory lookup and adjustment",
+        "Touch-optimized controls and large buttons",
+        "Offline data synchronization",
+        "Device-specific optimizations for warehouse environments",
+        "Touch targets are minimum 44px",
+        "Input font-size minimum 16px (prevents iOS zoom)",
+        "Uses touch-action: manipulation",
+        "Camera permission error state for barcode scanner",
+        "Offline status indicator with sync action"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/mobile/receiving.tsx",
+        "src/routes/_authed/mobile/picking.tsx",
+        "src/routes/_authed/mobile/counting.tsx",
+        "src/components/mobile/inventory-actions.tsx"
+      ],
+      "dependencies": [
+        "INV-CORE-API"
+      ],
+      "completion_promise": "INV_MOBILE_INTERFACE_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    }
+  ],
+  "success_criteria": [
+    "Complete warehouse management system with real-time inventory visibility",
+    "99.5%+ inventory accuracy through cycle counting and reconciliation",
+    "Advanced demand forecasting with 85%+ accuracy",
+    "Multi-location warehouse support with capacity optimization",
+    "FIFO cost accounting for accurate financial reporting",
+    "Real-time alerts and automated replenishment",
+    "Mobile-optimized interfaces for warehouse operations",
+    "Comprehensive audit trails for all inventory movements",
+    "Automated quality control and inspection workflows",
+    "Integration with procurement, orders, and financial systems",
+    "Performance optimized for 1M+ inventory items",
+    "Scalable architecture supporting multiple warehouses",
+    "Advanced analytics and reporting capabilities",
+    "Automated safety stock and reorder point calculations",
+    "Complete supplier performance integration"
+  ],
+  "out_of_scope": [
+    "Multi-warehouse network management",
+    "Advanced robotics and automation integration",
+    "Real-time location systems (RTLS)",
+    "Blockchain-based inventory tracking",
+    "AI-powered demand forecasting",
+    "Advanced manufacturing execution systems",
+    "Third-party logistics provider integration",
+    "Carbon footprint and sustainability tracking",
+    "Advanced serialization for regulated industries",
+    "Cold chain and temperature monitoring"
+  ],
+  "migration_notes": {
+    "existing_data": "If existing inventory data exists, migration scripts needed to transform schema to comprehensive warehouse structure",
+    "location_data": "Simple bin locations need mapping to hierarchical location structure",
+    "movement_history": "Existing movement history should be preserved and enhanced with new fields",
+    "cost_data": "Current cost data needs FIFO layer reconstruction from historical receipts"
+  },
+  "schema_dependencies": {
+    "prerequisite_migrations": [
+      {
+        "migration": "007_inventory-core.ts",
+        "provides": ["warehouseLocations", "inventoryMovements"],
+        "note": "Shared inventory tables - do NOT recreate in 011_inventory.ts"
+      },
+      {
+        "migration": "008_products.ts",
+        "provides": ["products"],
+        "note": "Products must exist for inventoryItems.productId FK"
+      }
+    ],
+    "this_migration": "011_inventory.ts",
+    "tables_owned": [
+      "inventoryItems",
+      "stockCounts",
+      "stockCountItems",
+      "inventoryCostLayers",
+      "inventoryForecasts",
+      "inventoryAlerts"
+    ],
+    "post_actions": [
+      "Add FK constraint: ALTER TABLE inventoryMovements ADD CONSTRAINT fk_movement_inventory_item FOREIGN KEY (inventoryItemId) REFERENCES inventoryItems(id) ON DELETE CASCADE"
+    ]
+  },
+  "_schema_remediation": {
+    "note": "warehouseLocations and inventoryMovements tables defined in 007_inventory-core.ts - NOT in this domain's migration",
+    "reason": "Prevents circular dependency between Products, Inventory, and Suppliers domains",
+    "tables_in_shared_migration": ["warehouseLocations", "inventoryMovements"],
+    "reference": "_meta/remediation-schema-migrations.md"
+  }
+}

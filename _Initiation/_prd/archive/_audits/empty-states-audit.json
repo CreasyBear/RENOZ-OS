@@ -1,0 +1,273 @@
+{
+  "prd_id": "CC-EMPTY",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "summary": {
+    "total_stories": 6,
+    "verified_gaps": 2,
+    "invalidated_gaps": 3,
+    "new_gaps_found": 0,
+    "implementation_status": "partially_complete"
+  },
+  "codebase_findings": {
+    "existing_empty_state_component": {
+      "path": "renoz-v2/src/components/shared/empty-state.tsx",
+      "description": "Reusable EmptyState component exists with icon, title, description, actionLabel, onAction, and variant props",
+      "variants": ["page", "inline"],
+      "features": [
+        "LucideIcon support",
+        "Title and description text",
+        "Simple button action (actionLabel/onAction)",
+        "Custom action content (ReactNode)",
+        "Accessible with role=status and aria-live",
+        "Proper heading hierarchy with semantic markup"
+      ],
+      "missing_from_prd": [
+        "Size variants (sm, md, lg) - only has page/inline",
+        "Secondary action link option",
+        "Primary color token for action button (uses outline variant)"
+      ]
+    },
+    "data_table_integration": {
+      "path": "renoz-v2/src/components/shared/data-table/data-table.tsx",
+      "description": "DataTable component fully integrates EmptyState with both zero-data and filtered empty states",
+      "props": {
+        "emptyState": "EmptyStateConfig for zero-data state",
+        "filteredEmptyState": "EmptyStateConfig for no-filter-results state",
+        "hasActiveFilters": "boolean to determine which empty state to show",
+        "onClearFilters": "handler for clear filters action"
+      }
+    },
+    "domain_empty_states_implemented": {
+      "customers": {
+        "path": "renoz-v2/src/routes/customers/index.tsx",
+        "zero_data": {
+          "icon": "Building2",
+          "title": "No customers yet",
+          "description": "Get started by adding your first customer",
+          "action": "Add Customer"
+        },
+        "filtered": {
+          "title": "No results found",
+          "description": "Try adjusting your search or filters",
+          "action": "Clear filters"
+        }
+      },
+      "orders": {
+        "path": "renoz-v2/src/routes/orders/index.tsx",
+        "zero_data": {
+          "icon": "ShoppingCart",
+          "title": "No orders yet",
+          "description": "Orders will appear here once created"
+        },
+        "filtered": {
+          "title": "No results found",
+          "description": "Try adjusting your search or filters",
+          "action": "Clear filters"
+        }
+      },
+      "catalog": {
+        "path": "renoz-v2/src/routes/catalog/index.tsx",
+        "zero_data": {
+          "icon": "Package",
+          "title": "No products yet",
+          "description": "Get started by adding your first product",
+          "action": "Add Product"
+        },
+        "filtered": {
+          "title": "No results found",
+          "action": "Clear filters"
+        }
+      },
+      "inventory": {
+        "path": "renoz-v2/src/routes/inventory/index.tsx",
+        "zero_data": {
+          "icon": "Package",
+          "title": "No inventory items yet",
+          "description": "Start by adding your first inventory item or importing from a spreadsheet",
+          "action": "Add Item"
+        },
+        "filtered": {
+          "title": "No results found",
+          "action": "Clear filters"
+        }
+      }
+    },
+    "onboarding_wizard": {
+      "path": "renoz-v2/src/components/domain/settings/onboarding-wizard.tsx",
+      "description": "Full onboarding wizard exists with company setup, logo, address, currency/tax, and team invitation steps",
+      "features": [
+        "Step-by-step wizard",
+        "Progress indicator",
+        "Skip functionality",
+        "Persistent state"
+      ]
+    },
+    "contextual_help": {
+      "path": "renoz-v2/src/components/shared/help-dialog.tsx",
+      "description": "Help dialog exists but no FeatureHint tooltip component found"
+    },
+    "illustrations": {
+      "status": "not_found",
+      "description": "No illustration assets found. Empty states use Lucide icons only."
+    }
+  },
+  "gap_verification": {
+    "no_empty_state_component_library": {
+      "original_gap": "No empty state component library",
+      "status": "INVALIDATED",
+      "reason": "EmptyState component exists at src/components/shared/empty-state.tsx with comprehensive props and accessibility features. Integrated into DataTable with emptyState/filteredEmptyState props."
+    },
+    "no_first_run_onboarding_flow": {
+      "original_gap": "No first-run onboarding flow",
+      "status": "INVALIDATED",
+      "reason": "OnboardingWizard component exists at src/components/domain/settings/onboarding-wizard.tsx with 6-step flow including company info, logo, address, settings, team, and completion."
+    },
+    "no_contextual_help_for_empty_views": {
+      "original_gap": "No contextual help for empty views",
+      "status": "PARTIALLY_VERIFIED",
+      "reason": "HelpDialog exists but FeatureHint tooltip component for contextual hints near features is not implemented. Empty states do include helpful descriptions but not dismissible hints."
+    },
+    "no_illustration_assets": {
+      "original_gap": "No illustration assets for empty states",
+      "status": "VERIFIED",
+      "reason": "No SVG illustration assets found. All empty states use Lucide icons (Building2, ShoppingCart, Package, etc.) instead of custom illustrations."
+    },
+    "no_guided_action_ctas": {
+      "original_gap": "No guided action CTAs for new users",
+      "status": "INVALIDATED",
+      "reason": "All major domain empty states include actionLabel/onAction CTAs that guide users to create their first record. DataTable handles this pattern consistently."
+    },
+    "no_domain_specific_empty_state_messages": {
+      "original_gap": "No domain-specific empty state messages",
+      "status": "INVALIDATED",
+      "reason": "Each domain (customers, orders, products, inventory) has custom empty state messages with domain-appropriate language and icons. Messages like 'No customers yet', 'No orders yet' with appropriate descriptions."
+    }
+  },
+  "stories_status": {
+    "CC-EMPTY-001": {
+      "name": "Empty State Component Library",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "EmptyState component already exists with icon, title, description, action props, page/inline variants, and accessibility features. Minor enhancements (size variants sm/md/lg) could be a separate small task.",
+      "layers": ["ui"],
+      "estimated_iterations": 0,
+      "existing_implementation": "renoz-v2/src/components/shared/empty-state.tsx"
+    },
+    "CC-EMPTY-002": {
+      "name": "Domain-Specific Empty States",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "All major domains (Customers, Orders, Products, Inventory) already have domain-specific empty states integrated via DataTable emptyState prop. Each uses appropriate icons and domain-specific language.",
+      "layers": ["ui"],
+      "estimated_iterations": 0,
+      "existing_implementations": [
+        "renoz-v2/src/routes/customers/index.tsx",
+        "renoz-v2/src/routes/orders/index.tsx",
+        "renoz-v2/src/routes/catalog/index.tsx",
+        "renoz-v2/src/routes/inventory/index.tsx"
+      ]
+    },
+    "CC-EMPTY-003": {
+      "name": "Filtered Empty States",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "DataTable already supports filteredEmptyState prop with hasActiveFilters detection. All routes implement this pattern with 'No results found' messaging and 'Clear filters' action.",
+      "layers": ["ui"],
+      "estimated_iterations": 0,
+      "existing_implementation": "renoz-v2/src/components/shared/data-table/data-table.tsx"
+    },
+    "CC-EMPTY-004": {
+      "name": "First-Run Welcome Experience",
+      "status": "invalid",
+      "change": "adjust_scope",
+      "reason": "OnboardingWizard exists with full flow (company, logo, address, settings, team, complete). Missing: dashboard-level WelcomeChecklist for tracking first customer/product/quote creation. PRD should be reduced to just the checklist component.",
+      "layers": ["ui"],
+      "estimated_iterations": 3,
+      "existing_implementation": "renoz-v2/src/components/domain/settings/onboarding-wizard.tsx",
+      "remaining_work": "WelcomeChecklist component for dashboard showing progress on first customer, first product, first quote"
+    },
+    "CC-EMPTY-005": {
+      "name": "Contextual Help Tooltips",
+      "status": "valid",
+      "change": "none",
+      "reason": "FeatureHint component does not exist. HelpDialog provides general help but not contextual dismissible hints near features. Gap is verified.",
+      "layers": ["ui"],
+      "estimated_iterations": 2,
+      "acceptance_criteria_testable": true
+    },
+    "CC-EMPTY-006": {
+      "name": "Empty State Illustrations",
+      "status": "valid",
+      "change": "none",
+      "reason": "No SVG illustration assets exist. All empty states use Lucide icons. Creating consistent illustration set would enhance UX but is cosmetic.",
+      "layers": ["ui"],
+      "estimated_iterations": 3,
+      "notes": "Lower priority - Lucide icons work well. Consider whether custom illustrations align with B2B aesthetic."
+    }
+  },
+  "recommended_stories": [
+    "CC-EMPTY-005",
+    "CC-EMPTY-006"
+  ],
+  "atomization_notes": {
+    "CC-EMPTY-004": {
+      "recommendation": "Scope reduction rather than atomization",
+      "new_scope": "Create WelcomeChecklist dashboard component only. OnboardingWizard already handles organization setup.",
+      "estimated_iterations": 3,
+      "story_update": {
+        "name": "Dashboard Welcome Checklist",
+        "description": "Create a checklist widget for the dashboard that tracks new user progress: add first customer, add first product, create first quote. Shows completion percentage and can be dismissed.",
+        "acceptance_criteria": [
+          "WelcomeChecklist component exists at src/components/domain/dashboard/welcome-checklist.tsx",
+          "Checklist shows on dashboard for users who haven't completed onboarding tasks",
+          "Items include: Add first customer, Add first product, Create first quote",
+          "Completed items show checkmark",
+          "Progress indicator shows completion percentage",
+          "Checklist can be dismissed permanently",
+          "Dismissed state persisted to organization settings",
+          "TypeScript compiles without errors"
+        ]
+      }
+    }
+  },
+  "additional_recommendations": {
+    "enhancement_opportunities": [
+      {
+        "component": "EmptyState",
+        "enhancement": "Add size variants (sm, md, lg) per PRD",
+        "priority": "low",
+        "effort": "1 iteration"
+      },
+      {
+        "component": "EmptyState",
+        "enhancement": "Add secondary action link support",
+        "priority": "low",
+        "effort": "1 iteration"
+      },
+      {
+        "component": "DataTable",
+        "enhancement": "Use primary button variant for emptyState action instead of outline",
+        "priority": "low",
+        "effort": "0.5 iterations"
+      }
+    ],
+    "coverage_gaps": [
+      {
+        "domain": "Pipeline/Opportunities",
+        "status": "likely_implemented",
+        "recommendation": "Verify pipeline route has empty state configured"
+      },
+      {
+        "domain": "Warranties",
+        "status": "needs_verification",
+        "recommendation": "Check if warranties list has domain-specific empty state"
+      },
+      {
+        "domain": "Issues",
+        "status": "needs_verification",
+        "recommendation": "Check if issues list has domain-specific empty state"
+      }
+    ]
+  }
+}

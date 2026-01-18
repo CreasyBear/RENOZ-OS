@@ -1,0 +1,30 @@
+# Sales Role Optimization Progress
+# PRD: sales.prd.json
+# Started: 2026-01-17
+# Updated: 2026-01-17
+
+## Stories (10 total)
+
+- [ ] ROLE-SALES-001: Quote Creation Wizard (<5 min)
+- [ ] ROLE-SALES-003: Customer 360 Quick Actions
+- [ ] ROLE-SALES-004a: Sales Dashboard Route
+- [ ] ROLE-SALES-004b: Forecasting Widgets
+- [ ] ROLE-SALES-005a: Follow-up Date Schema
+- [ ] ROLE-SALES-005b: Follow-up Server Functions
+- [ ] ROLE-SALES-005c: Follow-up Dashboard Widget and UI
+- [ ] ROLE-SALES-006: Quote Templates Library
+- [ ] ROLE-SALES-007: Quote Expiry Alerts Widget
+- [ ] ROLE-SALES-008: Win/Loss Analysis View
+
+## Current Story
+Not started
+
+## Iteration Count
+Total: 0
+Current Story: 0
+
+## Blockers
+None
+
+## Notes
+- Progress tracking initialized

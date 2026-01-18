@@ -1,0 +1,1270 @@
+{
+  "id": "DOM-DASHBOARD",
+  "name": "Business Intelligence Dashboard System",
+  "description": "Complete business intelligence and analytics platform providing real-time visibility into operational performance, with configurable widgets, time-based analysis, target tracking, and automated reporting capabilities.",
+  "created": "2026-01-10",
+  "updated": "2026-01-17",
+  "priority": 3,
+  "phase": "core-business",
+  "version": "1.0",
+  "business_value": {
+    "visibility_critical": true,
+    "decision_support": true,
+    "performance_tracking": true,
+    "description": "Executive and operational visibility into battery manufacturing and B2B sales performance"
+  },
+  "system_requirements": {
+    "database": {
+      "materialized_views": {
+        "mv_daily_metrics": {
+          "description": "Pre-computed daily aggregations for revenue, kWh deployed, order counts by organization",
+          "refresh_frequency": "Every 15 minutes via Trigger.dev",
+          "indexed_on": ["organization_id", "metric_date"],
+          "data_retention": "2 years"
+        },
+        "mv_daily_pipeline": {
+          "description": "Opportunity and quote metrics by day (stage counts, weighted pipeline, win rate)",
+          "refresh_frequency": "Every 15 minutes + on opportunity stage change",
+          "indexed_on": ["organization_id", "metric_date"],
+          "data_retention": "2 years"
+        },
+        "mv_daily_warranty": {
+          "description": "Warranty claims and resolutions by day (counts by status/type, resolution time)",
+          "refresh_frequency": "Every hour",
+          "indexed_on": ["organization_id", "metric_date"],
+          "data_retention": "2 years"
+        },
+        "mv_daily_jobs": {
+          "description": "Installation and job metrics by day (counts by status, labor hours)",
+          "refresh_frequency": "Every 15 minutes + on job status change",
+          "indexed_on": ["organization_id", "metric_date"],
+          "data_retention": "2 years"
+        },
+        "mv_current_state": {
+          "description": "Live snapshot of current metrics (active installations, open claims, current pipeline)",
+          "refresh_frequency": "Every 5 minutes",
+          "indexed_on": ["organization_id"],
+          "data_retention": "current only"
+        }
+      },
+      "targets": {
+        "description": "Performance targets and goals tracking",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "metric": "enum('revenue', 'kwh_deployed', 'quote_win_rate', 'active_installations', 'warranty_claims', 'pipeline', 'customers') NOT NULL",
+          "period": "enum('weekly', 'monthly', 'quarterly', 'yearly') NOT NULL",
+          "targetValue": "decimal(10,2) NOT NULL CHECK (targetValue >= 0)",
+          "orgId": "uuid NOT NULL REFERENCES organizations(id)",
+          "createdBy": "uuid NOT NULL REFERENCES users(id)",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()",
+          "updatedAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "orgId",
+          "metric",
+          "period"
+        ],
+        "constraints": [
+          "targetValue >= 0"
+        ]
+      },
+      "scheduledReports": {
+        "description": "Automated report scheduling and delivery",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "name": "varchar(100) NOT NULL",
+          "frequency": "enum('daily', 'weekly', 'monthly') NOT NULL",
+          "recipients": "text[] NOT NULL",
+          "metrics": "text[] NOT NULL",
+          "format": "enum('html', 'pdf') DEFAULT 'html'",
+          "isActive": "boolean DEFAULT true",
+          "lastRunAt": "timestamp",
+          "nextRunAt": "timestamp",
+          "orgId": "uuid NOT NULL REFERENCES organizations(id)",
+          "createdBy": "uuid NOT NULL REFERENCES users(id)",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()",
+          "updatedAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "orgId",
+          "frequency",
+          "isActive",
+          "nextRunAt"
+        ],
+        "constraints": [
+          "array_length(recipients, 1) > 0",
+          "array_length(metrics, 1) > 0"
+        ]
+      },
+      "dashboardLayouts": {
+        "description": "User-specific dashboard configurations",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "userId": "uuid NOT NULL REFERENCES users(id)",
+          "role": "varchar(50) NOT NULL",
+          "layout": "jsonb NOT NULL",
+          "widgetSettings": "jsonb DEFAULT '{}'",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()",
+          "updatedAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": [
+          "userId",
+          "role"
+        ],
+        "constraints": [
+          "jsonb_typeof(layout) = 'object'"
+        ]
+      }
+    },
+    "api_endpoints": {
+      "metrics": {
+        "getDashboardMetrics": {
+          "method": "GET",
+          "path": "/api/dashboard/metrics",
+          "query_params": [
+            "dateFrom",
+            "dateTo",
+            "comparePeriod"
+          ],
+          "response": {
+            "summary": {
+              "revenue": {
+                "current": "number (AUD)",
+                "change": "number",
+                "target": "number"
+              },
+              "kwh_deployed": {
+                "current": "number (kWh)",
+                "change": "number",
+                "target": "number"
+              },
+              "quote_win_rate": {
+                "current": "number (percentage)",
+                "change": "number",
+                "target": "number"
+              },
+              "active_installations": {
+                "current": "number",
+                "change": "number",
+                "target": "number"
+              },
+              "warranty_claims": {
+                "current": "number",
+                "change": "number",
+                "target": "number"
+              },
+              "pipeline": {
+                "current": "number",
+                "change": "number",
+                "target": "number"
+              },
+              "customers": {
+                "current": "number",
+                "change": "number",
+                "target": "number"
+              }
+            },
+            "charts": {
+              "revenueTrend": "ChartData[] (Monthly revenue in AUD)",
+              "kwhDeploymentTrend": "ChartData[] (kWh deployed over time)",
+              "productMix": "ChartData[] (Battery Systems, Inverters, Solar Panels, Installation Services)",
+              "pipelineByStage": "ChartData[]",
+              "quoteConversionFunnel": "ChartData[]",
+              "warrantyClaimsByType": "ChartData[]"
+            },
+            "recentActivity": "ActivityItem[]"
+          },
+          "description": "Get comprehensive dashboard metrics with trends and comparisons"
+        },
+        "getMetricsComparison": {
+          "method": "GET",
+          "path": "/api/dashboard/metrics/compare",
+          "query_params": [
+            "dateFrom",
+            "dateTo",
+            "comparisonType"
+          ],
+          "response": {
+            "current": "MetricsData",
+            "previous": "MetricsData",
+            "changes": "Record<string, number>",
+            "insights": "InsightItem[]"
+          },
+          "description": "Compare metrics across different time periods"
+        }
+      },
+      "targets": {
+        "listTargets": {
+          "method": "GET",
+          "path": "/api/targets",
+          "response": {
+            "targets": "Target[]"
+          },
+          "description": "Get all performance targets"
+        },
+        "createTarget": {
+          "method": "POST",
+          "path": "/api/targets",
+          "body": {
+            "metric": "TargetMetric",
+            "period": "TargetPeriod",
+            "targetValue": "number"
+          },
+          "response": {
+            "target": "Target"
+          },
+          "description": "Create new performance target"
+        },
+        "updateTarget": {
+          "method": "PUT",
+          "path": "/api/targets/:id",
+          "body": {
+            "targetValue": "number"
+          },
+          "response": {
+            "target": "Target"
+          },
+          "description": "Update target value"
+        },
+        "deleteTarget": {
+          "method": "DELETE",
+          "path": "/api/targets/:id",
+          "response": {
+            "success": "boolean"
+          },
+          "description": "Delete performance target"
+        },
+        "getTargetProgress": {
+          "method": "GET",
+          "path": "/api/targets/progress",
+          "response": {
+            "targets": "TargetProgress[]",
+            "overall": {
+              "achieved": "number",
+              "total": "number",
+              "percentage": "number"
+            }
+          },
+          "description": "Get progress against all targets"
+        }
+      },
+      "reports": {
+        "generateReport": {
+          "method": "POST",
+          "path": "/api/reports/generate",
+          "body": {
+            "metrics": "string[]",
+            "dateFrom": "date",
+            "dateTo": "date",
+            "format": "ReportFormat"
+          },
+          "response": {
+            "reportUrl": "string",
+            "expiresAt": "date"
+          },
+          "description": "Generate on-demand report"
+        },
+        "listScheduledReports": {
+          "method": "GET",
+          "path": "/api/scheduled-reports",
+          "response": {
+            "reports": "ScheduledReport[]"
+          },
+          "description": "Get scheduled report configurations"
+        },
+        "createScheduledReport": {
+          "method": "POST",
+          "path": "/api/scheduled-reports",
+          "body": {
+            "name": "string",
+            "frequency": "ReportFrequency",
+            "recipients": "string[]",
+            "metrics": "string[]",
+            "format": "ReportFormat"
+          },
+          "response": {
+            "report": "ScheduledReport"
+          },
+          "description": "Create scheduled report"
+        },
+        "executeScheduledReport": {
+          "method": "POST",
+          "path": "/api/scheduled-reports/:id/execute",
+          "response": {
+            "success": "boolean",
+            "sentTo": "string[]"
+          },
+          "description": "Manually execute scheduled report"
+        }
+      },
+      "layouts": {
+        "getUserLayout": {
+          "method": "GET",
+          "path": "/api/dashboard/layout",
+          "response": {
+            "layout": "DashboardLayout",
+            "availableWidgets": "WidgetDefinition[]"
+          },
+          "description": "Get user's dashboard layout"
+        },
+        "saveUserLayout": {
+          "method": "PUT",
+          "path": "/api/dashboard/layout",
+          "body": {
+            "layout": "DashboardLayout",
+            "widgetSettings": "Record<string, any>"
+          },
+          "response": {
+            "success": "boolean"
+          },
+          "description": "Save user's dashboard layout"
+        },
+        "resetLayout": {
+          "method": "POST",
+          "path": "/api/dashboard/layout/reset",
+          "body": {
+            "role": "string"
+          },
+          "response": {
+            "layout": "DashboardLayout"
+          },
+          "description": "Reset to default layout for role"
+        }
+      }
+    },
+    "ui_components": {
+      "dashboardGrid": {
+        "description": "Responsive grid layout for dashboard widgets",
+        "features": [
+          "Drag-drop widget rearrangement",
+          "Widget resizing with grid constraints",
+          "Responsive breakpoints (mobile/tablet/desktop)",
+          "Widget catalog for adding new widgets",
+          "Layout persistence per user/role"
+        ],
+        "breakpoints": {
+          "mobile": {
+            "columns": 1,
+            "maxWidgets": 6
+          },
+          "tablet": {
+            "columns": 2,
+            "maxWidgets": 8
+          },
+          "desktop": {
+            "columns": 3,
+            "maxWidgets": 12
+          }
+        }
+      },
+      "kpiWidget": {
+        "description": "Key performance indicator display card",
+        "features": [
+          "Metric value with trend indicator",
+          "Progress bar against targets",
+          "Click-through to detailed views",
+          "Comparison with previous periods",
+          "Color-coded status (good/warning/danger)"
+        ],
+        "metrics": [
+          "revenue",
+          "kwh_deployed",
+          "quote_win_rate",
+          "active_installations",
+          "warranty_claims",
+          "pipeline",
+          "customers",
+          "conversion"
+        ]
+      },
+      "chartWidget": {
+        "description": "Data visualization component",
+        "chartTypes": [
+          "line",
+          "bar",
+          "pie",
+          "area",
+          "combo"
+        ],
+        "features": [
+          "Interactive tooltips and legends",
+          "Drill-down to detailed data",
+          "Time range selection",
+          "Export to image/CSV",
+          "Responsive scaling"
+        ],
+        "interactions": [
+          "hover",
+          "click",
+          "zoom",
+          "filter"
+        ]
+      },
+      "activityFeed": {
+        "description": "Real-time activity timeline",
+        "features": [
+          "Grouped by date (Today/Yesterday/This Week)",
+          "Activity types (quotes, installations, warranty claims, opportunities, customers)",
+          "Quick actions per activity item",
+          "Infinite scroll pagination",
+          "Real-time updates via polling/websockets"
+        ]
+      },
+      "dateRangeSelector": {
+        "description": "Time period selection for dashboard filtering",
+        "presets": [
+          "Today",
+          "This Week",
+          "This Month",
+          "This Quarter",
+          "YTD",
+          "Custom"
+        ],
+        "features": [
+          "Quick preset selection",
+          "Custom date range picker",
+          "URL parameter synchronization",
+          "Global dashboard filter application"
+        ]
+      },
+      "comparisonToggle": {
+        "description": "Period-over-period comparison controls",
+        "comparisonTypes": [
+          "vs last period",
+          "vs same period last year"
+        ],
+        "features": [
+          "Toggle comparison on/off",
+          "Change indicators on all widgets",
+          "Color-coded improvement/decline",
+          "Percentage change calculations"
+        ]
+      },
+      "targetProgress": {
+        "description": "Goal tracking and progress visualization",
+        "features": [
+          "Progress bars against targets",
+          "Achievement notifications",
+          "Historical target performance",
+          "Target setting and management",
+          "Role-based target visibility"
+        ]
+      }
+    },
+    "business_rules": {
+      "metric_calculations": {
+        "revenue": "SUM(orderItems.lineTotal) for delivered orders in AUD",
+        "kwh_deployed": "SUM(batterySystem.capacity_kwh) for completed installations",
+        "quote_win_rate": "(accepted_quotes / total_quotes) * 100",
+        "active_installations": "COUNT(installations WHERE status IN ('in_progress', 'scheduled'))",
+        "warranty_claims": "COUNT(warranty_claims) filtered by date range and status",
+        "pipeline": "SUM(opportunities.value * opportunities.probability / 100)",
+        "customers": "COUNT(DISTINCT customers) with activity in period",
+        "conversion_rate": "accepted_quotes / (accepted_quotes + lost_opportunities) * 100"
+      },
+      "time_periods": {
+        "default_range": "Last 30 days",
+        "comparison_logic": "Previous period of same length",
+        "fiscal_year": "July 1 - June 30 (Australian business year)",
+        "business_hours": "Monday-Friday 9AM-5PM AEST",
+        "timezone": "Australia/Sydney"
+      },
+      "target_tracking": {
+        "calculation_method": "Actual vs target percentage",
+        "warning_threshold": "80% of target",
+        "critical_threshold": "50% of target",
+        "achievement_notification": "Email alerts for target milestones",
+        "rollover_logic": "Unachieved targets carry to next period"
+      },
+      "role_based_dashboards": {
+        "admin": "Full access to all metrics and widgets",
+        "sales": "Sales-focused: pipeline, quotes, quote_win_rate, revenue",
+        "operations": "Operations-focused: active_installations, kwh_deployed, warranty_claims",
+        "technician": "Field-focused: active_installations, warranty_claims, customer locations",
+        "viewer": "Read-only access to assigned metrics"
+      },
+      "data_refresh": {
+        "real_time": "Critical metrics update every 5 minutes",
+        "near_real_time": "Standard metrics update every 15 minutes",
+        "batch": "Historical data updates daily at 2AM",
+        "manual_refresh": "User-triggered refresh available on all widgets"
+      }
+    },
+    "integrations": {
+      "data_sources": {
+        "quotes_system": "Quote generation, acceptance, and win rate tracking",
+        "installations_system": "Installation scheduling, progress, and completion tracking",
+        "battery_systems": "kWh capacity tracking for deployed battery systems",
+        "warranty_system": "Warranty claims, resolutions, and product quality metrics",
+        "pipeline_system": "Opportunity and B2B sales forecasting data",
+        "customer_system": "Customer acquisition and activity metrics",
+        "user_system": "Team activity and performance data"
+      },
+      "reporting": {
+        "email_delivery": "SMTP integration for scheduled reports",
+        "pdf_generation": "Server-side PDF creation with charts",
+        "file_storage": "Supabase Storage for report assets",
+        "export_formats": "CSV, PDF, HTML email templates"
+      },
+      "external_apis": {
+        "calendar": "Meeting and activity scheduling integration",
+        "communication": "Email and notification delivery",
+        "storage": "File upload and hosting for reports",
+        "analytics": "Optional external analytics platform integration"
+      }
+    },
+    "performance_requirements": {
+      "response_times": {
+        "dashboard_load": "< 2 seconds",
+        "dashboard_load_cold": "< 600 milliseconds (no cache, MV query)",
+        "dashboard_load_cached": "< 200 milliseconds (Redis cache hit)",
+        "widget_refresh": "< 500 milliseconds",
+        "metric_calculation": "< 200 milliseconds",
+        "report_generation": "< 30 seconds"
+      },
+      "concurrency": {
+        "simultaneous_users": "50 concurrent dashboard users",
+        "peak_load": "100 users during business hours",
+        "background_jobs": "10 simultaneous report generations"
+      },
+      "data_volume": {
+        "daily_metrics": "10,000+ data points processed",
+        "historical_data": "2 years of transactional data",
+        "real_time_updates": "100+ metric updates per minute"
+      },
+      "scalability": {
+        "horizontal_scaling": "Stateless architecture for load balancing",
+        "caching_strategy": "Redis for metric caching, CDN for static assets",
+        "database_optimization": "Aggregated tables for fast metric queries"
+      },
+      "caching_layer": {
+        "provider": "Upstash Redis",
+        "cache_keys": {
+          "full_metrics": "dashboard:{orgId}:{dateFrom}:{dateTo}",
+          "summary": "dashboard:summary:{orgId}",
+          "charts": "dashboard:charts:{orgId}:{chartType}:{range}",
+          "activity": "dashboard:activity:{orgId}:{page}",
+          "targets": "dashboard:targets:{orgId}"
+        },
+        "ttl_strategy": {
+          "full_metrics": "5 minutes",
+          "summary": "5 minutes",
+          "charts": "15 minutes",
+          "activity": "1 minute",
+          "targets": "30 minutes"
+        },
+        "invalidation_triggers": [
+          "MV refresh completion",
+          "Order delivered event",
+          "Opportunity stage change",
+          "Job status change",
+          "Target update"
+        ]
+      },
+      "hybrid_query_strategy": {
+        "description": "Query materialized views for historical data, live tables for today's data",
+        "historical_source": "Materialized views (fast, pre-computed)",
+        "recent_source": "Live tables (last 24h, small dataset)",
+        "merge_logic": "Combine MV results with live query results at API layer"
+      }
+    },
+    "performance_benchmarks": {
+      "reference": "_Initiation/_meta/patterns/performance-benchmarks.md",
+      "data_volume": {
+        "target": "Year 3 (10K opportunities, 100K activities)",
+        "customers": 2000,
+        "contacts": 6000,
+        "opportunities": 10000,
+        "quotes": 15000,
+        "orders": 5000,
+        "jobs": 2500,
+        "activities": 100000
+      },
+      "load_time": {
+        "cold": "<2s",
+        "cached": "<500ms"
+      },
+      "widget_refresh_targets": {
+        "kpi_cards": {
+          "target": "<300ms",
+          "data_source": "mv_current_state + Redis cache",
+          "refresh_trigger": "5-minute polling"
+        },
+        "revenue_chart": {
+          "target": "<500ms",
+          "data_source": "mv_daily_metrics + Redis cache",
+          "refresh_trigger": "15-minute background refresh"
+        },
+        "pipeline_chart": {
+          "target": "<500ms",
+          "data_source": "mv_daily_pipeline + Redis cache",
+          "refresh_trigger": "15-minute + event-driven on stage change"
+        },
+        "activity_feed": {
+          "target": "<200ms",
+          "data_source": "Live query (paginated, limit 20)",
+          "refresh_trigger": "1-minute polling"
+        },
+        "warranty_summary": {
+          "target": "<400ms",
+          "data_source": "mv_daily_warranty + Redis cache",
+          "refresh_trigger": "1-hour background refresh"
+        },
+        "jobs_overview": {
+          "target": "<400ms",
+          "data_source": "mv_daily_jobs + Redis cache",
+          "refresh_trigger": "15-minute + event-driven on job status change"
+        },
+        "target_progress": {
+          "target": "<300ms",
+          "data_source": "targets table + mv_current_state",
+          "refresh_trigger": "30-minute cache TTL"
+        }
+      },
+      "benchmark_commands": {
+        "seed_benchmark_data": "bun run seed:benchmark --volume=year3",
+        "run_perf_tests": "bun test:perf",
+        "dashboard_load_test": "bun test:perf -- --grep \"dashboard load\" --timeout=5000",
+        "widget_refresh_test": "bun test:perf -- --grep \"widget refresh\" --timeout=2000"
+      }
+    }
+  },
+  "stories": [
+    {
+      "id": "DASH-CORE-SCHEMA",
+      "name": "Dashboard Core Schema",
+      "description": "Create targets, scheduledReports, dashboardLayouts tables",
+      "type": "schema",
+      "acceptance_criteria": [
+        "Complete targets table with all fields and constraints",
+        "scheduledReports table with JSON arrays for recipients/metrics",
+        "dashboardLayouts table for user-specific configurations",
+        "Foreign keys reference organizations(id) and users(id) with ON DELETE CASCADE, RLS policies restrict access to organization's own data",
+        "TypeScript types exported",
+        "Migration scripts generated and tested"
+      ],
+      "files_to_modify": [
+        "src/lib/schema/targets.ts",
+        "src/lib/schema/scheduled-reports.ts",
+        "src/lib/schema/dashboard-layouts.ts",
+        "src/lib/schema/index.ts",
+        "drizzle/migrations/006_dashboard.ts"
+      ],
+      "completion_promise": "DASH_CORE_SCHEMA_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending"
+    },
+    {
+      "id": "DASH-PERF-MVS",
+      "name": "Dashboard Materialized Views",
+      "description": "Create materialized views for pre-computed daily aggregations (from premortem remediation)",
+      "type": "schema",
+      "acceptance_criteria": [
+        "mv_daily_metrics view created with revenue, kWh, order counts by organization and date",
+        "mv_daily_pipeline view created with opportunity stage counts, weighted pipeline, win rate",
+        "mv_daily_warranty view created with claim counts by status/type, resolution time",
+        "mv_daily_jobs view created with job counts by status, labor hours",
+        "mv_current_state view created with active installations, open claims, current pipeline",
+        "All views have unique indexes on (organization_id, metric_date) for REFRESH CONCURRENTLY",
+        "Additional date range indexes for fast lookups",
+        "Migration tested on dev database with 2-year data retention WHERE clause"
+      ],
+      "files_to_modify": [
+        "drizzle/migrations/007_dashboard_materialized_views.ts"
+      ],
+      "dependencies": [
+        "DASH-CORE-SCHEMA"
+      ],
+      "completion_promise": "DASH_PERF_MVS_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending",
+      "remediation_source": "_meta/remediation-dashboard-performance.md"
+    },
+    {
+      "id": "DASH-PERF-INDEXES",
+      "name": "Dashboard Performance Indexes",
+      "description": "Create composite indexes optimized for date range + organizationId queries (from premortem remediation)",
+      "type": "schema",
+      "acceptance_criteria": [
+        "Composite index on orders(organization_id, created_at DESC, status)",
+        "Partial index on orders for delivered status",
+        "Composite index on opportunities(organization_id, stage, created_at DESC)",
+        "Partial index on opportunities for closed (won/lost) stage",
+        "Composite index on jobs(organization_id, status) and partial index for active jobs",
+        "Composite index on warranty_claims(organization_id, status, created_at DESC)",
+        "Covering indexes for revenue and pipeline calculations with INCLUDE clauses",
+        "All indexes created with CREATE INDEX CONCURRENTLY for zero-downtime deployment"
+      ],
+      "files_to_modify": [
+        "drizzle/migrations/008_dashboard_indexes.ts"
+      ],
+      "dependencies": [
+        "DASH-PERF-MVS"
+      ],
+      "completion_promise": "DASH_PERF_INDEXES_COMPLETE",
+      "estimated_iterations": 1,
+      "status": "pending",
+      "remediation_source": "_meta/remediation-dashboard-performance.md"
+    },
+    {
+      "id": "DASH-PERF-CACHE",
+      "name": "Dashboard Caching Layer",
+      "description": "Implement Redis caching with Upstash for dashboard metrics (from premortem remediation)",
+      "type": "infrastructure",
+      "acceptance_criteria": [
+        "DashboardCache class implemented with getMetrics, setMetrics, invalidateOrg, invalidateAll methods",
+        "TTL strategy: full_metrics=5min, charts=15min, activity=1min, targets=30min",
+        "Cache key structure: dashboard:{orgId}:{dateFrom}:{dateTo} for full metrics",
+        "Pattern-based invalidation using redis.keys() and redis.del()",
+        "Upstash Redis client configured via UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN env vars",
+        "Fallback to direct MV query when Redis unavailable",
+        "TypeScript types for DashboardMetrics response"
+      ],
+      "files_to_modify": [
+        "src/lib/cache/dashboard-cache.ts"
+      ],
+      "dependencies": [
+        "DASH-PERF-MVS"
+      ],
+      "completion_promise": "DASH_PERF_CACHE_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending",
+      "remediation_source": "_meta/remediation-dashboard-performance.md"
+    },
+    {
+      "id": "DASH-PERF-REFRESH",
+      "name": "Dashboard MV Refresh Jobs",
+      "description": "Implement Trigger.dev background jobs for materialized view refresh (from premortem remediation)",
+      "type": "background-job",
+      "acceptance_criteria": [
+        "refreshDailyMetrics scheduled task running every 15 minutes for mv_daily_metrics, mv_daily_pipeline, mv_daily_jobs",
+        "refreshCurrentState scheduled task running every 5 minutes for mv_current_state with cache invalidation",
+        "refreshWarrantyMetrics scheduled task running every hour for mv_daily_warranty",
+        "Event-driven refresh on order.delivered and opportunity.stage_changed events",
+        "All refresh operations use REFRESH MATERIALIZED VIEW CONCURRENTLY",
+        "Retry logic for failed refreshes with alerting",
+        "Return value includes list of refreshed views and timestamp"
+      ],
+      "files_to_modify": [
+        "trigger/dashboard-refresh.ts"
+      ],
+      "dependencies": [
+        "DASH-PERF-MVS",
+        "DASH-PERF-CACHE"
+      ],
+      "completion_promise": "DASH_PERF_REFRESH_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending",
+      "remediation_source": "_meta/remediation-dashboard-performance.md"
+    },
+    {
+      "id": "DASH-PERF-PRECOMPUTE",
+      "name": "Dashboard Pre-computation Jobs",
+      "description": "Implement Trigger.dev jobs for expensive metrics pre-computation (from premortem remediation)",
+      "type": "background-job",
+      "acceptance_criteria": [
+        "precomputeTrendCharts scheduled task running daily at 2 AM AEST for 12-month revenue and kWh trends",
+        "precomputeWeeklyAnalytics scheduled task running Sunday 3 AM for CAC and LTV calculations",
+        "YoY comparison data pre-computed and cached with 24-hour TTL",
+        "Cache keys follow pattern dashboard:charts:{orgId}:{chartType}:{range}",
+        "Only processes organizations with activity in last 7 days",
+        "Return value includes count of processed organizations"
+      ],
+      "files_to_modify": [
+        "trigger/dashboard-precompute.ts"
+      ],
+      "dependencies": [
+        "DASH-PERF-CACHE"
+      ],
+      "completion_promise": "DASH_PERF_PRECOMPUTE_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending",
+      "remediation_source": "_meta/remediation-dashboard-performance.md"
+    },
+    {
+      "id": "DASH-PERF-WARMING",
+      "name": "Dashboard Cache Warming",
+      "description": "Implement cache warming for active organizations during off-peak hours (from premortem remediation)",
+      "type": "background-job",
+      "acceptance_criteria": [
+        "warmDashboardCache scheduled task running daily at 2 AM AEST",
+        "Pre-computes common date ranges: today, this_week, this_month, last_30_days",
+        "Targets organizations with updatedAt within last 7 days",
+        "Stores results in Redis with appropriate TTLs",
+        "Return value includes count of warmed organizations and ranges",
+        "Error handling for individual org failures (continue processing others)"
+      ],
+      "files_to_modify": [
+        "trigger/cache-warming.ts"
+      ],
+      "dependencies": [
+        "DASH-PERF-CACHE",
+        "DASH-CORE-API"
+      ],
+      "completion_promise": "DASH_PERF_WARMING_COMPLETE",
+      "estimated_iterations": 1,
+      "status": "pending",
+      "remediation_source": "_meta/remediation-dashboard-performance.md"
+    },
+    {
+      "id": "DASH-PERF-API",
+      "name": "Dashboard Hybrid Query Integration",
+      "description": "Integrate materialized views and caching into getDashboardMetrics (from premortem remediation)",
+      "type": "server-function",
+      "acceptance_criteria": [
+        "getDashboardMetrics checks Redis cache first with cache key dashboard:{orgId}:{dateFrom}:{dateTo}",
+        "On cache miss: splits query into historical (MV) and recent (live tables for today)",
+        "getHistoricalMetricsFromMV queries mv_daily_metrics for date range",
+        "getRecentMetricsLive queries live tables for today's data only",
+        "getCurrentStateFromMV queries mv_current_state for active counts",
+        "mergeMetrics combines all three results",
+        "Result cached with 5-minute TTL",
+        "Response time < 600ms cold, < 200ms cached",
+        "Fallback to full live query if MV unavailable"
+      ],
+      "files_to_modify": [
+        "src/server/functions/dashboard.ts"
+      ],
+      "dependencies": [
+        "DASH-CORE-API",
+        "DASH-PERF-MVS",
+        "DASH-PERF-CACHE"
+      ],
+      "completion_promise": "DASH_PERF_API_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending",
+      "remediation_source": "_meta/remediation-dashboard-performance.md"
+    },
+    {
+      "id": "DASH-CORE-API",
+      "name": "Dashboard Core API",
+      "description": "Implement metrics calculation and dashboard management endpoints",
+      "type": "server-function",
+      "acceptance_criteria": [
+        "getDashboardMetrics with comprehensive data aggregation",
+        "getMetricsComparison for period-over-period analysis",
+        "Layout management endpoints (get/save/reset)",
+        "Database indexes on organizationId, createdAt, and all foreign key columns; queries use indexed columns in WHERE clauses",
+        "Caching strategy for performance",
+        "Zod validation on all inputs; try-catch wrapping with specific error messages; 400 for validation, 404 for not found, 500 for server errors"
+      ],
+      "files_to_modify": [
+        "src/server/functions/dashboard.ts",
+        "src/lib/schemas/dashboard.ts"
+      ],
+      "dependencies": [
+        "DASH-CORE-SCHEMA"
+      ],
+      "completion_promise": "DASH_CORE_API_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "DASH-GRID-UI",
+      "name": "Dashboard Grid System",
+      "description": "Responsive grid layout with drag-drop widget management",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "CSS Grid-based responsive layout",
+        "Drag-drop widget rearrangement",
+        "Widget resizing with snap-to-grid",
+        "Mobile-responsive single column layout",
+        "Widget catalog drawer for adding widgets",
+        "Layout persistence and restoration"
+      ],
+      "files_to_modify": [
+        "src/components/domain/dashboard/dashboard-grid.tsx",
+        "src/components/domain/dashboard/widget-catalog.tsx",
+        "src/components/domain/dashboard/dnd-provider.tsx"
+      ],
+      "dependencies": [
+        "DASH-CORE-API"
+      ],
+      "completion_promise": "DASH_GRID_UI_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "DASH-KPI-WIDGET",
+      "name": "KPI Widget System",
+      "description": "Key performance indicator display with targets and trends",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Reusable KPIWidget component with trend indicators",
+        "Progress bars for target achievement",
+        "Color-coded status based on performance",
+        "Click-through navigation to detailed views",
+        "Comparison indicators (vs previous period)",
+        "ARIA labels on progress bars (aria-valuenow, aria-valuemin, aria-valuemax), role='status' on trend indicators, aria-describedby linking value to label"
+      ],
+      "files_to_modify": [
+        "src/components/domain/dashboard/widgets/kpi-widget.tsx",
+        "src/components/domain/dashboard/widgets/progress-bar.tsx",
+        "src/components/domain/dashboard/widgets/trend-indicator.tsx"
+      ],
+      "dependencies": [
+        "DASH-GRID-UI"
+      ],
+      "completion_promise": "DASH_KPI_WIDGET_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "DASH-CHART-WIDGET",
+      "name": "Chart Widget System",
+      "description": "Data visualization with interactive features and drill-down",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Chart.js or D3.js based visualization components",
+        "Support for line, bar, pie, area, and combo charts",
+        "Interactive tooltips and data point selection",
+        "Drill-down modal with detailed data tables",
+        "Export capabilities (PNG, CSV)",
+        "Responsive chart scaling",
+        "Skeleton loader from @/components/ui/skeleton during data fetch; error state with retry button and error message"
+      ],
+      "files_to_modify": [
+        "src/components/domain/dashboard/widgets/chart-widget.tsx",
+        "src/components/domain/dashboard/drill-down-modal.tsx",
+        "src/components/domain/dashboard/chart-controls.tsx"
+      ],
+      "dependencies": [
+        "DASH-GRID-UI"
+      ],
+      "completion_promise": "DASH_CHART_WIDGET_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "DASH-DATE-RANGE",
+      "name": "Date Range Filtering",
+      "description": "Global date range selection affecting all dashboard widgets",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Date range picker with preset options",
+        "Custom date range selection",
+        "URL parameter synchronization",
+        "Global filter context for all widgets",
+        "Date range validation and constraints",
+        "Responsive placement (header on desktop, drawer on mobile)"
+      ],
+      "files_to_modify": [
+        "src/components/domain/dashboard/date-range-selector.tsx",
+        "src/components/domain/dashboard/dashboard-context.tsx",
+        "src/routes/_authed/dashboard/index.tsx"
+      ],
+      "dependencies": [
+        "DASH-GRID-UI"
+      ],
+      "completion_promise": "DASH_DATE_RANGE_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "DASH-ACTIVITY-FEED",
+      "name": "Activity Feed Widget",
+      "description": "Real-time activity timeline with grouping and actions",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Grouped activity feed (Today/Yesterday/This Week)",
+        "Distinct icons per type: quote=FileText, installation=Wrench, warranty=Shield, opportunity=TrendingUp, customer=Users (from lucide-react)",
+        "Quick actions per activity item",
+        "Infinite scroll for performance",
+        "Real-time updates with optimistic UI",
+        "Activity filtering and search"
+      ],
+      "files_to_modify": [
+        "src/components/domain/dashboard/widgets/activity-feed.tsx",
+        "src/components/domain/dashboard/activity-item.tsx",
+        "src/components/domain/dashboard/activity-group.tsx"
+      ],
+      "dependencies": [
+        "DASH-GRID-UI"
+      ],
+      "completion_promise": "DASH_ACTIVITY_FEED_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "DASH-TARGETS-API",
+      "name": "Targets Management API",
+      "description": "CRUD operations for performance targets and progress tracking",
+      "type": "server-function",
+      "acceptance_criteria": [
+        "Complete targets CRUD operations",
+        "Progress calculation against current metrics",
+        "Target validation and constraints",
+        "Bulk target operations",
+        "Target achievement notifications",
+        "Audit trail for target changes"
+      ],
+      "files_to_modify": [
+        "src/server/functions/targets.ts",
+        "src/lib/schemas/targets.ts"
+      ],
+      "dependencies": [
+        "DASH-CORE-SCHEMA"
+      ],
+      "completion_promise": "DASH_TARGETS_API_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "DASH-TARGETS-UI",
+      "name": "Targets Management Interface",
+      "description": "Target setting, progress display, and achievement tracking",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Target creation and editing forms",
+        "Progress visualization with achievement indicators",
+        "Target vs actual comparisons",
+        "Achievement milestone notifications",
+        "Historical target performance",
+        "Role-based target permissions"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/settings/targets.tsx",
+        "src/components/domain/dashboard/target-progress.tsx",
+        "src/components/domain/settings/target-form.tsx"
+      ],
+      "dependencies": [
+        "DASH-TARGETS-API"
+      ],
+      "completion_promise": "DASH_TARGETS_UI_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "DASH-COMPARISON-API",
+      "name": "Comparison Analysis API",
+      "description": "Period-over-period comparison calculations and insights",
+      "type": "server-function",
+      "acceptance_criteria": [
+        "Flexible comparison periods (previous period, same period last year)",
+        "Percentage change calculations for all metrics",
+        "Statistical significance testing",
+        "Trend analysis and forecasting",
+        "Comparison caching for performance",
+        "Automated insights generation"
+      ],
+      "files_to_modify": [
+        "src/server/functions/dashboard.ts",
+        "src/lib/schemas/comparison.ts"
+      ],
+      "dependencies": [
+        "DASH-CORE-API"
+      ],
+      "completion_promise": "DASH_COMPARISON_API_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "DASH-COMPARISON-UI",
+      "name": "Comparison Interface",
+      "description": "Period comparison controls and visual indicators",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Comparison toggle and period selector",
+        "Change indicators on all widgets",
+        "Color-coded improvement/decline visualization",
+        "Comparison tooltips with detailed statistics",
+        "Chart overlays showing both periods",
+        "Export comparison reports"
+      ],
+      "files_to_modify": [
+        "src/components/domain/dashboard/comparison-toggle.tsx",
+        "src/components/domain/dashboard/comparison-indicators.tsx",
+        "src/components/domain/dashboard/comparison-chart.tsx"
+      ],
+      "dependencies": [
+        "DASH-COMPARISON-API"
+      ],
+      "completion_promise": "DASH_COMPARISON_UI_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "DASH-REPORTS-API",
+      "name": "Automated Reports API",
+      "description": "Scheduled report generation and email delivery",
+      "type": "server-function",
+      "acceptance_criteria": [
+        "Report template management",
+        "Scheduled report configuration",
+        "PDF and HTML report generation",
+        "Email delivery with attachments",
+        "Report execution tracking and logging",
+        "Recipient management and preferences"
+      ],
+      "files_to_modify": [
+        "src/server/functions/scheduled-reports.ts",
+        "src/lib/schemas/scheduled-reports.ts"
+      ],
+      "dependencies": [
+        "DASH-CORE-SCHEMA"
+      ],
+      "completion_promise": "DASH_REPORTS_API_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "DASH-REPORTS-UI",
+      "name": "Reports Management Interface",
+      "description": "Scheduled report configuration and manual report generation",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Report creation and configuration forms",
+        "Scheduled report management",
+        "Manual report generation with preview",
+        "Report delivery history",
+        "Recipient management",
+        "Report template customization"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/settings/scheduled-reports.tsx",
+        "src/components/domain/dashboard/report-builder.tsx",
+        "src/components/domain/settings/report-form.tsx"
+      ],
+      "dependencies": [
+        "DASH-REPORTS-API"
+      ],
+      "completion_promise": "DASH_REPORTS_UI_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "DASH-REPORTS-BACKGROUND",
+      "name": "Background Report Processing",
+      "description": "Automated report execution using Trigger.dev",
+      "type": "background-job",
+      "acceptance_criteria": [
+        "Cron job scheduling for report execution",
+        "Report generation in background workers",
+        "Resend SDK with retry on 429/5xx; log delivery status to database; alert admins on 3 consecutive failures",
+        "Execution logging and monitoring",
+        "Retry logic for failed deliveries",
+        "Resource usage optimization"
+      ],
+      "files_to_modify": [
+        "trigger/dashboard-reports.ts",
+        "src/server/functions/scheduled-reports.ts"
+      ],
+      "dependencies": [
+        "DASH-REPORTS-API"
+      ],
+      "completion_promise": "DASH_REPORTS_BACKGROUND_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "DASH-MOBILE-UI",
+      "name": "Mobile Dashboard Interface",
+      "description": "Mobile-optimized dashboard with touch interactions",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Single-column layout for mobile screens",
+        "Swipe gestures for navigation",
+        "Touch-optimized widget interactions",
+        "Pull-to-refresh functionality",
+        "Offline caching capabilities",
+        "Full-screen spinner on initial load; inline skeleton per widget during refresh; pull-to-refresh indicator visible during gesture",
+        "Responsive typography and spacing"
+      ],
+      "files_to_modify": [
+        "src/components/domain/dashboard/mobile-dashboard.tsx",
+        "src/components/domain/dashboard/swipe-container.tsx",
+        "src/components/domain/dashboard/pull-to-refresh.tsx"
+      ],
+      "dependencies": [
+        "DASH-GRID-UI"
+      ],
+      "completion_promise": "DASH_MOBILE_UI_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    },
+    {
+      "id": "DASH-AI-INSIGHTS",
+      "name": "AI-Powered Insights",
+      "description": "Automated analysis and recommendations based on dashboard data",
+      "type": "ai-integration",
+      "acceptance_criteria": [
+        "Pattern recognition in metrics data",
+        "Automated insight generation",
+        "Anomaly detection and alerting",
+        "Predictive trend analysis",
+        "Actionable recommendations",
+        "Integration with existing AI infrastructure"
+      ],
+      "files_to_modify": [
+        "src/server/functions/ai-insights.ts",
+        "src/components/domain/dashboard/widgets/ai-insights-widget.tsx",
+        "src/lib/schemas/ai-insights.ts"
+      ],
+      "dependencies": [
+        "DASH-CORE-API"
+      ],
+      "completion_promise": "DASH_AI_INSIGHTS_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    }
+  ],
+  "success_criteria": [
+    "Complete business intelligence platform with real-time metrics",
+    "Role-based dashboards with personalized layouts",
+    "Performance target tracking with achievement notifications",
+    "Automated report generation and email delivery",
+    "Period-over-period analysis with trend insights",
+    "Mobile-responsive design with touch interactions",
+    "AI-powered insights and anomaly detection",
+    "Dashboard load time < 2 seconds, widget refresh < 500ms",
+    "Support for 50+ concurrent users during peak hours",
+    "Complete audit trail for all dashboard interactions",
+    "Integration with email, calendar, and file storage systems",
+    "Export capabilities in CSV, PDF, and image formats"
+  ],
+  "out_of_scope": [
+    "Advanced predictive analytics (machine learning models)",
+    "Custom widget development by end users",
+    "Third-party BI tool integrations (Tableau, PowerBI)",
+    "Real-time streaming data connections",
+    "Advanced data warehousing and cube analytics",
+    "Multi-tenant dashboard sharing",
+    "Dashboard embedding in external applications",
+    "Advanced user permission management beyond roles"
+  ],
+  "migration_notes": {
+    "existing_data": "If existing user preferences or basic dashboard configurations exist, they should be migrated to the new layout system",
+    "performance_baseline": "Current dashboard performance should be maintained or improved",
+    "user_training": "Users may need training on new widget interactions and layout customization",
+    "performance_migrations": {
+      "007_dashboard_materialized_views.ts": "Creates mv_daily_metrics, mv_daily_pipeline, mv_daily_warranty, mv_daily_jobs, mv_current_state with unique indexes for REFRESH CONCURRENTLY",
+      "008_dashboard_indexes.ts": "Creates composite indexes for date range + organizationId queries on orders, opportunities, jobs, warranty_claims, customers tables"
+    }
+  },
+  "performance_files_to_create": [
+    "drizzle/migrations/007_dashboard_materialized_views.ts",
+    "drizzle/migrations/008_dashboard_indexes.ts",
+    "src/lib/cache/dashboard-cache.ts",
+    "trigger/dashboard-refresh.ts",
+    "trigger/dashboard-precompute.ts",
+    "trigger/cache-warming.ts"
+  ],
+  "premortem_remediation": {
+    "source": "_meta/remediation-dashboard-performance.md",
+    "problem": "getDashboardMetrics aggregates across 7+ tables per request with no caching strategy",
+    "solution_summary": "Materialized views for pre-computed daily aggregations, Redis caching layer (Upstash), Trigger.dev background jobs for MV refresh, hybrid query strategy (MV for historical, live for today)",
+    "performance_targets": {
+      "dashboard_load": "< 2 seconds (PRD requirement)",
+      "cold_query": "< 600 milliseconds (MV query, no cache)",
+      "cached_query": "< 200 milliseconds (Redis cache hit)",
+      "mv_refresh": "Every 15 minutes for most views, 5 minutes for current_state"
+    },
+    "implementation_phases": {
+      "phase_1_database": "Week 1 - Create materialized views and composite indexes",
+      "phase_2_background": "Week 1-2 - Trigger.dev refresh jobs (15-min, 5-min, hourly schedules)",
+      "phase_3_caching": "Week 2 - Redis caching layer with TTL strategy and invalidation",
+      "phase_4_api": "Week 2-3 - Hybrid query strategy in getDashboardMetrics",
+      "phase_5_monitoring": "Week 3 - Latency metrics, cache hit rate, MV freshness alerts"
+    }
+  }
+}

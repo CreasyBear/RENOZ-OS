@@ -1,0 +1,778 @@
+{
+  "id": "ROLE-OPS",
+  "name": "Operations Role Optimization",
+  "description": "Optimized experience for Operations/Warehouse staff. Focus on real-time stock visibility, efficient picking, and low-stock alerts.",
+  "created": "2026-01-09",
+  "priority": 2,
+  "phase": "role",
+  "persona": "Operations / Warehouse",
+  "dependencies": {
+    "phase": "Role",
+    "executionOrder": 6,
+    "schemaRequired": [
+      {
+        "table": "users",
+        "status": "EXISTS"
+      },
+      {
+        "table": "orders",
+        "status": "EXISTS"
+      },
+      {
+        "table": "products",
+        "status": "EXISTS"
+      },
+      {
+        "table": "purchase-orders",
+        "status": "EXISTS"
+      },
+      {
+        "table": "suppliers",
+        "status": "EXISTS"
+      }
+    ],
+    "prdDependencies": [
+      {
+        "prdId": "DOM-ORD",
+        "status": "REQUIRED",
+        "reason": "Operations role needs order fulfillment and picking workflows"
+      },
+      {
+        "prdId": "DOM-INV",
+        "status": "REQUIRED",
+        "reason": "Operations role needs inventory management and low-stock alerts"
+      },
+      {
+        "prdId": "DOM-SUPP",
+        "status": "REQUIRED",
+        "reason": "Operations role needs purchase order receiving and goods receipt"
+      }
+    ],
+    "enables": []
+  },
+  "ui_spec": {
+    "target_role": "operations",
+    "primary_device": "both",
+    "priority_actions": [
+      "Start Picking",
+      "Receive Goods",
+      "Check Stock"
+    ],
+    "accessibility": {
+      "keyboard_navigation": true,
+      "screen_reader_support": true,
+      "color_contrast": "WCAG AA",
+      "focus_indicators": "visible ring on all interactive elements",
+      "touch_targets": "min 44px for mobile/tablet use"
+    },
+    "dashboard_layout": {
+      "type": "action-oriented",
+      "columns": 2,
+      "primary_section": "orders-to-pick",
+      "widget_arrangement": [
+        {
+          "widget": "orders-to-pick",
+          "position": "top-left",
+          "span": 1
+        },
+        {
+          "widget": "ready-to-ship",
+          "position": "top-right",
+          "span": 1
+        },
+        {
+          "widget": "low-stock-alerts",
+          "position": "middle-left",
+          "span": 1
+        },
+        {
+          "widget": "expected-receipts",
+          "position": "middle-right",
+          "span": 1
+        },
+        {
+          "widget": "stock-summary",
+          "position": "bottom",
+          "span": 2
+        }
+      ]
+    },
+    "quick_action_panel": {
+      "position": "floating bottom on mobile, sidebar on desktop",
+      "actions": [
+        {
+          "label": "Start Picking",
+          "icon": "package",
+          "shortcut": null
+        },
+        {
+          "label": "Receive Goods",
+          "icon": "truck",
+          "shortcut": null
+        },
+        {
+          "label": "Scan Item",
+          "icon": "scan",
+          "shortcut": null
+        }
+      ]
+    },
+    "notification_preferences": {
+      "low_stock": {
+        "default": true,
+        "channels": [
+          "in-app"
+        ],
+        "timing": "immediate"
+      },
+      "new_orders": {
+        "default": true,
+        "channels": [
+          "in-app"
+        ],
+        "timing": "immediate"
+      },
+      "po_arrival": {
+        "default": true,
+        "channels": [
+          "in-app"
+        ],
+        "timing": "morning of expected date"
+      }
+    },
+    "mobile_optimization": {
+      "bottom_nav": true,
+      "swipe_gestures": true,
+      "large_touch_targets": true,
+      "simplified_views": true
+    }
+  },
+  "references": {
+    "internal": [
+      "memory-bank/VISION.md - User personas",
+      "memory-bank/_meta/assumptions.md - Performance targets"
+    ],
+    "external": []
+  },
+  "current_state": {
+    "implemented": [
+      "Inventory list view",
+      "Order list with status",
+      "Fulfillment tab with allocation (FIFO)",
+      "SwipeableRow for pick confirmation",
+      "Short pick dialog for shortages",
+      "Batch pick dialog (selection only)",
+      "Receive goods from PO with serial entry",
+      "Pick list PDF generation",
+      "Packing slip PDF generation",
+      "Role-based dashboard defaults for warehouse",
+      "Todays shipments widget",
+      "Low stock widget"
+    ],
+    "gaps": [
+      "No dedicated /operations route as landing",
+      "No pick queue view",
+      "No consolidated batch pick list",
+      "No alert badge in nav for low stock",
+      "No shipment queue (blocked on DOM-ORD-003)",
+      "No real-time stock on order items",
+      "No mobile optimization"
+    ]
+  },
+  "stories": [
+    {
+      "id": "ROLE-OPS-001",
+      "name": "Warehouse Dashboard",
+      "description": "Operations landing page with key metrics and quick actions",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "New route /operations as warehouse role landing page",
+        "Widgets: orders to pick, ready to ship, awaiting receipt",
+        "Low stock alerts prominently displayed (reuse low-stock-widget)",
+        "Today's expected receipts list",
+        "Real-time stock summary widget",
+        "Quick actions: start picking, receive goods",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "ui"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_OPS_001_COMPLETE",
+      "ui_spec": {
+        "target_role": "operations",
+        "primary_device": "both",
+        "priority_actions": [
+          "Start Picking",
+          "Receive Goods",
+          "View Low Stock"
+        ],
+        "accessibility": {
+          "keyboard_navigation": "Tab through widgets and actions",
+          "screen_reader_support": "Dashboard regions with ARIA landmarks",
+          "high_contrast": "Numbers and counts clearly visible"
+        },
+        "layout": {
+          "desktop": {
+            "type": "2-column grid",
+            "widget_size": "large cards with prominent counts",
+            "quick_actions": "sidebar panel"
+          },
+          "mobile": {
+            "type": "single column stack",
+            "widget_size": "full-width cards",
+            "quick_actions": "floating action button menu"
+          }
+        },
+        "visual_priority": {
+          "orders_to_pick": "Primary highlight color, largest count display",
+          "low_stock": "Warning color when count > 0"
+        }
+      }
+    },
+    {
+      "id": "ROLE-OPS-002",
+      "name": "Streamlined Picking Workflow",
+      "description": "Dedicated pick queue and picking route",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Pick queue shows orders ready to pick at /operations/picking",
+        "Start picking -> item list with locations",
+        "Mark items as picked (reuse SwipeableRow)",
+        "Handle shortages inline (reuse short-pick-dialog)",
+        "Complete picking -> moves order to ready-to-ship",
+        "Progress tracking during picking session",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "ui"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_OPS_002_COMPLETE",
+      "ui_spec": {
+        "target_role": "operations",
+        "primary_device": "both",
+        "priority_actions": [
+          "Pick Item",
+          "Report Shortage",
+          "Complete Order"
+        ],
+        "accessibility": {
+          "touch_targets": "min 44px height for all pick actions",
+          "swipe_gestures": "Alternative tap button for non-swipe users",
+          "screen_reader_support": "Item name, quantity, and location announced"
+        },
+        "layout": {
+          "desktop": {
+            "type": "split-view",
+            "left_panel": "Order queue list",
+            "right_panel": "Current order items with pick actions"
+          },
+          "mobile": {
+            "type": "full-screen flow",
+            "view_sequence": [
+              "Queue",
+              "Order Items",
+              "Item Detail"
+            ],
+            "progress_bar": "top sticky showing X of Y items picked"
+          }
+        },
+        "interaction": {
+          "swipe_right": "Mark item as picked",
+          "swipe_left": "Open shortage dialog",
+          "tap": "View item detail (location, image if available)"
+        },
+        "feedback": {
+          "pick_confirmation": "Haptic + visual checkmark animation",
+          "order_complete": "Success toast + auto-advance to next order"
+        }
+      }
+    },
+    {
+      "id": "ROLE-OPS-003",
+      "name": "Batch Picking for Multiple Orders",
+      "description": "Pick multiple orders in one trip with consolidated list",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Select multiple orders for batch pick (reuse batch-pick-dialog)",
+        "Consolidated pick list by product",
+        "Shows which orders need each item",
+        "Distribute picked items to orders workflow",
+        "Handle mixed fulfillment (some complete, some partial)",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "ui"
+      ],
+      "dependencies": [
+        "ROLE-OPS-002"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_OPS_003_COMPLETE",
+      "ui_spec": {
+        "target_role": "operations",
+        "primary_device": "both",
+        "priority_actions": [
+          "Select Orders",
+          "Pick Consolidated",
+          "Distribute Items"
+        ],
+        "accessibility": {
+          "touch_targets": "Large checkboxes for order selection",
+          "keyboard_navigation": "Space to select, Enter to confirm batch",
+          "screen_reader_support": "Order count and total items announced"
+        },
+        "layout": {
+          "selection_phase": {
+            "type": "checkbox list",
+            "info_display": "Order number, item count, customer name",
+            "summary_bar": "sticky bottom showing selected count"
+          },
+          "picking_phase": {
+            "type": "grouped list by product",
+            "item_display": "Product, total qty, breakdown by order",
+            "distribution_ui": "Expandable rows showing order allocation"
+          }
+        },
+        "interaction": {
+          "batch_size_limit": "Suggest max 10 orders for efficiency",
+          "smart_grouping": "Sort by warehouse location"
+        }
+      }
+    },
+    {
+      "id": "ROLE-OPS-004",
+      "name": "Low-Stock Alert System",
+      "description": "Nav badge and one-click PO creation from low stock alerts",
+      "priority": 4,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Alert badge on nav when low stock exists",
+        "Click through to reorder suggestion from low-stock-widget",
+        "One-click PO creation from alert (pre-fill supplier, product, reorder qty)",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "ui"
+      ],
+      "dependencies": [
+        "INV-CORE-SCHEMA"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_OPS_004_COMPLETE",
+      "ui_spec": {
+        "target_role": "operations",
+        "primary_device": "desktop",
+        "priority_actions": [
+          "View Alert",
+          "Create PO",
+          "Dismiss Alert"
+        ],
+        "accessibility": {
+          "badge_accessibility": "ARIA live region for badge count changes",
+          "color_independence": "Badge has number, not just color",
+          "keyboard_navigation": "Badge focusable, Enter opens alert panel"
+        },
+        "layout": {
+          "nav_badge": {
+            "position": "on inventory nav item",
+            "style": "red circle with count"
+          },
+          "alert_panel": {
+            "trigger": "click badge or widget",
+            "content": "List of low stock products with reorder actions"
+          },
+          "po_creation": {
+            "type": "slide-out panel or modal",
+            "pre_filled": [
+              "supplier",
+              "product",
+              "reorder qty"
+            ],
+            "editable": true
+          }
+        }
+      }
+    },
+    {
+      "id": "ROLE-OPS-005",
+      "name": "Quick Receiving Flow Enhancements",
+      "description": "Expected receipts list and GRN PDF",
+      "priority": 5,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Expected receipts list at /operations/receiving",
+        "List shows POs with expected delivery dates",
+        "Print GRN (Goods Received Note) PDF",
+        "Putaway confirmation step after receiving",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "ui"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_OPS_005_COMPLETE",
+      "ui_spec": {
+        "target_role": "operations",
+        "primary_device": "both",
+        "priority_actions": [
+          "Receive Order",
+          "Print GRN",
+          "Confirm Putaway"
+        ],
+        "accessibility": {
+          "touch_targets": "Large tap areas for mobile receiving",
+          "keyboard_navigation": "Tab through PO list and actions",
+          "screen_reader_support": "PO number, supplier, expected date announced"
+        },
+        "layout": {
+          "list_view": {
+            "columns": [
+              "PO Number",
+              "Supplier",
+              "Expected Date",
+              "Items",
+              "Actions"
+            ],
+            "mobile_card": "Stacked layout with swipe to receive"
+          },
+          "receive_flow": {
+            "steps": [
+              "Select PO",
+              "Verify Items",
+              "Enter Quantities",
+              "Print GRN",
+              "Putaway"
+            ],
+            "serial_entry": "Inline input for serialized items"
+          }
+        },
+        "interaction": {
+          "quick_receive": "Swipe right to mark fully received",
+          "partial_receive": "Tap to open detailed quantity entry"
+        }
+      }
+    },
+    {
+      "id": "ROLE-OPS-006",
+      "name": "Shipment Coordination View",
+      "description": "Track all outbound shipments (requires partial shipment support)",
+      "priority": 6,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Shipment queue by status at /operations/shipments",
+        "Carrier assignment and tracking entry",
+        "Expected delivery dates",
+        "Print shipping labels/packing slips (reuse packing-slip-pdf)",
+        "Bulk shipment actions",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "ui"
+      ],
+      "dependencies": [
+        "ORD-SHIPPING-SCHEMA",
+        "ORD-SHIPPING-API"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_OPS_006_COMPLETE",
+      "notes": "Depends on ORD-SHIPPING-SCHEMA and ORD-SHIPPING-API for shipment functionality",
+      "ui_spec": {
+        "target_role": "operations",
+        "primary_device": "desktop",
+        "priority_actions": [
+          "Assign Carrier",
+          "Print Label",
+          "Mark Shipped"
+        ],
+        "accessibility": {
+          "keyboard_navigation": "Tab through shipment queue",
+          "bulk_selection": "Shift+click for range select",
+          "screen_reader_support": "Shipment status and destination announced"
+        },
+        "layout": {
+          "queue_view": {
+            "type": "table with status tabs",
+            "tabs": [
+              "Ready to Ship",
+              "In Transit",
+              "Delivered"
+            ],
+            "columns": [
+              "Order",
+              "Customer",
+              "Carrier",
+              "Tracking",
+              "Expected",
+              "Actions"
+            ]
+          },
+          "bulk_actions": {
+            "position": "sticky top when items selected",
+            "actions": [
+              "Print All Labels",
+              "Print All Packing Slips",
+              "Mark All Shipped"
+            ]
+          }
+        },
+        "interaction": {
+          "tracking_entry": "Inline edit or modal",
+          "carrier_select": "Dropdown with saved carriers"
+        }
+      }
+    },
+    {
+      "id": "ROLE-OPS-007",
+      "name": "Real-time Stock on Order Screen",
+      "description": "Show stock availability per order line item",
+      "priority": 7,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Order detail shows stock per line item",
+        "Display: Available vs Allocated vs Total",
+        "Out of stock items highlighted in red",
+        "Quick link to inventory detail",
+        "Inline stock check without leaving order",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "ui"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_OPS_007_COMPLETE",
+      "ui_spec": {
+        "target_role": "operations",
+        "primary_device": "desktop",
+        "priority_actions": [
+          "Check Stock",
+          "View Inventory",
+          "Allocate Stock"
+        ],
+        "accessibility": {
+          "color_independence": "Out of stock has icon + text, not just red",
+          "screen_reader_support": "Stock status announced with each line item",
+          "keyboard_navigation": "Tab to stock info, Enter for detail popup"
+        },
+        "layout": {
+          "line_item_enhancement": {
+            "additional_column": "Stock Status",
+            "stock_display": "Available / Allocated / On Hand",
+            "indicator_position": "right side of each line item"
+          },
+          "stock_popup": {
+            "trigger": "hover or focus on stock indicator",
+            "content": "Full stock breakdown with warehouse locations"
+          }
+        },
+        "visual": {
+          "sufficient_stock": "Green checkmark",
+          "partial_stock": "Yellow warning with available qty",
+          "no_stock": "Red X with 'Out of Stock' text"
+        }
+      }
+    },
+    {
+      "id": "ROLE-OPS-008a",
+      "name": "Mobile Responsive Layouts",
+      "description": "Responsive mobile layouts for operations views",
+      "priority": 8,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Picking workflow responsive to mobile",
+        "Large touch targets for actions (min-h-[44px])",
+        "Works on tablet in warehouse",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "ui"
+      ],
+      "dependencies": [
+        "ROLE-OPS-002"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_OPS_008a_COMPLETE",
+      "ui_spec": {
+        "target_role": "operations",
+        "primary_device": "mobile",
+        "priority_actions": [
+          "Pick Item",
+          "Scan",
+          "Complete"
+        ],
+        "accessibility": {
+          "touch_targets": "min 44px height and width",
+          "spacing": "min 8px between touch targets",
+          "font_size": "min 16px for input fields (prevents iOS zoom)"
+        },
+        "layout": {
+          "breakpoints": {
+            "mobile": "< 640px - single column, bottom nav",
+            "tablet": "640-1024px - two column, side actions",
+            "desktop": "> 1024px - full layout"
+          },
+          "mobile_specific": {
+            "navigation": "bottom tab bar",
+            "actions": "full-width buttons",
+            "lists": "swipeable cards"
+          }
+        },
+        "gestures": {
+          "swipe_right": "Complete/confirm action",
+          "swipe_left": "Secondary action (shortage, cancel)",
+          "pull_down": "Refresh"
+        }
+      }
+    },
+    {
+      "id": "ROLE-OPS-008b",
+      "name": "Barcode Scanning Integration",
+      "description": "Camera-based barcode scanning for products",
+      "priority": 9,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Barcode scanner component using camera API",
+        "Scan to find product during picking",
+        "Scan to verify item during receiving",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "ui"
+      ],
+      "dependencies": [
+        "ROLE-OPS-008a"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_OPS_008b_COMPLETE",
+      "ui_spec": {
+        "target_role": "operations",
+        "primary_device": "mobile",
+        "priority_actions": [
+          "Scan Barcode",
+          "Manual Entry",
+          "Verify Item"
+        ],
+        "accessibility": {
+          "fallback": "Manual SKU entry always available",
+          "feedback": "Audio beep + haptic on successful scan",
+          "visual_confirmation": "Green flash overlay on scan success"
+        },
+        "layout": {
+          "scanner_view": {
+            "type": "full-screen camera with overlay",
+            "guide_box": "centered rectangle showing scan area",
+            "controls": "bottom bar with flashlight toggle, manual entry"
+          },
+          "result_display": {
+            "position": "bottom sheet sliding up",
+            "content": "Product name, SKU, expected qty, confirm button"
+          }
+        },
+        "interaction": {
+          "auto_advance": "After scan, show product and auto-confirm after 2s",
+          "error_handling": "Clear error message if barcode not found"
+        }
+      }
+    },
+    {
+      "id": "ROLE-OPS-008c",
+      "name": "Offline Support",
+      "description": "PWA service worker for offline warehouse operations",
+      "priority": 10,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Service worker caches operations routes",
+        "Offline indicator in UI",
+        "Queue actions when offline",
+        "Sync when connection restored",
+        "TypeScript compiles without errors"
+      ],
+      "layers": [
+        "ui"
+      ],
+      "dependencies": [
+        "ROLE-OPS-008a"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_OPS_008c_COMPLETE",
+      "notes": "High complexity - consider implementing after field-tech PWA as similar infrastructure",
+      "ui_spec": {
+        "target_role": "operations",
+        "primary_device": "mobile",
+        "priority_actions": [
+          "Continue Working",
+          "View Queue",
+          "Force Sync"
+        ],
+        "accessibility": {
+          "offline_indicator": "Persistent banner, not just icon",
+          "screen_reader_support": "Announce offline/online status changes",
+          "queue_visibility": "Clear count of pending actions"
+        },
+        "layout": {
+          "offline_banner": {
+            "position": "top sticky",
+            "content": "Offline - X actions queued",
+            "style": "yellow/amber background"
+          },
+          "queue_view": {
+            "trigger": "tap banner",
+            "content": "list of pending actions with timestamps"
+          }
+        },
+        "sync_behavior": {
+          "auto_sync": "When connection restored",
+          "conflict_resolution": "Server wins, show user what changed",
+          "retry_logic": "3 attempts with exponential backoff"
+        }
+      }
+    }
+  ],
+  "success_criteria": [
+    "Warehouse dashboard shows full operational picture",
+    "Picking workflow reduces errors",
+    "Low-stock alerts prevent stockouts",
+    "Quick receiving speeds up putaway",
+    "npm run typecheck passes"
+  ],
+  "out_of_scope": [
+    "Multi-warehouse support",
+    "Wave picking",
+    "Warehouse slotting optimization"
+  ],
+  "pattern_references": [
+    {
+      "file": "_Initiation/_meta/patterns/testing-standards.md",
+      "applies_to": "all stories",
+      "reason": "All stories must follow testing standards"
+    },
+    {
+      "file": "_Initiation/_meta/patterns/ux-3-click-rule.md",
+      "applies_to": "ui layer stories",
+      "reason": "UI must comply with 3-click rule"
+    },
+    {
+      "file": "_Initiation/_meta/patterns/performance-benchmarks.md",
+      "applies_to": "server and ui stories",
+      "reason": "Must meet response time targets"
+    }
+  ]
+}

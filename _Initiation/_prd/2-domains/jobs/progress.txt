@@ -1,0 +1,39 @@
+# Jobs/Projects Domain Progress
+# PRD: jobs.prd.json
+# Started: 2026-01-17
+# Updated: 2026-01-17
+
+## Stories (19 total)
+
+- [ ] DOM-JOBS-001a: Job Task Management: Schema
+- [ ] DOM-JOBS-001b: Job Task Management: Server Functions
+- [ ] DOM-JOBS-001c: Job Task Management: UI
+- [ ] DOM-JOBS-002a: Job BOM Tracking: Schema
+- [ ] DOM-JOBS-002b: Job BOM Tracking: Server Functions
+- [ ] DOM-JOBS-002c: Job BOM Tracking: UI
+- [ ] DOM-JOBS-003a: Time Tracking: Schema
+- [ ] DOM-JOBS-003b: Time Tracking: Server Functions
+- [ ] DOM-JOBS-003c: Time Tracking: UI
+- [ ] DOM-JOBS-004a: Commissioning Checklist: Schema
+- [ ] DOM-JOBS-004b: Commissioning Checklist: Server Functions
+- [ ] DOM-JOBS-004c: Commissioning Checklist: UI
+- [ ] DOM-JOBS-005a: Job Scheduling Calendar: Basic Calendar
+- [ ] DOM-JOBS-005b: Job Scheduling Calendar: Drag-Drop & Filters
+- [ ] DOM-JOBS-007a: Job Templates: Schema
+- [ ] DOM-JOBS-007b: Job Templates: Server Functions
+- [ ] DOM-JOBS-007c: Job Templates: UI
+- [ ] DOM-JOBS-008a: Job Costing Report: Server Functions
+- [ ] DOM-JOBS-008b: Job Costing Report: UI
+
+## Current Story
+Not started
+
+## Iteration Count
+Total: 0
+Current Story: 0
+
+## Blockers
+None
+
+## Notes
+- Progress tracking initialized

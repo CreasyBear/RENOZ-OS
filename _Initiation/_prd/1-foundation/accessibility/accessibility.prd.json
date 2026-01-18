@@ -1,0 +1,586 @@
+{
+  "id": "CC-A11Y",
+  "name": "Accessibility",
+  "description": "Accessibility patterns and compliance for the Renoz application. Implements full keyboard navigation as required by assumptions.md, focus management, screen reader support, and WCAG 2.1 AA compliance. Ensures the application is usable by all team members.",
+  "created": "2026-01-09",
+  "priority": 1,
+  "phase": "cross-cutting",
+  "dependencies": {
+    "phase": "Cross-cutting",
+    "executionOrder": 0,
+    "schemaRequired": [],
+    "schemaCreates": [],
+    "serverFunctionsRequired": [],
+    "serverFunctionsCreates": [
+      {
+        "function": "ErrorSummary",
+        "story": "CC-A11Y-005"
+      },
+      {
+        "function": "FormFieldGroup",
+        "story": "CC-A11Y-005"
+      },
+      {
+        "function": "useReducedMotion",
+        "story": "CC-A11Y-007"
+      },
+      {
+        "function": "AccessibleDataTable",
+        "story": "CC-A11Y-008"
+      }
+    ],
+    "prdDependencies": [],
+    "enables": [
+      {
+        "prdId": "all",
+        "reason": "Accessibility patterns are foundational for all UI components across all domain PRDs"
+      },
+      {
+        "prdId": "CC-ERROR",
+        "reason": "Error handling uses accessible aria-live announcements"
+      },
+      {
+        "prdId": "CC-LOADING",
+        "reason": "Loading states use accessible role='status' and reduced-motion support"
+      },
+      {
+        "prdId": "CC-EMPTY",
+        "reason": "Empty states use accessible aria-live regions"
+      },
+      {
+        "prdId": "CC-NOTIFY",
+        "reason": "Notifications require accessible focus management and announcements"
+      }
+    ]
+  },
+  "references": {
+    "internal": [
+      "memory-bank/_meta/assumptions.md#device--browser",
+      "memory-bank/_meta/conventions.md#component-states"
+    ],
+    "external": [
+      "https://www.w3.org/WAI/WCAG21/quickref/",
+      "https://www.radix-ui.com/primitives/docs/overview/accessibility",
+      "https://react.dev/reference/react-dom/components#form-components"
+    ]
+  },
+  "current_state": {
+    "implemented": [
+      "Skip link component at src/components/shared/skip-link.tsx targeting #main-content",
+      "Proper landmark structure (header role='banner', nav role='navigation', main role='main')",
+      "Radix UI primitives provide keyboard navigation, focus trapping, Escape to close",
+      "trapFocus utility in accessibility-helpers.ts",
+      "AriaLiveRegion component and useAriaLiveAnnouncement hook for announcements",
+      "Loading/error/empty states use aria-live='polite' or aria-live='assertive'",
+      "FormFieldWrapper with label association, aria-required, error IDs",
+      "E2E accessibility testing with axe-core"
+    ],
+    "gaps": [
+      "No color contrast audit completed",
+      "No prefers-reduced-motion support",
+      "Table accessibility incomplete (no scope='col', no aria-sort)",
+      "Form accessibility inconsistent across all forms"
+    ]
+  },
+  "stories": [
+    {
+      "id": "CC-A11Y-005",
+      "name": "Form Accessibility Consistency",
+      "description": "Audit all forms for consistent accessibility patterns. Add fieldset/legend for form groups, autocomplete attributes, and create ErrorSummary component.",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Audit all forms for consistent aria-invalid and aria-describedby usage",
+        "Add fieldset and legend to multi-field groups (e.g., address forms)",
+        "Add autocomplete attributes to email, name, phone, address fields",
+        "Create and integrate ErrorSummary component for form submission failures",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "CC_A11Y_005_COMPLETE",
+      "layer": "ui",
+      "ui_spec": {
+        "reusable": true,
+        "component_type": "FormAccessibilityPatterns",
+        "components": {
+          "ErrorSummary": {
+            "description": "Summary of all form errors at top of form",
+            "purpose": "Screen reader users can quickly understand all errors"
+          },
+          "FormFieldGroup": {
+            "description": "Wrapper using fieldset/legend for related fields",
+            "purpose": "Group related fields semantically"
+          }
+        },
+        "component_structure": {
+          "error_summary": {
+            "container": "Alert component with role='alert'",
+            "heading": "h2 or aria-label 'Form errors'",
+            "error_list": "ul with li per error, each linking to field",
+            "position": "Top of form, before first field"
+          },
+          "form_field_group": {
+            "wrapper": "fieldset element",
+            "title": "legend element (visually styled as label)",
+            "fields": "Child form fields"
+          },
+          "autocomplete_mapping": {
+            "email": "email",
+            "name": "name",
+            "given_name": "given-name",
+            "family_name": "family-name",
+            "phone": "tel",
+            "address_line1": "address-line1",
+            "address_line2": "address-line2",
+            "city": "address-level2",
+            "state": "address-level1",
+            "postal_code": "postal-code",
+            "country": "country-name"
+          }
+        },
+        "animations": {
+          "error_summary_enter": "fade-in 200ms, optional shake on severe errors",
+          "field_error_highlight": "red border fade-in 150ms",
+          "scroll_to_error": "smooth scroll to first error field",
+          "reduced_motion": {
+            "error_summary": "instant show, no shake",
+            "scroll": "instant scroll, no smooth"
+          }
+        },
+        "theme_compatibility": {
+          "light": {
+            "error_summary_bg": "bg-destructive/10",
+            "error_summary_border": "border-destructive",
+            "error_link": "text-destructive underline",
+            "fieldset_border": "border-border (subtle)"
+          },
+          "dark": {
+            "error_summary_bg": "bg-destructive/20",
+            "error_summary_border": "border-destructive",
+            "error_link": "text-destructive underline",
+            "fieldset_border": "border-border"
+          }
+        },
+        "accessibility": {
+          "error_summary": {
+            "role": "alert",
+            "aria_live": "assertive",
+            "tabindex": "-1 (to receive programmatic focus)"
+          },
+          "error_links": {
+            "href": "#field-id",
+            "on_click": "Focus the target field"
+          },
+          "fieldset": {
+            "element": "fieldset",
+            "legend": "Required, provides group label"
+          },
+          "field_errors": {
+            "aria_invalid": "true when field has error",
+            "aria_describedby": "points to error message element ID",
+            "aria_errormessage": "alternative to aria-describedby for errors"
+          },
+          "announcements": {
+            "form_submit_error": "Form has {n} errors. {First error message}. Navigate to error summary for all errors.",
+            "field_error": "{Field name}: {Error message}",
+            "error_cleared": "{Field name} error cleared"
+          },
+          "focus_management": {
+            "on_submit_error": "Focus moves to error summary",
+            "error_link_click": "Focus moves to associated field",
+            "on_field_error_clear": "Keep focus on current field"
+          }
+        },
+        "touch_targets": {
+          "error_links": "min-h-11 inline-block padding",
+          "form_fields": "min-h-11 (44px input height)"
+        },
+        "responsive": {
+          "all": "Error summary full-width, stacks naturally"
+        }
+      }
+    },
+    {
+      "id": "CC-A11Y-006",
+      "name": "Color Contrast Compliance",
+      "description": "Audit and fix color contrast issues to meet WCAG 2.1 AA requirements. Ensure all text and interactive elements have sufficient contrast.",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Normal text meets 4.5:1 contrast ratio minimum",
+        "Large text (18px+ or 14px+ bold) meets 3:1 ratio minimum",
+        "Interactive elements have 3:1 contrast against adjacent colors",
+        "Focus indicators have sufficient contrast",
+        "Error/success/warning colors accessible against backgrounds",
+        "No information conveyed by color alone (icons/text supplement)",
+        "Color palette documented with contrast ratios",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "CC_A11Y_006_COMPLETE",
+      "layer": "ui",
+      "ui_spec": {
+        "reusable": true,
+        "component_type": "ColorContrastSystem",
+        "design_tokens": {
+          "text_colors": {
+            "foreground": "Primary text, 4.5:1 minimum against background",
+            "muted_foreground": "Secondary text, 4.5:1 minimum",
+            "placeholder": "Placeholder text, 4.5:1 when used for important info"
+          },
+          "interactive_colors": {
+            "primary": "3:1 against adjacent non-text colors",
+            "destructive": "3:1 against adjacent colors",
+            "focus_ring": "3:1 against background and component"
+          },
+          "status_colors": {
+            "success": "Text + icon, never color alone",
+            "warning": "Text + icon, never color alone",
+            "error": "Text + icon, never color alone",
+            "info": "Text + icon, never color alone"
+          }
+        },
+        "component_patterns": {
+          "status_indicators": {
+            "pattern": "Icon + text label",
+            "example": "CheckCircle icon + 'Success' text",
+            "not_allowed": "Green circle alone"
+          },
+          "form_errors": {
+            "pattern": "Red border + error icon + error text",
+            "not_allowed": "Red border alone"
+          },
+          "badges": {
+            "pattern": "Background color + contrasting text + optional icon",
+            "contrast": "Text must be 4.5:1 against badge background"
+          },
+          "focus_indicators": {
+            "pattern": "2px ring with offset, contrasting color",
+            "contrast": "3:1 against both component and page background"
+          }
+        },
+        "animations": {
+          "note": "Color changes should not be the only indicator of state change",
+          "focus_transition": "ring color transition 150ms",
+          "reduced_motion": "No special considerations for color contrast"
+        },
+        "theme_compatibility": {
+          "light": {
+            "primary_text": "#09090b (foreground)",
+            "secondary_text": "#71717a (muted-foreground)",
+            "background": "#ffffff",
+            "focus_ring": "#2563eb (ring)"
+          },
+          "dark": {
+            "primary_text": "#fafafa (foreground)",
+            "secondary_text": "#a1a1aa (muted-foreground)",
+            "background": "#09090b",
+            "focus_ring": "#3b82f6 (ring)"
+          },
+          "audit_checklist": [
+            "Run automated contrast checker (axe, WAVE)",
+            "Manual check of custom components",
+            "Test with color blindness simulators",
+            "Verify in both light and dark modes"
+          ]
+        },
+        "accessibility": {
+          "wcag_criteria": {
+            "1.4.3": "Contrast (Minimum) - 4.5:1 for normal text",
+            "1.4.6": "Contrast (Enhanced) - 7:1 for AAA (optional)",
+            "1.4.11": "Non-text Contrast - 3:1 for UI components"
+          },
+          "testing_tools": [
+            "axe-core (automated)",
+            "WAVE browser extension",
+            "Colour Contrast Analyser (manual)",
+            "Stark (Figma plugin)"
+          ]
+        },
+        "documentation": {
+          "location": "src/styles/color-contrast.md",
+          "contents": [
+            "Color palette with hex values",
+            "Contrast ratios for each combination",
+            "Approved color pairings",
+            "Forbidden combinations"
+          ]
+        }
+      }
+    },
+    {
+      "id": "CC-A11Y-007",
+      "name": "Reduced Motion Support",
+      "description": "Respect user's prefers-reduced-motion preference. Reduce or eliminate animations for users who have indicated motion sensitivity.",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "CSS media query detects prefers-reduced-motion",
+        "Animations disabled or reduced when preference set",
+        "Loading spinners use subtle opacity fade instead of rotation",
+        "Page transitions use fade instead of slide",
+        "Toast notifications appear without slide animation",
+        "Skeleton shimmer effect optional based on preference",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "CC_A11Y_007_COMPLETE",
+      "layer": "ui",
+      "ui_spec": {
+        "reusable": true,
+        "component_type": "ReducedMotionSupport",
+        "implementation": {
+          "css_approach": {
+            "media_query": "@media (prefers-reduced-motion: reduce)",
+            "global_styles": "Set animation-duration: 0.01ms, transition-duration: 0.01ms",
+            "location": "src/styles/globals.css"
+          },
+          "js_approach": {
+            "hook": "useReducedMotion() from @/hooks/use-reduced-motion",
+            "implementation": "window.matchMedia('(prefers-reduced-motion: reduce)').matches",
+            "usage": "Conditional animation props in components"
+          }
+        },
+        "component_adaptations": {
+          "spinner": {
+            "standard": "rotate 1s linear infinite",
+            "reduced": "opacity 1.5s ease-in-out infinite (pulse)"
+          },
+          "skeleton_shimmer": {
+            "standard": "translateX animation across skeleton",
+            "reduced": "static gray background, no shimmer"
+          },
+          "page_transitions": {
+            "standard": "slide + fade 300ms",
+            "reduced": "fade only 150ms or instant"
+          },
+          "toasts": {
+            "standard": "slide-in from edge 200ms",
+            "reduced": "fade-in 100ms or instant"
+          },
+          "modals": {
+            "standard": "scale + fade 200ms",
+            "reduced": "fade only 100ms or instant"
+          },
+          "dropdowns": {
+            "standard": "scale + fade from origin",
+            "reduced": "instant show/hide"
+          },
+          "progress_bars": {
+            "standard": "smooth width transition",
+            "reduced": "instant width change"
+          },
+          "hover_effects": {
+            "standard": "scale, shadow, color transitions",
+            "reduced": "color change only, instant"
+          }
+        },
+        "animations": {
+          "allowed_in_reduced": [
+            "Opacity fades (subtle, < 200ms)",
+            "Color transitions (instant or very fast)",
+            "Essential UI feedback (focus rings)"
+          ],
+          "not_allowed_in_reduced": [
+            "Rotation animations",
+            "Slide/translate animations",
+            "Scale/zoom animations",
+            "Parallax effects",
+            "Auto-playing carousels",
+            "Bouncing elements"
+          ]
+        },
+        "theme_compatibility": {
+          "note": "Reduced motion applies equally to light and dark modes"
+        },
+        "accessibility": {
+          "wcag_criteria": {
+            "2.3.3": "Animation from Interactions (AAA, but good practice)"
+          },
+          "vestibular_disorders": "Reduces risk of triggering vestibular disorders",
+          "testing": {
+            "macos": "System Preferences > Accessibility > Display > Reduce motion",
+            "windows": "Settings > Ease of Access > Display > Show animations",
+            "css_emulation": "DevTools > Rendering > Emulate CSS media feature prefers-reduced-motion"
+          }
+        },
+        "touch_targets": {
+          "note": "No impact on touch targets"
+        },
+        "responsive": {
+          "note": "Reduced motion applies across all breakpoints"
+        }
+      }
+    },
+    {
+      "id": "CC-A11Y-008",
+      "name": "Data Table Accessibility",
+      "description": "Ensure data tables are fully accessible with proper semantics, keyboard navigation, and screen reader support.",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Add scope='col' to TableHead component",
+        "Add aria-sort prop to TableHead for sortable columns",
+        "Add table caption or aria-labelledby pattern to Table component",
+        "Document pattern for row selection checkbox labels",
+        "Ensure pagination components are keyboard accessible (verify with Radix)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "CC_A11Y_008_COMPLETE",
+      "layer": "ui",
+      "ui_spec": {
+        "reusable": true,
+        "component_type": "AccessibleDataTable",
+        "component_structure": {
+          "table": {
+            "element": "table",
+            "caption": "caption element or aria-labelledby",
+            "aria_describedby": "Optional description of table contents"
+          },
+          "thead": {
+            "element": "thead",
+            "row": "tr"
+          },
+          "th": {
+            "element": "th",
+            "scope": "col (for column headers)",
+            "aria_sort": "ascending | descending | none (for sortable)",
+            "button": "Nested button for sort trigger"
+          },
+          "tbody": {
+            "element": "tbody"
+          },
+          "tr": {
+            "element": "tr",
+            "aria_selected": "true/false for selectable rows",
+            "tabindex": "0 for keyboard navigation (if row-level actions)"
+          },
+          "td": {
+            "element": "td"
+          },
+          "selection_checkbox": {
+            "element": "checkbox input",
+            "aria_label": "Select row for {row identifier}",
+            "header_checkbox_label": "Select all rows"
+          }
+        },
+        "keyboard_navigation": {
+          "tab": "Move between interactive elements (sort buttons, checkboxes, action buttons)",
+          "arrow_keys": "Optional: navigate between cells (complex tables)",
+          "enter": "Activate sort or row action",
+          "space": "Toggle checkbox selection",
+          "escape": "Clear selection or close dropdown"
+        },
+        "animations": {
+          "sort_indicator": {
+            "standard": "Rotate arrow icon 200ms",
+            "reduced_motion": "Instant icon swap"
+          },
+          "row_selection": {
+            "standard": "Background color fade 150ms",
+            "reduced_motion": "Instant color change"
+          },
+          "loading_overlay": {
+            "standard": "Fade in 150ms",
+            "reduced_motion": "Instant show"
+          }
+        },
+        "theme_compatibility": {
+          "light": {
+            "header_bg": "bg-muted/50",
+            "selected_row": "bg-primary/10",
+            "hover_row": "bg-muted/50",
+            "sort_icon": "text-foreground"
+          },
+          "dark": {
+            "header_bg": "bg-muted/30",
+            "selected_row": "bg-primary/20",
+            "hover_row": "bg-muted/30",
+            "sort_icon": "text-foreground"
+          }
+        },
+        "accessibility": {
+          "table": {
+            "role": "table (implicit)",
+            "aria_labelledby": "ID of visible table title",
+            "aria_describedby": "ID of table description (if exists)"
+          },
+          "sortable_columns": {
+            "aria_sort": "ascending | descending | none",
+            "button_aria_label": "Sort by {column name}, currently {sort state}"
+          },
+          "row_selection": {
+            "aria_selected": "true when row selected",
+            "checkbox_aria_label": "Select {row identifier}"
+          },
+          "pagination": {
+            "nav_role": "navigation",
+            "nav_aria_label": "Table pagination",
+            "button_labels": "Go to page {n}, Previous page, Next page"
+          },
+          "announcements": {
+            "sort_changed": "Table sorted by {column}, {direction}",
+            "selection_changed": "{n} rows selected",
+            "page_changed": "Showing page {n} of {total}, {rows} rows",
+            "filter_applied": "Table filtered, showing {n} of {total} rows"
+          },
+          "focus_management": {
+            "after_sort": "Keep focus on sort button",
+            "after_page_change": "Announce new data, optionally focus first row",
+            "after_selection": "Keep focus on checkbox"
+          }
+        },
+        "touch_targets": {
+          "sort_button": "Full header cell clickable, min-h-11",
+          "checkbox": "min-w-11 min-h-11 clickable area",
+          "pagination_buttons": "min-w-11 min-h-11",
+          "row_actions": "min-w-11 min-h-11 per action"
+        },
+        "responsive": {
+          "mobile": {
+            "strategy": "Horizontal scroll with sticky first column, or card view",
+            "touch_scroll": "Enable momentum scrolling"
+          },
+          "tablet_up": {
+            "strategy": "Full table with all columns visible"
+          }
+        },
+        "screen_reader_testing": {
+          "voiceover": "Test with VoiceOver on macOS",
+          "nvda": "Test with NVDA on Windows",
+          "verification": [
+            "Can identify table and caption",
+            "Can navigate between cells",
+            "Sort state announced",
+            "Selection state announced",
+            "Pagination controls accessible"
+          ]
+        }
+      }
+    }
+  ],
+  "success_criteria": [
+    "Application passes WCAG 2.1 AA automated testing",
+    "All functionality accessible via keyboard alone",
+    "Screen reader users can navigate and complete all workflows",
+    "Focus is always visible and logically ordered",
+    "Color is never the only means of conveying information",
+    "Motion-sensitive users have reduced animation option"
+  ],
+  "out_of_scope": [
+    "WCAG 2.1 AAA compliance",
+    "Automated accessibility testing CI integration",
+    "Mobile screen reader testing (VoiceOver, TalkBack)",
+    "Accessibility statement/documentation page"
+  ],
+  "domain_completion_promise": "CC_A11Y_COMPLETE"
+}

@@ -1,0 +1,470 @@
+# Product Catalog Management System Progress
+# PRD: products.prd.json
+# Started: 2026-01-17
+# Updated: 2026-01-17
+
+## Stories (18 total)
+
+- [x] PROD-CORE-SCHEMA: Product Core Schema
+- [x] PROD-CORE-API: Product Core API
+- [x] PROD-CATALOG-UI: Product Catalog Interface
+- [x] PROD-DETAIL-UI: Product Detail Interface
+- [x] PROD-FORM-UI: Product Creation/Edit Form
+- [x] PROD-PRICING-API: Pricing Engine API
+- [x] PROD-PRICING-UI: Pricing Management Interface
+- [x] PROD-BUNDLES-API: Product Bundles API
+- [x] PROD-BUNDLES-UI: Bundle Management Interface
+- [x] PROD-IMAGES-API: Product Images API
+- [x] PROD-IMAGES-UI: Image Gallery Interface
+- [x] PROD-ATTRIBUTES-API: Product Attributes API
+- [x] PROD-ATTRIBUTES-UI: Attributes Management Interface
+- [x] PROD-INVENTORY-API: Inventory Management API
+- [x] PROD-INVENTORY-UI: Inventory Management Interface
+- [x] PROD-BULK-OPERATIONS: Bulk Operations System
+- [x] PROD-SEARCH-OPTIMIZATION: Search Optimization
+- [x] PROD-CATEGORY-MANAGEMENT: Category Management System
+
+## Current Story
+COMPLETE - All 18 stories finished
+
+## Iteration Count
+Total: 18
+Current Story: 0
+
+## Blockers
+None
+
+## Notes
+- PROD-CATALOG-UI complete: Created product catalog browsing interface
+  - src/routes/_authenticated/products/index.tsx - Main products list route with:
+    - URL-based search params for pagination, filtering, sorting
+    - Category sidebar for tree navigation
+    - Full-text search with input
+    - Status and type filter dropdowns
+    - Filter badges with clear actions
+    - Bulk selection actions bar
+    - Empty states (no products / no search results)
+  - src/components/domain/products/product-table.tsx - Data table with:
+    - Column sorting (SKU, name, type, status, price)
+    - Row selection with checkboxes
+    - Quick actions dropdown per row
+    - Pagination controls
+  - src/components/domain/products/category-sidebar.tsx - Category tree with:
+    - Expandable/collapsible hierarchy
+    - Active category highlighting
+  - src/components/domain/products/product-filters.tsx - Advanced filter panel (Sheet)
+  - src/components/ui/select.tsx - Radix Select component added
+- PROD-CORE-API complete: Created server functions for products and pricing
+  - src/lib/server/functions/products.ts - Product CRUD, search, and category management
+    - listProducts with pagination, filtering, and sorting
+    - getProduct with full related data (images, tiers, attributes, relations, bundles)
+    - createProduct, updateProduct, deleteProduct with validation
+    - searchProducts with full-text search
+    - listCategories, getCategoryTree, createCategory, updateCategory, deleteCategory
+  - src/lib/server/functions/product-pricing.ts - Price resolution and tier management
+    - resolvePrice with Customer-specific -> Volume tier -> Base price resolution order
+    - listPriceTiers, createPriceTier, updatePriceTier, deletePriceTier, setPriceTiers
+    - listCustomerPrices, setCustomerPrice, deleteCustomerPrice
+  - Fixed TanStack + Drizzle JSONB compatibility issues with type hints
+- PROD-CORE-SCHEMA complete: Created all product domain schema files
+  - drizzle/schema/categories.ts - Hierarchical categories with parent/child relations
+  - drizzle/schema/product-pricing.ts - Price tiers and customer-specific pricing
+  - drizzle/schema/product-bundles.ts - Bundle components with quantity tracking
+  - drizzle/schema/product-images.ts - Image gallery with primary selection
+  - drizzle/schema/product-attributes.ts - Dynamic attributes with type support
+  - drizzle/schema/product-relations.ts - Product relationships (accessory, alternative, etc.)
+  - Updated drizzle/schema/products.ts with categoryId, status enum, and relations
+  - Updated drizzle/schema/enums.ts with productStatusEnum, attributeTypeEnum, productRelationTypeEnum
+  - Updated drizzle/schema/index.ts to export all new schemas
+  - Updated src/lib/schemas/products.ts with comprehensive Zod validation schemas
+- TypeScript compiles without errors
+- Inventory movements table NOT redefined (uses shared 007_inventory-core.ts migration)
+- PROD-DETAIL-UI complete: Created product detail interface with tabbed sections
+  - src/routes/_authenticated/products/$productId.tsx - Product detail route with:
+    - Loader fetching product + related data (images, pricing, attributes, relations)
+    - Price summary card showing base price, cost price, margin
+    - 6-tab interface: Overview, Pricing, Inventory, Images, Attributes, Relations
+    - Quick actions: Edit, Duplicate, Delete
+  - src/components/domain/products/tabs/overview-tab.tsx - Product overview with:
+    - Description, specifications, bundle components (for bundles)
+    - SEO section, sidebar with details/tags/settings
+  - src/components/domain/products/tabs/pricing-tab.tsx - Pricing management:
+    - Volume pricing tiers table with savings calculation
+    - Customer-specific pricing section
+    - Price calculator
+  - src/components/domain/products/tabs/inventory-tab.tsx - Inventory tracking:
+    - Stock summary cards (total, available, reserved, incoming)
+    - Stock by location section
+    - Serial numbers section (for serialized products)
+    - Movement history
+  - src/components/domain/products/tabs/images-tab.tsx - Image gallery:
+    - Grid display with drag handles for reordering
+    - Primary image badge, set primary action
+    - Upload dropzone, image guidelines
+  - src/components/domain/products/tabs/attributes-tab.tsx - Dynamic attributes:
+    - Table with attribute name, type, value, required status
+    - Type-specific value formatting
+  - src/components/domain/products/tabs/relations-tab.tsx - Product relationships:
+    - Bundle components section (for bundle products)
+    - Related products with relation types (accessory, alternative, cross-sell, up-sell)
+  - Updated PageLayout.Header to accept ReactNode for title prop
+- PROD-FORM-UI complete: Created product creation/edit form
+  - src/components/domain/products/product-form.tsx - Multi-section form with:
+    - BasicInfoSection: SKU, name, type, status, category, description
+    - PricingSection: Base price, cost price, margin calculation
+    - SettingsSection: Sellable, purchasable, track inventory, serialized flags
+    - SpecificationsSection: Barcode, weight, dimensions
+    - SEOSection: SEO title, description, tags placeholder
+    - Collapsible sections with icons
+    - Real-time validation with Zod schema
+    - Unsaved changes indicator
+  - src/routes/_authenticated/products/new.tsx - New product creation route
+    - Loads category tree for hierarchy selection
+    - Flattens categories with breadcrumb-style names
+    - Redirects to products list on save
+  - src/routes/_authenticated/products/$productId/edit.tsx - Edit product route
+    - Loads existing product data + category tree
+    - Pre-populates form with current values
+    - Redirects to product detail on save
+  - Exported CategoryWithChildren type from products.ts for route type safety
+- PROD-PRICING-API complete: Comprehensive pricing engine with history tracking
+  - drizzle/schema/product-pricing.ts - Added priceHistory table:
+    - Tracks all price changes for audit trail
+    - Records change type, before/after values, user, reason
+    - Links to product, tier, and customer contexts
+  - drizzle/schema/enums.ts - Added priceChangeTypeEnum:
+    - base_price, cost_price, tier_created, tier_updated, tier_deleted, customer_price, bulk_update
+  - src/lib/server/functions/product-pricing.ts - Extended with:
+    - recordPriceChange() - Internal helper for audit trail
+    - getPriceHistory() - Fetch paginated price history for a product
+    - bulkUpdatePrices() - Bulk update prices for multiple products
+    - applyPriceAdjustment() - Apply percentage adjustments (e.g., +5% across all products)
+  - Existing functionality preserved:
+    - resolvePrice() - Customer -> Volume tier -> Base price resolution
+    - Volume tier CRUD (listPriceTiers, createPriceTier, updatePriceTier, deletePriceTier, setPriceTiers)
+    - Customer-specific pricing (listCustomerPrices, setCustomerPrice, deleteCustomerPrice)
+- PROD-PRICING-UI complete: Comprehensive pricing management interface
+  - src/components/domain/products/price-tiers.tsx - Volume tier management:
+    - Add/edit/delete price tiers with dialog forms
+    - Quantity range validation and overlap detection
+    - Fixed price or discount percentage options
+    - Active/inactive tier status toggle
+    - Savings calculation display
+  - src/components/domain/products/customer-pricing.tsx - Customer-specific pricing:
+    - Add/remove customer prices with validity periods
+    - Date pickers for valid from/to
+    - Active status based on date range
+    - Discount or fixed price options
+  - src/components/domain/products/price-history.tsx - Price history display:
+    - Paginated history timeline
+    - Change type badges (base_price, tier, bulk_update, etc.)
+    - Before/after price comparison with percentage change
+    - Direction indicators (up/down arrows)
+  - src/components/domain/products/pricing-engine.tsx - Margin analysis:
+    - Current margin health status (healthy/warning/critical)
+    - Price recommendations (competitive/balanced/premium)
+    - Interactive price calculator with quantity/customer inputs
+    - Bulk adjustment slider with preview
+- PROD-BUNDLES-API complete: Bundle creation and management
+  - src/lib/server/functions/product-bundles.ts - Bundle server functions:
+    - getBundleComponents() - Get all components with product details
+    - setBundleComponents() - Replace all components (bulk set)
+    - addBundleComponent() - Add single component to bundle
+    - updateBundleComponent() - Update quantity, optional flag, sort order
+    - removeBundleComponent() - Remove component from bundle
+    - calculateBundlePrice() - Calculate total price with savings breakdown
+    - expandBundle() - Expand bundle into individual items for order processing
+    - validateBundle() - Validate configuration (circular refs, missing products)
+    - findBundlesContaining() - Find all bundles that include a product
+- PROD-BUNDLES-UI complete: Bundle management interface
+  - src/components/domain/products/component-selector.tsx - Product search dialog:
+    - Search products by name/SKU with debounce
+    - Quantity and optional flag per selection
+    - Filters out bundles and inactive products
+    - Selected components summary with badges
+  - src/components/domain/products/bundle-editor.tsx - Bundle component management:
+    - Add/remove/reorder components
+    - Quantity adjustment with live price update
+    - Optional component toggle
+    - Validation status display (errors/warnings)
+    - Price breakdown (components vs bundle, savings)
+  - src/components/domain/products/bundle-creator.tsx - New bundle wizard:
+    - Step 1: Select components from product search
+    - Step 2: Configure SKU, name, description, pricing
+    - Calculated vs custom price toggle
+    - Savings preview
+    - Step 3: Success confirmation
+- PROD-IMAGES-API complete: Product image management server functions
+  - src/lib/server/functions/product-images.ts - Image server functions:
+    - listProductImages() - List images for product, sorted by order
+    - getPrimaryImage() - Get primary image with fallback to first
+    - addProductImage() - Add image with metadata, auto-primary for first
+    - updateProductImage() - Update alt text and caption
+    - deleteProductImage() - Delete with primary reassignment
+    - setPrimaryImage() - Set image as primary
+    - reorderProductImages() - Bulk reorder images
+    - bulkDeleteImages() - Delete multiple images
+    - bulkUpdateAltText() - Update alt text for multiple images
+    - getImageStats() - Get image statistics (count, size, missing alt)
+  - Validation: MIME type, file size (10MB), max 20 images per product
+- PROD-IMAGES-UI complete: Image gallery interface with full functionality
+  - src/components/domain/products/image-gallery.tsx - Gallery component:
+    - Grid display with drag-and-drop reordering
+    - Primary image badge and set primary action
+    - Lightbox viewer with keyboard navigation (arrows, Esc)
+    - Image counter and captions in lightbox
+    - Delete confirmation with primary warning
+  - src/components/domain/products/image-uploader.tsx - Upload component:
+    - Drag-and-drop file selection
+    - File validation (type, size)
+    - Preview grid with dimensions and file size
+    - Upload progress indicators
+    - Batch upload with status tracking
+  - src/components/domain/products/image-editor.tsx - Metadata editor:
+    - Alt text field with character counter (max 255)
+    - Caption field with character counter (max 1000)
+    - Image preview with dimensions and file size
+    - Alt text best practices tips
+  - src/components/domain/products/tabs/images-tab.tsx - Updated tab:
+    - Integrates gallery, uploader, and editor components
+    - Image statistics card (count, size, primary, missing alt)
+    - Refresh on changes with server sync
+    - Guidelines section with limits
+- PROD-ATTRIBUTES-API complete: Dynamic attribute system
+  - src/lib/server/functions/product-attributes.ts - Attribute server functions:
+    - listAttributes() - List attribute definitions with category filter
+    - getAttribute() - Get single attribute by ID
+    - createAttribute() - Create attribute definition with type/options
+    - updateAttribute() - Update attribute definition
+    - deleteAttribute() - Delete attribute and all its values
+    - getProductAttributeValues() - Get values for a product
+    - setProductAttribute() - Set single attribute value with validation
+    - setProductAttributes() - Bulk set multiple values
+    - deleteProductAttribute() - Remove attribute value from product
+    - checkRequiredAttributes() - Validate required attributes are filled
+    - getFilterableAttributes() - Get attributes for filter UI
+  - Type validation: text, number, boolean, select, multiselect, date
+  - Options support: min/max for numbers, choices for select types
+  - Category-based attribute assignment (empty = applies to all)
+- PROD-ATTRIBUTES-UI complete: Attributes management interface
+  - src/components/domain/products/attribute-value-editor.tsx - Value editor dialog:
+    - Type-specific inputs (text, number, boolean, date, select, multiselect)
+    - Switch for boolean, date picker for date, checkbox list for multiselect
+    - Clear value action, validation display
+    - Min/max constraints for numbers shown
+  - src/components/domain/products/attribute-definitions.tsx - Admin interface:
+    - Create/edit/delete attribute definitions
+    - Type selection with options (choices for select, min/max for numbers)
+    - Category assignment (empty = applies to all)
+    - Active status toggle
+    - Sortable table with search
+  - src/components/domain/products/tabs/attributes-tab.tsx - Updated tab:
+    - Loads attributes via server function (not props)
+    - Required attributes validation status
+    - Available/unset attributes section with quick-add buttons
+    - Uses AttributeValueEditor for editing
+    - About Attributes info section
+- PROD-INVENTORY-API complete: Inventory management server functions
+  - src/lib/server/functions/product-inventory.ts - Inventory server functions:
+    - Location CRUD (listLocations, getLocation, createLocation, updateLocation, deleteLocation)
+    - Inventory queries (getProductInventory, getLocationInventory, getDefaultLocation)
+    - Stock movements (recordMovement, receiveStock, allocateStock, deallocateStock)
+    - Stock adjustment (adjustStock)
+    - Stock transfer between locations (transferStock)
+    - Movement history (getProductMovements, getLocationMovements)
+    - Low stock alerts (getLowStockAlerts)
+    - Statistics (getInventoryStats)
+    - Bulk operations (bulkReceiveStock)
+  - Uses existing drizzle/schema/inventory.ts (locations, inventory, inventoryMovements tables)
+  - Uses existing src/lib/schemas/inventory.ts Zod validation schemas
+  - Multi-location inventory support
+  - Transaction-based movement recording with audit trail
+  - Negative inventory prevention (unless location.allowNegative = true)
+- PROD-INVENTORY-UI complete: Inventory management interface
+  - src/components/domain/products/tabs/inventory-tab.tsx - Updated inventory tab:
+    - Stock summary cards (total, available, allocated, value)
+    - 30-day activity summary (received, shipped, movements)
+    - Stock by location table with adjust actions
+    - Low stock warning banner
+    - Serial numbers section (for serialized products)
+    - Integrates StockAdjustment dialog and InventoryHistory
+  - src/components/domain/products/stock-adjustment.tsx - Stock adjustment dialog:
+    - Add/subtract/set adjustment types
+    - Location selection dropdown
+    - Reason presets (cycle count, damaged, theft, found, return, correction)
+    - Live preview of new stock level
+    - Negative stock warning
+  - src/components/domain/products/inventory-history.tsx - Movement history:
+    - Paginated movement list with type-specific badges
+    - Movement type filter dropdown
+    - Quantity change indicators (+/- with colors)
+    - Reference and notes display
+- PROD-BULK-OPERATIONS complete: Bulk operations system for products
+  - src/lib/server/functions/product-bulk-ops.ts - Bulk operations API:
+    - parseImportFile() - Parse and validate CSV content
+    - importProducts() - Import with create_only/update_only/create_or_update modes
+    - bulkUpdateProducts() - Update status, category, flags for multiple products
+    - bulkUpdatePrices() - Percentage or fixed price adjustments
+    - bulkDeleteProducts() - Soft delete multiple products
+    - exportProducts() - Export filtered products to CSV
+    - getImportTemplate() - Download CSV template with headers
+    - CSV field name normalization (handles various header formats)
+    - Category lookup by name during import
+  - src/components/domain/products/bulk-import.tsx - Import wizard:
+    - Step 1: Upload - Drag-and-drop file selection, CSV validation
+    - Step 2: Preview - Data validation table, error highlighting
+    - Step 3: Importing - Progress bar with simulated progress
+    - Step 4: Complete - Summary of created/updated/skipped/errors
+    - Import mode selection (create only, update only, create or update)
+    - Template download button
+  - src/components/domain/products/bulk-operations.tsx - Bulk actions panel:
+    - Bulk status update dialog (active/inactive/discontinued)
+    - Bulk price update dialog (percentage or fixed, base/cost price)
+    - Bulk delete with confirmation and warnings
+    - Export to CSV for selected products
+    - Selection count badge and clear selection
+- PROD-SEARCH-OPTIMIZATION complete: Full-text search with PostgreSQL
+  - src/lib/server/functions/product-search.ts - Search API:
+    - searchProducts() - Full-text search with tsvector/tsquery
+    - PostgreSQL ts_rank for relevance scoring
+    - Attribute-based filtering with operator support (eq, gt, lt, contains)
+    - getSearchSuggestions() - Autocomplete with product/category/recent terms
+    - getPopularSearchTerms() - Trending search analytics
+    - getSearchFacets() - Faceted navigation (status, type, category, price range)
+    - recordSearchEvent() - Search analytics tracking
+    - getSearchAnalytics() - Search usage statistics
+    - getRelatedProducts() - Similar products by category and price
+  - src/components/domain/products/search-interface.tsx - Search UI:
+    - Command palette style autocomplete dropdown
+    - Recent searches, category suggestions, product matches
+    - Faceted filter panel (Sheet)
+    - Status, type, category, price range filters
+    - Active filter badges with remove
+    - Debounced search input
+  - src/hooks/use-debounce.ts - New debounce hook utility
+- PROD-CATEGORY-MANAGEMENT complete: Hierarchical category management
+  - src/components/domain/products/category-tree.tsx - Tree visualization:
+    - Expandable/collapsible nodes with chevron icons
+    - Folder icons (open/closed based on expand state)
+    - Product count badges per category
+    - Inactive status badge
+    - Actions dropdown (Add Subcategory, Edit, Duplicate, Move Up/Down, Delete)
+    - Delete confirmation with subcategory/product warnings
+    - Expand All / Collapse All controls
+  - src/components/domain/products/category-editor.tsx - Category editor dialog:
+    - Create and edit modes
+    - Name and description fields
+    - Parent category selection with flattened tree dropdown
+    - Active status toggle
+    - Inherit parent attributes toggle
+    - SEO fields (title, description) with character counters
+    - Form validation with Zod schema
+  - src/routes/_authenticated/settings/categories.tsx - Settings page:
+    - Category tree card with refresh
+    - Selected category details sidebar
+    - Quick actions (Edit, Add Subcategory) from sidebar
+    - Tips section for user guidance
+    - Full CRUD integration with server functions
+  - TypeScript error fixes across products domain
+
+## Premortem Remediations (2026-01-17)
+
+### Tigers Fixed (HIGH severity):
+- [x] FK constraints added to 6 schema files (cascade delete)
+  - product-images.ts, product-attributes.ts, product-pricing.ts
+  - product-relations.ts, product-bundles.ts
+- [x] N+1 query patterns fixed in 4 functions:
+  - bulkUpdatePrices() - batch fetch with inArray + Map
+  - applyPriceAdjustment() - batch fetch with inArray + Map
+  - bulkReceiveStock() - transaction with batch operations
+  - setProductAttributes() - transaction with batch upsert
+- [x] Unbounded search analytics Map - LRU cache with 1000 limit
+- [x] Image lightbox focus trap - Dialog component for automatic focus management
+- [x] ARIA labels and keyboard navigation for CategoryTree component
+
+### Elephants (MEDIUM - Future Remediation):
+1. **Soft delete doesn't cascade to related records**
+   - Location: products.ts uses deletedAt soft delete
+   - Risk: Data bloat from orphaned related records (images, attributes, prices)
+   - Remediation: Add cleanup job or cascade soft delete to relations
+
+2. **Price history not recorded via updateProduct directly**
+   - Location: products.ts updateProduct() vs product-pricing.ts
+   - Risk: Audit trail gaps when price changed through product form
+   - Remediation: Add price change detection in updateProduct
+
+3. **No rate limiting on bulk operations**
+   - Location: product-bulk-ops.ts, product-pricing.ts
+   - Risk: Resource exhaustion from large imports/updates
+   - Remediation: Add configurable limits (e.g., 500 items per batch)
+
+4. **No component tests exist**
+   - Location: src/components/domain/products/**
+   - Risk: UI regressions undetected
+   - Remediation: Add Vitest + React Testing Library tests
+   - Status: Test file created at tests/unit/components/category-tree.test.tsx (63 tests)
+   - Note: Run `bun test tests/unit/components/category-tree.test.tsx` to execute
+
+## Frontend Design Improvements (2026-01-17)
+
+### Components Created (12 new files):
+
+**Skeleton Loading Components:**
+- src/components/skeletons/skeleton-cell.tsx - Reusable cell types (checkbox, text, badge, price, etc.)
+- src/components/skeletons/products/table-skeleton.tsx - ProductTableSkeleton for list view
+- src/components/skeletons/products/detail-skeleton.tsx - ProductDetailSkeleton for detail view
+- src/components/skeletons/products/pricing-card-skeleton.tsx - PricingCardSkeleton
+- src/components/skeletons/shared/tabs-skeleton.tsx - Reusable tabs skeleton
+- src/components/skeletons/index.ts - Barrel exports
+
+**Memoized Table Cells:**
+- src/components/shared/data-table/cells/price-cell.tsx - Currency with color coding
+- src/components/shared/data-table/cells/status-cell.tsx - Generic status badge
+- src/components/shared/data-table/cells/type-cell.tsx - Icon + label
+- src/components/shared/data-table/cells/date-cell.tsx - Formatted dates
+- src/components/shared/data-table/cells/sku-cell.tsx - Monospace + copy
+- src/components/shared/data-table/cells/name-cell.tsx - Truncation + tooltip
+- src/components/shared/data-table/cells/index.ts - Barrel exports
+
+**Format Components:**
+- src/components/shared/format/format-amount.tsx - Currency display with color coding
+- src/components/shared/format/format-percent.tsx - Percentage display
+- src/components/shared/format/format-delta.tsx - Arrow + change indicators
+- src/components/shared/format/index.ts - Barrel exports
+
+**Utilities:**
+- src/components/shared/truncate-tooltip.tsx - Truncation with tooltip
+
+### Cross-Domain Integration (22 files updated):
+
+**FormatAmount Integration:**
+- customers/ domain: 7 files (removed local formatCurrency, use FormatAmount)
+- pipeline/ domain: 12 files (quote items use cents={true})
+- orders/ domain: 2 files
+- reports/: 1 file
+
+**TruncateTooltip Integration:**
+- customers/ domain: 5 files (names, emails, phones)
+- pipeline/ domain: 4 files (opportunity titles, product names)
+- orders/ domain: 6 files (template names, customer info)
+
+### Usage Examples:
+
+```tsx
+// Skeleton loading with Suspense
+<Suspense fallback={<ProductTableSkeleton rowCount={8} />}>
+  <ProductsTable />
+</Suspense>
+
+// Memoized cells in DataTable columns
+<PriceCell value={125.00} colorPositive align="right" />
+<StatusCell status="active" statusConfig={PRODUCT_STATUS_CONFIG} />
+<NameCell name="Product" subtitle="Description" maxWidth={250} />
+
+// Format components
+<FormatAmount amount={12500} cents colorCode size="lg" />
+<FormatDelta value={12.5} type="percent" indicator="arrow" />
+
+// Truncation with tooltip
+<TruncateTooltip text={longName} maxLength={30} />
+```

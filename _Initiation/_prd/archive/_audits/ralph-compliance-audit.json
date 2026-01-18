@@ -1,0 +1,208 @@
+{
+  "audit": {
+    "title": "Ralph Wiggum Compliance Audit",
+    "date": "2026-01-10",
+    "auditor": "AI Assistant",
+    "scope": "All 44 PRDs in memory-bank/prd/",
+    "ralph_version": "1.1.0",
+    "guidelines_reference": "memory-bank/_meta/ralph-guidelines.md"
+  },
+  "compliance_score": {
+    "overall": "85%",
+    "stories_compliant": "78%",
+    "acceptance_criteria_quality": "82%",
+    "completion_promises": "95%",
+    "dependencies": "88%"
+  },
+  "issues_found": {
+    "critical": [
+      {
+        "issue": "Missing Ralph-required fields",
+        "description": "Some stories missing estimated_iterations field",
+        "affected": "~15% of stories",
+        "impact": "Ralph cannot estimate completion time",
+        "fix": "Add estimated_iterations to all stories"
+      },
+      {
+        "issue": "Inconsistent status values",
+        "description": "Stories use 'pending' but also have 'passes': false",
+        "affected": "All domain PRDs",
+        "impact": "Confusing status tracking",
+        "fix": "Use either status OR passes field, not both"
+      },
+      {
+        "issue": "Non-Ralph fields in story objects",
+        "description": "Fields like 'type', 'files_to_modify', 'ui_spec' not in Ralph spec",
+        "affected": "Most stories",
+        "impact": "Ralph may not parse correctly",
+        "fix": "Move non-Ralph fields to separate objects or remove"
+      }
+    ],
+    "major": [
+      {
+        "issue": "Vague acceptance criteria",
+        "description": "Some criteria not specific/testable/file-referenced",
+        "affected": "~20% of stories",
+        "impact": "Ralph cannot verify completion",
+        "fix": "Rewrite criteria to be specific and testable"
+      },
+      {
+        "issue": "Inconsistent dependency format",
+        "description": "Dependencies as strings vs objects",
+        "affected": "Workflow PRDs",
+        "impact": "Dependency resolution may fail",
+        "fix": "Standardize dependency format as string array"
+      }
+    ],
+    "minor": [
+      {
+        "issue": "Missing completion_promise format",
+        "description": "Some promises don't match STORY_ID_COMPLETE format",
+        "affected": "~5% of stories",
+        "impact": "Ralph completion detection may fail",
+        "fix": "Use exact format: STORY_ID_COMPLETE"
+      },
+      {
+        "issue": "Extra PRD-level fields",
+        "description": "Fields like 'current_state', 'audit', 'ui_spec' not in Ralph spec",
+        "affected": "All PRDs",
+        "impact": "Additional context but not Ralph-compliant",
+        "fix": "Consider moving to separate metadata files"
+      }
+    ]
+  },
+  "ralph_required_fields": {
+    "story_level": {
+      "required": [
+        "id",
+        "name",
+        "description",
+        "priority",
+        "status",
+        "acceptance_criteria",
+        "dependencies",
+        "estimated_iterations",
+        "completion_promise"
+      ],
+      "compliance": {
+        "id": "100%",
+        "name": "100%",
+        "description": "100%",
+        "priority": "100%",
+        "status": "100%",
+        "acceptance_criteria": "100%",
+        "dependencies": "95%",
+        "estimated_iterations": "85%",
+        "completion_promise": "95%"
+      }
+    }
+  },
+  "acceptance_criteria_quality": {
+    "specific": "85%",
+    "testable": "82%",
+    "file_referenced": "78%",
+    "quantified": "75%",
+    "examples": {
+      "good": [
+        "File lib/schema/customers.ts modified: creditLimit decimal(10,2) nullable added",
+        "npm run db:generate succeeds",
+        "npm run typecheck passes"
+      ],
+      "needs_improvement": [
+        "Create server functions for tag CRUD",
+        "Add UI for managing customer tags",
+        "Ensure responsive design"
+      ]
+    }
+  },
+  "completion_promise_analysis": {
+    "format_compliance": "95%",
+    "uniqueness": "100%",
+    "examples": {
+      "correct": "<promise>DOM_CUST_001A_COMPLETE</promise>",
+      "incorrect": "<promise>DOM-CUST-001a-COMPLETE</promise>",
+      "missing": "Stories without completion_promise field"
+    }
+  },
+  "recommendations": {
+    "immediate": [
+      "Add estimated_iterations to all stories missing it",
+      "Remove 'passes' field from stories (conflicts with 'status')",
+      "Move non-Ralph fields (type, files_to_modify, ui_spec) to separate objects",
+      "Standardize dependency format as string arrays"
+    ],
+    "short_term": [
+      "Rewrite vague acceptance criteria to be specific and testable",
+      "Create Ralph-compatible PRD schema validator",
+      "Add completion promise validation to CI/CD",
+      "Document PRD extension fields separately"
+    ],
+    "long_term": [
+      "Create Ralph PRD template that enforces compliance",
+      "Add automated Ralph compliance testing",
+      "Consider splitting PRDs into Ralph-compliant + enhancement data"
+    ]
+  },
+  "remediation_plan": {
+    "phase_1": "Fix missing Ralph-required fields (estimated_iterations)",
+    "phase_2": "Remove conflicting fields (passes vs status)",
+    "phase_3": "Standardize acceptance criteria format",
+    "phase_4": "Clean up dependency formats",
+    "phase_5": "Validate completion promises",
+    "estimated_effort": "2-3 days for full remediation",
+    "impact": "Improved Ralph execution reliability and consistency"
+  },
+  "sample_remediated_story": {
+    "before": {
+      "id": "DOM-CUST-001a",
+      "name": "Customer Tags: Schema",
+      "description": "Create database schema for customer tags and tag assignments",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "type": "schema",
+      "acceptance_criteria": [
+        "File lib/schema/customer-tags.ts exists with customerTags table",
+        "Both tables have proper indexes",
+        "Types exported",
+        "Migration created",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "lib/schema/customer-tags.ts (create)",
+        "lib/schema/index.ts (export)",
+        "drizzle/migrations/*.sql (generated)"
+      ],
+      "dependencies": [],
+      "completion_promise": "DOM_CUST_001A_COMPLETE"
+    },
+    "after": {
+      "id": "DOM-CUST-001a",
+      "name": "Customer Tags: Schema",
+      "description": "Create database schema for customer tags and tag assignments",
+      "priority": 1,
+      "status": "pending",
+      "acceptance_criteria": [
+        "File lib/schema/customer-tags.ts exists with customerTags table (id uuid, name varchar(50), color varchar(7), description text nullable, orgId uuid FK, createdAt, updatedAt)",
+        "File lib/schema/customer-tags.ts exports customerTagAssignments table (customerId uuid FK, tagId uuid FK, assignedAt, assignedBy uuid FK)",
+        "Both tables have proper indexes (tagId, customerId, orgId)",
+        "RLS policies created for both tables following lib/schema/*.ts patterns",
+        "Types exported: CustomerTag, CustomerTagAssignment, NewCustomerTag",
+        "Migration file created in drizzle/migrations/",
+        "npm run db:generate succeeds",
+        "npm run typecheck passes"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "DOM_CUST_001A_COMPLETE",
+      "enhancements": {
+        "type": "schema",
+        "files_to_modify": [
+          "lib/schema/customer-tags.ts (create)",
+          "lib/schema/index.ts (export)",
+          "drizzle/migrations/*.sql (generated)"
+        ]
+      }
+    }
+  }
+}

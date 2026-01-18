@@ -1,0 +1,522 @@
+{
+  "prd_id": "DOM-SETTINGS",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "summary": {
+    "total_stories": 8,
+    "verified_gaps": 5,
+    "invalidated_gaps": 2,
+    "partially_implemented": 1,
+    "new_gaps_found": 0,
+    "implementation_status": "partially_complete"
+  },
+  "codebase_findings": {
+    "settings_routes": {
+      "exists": true,
+      "routes": [
+        "/settings/profile",
+        "/settings/organization",
+        "/settings/users",
+        "/settings/notifications",
+        "/settings/templates",
+        "/settings/xero",
+        "/settings/import",
+        "/settings/audit-log"
+      ],
+      "note": "No /settings index page - navigation accessed via sidebar"
+    },
+    "organizations_schema": {
+      "exists": true,
+      "location": "renoz-v2/lib/schema/organizations.ts",
+      "fields": ["id", "name", "email", "phone", "address*", "logoUrl", "settings (jsonb)", "xeroTenantId", "xeroConnectedAt", "status", "createdAt", "updatedAt", "version"],
+      "note": "Settings stored as JSONB field - no dedicated system_settings table"
+    },
+    "user_preferences_schema": {
+      "exists": true,
+      "location": "renoz-v2/lib/schema/user-preferences.ts",
+      "fields": ["userId", "notificationSettings", "theme", "dashboardLayout", "recentlyViewed", "favorites", "tableViews", "updatedAt"],
+      "note": "Theme stored here (light/dark/system). No regional format preferences."
+    },
+    "audit_logs_schema": {
+      "exists": true,
+      "location": "renoz-v2/lib/schema/audit-logs.ts",
+      "fields": ["id", "organizationId", "userId", "action", "entityType", "entityId", "changes (jsonb)", "ipAddress", "userAgent", "createdAt"],
+      "indexes": ["org_id", "entity", "user_id", "created_at"]
+    },
+    "audit_log_page": {
+      "exists": true,
+      "location": "renoz-v2/src/routes/settings/audit-log.tsx",
+      "features": [
+        "Table listing audit logs",
+        "Filter by action, entity type, date range",
+        "Expandable rows showing changes JSON",
+        "User name/email display",
+        "IP address display",
+        "Pagination"
+      ],
+      "missing": [
+        "Search within records",
+        "Export to CSV",
+        "Filter by specific user (dropdown)",
+        "Admin-only access check on route"
+      ]
+    },
+    "audit_log_server_functions": {
+      "exists": true,
+      "location": "renoz-v2/src/server/functions/audit-logs.ts",
+      "functions": ["getAuditLogs"],
+      "features": ["Admin-only via requireAdmin middleware", "Pagination", "Filtering"]
+    },
+    "organization_settings_page": {
+      "exists": true,
+      "location": "renoz-v2/src/routes/settings/organization.tsx",
+      "features": ["Company name", "Email/phone", "Address", "Logo upload", "Admin-only"]
+    },
+    "notification_preferences_page": {
+      "exists": true,
+      "location": "renoz-v2/src/routes/settings/notifications.tsx",
+      "features": ["Per-type email/in-app toggles", "Team notifications", "Digest settings"]
+    },
+    "xero_integration_page": {
+      "exists": true,
+      "location": "renoz-v2/src/routes/settings/xero.tsx",
+      "features": ["Connection status", "Connect/disconnect", "Bulk sync customers", "Bulk sync products"],
+      "note": "Partial implementation of integration settings - Xero only"
+    },
+    "document_templates_page": {
+      "exists": true,
+      "location": "renoz-v2/src/routes/settings/templates.tsx",
+      "features": ["Quote header/footer", "Order header/footer", "HTML templates", "Template variables"]
+    },
+    "import_page": {
+      "exists": true,
+      "location": "renoz-v2/src/routes/settings/import.tsx",
+      "features": ["Product import from CSV", "Customer import from CSV", "Sample templates", "Preview before import"],
+      "note": "Import only - no export/backup functionality"
+    },
+    "user_management_page": {
+      "exists": true,
+      "location": "renoz-v2/src/routes/settings/users/index.tsx",
+      "features": ["User list", "Role management", "Invite user", "Deactivate/reactivate"]
+    },
+    "profile_page": {
+      "exists": true,
+      "location": "renoz-v2/src/routes/settings/profile.tsx",
+      "features": ["First/last name", "Email", "Phone", "Avatar upload", "Password change"]
+    },
+    "export_utilities": {
+      "exists": true,
+      "location": "renoz-v2/lib/utils/export.ts",
+      "functions": ["exportToCSV", "exportToExcel", "downloadBlob"],
+      "note": "Generic export utilities exist but not used for audit logs or backup"
+    },
+    "system_settings_table": {
+      "exists": false,
+      "searched_locations": ["lib/schema/*system-settings*", "lib/schema/*defaults*"]
+    },
+    "business_hours_table": {
+      "exists": false,
+      "searched_locations": ["lib/schema/*business-hours*", "lib/schema/*schedule*"]
+    },
+    "custom_fields_table": {
+      "exists": false,
+      "searched_locations": ["lib/schema/*custom-field*", "lib/schema/*metadata*"]
+    },
+    "settings_search": {
+      "exists": false,
+      "searched_locations": ["src/components/*settings-search*", "src/routes/settings/*search*"]
+    },
+    "category_management": {
+      "exists": false,
+      "note": "PRD claims 'Category management' is implemented but no evidence found in settings routes. Products have categories but no dedicated settings page for managing them.",
+      "searched_locations": ["src/routes/settings/*categor*"]
+    }
+  },
+  "current_state_corrections": {
+    "implemented_accurate": [
+      "User preferences (theme, notifications)",
+      "Organization details",
+      "Email templates (document templates)",
+      "Basic settings navigation"
+    ],
+    "implemented_inaccurate": [
+      {
+        "claimed": "Category management",
+        "reality": "No dedicated category management page found in settings. Products have categories but managed inline in catalog."
+      }
+    ],
+    "gaps_accurate": [
+      "No system-wide defaults",
+      "No export/backup",
+      "No number format settings",
+      "No business hours configuration",
+      "No custom fields framework",
+      "No settings search"
+    ],
+    "gaps_inaccurate": [
+      {
+        "claimed": "No audit log viewer",
+        "reality": "Audit log viewer exists at /settings/audit-log with filtering, pagination, and detail views"
+      },
+      {
+        "claimed": "No integration settings page",
+        "reality": "Xero integration page exists at /settings/xero. However, no unified integrations hub for all integrations."
+      }
+    ]
+  },
+  "stories_status": {
+    "DOM-SET-001": {
+      "name": "Add System Defaults Configuration",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No system_settings table exists. Organizations have settings JSONB field but no structured defaults for payment terms, tax rate, currency, etc. Story spans schema + server + UI layers.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 6,
+      "atomization_reason": "Story requires: (1) schema for system_settings table, (2) server functions for CRUD, (3) UI settings page, (4) integration with forms. Exceeds single layer scope.",
+      "acceptance_criteria_notes": {
+        "testable": true,
+        "concerns": [
+          "AC 'Settings used as defaults in forms' is vague - need to specify which forms",
+          "AC 'Override per record where applicable' needs specification of which records support overrides"
+        ]
+      }
+    },
+    "DOM-SET-002": {
+      "name": "Add Audit Log Viewer",
+      "status": "partially_implemented",
+      "change": "reduce_scope",
+      "reason": "Audit log page already exists with basic functionality. Missing: search within records, CSV export, user dropdown filter, admin-only route guard.",
+      "layers": ["ui"],
+      "estimated_iterations": 3,
+      "acceptance_criteria_notes": {
+        "testable": true,
+        "met": [
+          "Audit log page in settings - EXISTS",
+          "Filter by: action, entity, date range - EXISTS",
+          "Detail view shows changes (before/after) - EXISTS (via expandable rows)",
+          "TypeScript compiles without errors - ASSUMED TRUE"
+        ],
+        "unmet": [
+          "Filter by user (as dropdown selector) - missing",
+          "Search within audit records - missing",
+          "Export audit log to CSV - missing",
+          "Admin-only access (route guard) - partially missing"
+        ]
+      }
+    },
+    "DOM-SET-003": {
+      "name": "Add Data Export/Backup",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "Import hub exists but no export/backup capability. Export utilities exist but not wired to entities. Requires server-side Trigger.dev job + UI + email notification.",
+      "layers": ["server", "ui"],
+      "estimated_iterations": 6,
+      "atomization_reason": "Story requires: (1) Trigger.dev background job for export generation, (2) Server functions for initiating export and tracking status, (3) UI page with entity selection and format choice, (4) Email notification on completion, (5) Export history tracking. Too complex for single story."
+    },
+    "DOM-SET-004": {
+      "name": "Add Number/Date Format Settings",
+      "status": "valid",
+      "change": "none",
+      "reason": "No regional formatting settings exist. User preferences has theme but no date/number/currency format. Need to add to user preferences and apply throughout app.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 5,
+      "acceptance_criteria_notes": {
+        "testable": true,
+        "concerns": [
+          "AC 'Applied throughout application' is very broad - will need careful scoping",
+          "Consider creating a format utility function that all components use rather than touching every component"
+        ]
+      }
+    },
+    "DOM-SET-005": {
+      "name": "Add Business Hours Configuration",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No business_hours table or configuration exists. Requires schema + UI + integration with SLA calculations. Complex multi-layer story.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 5,
+      "atomization_reason": "Story requires: (1) business_hours schema, (2) holidays list schema, (3) server CRUD functions, (4) configuration UI, (5) integration with SLA/scheduling. Should split schema from UI from integration."
+    },
+    "DOM-SET-006": {
+      "name": "Add Custom Fields Framework",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No custom fields infrastructure exists. This is a major feature requiring custom_fields + custom_field_values tables, settings UI, and integration with all entity forms/detail pages.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 8,
+      "atomization_reason": "This is a framework-level feature. Must split into: (1) Schema + types, (2) Server functions, (3) Settings configuration UI, (4) Form integration component, (5) Filter integration. Original estimate of 6 iterations is too low.",
+      "acceptance_criteria_notes": {
+        "testable": true,
+        "concerns": [
+          "Scope creep risk - 'displayed on forms/detail pages' and 'Filter by custom fields in lists' are each significant work items",
+          "Consider MVP scope: just one entity (customers) first"
+        ]
+      }
+    },
+    "DOM-SET-007": {
+      "name": "Add Integration Settings Page",
+      "status": "partially_implemented",
+      "change": "reduce_scope",
+      "reason": "Xero integration page exists at /settings/xero with connection status and sync features. Missing: unified integrations hub, Resend status, Trigger.dev status.",
+      "layers": ["ui"],
+      "estimated_iterations": 3,
+      "acceptance_criteria_notes": {
+        "testable": true,
+        "met": [
+          "Xero: connection status, sync settings, last sync - EXISTS (mostly)",
+          "Test connection action per integration - EXISTS for Xero",
+          "TypeScript compiles - ASSUMED TRUE"
+        ],
+        "unmet": [
+          "Integrations page listing ALL connections - missing (only Xero has dedicated page)",
+          "Status indicator: connected, disconnected, error - partial (only Xero)",
+          "Resend: API status, templates, stats - missing",
+          "Trigger.dev: job status, recent runs - missing"
+        ]
+      }
+    },
+    "DOM-SET-008": {
+      "name": "Add Settings Search",
+      "status": "valid",
+      "change": "none",
+      "reason": "No settings search functionality exists. With 8+ settings pages, search would be useful but scope is contained to UI layer.",
+      "layers": ["ui"],
+      "estimated_iterations": 3,
+      "acceptance_criteria_notes": {
+        "testable": true,
+        "concerns": [
+          "Need to define searchable settings index structure",
+          "Recent searches persistence - where stored? Local storage or user preferences?"
+        ]
+      }
+    }
+  },
+  "recommended_stories": [
+    {
+      "id": "DOM-SET-002",
+      "reason": "Low-hanging fruit - audit log page exists, just needs enhancements",
+      "priority": 1
+    },
+    {
+      "id": "DOM-SET-007",
+      "reason": "Low-hanging fruit - integrations hub to consolidate existing Xero page",
+      "priority": 2
+    },
+    {
+      "id": "DOM-SET-008",
+      "reason": "Self-contained UI work with clear scope",
+      "priority": 3
+    }
+  ],
+  "atomization_notes": {
+    "DOM-SET-001": {
+      "original_name": "Add System Defaults Configuration",
+      "split_into": [
+        {
+          "id": "DOM-SET-001a",
+          "name": "Create system_settings schema and server functions",
+          "description": "Create system_settings table with key/value/type structure and CRUD server functions",
+          "layers": ["schema", "server"],
+          "estimated_iterations": 3,
+          "acceptance_criteria": [
+            "system_settings table created with columns: id, organizationId, key (text), value (jsonb), type (text), createdAt, updatedAt",
+            "Server functions: getSystemSettings, updateSystemSetting",
+            "Settings keys defined: default_payment_terms, default_tax_rate, default_currency, default_order_status, default_quote_validity",
+            "Admin-only access via middleware",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-SET-001b",
+          "name": "Create System Defaults Settings Page",
+          "description": "Create admin UI page to view and edit system defaults",
+          "layers": ["ui"],
+          "estimated_iterations": 3,
+          "dependencies": ["DOM-SET-001a"],
+          "acceptance_criteria": [
+            "New route /settings/defaults accessible to admin users",
+            "Form fields for: payment terms (days), tax rate (%), currency (dropdown), order status (dropdown), quote validity (days)",
+            "Form validation with appropriate constraints",
+            "Save button persists to database",
+            "Success/error toast feedback",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-SET-001c",
+          "name": "Integrate system defaults into forms",
+          "description": "Use system defaults as initial values in quote and order forms",
+          "layers": ["ui"],
+          "estimated_iterations": 2,
+          "dependencies": ["DOM-SET-001b"],
+          "acceptance_criteria": [
+            "Quote form pre-fills validity period from system default",
+            "Order form pre-fills status from system default",
+            "Invoice/financial forms use default tax rate",
+            "Forms allow override of defaults per record",
+            "TypeScript compiles without errors"
+          ]
+        }
+      ]
+    },
+    "DOM-SET-003": {
+      "original_name": "Add Data Export/Backup",
+      "split_into": [
+        {
+          "id": "DOM-SET-003a",
+          "name": "Create Export Job Infrastructure",
+          "description": "Create Trigger.dev job and server functions for generating data exports",
+          "layers": ["server"],
+          "estimated_iterations": 4,
+          "acceptance_criteria": [
+            "Trigger.dev task: exportOrganizationData",
+            "Export job accepts: entities array, format (csv/json), requestedBy (userId)",
+            "Exports stored in Supabase storage bucket",
+            "Export record tracked in database with: status, progress, downloadUrl, expiresAt",
+            "Email sent to requester when export complete with download link",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-SET-003b",
+          "name": "Create Export Page UI",
+          "description": "Create settings page for initiating and viewing exports",
+          "layers": ["ui"],
+          "estimated_iterations": 3,
+          "dependencies": ["DOM-SET-003a"],
+          "acceptance_criteria": [
+            "New route /settings/export",
+            "Entity selection checkboxes: customers, orders, products, suppliers, warranties, issues",
+            "Format selection: CSV, JSON",
+            "Start Export button triggers job",
+            "Export history table with: date, entities, format, status, download link",
+            "Re-download available until link expires",
+            "TypeScript compiles without errors"
+          ]
+        }
+      ]
+    },
+    "DOM-SET-005": {
+      "original_name": "Add Business Hours Configuration",
+      "split_into": [
+        {
+          "id": "DOM-SET-005a",
+          "name": "Create business_hours and holidays schema",
+          "description": "Create database tables for business hours and holidays",
+          "layers": ["schema", "server"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "business_hours table: organizationId, dayOfWeek (0-6), startTime, endTime, isEnabled",
+            "holidays table: organizationId, date, name",
+            "organization timezone setting stored in organizations.settings or system_settings",
+            "Server functions: getBusinessHours, updateBusinessHours, getHolidays, addHoliday, removeHoliday",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-SET-005b",
+          "name": "Create Business Hours Settings Page",
+          "description": "Create UI for configuring business hours and holidays",
+          "layers": ["ui"],
+          "estimated_iterations": 3,
+          "dependencies": ["DOM-SET-005a"],
+          "acceptance_criteria": [
+            "New route /settings/business-hours",
+            "Weekly schedule grid with start/end time pickers per day",
+            "Toggle to enable/disable each day",
+            "Timezone selector",
+            "Holidays list with add/remove functionality",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-SET-005c",
+          "name": "Integrate business hours with SLA calculations",
+          "description": "Use business hours in SLA/response time calculations",
+          "layers": ["server"],
+          "estimated_iterations": 2,
+          "dependencies": ["DOM-SET-005b"],
+          "acceptance_criteria": [
+            "SLA due dates calculated using business hours only",
+            "Holidays excluded from business hour calculations",
+            "Scheduling views reflect business hours",
+            "TypeScript compiles without errors"
+          ]
+        }
+      ]
+    },
+    "DOM-SET-006": {
+      "original_name": "Add Custom Fields Framework",
+      "split_into": [
+        {
+          "id": "DOM-SET-006a",
+          "name": "Create custom fields schema and types",
+          "description": "Create database schema for custom field definitions and values",
+          "layers": ["schema", "server"],
+          "estimated_iterations": 3,
+          "acceptance_criteria": [
+            "custom_fields table: id, organizationId, entityType, name, fieldType (text/number/date/select/checkbox), options (jsonb), isRequired, sortOrder",
+            "custom_field_values table: id, customFieldId, entityId, value (jsonb)",
+            "TypeScript types for CustomField, CustomFieldValue",
+            "Server functions: getCustomFieldsForEntity, createCustomField, updateCustomField, deleteCustomField",
+            "Server functions: getCustomFieldValues, setCustomFieldValues",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-SET-006b",
+          "name": "Create Custom Fields Configuration UI",
+          "description": "Admin UI to define custom fields per entity",
+          "layers": ["ui"],
+          "estimated_iterations": 3,
+          "dependencies": ["DOM-SET-006a"],
+          "acceptance_criteria": [
+            "New route /settings/custom-fields",
+            "Entity selector dropdown (customers, orders, products, etc.)",
+            "List of existing custom fields with edit/delete",
+            "Add field form: name, type, options (for select), required toggle",
+            "Drag-and-drop reordering of fields",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-SET-006c",
+          "name": "Custom Fields Form Component",
+          "description": "Reusable component to render and capture custom field values",
+          "layers": ["ui"],
+          "estimated_iterations": 3,
+          "dependencies": ["DOM-SET-006b"],
+          "acceptance_criteria": [
+            "CustomFieldsFormSection component accepts entityType and entityId props",
+            "Renders appropriate input for each field type",
+            "Validates required fields",
+            "Saves values on form submission",
+            "Works in both create and edit modes",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-SET-006d",
+          "name": "Integrate custom fields into entity forms (MVP: Customers)",
+          "description": "Add custom fields section to customer create/edit forms",
+          "layers": ["ui"],
+          "estimated_iterations": 2,
+          "dependencies": ["DOM-SET-006c"],
+          "acceptance_criteria": [
+            "Customer create form shows custom fields section",
+            "Customer edit form shows and saves custom field values",
+            "Customer detail page displays custom field values",
+            "TypeScript compiles without errors"
+          ]
+        }
+      ]
+    }
+  },
+  "additional_recommendations": {
+    "update_prd_current_state": "Remove 'Category management' from implemented list - no evidence found. Add 'Xero integration settings' to implemented list.",
+    "update_prd_gaps": "Remove 'No audit log viewer' from gaps - it exists. Modify 'No integration settings page' to 'No unified integrations hub' since Xero page exists.",
+    "story_002_scope_reduction": "DOM-SET-002 should be renamed to 'Enhance Audit Log Viewer' with scope limited to: search, CSV export, user filter dropdown, and admin route guard.",
+    "story_007_scope_reduction": "DOM-SET-007 should be renamed to 'Create Unified Integrations Hub' with scope to create index page that shows all integrations (Xero, Resend, Trigger.dev) with status.",
+    "consider_mvp_approach": "For DOM-SET-006 (Custom Fields), consider starting with just Customers entity to prove the framework before expanding to all entities."
+  }
+}

@@ -1,0 +1,202 @@
+{
+  "prd_id": "WF-JOB",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "summary": {
+    "total_stories": 6,
+    "verified_gaps": 5,
+    "invalidated_gaps": 1,
+    "implementation_status": "The job completion workflow has substantial existing infrastructure. Sign-off (WF-JOB-005) is partially implemented with public sign-off page, signature capture, and completion wizard. Job execution tracking (WF-JOB-004) is partially implemented with status tracking, photo capture, and basic completion flow. Gaps remain for: job creation from order automation, customer confirmation scheduling flow, pre-job preparation with checklists/material allocation, and automated post-completion invoicing."
+  },
+  "codebase_findings": {
+    "schema_files": [
+      "renoz-v2/lib/schema/job-assignments.ts - jobAssignments table (id, orgId, orderId, installerId, scheduledDate, scheduledTime, estimatedDuration, status, startedAt, completedAt, signatureUrl, signedByName, signOffToken, signOffTokenExpiresAt, notes, version)",
+      "renoz-v2/lib/schema/job-assignments.ts - jobPhotos table (id, jobAssignmentId, type, photoUrl, caption)"
+    ],
+    "server_functions": [
+      "renoz-v2/src/server/functions/jobs.ts - listMyJobs, listAllJobs, getJob, assignJob, startJob, addJobPhoto, captureSignature, completeJob, updateJob, getJobPhotos",
+      "renoz-v2/src/server/functions/jobs-public.ts - getJobPublic, captureSignaturePublic (token-based public sign-off)",
+      "renoz-v2/src/server/functions/invoices.ts - generateInvoice, updateInvoiceStatus, getInvoice, listInvoices, sendInvoice (manual invoice generation from orders)"
+    ],
+    "components": [
+      "renoz-v2/src/components/domain/jobs/completion-wizard.tsx - Multi-step job completion wizard (verify, photos, signature, notes, confirm)",
+      "renoz-v2/src/components/domain/jobs/photo-capture.tsx - Before/during/after/issue photo capture",
+      "renoz-v2/src/components/domain/jobs/serial-verify.tsx - Serial number verification",
+      "renoz-v2/src/components/domain/jobs/signature-pad.tsx - Customer signature capture",
+      "renoz-v2/src/components/domain/jobs/report-issue.tsx - Issue reporting from field",
+      "renoz-v2/src/components/domain/jobs/message-office-dialog.tsx - Installer to office messaging",
+      "renoz-v2/src/components/domain/orders/assign-job-dialog.tsx - Manual job assignment from order"
+    ],
+    "routes": [
+      "renoz-v2/src/routes/installer/jobs/$jobId.tsx - Job detail page for installers with tabs, GPS, photos, signature, completion",
+      "renoz-v2/src/routes/installer/today.tsx - Today's jobs dashboard for installers",
+      "renoz-v2/src/routes/installer/schedule.tsx - Weekly schedule view (list format with week navigation)",
+      "renoz-v2/src/routes/sign-off/$jobId.tsx - Public customer sign-off page (token-based, handles already-signed state)"
+    ],
+    "trigger_jobs": [
+      "renoz-v2/trigger/job-completion-email.ts - Sends job completion email to customer via Resend, includes sign-off link if customer unavailable",
+      "renoz-v2/trigger/warranty-jobs.ts - autoRegisterWarranties triggered on job completion"
+    ],
+    "infrastructure": [
+      "renoz-v2/lib/offline/gps.ts - GPS tracking utilities (getCurrentLocation, isWithinRadius)",
+      "renoz-v2/lib/offline/sync-manager.ts - Offline sync manager",
+      "renoz-v2/lib/offline/db.ts - IndexedDB for offline storage",
+      "renoz-v2/public/manifest.json - PWA manifest present"
+    ]
+  },
+  "stories_status": {
+    "WF-JOB-001": {
+      "name": "Add Job Creation from Order",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "Currently jobs are manually assigned via AssignJobDialog from order detail. No automatic job creation when order requires installation. No flag on orders for 'requires installation'. Job is created manually with date/time selection.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 4,
+      "atomization_recommendation": "Split into: (1) Schema: Add requiresInstallation flag to orders, (2) Server: createJobFromOrder function with auto-population, (3) UI: Toggle on order form for requiresInstallation, (4) Trigger: Auto-create job on order confirmation",
+      "dependencies_note": "Depends on DOM-JOBS-002 (BOM tracking) to populate job materials from order items"
+    },
+    "WF-JOB-002": {
+      "name": "Add Job Scheduling Workflow",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "Basic scheduling exists (AssignJobDialog with date/time picker). Missing: technician availability checking, customer confirmation request email, customer link to confirm/request change, confirmation status updates, 24h reminder email.",
+      "layers": ["schema", "server", "ui", "trigger"],
+      "estimated_iterations": 5,
+      "atomization_recommendation": "Split into: (1) Schema: Add confirmationStatus, confirmationToken fields, (2) Server: requestCustomerConfirmation function, (3) UI: Customer confirmation page (public route), (4) Trigger: Confirmation request email, (5) Trigger: 24h reminder email scheduled job",
+      "dependencies_note": "Depends on DOM-JOBS-005 (calendar view) for schedule-from-calendar functionality"
+    },
+    "WF-JOB-003": {
+      "name": "Add Pre-Job Preparation",
+      "status": "valid",
+      "change": "new",
+      "reason": "No pre-job checklist or preparation workflow exists. No material allocation from inventory. No print job pack functionality. No 'ready for dispatch' status/marker. GPS navigation link exists but no job pack preparation.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 4,
+      "atomization_recommendation": "Split into: (1) Schema: job_prep_checklist table, (2) Server: markReadyForDispatch function with validation, (3) UI: Pre-job prep checklist component, (4) UI: Print job pack feature (PDF generation)",
+      "dependencies_note": "Depends on DOM-JOBS-002 (BOM tracking) for material allocation and DOM-JOBS-004 (punchlist/checklist) for checklist templates"
+    },
+    "WF-JOB-004": {
+      "name": "Add Job Execution Tracking",
+      "status": "partial",
+      "change": "enhance",
+      "reason": "PARTIALLY IMPLEMENTED: Status tracking exists (scheduled, in_progress, completed). Photo capture during execution exists (before/during/after/issue types). startJob and completeJob functions exist. Missing: granular status updates (en route, on site), checklist completion from mobile, time tracking start/stop, real-time office visibility dashboard.",
+      "layers": ["server", "ui"],
+      "estimated_iterations": 3,
+      "existing_implementation": "renoz-v2/src/server/functions/jobs.ts has startJob/completeJob, photo-capture.tsx, completion-wizard.tsx",
+      "atomization_recommendation": "Split into: (1) Schema: Add granular status enum (en_route, on_site), (2) Server: updateJobStatus function for field updates, (3) UI: Operations dashboard for real-time job visibility",
+      "dependencies_note": "Depends on DOM-JOBS-003 (time tracking) and DOM-JOBS-004 (checklist) from jobs domain PRD"
+    },
+    "WF-JOB-005": {
+      "name": "Add Customer Sign-Off Process",
+      "status": "partial",
+      "change": "enhance",
+      "reason": "PARTIALLY IMPLEMENTED: Sign-off page exists with job summary display. Customer signature capture works. Public token-based sign-off route exists. Confirmation email sent on completion. Missing: optional feedback/notes field on sign-off, warranty registration is triggered but no visible confirmation to customer, PDF work completion certificate generation.",
+      "layers": ["server", "ui"],
+      "estimated_iterations": 2,
+      "existing_implementation": "renoz-v2/src/routes/sign-off/$jobId.tsx has full sign-off flow, renoz-v2/trigger/job-completion-email.ts sends completion email with sign-off link",
+      "atomization_recommendation": "Split into: (1) UI: Add feedback/notes textarea to sign-off page, (2) Server: Generate PDF completion certificate, (3) Trigger: Attach certificate to confirmation email"
+    },
+    "WF-JOB-006": {
+      "name": "Add Post-Job Invoicing",
+      "status": "valid",
+      "change": "new",
+      "reason": "No automated invoicing on job completion. Manual invoice generation exists (invoices.ts) but not triggered automatically. Invoice includes order items but no labor tracking (time entries not implemented yet). No review-before-send workflow. No link between invoice and job. Xero push exists but not automated.",
+      "layers": ["schema", "server", "ui", "trigger"],
+      "estimated_iterations": 4,
+      "atomization_recommendation": "Split into: (1) Schema: Link invoice to job (jobId on invoice), (2) Server: autoGenerateInvoice triggered by sign-off, (3) UI: Invoice review dialog before auto-send, (4) Server: Include labor (from time entries when available) in invoice",
+      "dependencies_note": "Hard dependency on WF-JOB-005 (sign-off triggers invoicing) and WF-INV-001 (auto-invoice capability from invoicing workflow PRD)"
+    }
+  },
+  "recommended_stories": [
+    {
+      "id": "WF-JOB-005-A",
+      "name": "Sign-Off Feedback and Certificate",
+      "description": "Enhance sign-off page with feedback field and generate PDF completion certificate",
+      "priority": 1,
+      "layers": ["ui", "server"],
+      "acceptance_criteria": [
+        "Add optional feedback/notes textarea to sign-off page",
+        "Generate PDF completion certificate on sign-off",
+        "Include certificate download link on success",
+        "Attach certificate to confirmation email",
+        "TypeScript compiles without errors"
+      ],
+      "estimated_iterations": 2
+    },
+    {
+      "id": "WF-JOB-004-A",
+      "name": "Granular Job Status Tracking",
+      "description": "Add en_route and on_site status options for real-time tracking",
+      "priority": 2,
+      "layers": ["schema", "server", "ui"],
+      "acceptance_criteria": [
+        "Add en_route, on_site to job status enum",
+        "updateJobStatus server function for field updates",
+        "Status update buttons on installer mobile view",
+        "Operations dashboard showing job locations/status",
+        "TypeScript compiles without errors"
+      ],
+      "estimated_iterations": 3
+    },
+    {
+      "id": "WF-JOB-001-A",
+      "name": "Order Requires Installation Flag",
+      "description": "Add requiresInstallation flag and auto-suggest job creation",
+      "priority": 3,
+      "layers": ["schema", "server", "ui"],
+      "dependencies": ["DOM-ORDERS"],
+      "acceptance_criteria": [
+        "Add requiresInstallation boolean to orders table",
+        "Toggle on order form to mark installation required",
+        "Banner on order detail: 'This order requires installation - Schedule Job'",
+        "TypeScript compiles without errors"
+      ],
+      "estimated_iterations": 2
+    },
+    {
+      "id": "WF-JOB-002-A",
+      "name": "Customer Scheduling Confirmation",
+      "description": "Send customer confirmation request and handle response",
+      "priority": 4,
+      "layers": ["schema", "server", "ui", "trigger"],
+      "acceptance_criteria": [
+        "Add confirmationStatus, confirmationToken to job_assignments",
+        "requestCustomerConfirmation server function",
+        "Public customer confirmation page",
+        "Confirmation email via Resend trigger",
+        "Customer can confirm or request different time",
+        "TypeScript compiles without errors"
+      ],
+      "estimated_iterations": 4
+    },
+    {
+      "id": "WF-JOB-006-A",
+      "name": "Post-Completion Auto-Invoice Trigger",
+      "description": "Trigger invoice generation after successful sign-off",
+      "priority": 5,
+      "layers": ["server", "trigger"],
+      "dependencies": ["WF-JOB-005", "WF-INV-001"],
+      "acceptance_criteria": [
+        "Option: auto-invoice on sign-off (configurable per org)",
+        "Trigger invoice generation on job completion",
+        "Link invoice to job (jobId reference)",
+        "Review queue for generated invoices",
+        "TypeScript compiles without errors"
+      ],
+      "estimated_iterations": 3
+    }
+  ],
+  "atomization_notes": {
+    "general_pattern": "Workflow stories span multiple domains and require coordination. Best approach: (1) Enhance existing partial implementations first (WF-JOB-005, WF-JOB-004), (2) Build foundational capabilities (status tracking, flags), (3) Add automation triggers last.",
+    "dependency_chain": "WF-JOB-001 (job from order) -> WF-JOB-002 (scheduling) -> WF-JOB-003 (prep) -> WF-JOB-004 (execution) -> WF-JOB-005 (sign-off) -> WF-JOB-006 (invoicing). This is the natural workflow sequence.",
+    "cross_domain_dependencies": {
+      "DOM-JOBS-002": "BOM tracking needed for WF-JOB-001 (populate materials) and WF-JOB-003 (material allocation)",
+      "DOM-JOBS-003": "Time tracking needed for WF-JOB-006 (include labor in invoice)",
+      "DOM-JOBS-004": "Checklist needed for WF-JOB-003 (pre-job checklist) and WF-JOB-004 (execution checklists)",
+      "DOM-JOBS-005": "Calendar needed for WF-JOB-002 (schedule from calendar)",
+      "WF-INV-001": "Auto-invoice capability needed for WF-JOB-006"
+    },
+    "existing_infrastructure": "Strong foundation exists: sign-off page, completion wizard, photo capture, email triggers, warranty auto-registration. Focus workflow stories on connecting these pieces and adding missing automation.",
+    "trigger_jobs": "Leverage existing Trigger.dev infrastructure. job-completion-email.ts and warranty-jobs.ts patterns can be extended for scheduling reminders and invoice generation."
+  }
+}

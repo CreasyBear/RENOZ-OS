@@ -1,0 +1,512 @@
+{
+  "prd_id": "DOM-INVENTORY",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "summary": {
+    "total_stories": 8,
+    "verified_gaps": 6,
+    "invalidated_gaps": 2,
+    "implementation_status": "Foundation complete with reorder point partial, warehouse locations partial (binLocation only). Most stories valid but need atomization for Ralph executability."
+  },
+  "codebase_findings": {
+    "schema_files": [
+      {
+        "path": "renoz-v2/lib/schema/products.ts",
+        "contains": [
+          "products table with reorderPoint column (decimal)",
+          "inventoryItems table with binLocation text field",
+          "inventoryItems has allocatedToOrderId and allocatedToOrderItemId fields",
+          "inventoryMovements table with audit trail",
+          "Status enum: available, allocated, sold, damaged, returned"
+        ],
+        "notes": "reorderPoint exists but reorderQty is missing. binLocation is simple text, not full warehouse_locations table"
+      }
+    ],
+    "server_functions": [
+      {
+        "path": "renoz-v2/src/server/functions/inventory.ts",
+        "functions": [
+          "adjustStock - Stock adjustment with reasons and audit",
+          "getInventoryMovements - Movement history with order/PO references",
+          "getInventoryMetrics - Dashboard metrics with stock counts",
+          "listInventoryItems - Paginated list with filters",
+          "bulkArchiveInventory - Bulk archive products",
+          "bulkRestoreInventory - Bulk restore products",
+          "bulkDeleteInventory - Bulk hard delete",
+          "bulkExportInventory - Export with optional movements",
+          "getInventoryAlerts - Alert counts (out of stock, low, critical)",
+          "dismissInventoryAlerts - Dismiss alerts"
+        ],
+        "notes": "getInventoryAlerts exists but no notification system or dashboard widget integration. No FIFO valuation, no stock count process, no forecasting."
+      },
+      {
+        "path": "renoz-v2/src/server/functions/reports.ts",
+        "functions": [
+          "getInventoryReport - Stock levels, allocated vs available, value calculation"
+        ],
+        "notes": "Report shows stockAllocated and available (on hand - allocated). Basic valuation exists but not FIFO."
+      }
+    ],
+    "components": [
+      {
+        "path": "renoz-v2/src/components/domain/inventory/inventory-columns.tsx",
+        "contains": "Table columns with product, category, stock, value, status"
+      },
+      {
+        "path": "renoz-v2/src/components/domain/inventory/add-item-form.tsx",
+        "contains": "Product creation form with reorderPoint field, binLocation field, initial inventory"
+      },
+      {
+        "path": "renoz-v2/src/components/domain/inventory/adjust-stock-dialog.tsx",
+        "contains": "Stock adjustment dialog with quantity, reason, business impact preview"
+      },
+      {
+        "path": "renoz-v2/src/components/domain/inventory/bulk-actions.tsx",
+        "contains": "Bulk export, archive, restore, delete actions"
+      },
+      {
+        "path": "renoz-v2/src/components/domain/dashboard/widgets/low-stock-widget.tsx",
+        "contains": "Dashboard widget showing low stock products with reorderPoint comparison"
+      }
+    ],
+    "routes": [
+      {
+        "path": "renoz-v2/src/routes/inventory/index.tsx",
+        "contains": [
+          "Full inventory list page with metrics, filters, search",
+          "InventoryAlertsBanner for stock alerts",
+          "Stock status filters (in_stock, low, out)",
+          "Category filters",
+          "Quick actions panel",
+          "Bulk operations support"
+        ]
+      },
+      {
+        "path": "renoz-v2/src/routes/inventory/new.tsx",
+        "contains": "New inventory item route (add item form)"
+      },
+      {
+        "path": "renoz-v2/src/routes/reports/inventory.tsx",
+        "contains": "Inventory report with stock levels, low stock alerts, value summary"
+      }
+    ]
+  },
+  "stories_status": {
+    "DOM-INV-001": {
+      "name": "Add Reorder Point Alerts",
+      "status": "partial",
+      "change": "atomize",
+      "layers": ["schema", "server", "UI"],
+      "estimated_iterations": 5,
+      "existing_implementation": {
+        "products.reorderPoint": "EXISTS - decimal column in products table",
+        "products.reorderQty": "MISSING - not in schema",
+        "dashboard_widget": "EXISTS - low-stock-widget.tsx shows products below reorder",
+        "notification_on_drop": "MISSING - no trigger or notification when stock drops",
+        "quick_action_po": "MISSING - no action to create PO from alert",
+        "filter_below_reorder": "EXISTS - inventory list has 'low' stock status filter"
+      },
+      "remaining_work": [
+        "Add products.reorderQty column to schema",
+        "Create notification trigger when stock drops below reorderPoint",
+        "Add quick action button to create PO from low stock alert"
+      ],
+      "atomization_needed": true,
+      "atomization_reason": "Story crosses schema, server notification logic, and UI quick action"
+    },
+    "DOM-INV-002": {
+      "name": "Add Warehouse Locations",
+      "status": "partial",
+      "change": "atomize",
+      "layers": ["schema", "server", "UI"],
+      "estimated_iterations": 8,
+      "existing_implementation": {
+        "warehouse_locations_table": "MISSING - no table exists",
+        "inventory_items.locationId": "MISSING - only simple binLocation text field exists",
+        "assign_on_receive": "PARTIAL - binLocation can be set but not linked to locations",
+        "location_on_pick_lists": "MISSING - no pick list view exists",
+        "move_between_locations": "MISSING - no server function",
+        "location_settings": "MISSING - no management UI"
+      },
+      "remaining_work": [
+        "Create warehouse_locations schema (id, name, zone, aisle, shelf, bin)",
+        "Add inventory_items.locationId FK column",
+        "Create CRUD server functions for locations",
+        "Update goods receipt to assign locationId",
+        "Create pick list view showing location",
+        "Create move-between-locations action",
+        "Create settings page for location management"
+      ],
+      "atomization_needed": true,
+      "atomization_reason": "Large story spanning schema creation, multiple server functions, and multiple UI components"
+    },
+    "DOM-INV-003": {
+      "name": "Add Stock Count Process",
+      "status": "valid",
+      "change": "atomize",
+      "layers": ["schema", "server", "UI"],
+      "estimated_iterations": 10,
+      "existing_implementation": {
+        "stock_counts_table": "MISSING",
+        "stock_count_items_table": "MISSING",
+        "freeze_expected": "MISSING",
+        "count_entry_form": "MISSING",
+        "auto_adjustments": "MISSING",
+        "count_history": "MISSING"
+      },
+      "remaining_work": [
+        "Create stock_counts schema",
+        "Create stock_count_items schema",
+        "Create startStockCount server function",
+        "Create stock count entry UI",
+        "Create variance highlighting logic",
+        "Create auto-adjustment on count completion",
+        "Create count history view"
+      ],
+      "atomization_needed": true,
+      "atomization_reason": "Complex multi-table workflow requiring schema, server logic, and multiple UI components"
+    },
+    "DOM-INV-004": {
+      "name": "Add Reserved Stock Handling",
+      "status": "partial",
+      "change": "atomize",
+      "layers": ["schema", "server", "UI"],
+      "estimated_iterations": 6,
+      "existing_implementation": {
+        "stock_display": "PARTIAL - inventory report shows stockOnHand and stockAllocated",
+        "available_calculation": "EXISTS - available = stock_on_hand - stock_allocated in reports",
+        "order_stock_check": "PARTIAL - allocatedToOrderId exists on inventory_items",
+        "reserved_duration": "MISSING - no auto-release after X days",
+        "manual_release": "MISSING - no server function",
+        "reserved_report": "MISSING - no dedicated report"
+      },
+      "remaining_work": [
+        "Update inventory list UI to show on hand, allocated, available columns",
+        "Add stock availability check during order creation",
+        "Add reservedUntil date to inventory_items",
+        "Create cron job to auto-release expired reservations",
+        "Create manual release reservation action",
+        "Create reserved stock report"
+      ],
+      "atomization_needed": true,
+      "atomization_reason": "Spans schema additions, server logic, cron job, and UI updates"
+    },
+    "DOM-INV-005": {
+      "name": "Add Inventory Valuation",
+      "status": "valid",
+      "change": "atomize",
+      "layers": ["schema", "server", "UI"],
+      "estimated_iterations": 8,
+      "existing_implementation": {
+        "cost_per_receipt": "PARTIAL - costPrice on inventory_items but not FIFO tracking",
+        "fifo_valuation": "MISSING - no FIFO layer tracking",
+        "valuation_report": "PARTIAL - basic value shown in inventory report (qty * cost)",
+        "dashboard_total_value": "EXISTS - getInventoryMetrics returns totalValue",
+        "cost_basis_visible": "PARTIAL - costPrice shown but not FIFO layers",
+        "valuation_on_movement": "MISSING - no FIFO calculation on stock out"
+      },
+      "remaining_work": [
+        "Create inventory_cost_layers table for FIFO tracking",
+        "Update goods receipt to create cost layers",
+        "Create FIFO depletion logic for stock out",
+        "Create COGS calculation function",
+        "Create valuation report by product with FIFO breakdown",
+        "Update dashboard to show accurate FIFO-based value"
+      ],
+      "atomization_needed": true,
+      "atomization_reason": "Complex accounting logic requiring new schema, FIFO algorithms, and reporting"
+    },
+    "DOM-INV-006": {
+      "name": "Add Inventory Forecasting",
+      "status": "valid",
+      "change": "none",
+      "layers": ["server", "UI"],
+      "estimated_iterations": 5,
+      "existing_implementation": {
+        "average_usage": "MISSING",
+        "stockout_prediction": "MISSING",
+        "recommended_reorder": "MISSING",
+        "forecast_chart": "MISSING",
+        "open_po_factor": "MISSING",
+        "seasonal_adjustment": "MISSING"
+      },
+      "remaining_work": [
+        "Create usage calculation from inventory_movements history",
+        "Create stockout prediction algorithm",
+        "Create recommended reorder quantity calculation",
+        "Create forecast chart component",
+        "Factor in open POs and expected receipts",
+        "Optional: Add seasonal adjustment"
+      ],
+      "atomization_needed": false,
+      "atomization_reason": "Story is already well-scoped at server + UI layers only",
+      "dependencies": ["DOM-INV-001 must be complete for reorder points", "DOM-INV-004 for accurate available stock"]
+    },
+    "DOM-INV-007": {
+      "name": "Add Inventory Aging Report",
+      "status": "valid",
+      "change": "none",
+      "layers": ["server", "UI"],
+      "estimated_iterations": 4,
+      "existing_implementation": {
+        "days_since_receipt": "PARTIAL - receivedAt exists on inventory_items",
+        "aging_buckets": "MISSING",
+        "aging_report": "MISSING",
+        "slow_moving_highlight": "MISSING",
+        "clearance_action": "MISSING",
+        "csv_export": "PARTIAL - bulkExportInventory exists but no aging format"
+      },
+      "remaining_work": [
+        "Create aging calculation server function",
+        "Create aging report UI with bucket columns",
+        "Add slow-moving inventory highlighting",
+        "Add clearance/write-off actions",
+        "Add aging-specific CSV export format"
+      ],
+      "atomization_needed": false,
+      "atomization_reason": "Story is appropriately scoped for server function + report UI"
+    },
+    "DOM-INV-008": {
+      "name": "Create Inventory Dashboard",
+      "status": "partial",
+      "change": "atomize",
+      "layers": ["UI"],
+      "estimated_iterations": 6,
+      "existing_implementation": {
+        "inventory_dashboard_page": "PARTIAL - /inventory has metrics summary but not dedicated dashboard",
+        "total_value_widget": "PARTIAL - getInventoryMetrics returns totalValue",
+        "below_reorder_widget": "EXISTS - low-stock-widget.tsx",
+        "pending_receipts_widget": "MISSING - no PO integration",
+        "quick_filters": "EXISTS - /inventory has category and stock status filters",
+        "recent_movements": "MISSING - no timeline view",
+        "top_products": "MISSING - no volume analysis",
+        "stock_health": "PARTIAL - alerts exist but no visual indicators"
+      },
+      "remaining_work": [
+        "Create dedicated /inventory/dashboard route",
+        "Add pending receipts widget (requires PO integration)",
+        "Add recent movements timeline",
+        "Add top products by movement volume widget",
+        "Add stock health visual indicators",
+        "Consolidate existing widgets into dashboard layout"
+      ],
+      "atomization_needed": true,
+      "atomization_reason": "Multiple widget components need creation, depends on DOM-INV-001 and DOM-INV-002 completion",
+      "dependencies": ["DOM-INV-001 for reorder alerts", "DOM-INV-002 for location filters"]
+    }
+  },
+  "recommended_stories": [
+    {
+      "priority": 1,
+      "story_id": "DOM-INV-001",
+      "reason": "Nearly complete, only 3 items remain. High business value for preventing stockouts."
+    },
+    {
+      "priority": 2,
+      "story_id": "DOM-INV-004",
+      "reason": "Allocation logic partially exists. Completing this prevents overselling."
+    },
+    {
+      "priority": 3,
+      "story_id": "DOM-INV-007",
+      "reason": "No schema changes needed. Pure server + UI work. Quick win for visibility."
+    },
+    {
+      "priority": 4,
+      "story_id": "DOM-INV-006",
+      "reason": "Depends on DOM-INV-001 and DOM-INV-004 but purely server + UI work once deps are met."
+    }
+  ],
+  "atomization_notes": {
+    "DOM-INV-001": {
+      "suggested_split": [
+        {
+          "id": "DOM-INV-001-A",
+          "name": "Add reorderQty column to products schema",
+          "layers": ["schema"],
+          "iterations": 1
+        },
+        {
+          "id": "DOM-INV-001-B",
+          "name": "Create low stock notification trigger",
+          "layers": ["server"],
+          "iterations": 2
+        },
+        {
+          "id": "DOM-INV-001-C",
+          "name": "Add Create PO quick action from low stock alert",
+          "layers": ["UI"],
+          "iterations": 2
+        }
+      ]
+    },
+    "DOM-INV-002": {
+      "suggested_split": [
+        {
+          "id": "DOM-INV-002-A",
+          "name": "Create warehouse_locations schema",
+          "layers": ["schema"],
+          "iterations": 2
+        },
+        {
+          "id": "DOM-INV-002-B",
+          "name": "Add inventory_items.locationId FK",
+          "layers": ["schema"],
+          "iterations": 1
+        },
+        {
+          "id": "DOM-INV-002-C",
+          "name": "Create location CRUD server functions",
+          "layers": ["server"],
+          "iterations": 2
+        },
+        {
+          "id": "DOM-INV-002-D",
+          "name": "Update goods receipt flow for location",
+          "layers": ["server", "UI"],
+          "iterations": 2
+        },
+        {
+          "id": "DOM-INV-002-E",
+          "name": "Create location management settings page",
+          "layers": ["UI"],
+          "iterations": 2
+        }
+      ]
+    },
+    "DOM-INV-003": {
+      "suggested_split": [
+        {
+          "id": "DOM-INV-003-A",
+          "name": "Create stock_counts and stock_count_items schema",
+          "layers": ["schema"],
+          "iterations": 2
+        },
+        {
+          "id": "DOM-INV-003-B",
+          "name": "Create stock count lifecycle server functions",
+          "layers": ["server"],
+          "iterations": 3
+        },
+        {
+          "id": "DOM-INV-003-C",
+          "name": "Create stock count entry UI with variance",
+          "layers": ["UI"],
+          "iterations": 3
+        },
+        {
+          "id": "DOM-INV-003-D",
+          "name": "Create count history and reports",
+          "layers": ["UI"],
+          "iterations": 2
+        }
+      ]
+    },
+    "DOM-INV-004": {
+      "suggested_split": [
+        {
+          "id": "DOM-INV-004-A",
+          "name": "Update inventory list UI to show allocated/available",
+          "layers": ["UI"],
+          "iterations": 1
+        },
+        {
+          "id": "DOM-INV-004-B",
+          "name": "Add reservedUntil schema and auto-release job",
+          "layers": ["schema", "server"],
+          "iterations": 3
+        },
+        {
+          "id": "DOM-INV-004-C",
+          "name": "Create manual release and reserved stock report",
+          "layers": ["server", "UI"],
+          "iterations": 2
+        }
+      ]
+    },
+    "DOM-INV-005": {
+      "suggested_split": [
+        {
+          "id": "DOM-INV-005-A",
+          "name": "Create inventory_cost_layers schema",
+          "layers": ["schema"],
+          "iterations": 2
+        },
+        {
+          "id": "DOM-INV-005-B",
+          "name": "Update goods receipt to create cost layers",
+          "layers": ["server"],
+          "iterations": 2
+        },
+        {
+          "id": "DOM-INV-005-C",
+          "name": "Implement FIFO depletion and COGS calculation",
+          "layers": ["server"],
+          "iterations": 2
+        },
+        {
+          "id": "DOM-INV-005-D",
+          "name": "Create FIFO valuation report UI",
+          "layers": ["UI"],
+          "iterations": 2
+        }
+      ]
+    },
+    "DOM-INV-008": {
+      "suggested_split": [
+        {
+          "id": "DOM-INV-008-A",
+          "name": "Create dedicated inventory dashboard route",
+          "layers": ["UI"],
+          "iterations": 2
+        },
+        {
+          "id": "DOM-INV-008-B",
+          "name": "Add recent movements timeline widget",
+          "layers": ["server", "UI"],
+          "iterations": 2
+        },
+        {
+          "id": "DOM-INV-008-C",
+          "name": "Add top products by volume widget",
+          "layers": ["server", "UI"],
+          "iterations": 2
+        }
+      ]
+    }
+  },
+  "warnings": [
+    {
+      "type": "dependency_missing",
+      "story": "DOM-INV-008",
+      "message": "Story depends on DOM-INV-001 and DOM-INV-002 but these are listed as independent in PRD"
+    },
+    {
+      "type": "iteration_underestimate",
+      "story": "DOM-INV-002",
+      "message": "Estimated 4 iterations but requires schema + CRUD + goods receipt + move action + settings = likely 8+ iterations"
+    },
+    {
+      "type": "iteration_underestimate",
+      "story": "DOM-INV-003",
+      "message": "Estimated 5 iterations but full stock count workflow likely needs 10 iterations"
+    }
+  ],
+  "critical_findings": [
+    {
+      "finding": "reorderPoint exists but is not consistently used for notifications",
+      "impact": "Users may not get alerted when stock drops below reorder point",
+      "recommendation": "Prioritize DOM-INV-001-B to add notification trigger"
+    },
+    {
+      "finding": "Allocation tracking exists in schema but UI doesn't surface it clearly",
+      "impact": "Users see stockOnHand but not available stock, risking overselling",
+      "recommendation": "Prioritize DOM-INV-004-A to show allocated/available in inventory list"
+    },
+    {
+      "finding": "No FIFO cost tracking means COGS on orders may be inaccurate",
+      "impact": "Financial reports may show incorrect margins",
+      "recommendation": "DOM-INV-005 is important for financial accuracy but has high complexity"
+    }
+  ]
+}

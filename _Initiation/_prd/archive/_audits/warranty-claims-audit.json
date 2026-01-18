@@ -1,0 +1,576 @@
+{
+  "prd_id": "WF-WARRANTY",
+  "prd_type": "workflow",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "summary": {
+    "total_stories": 6,
+    "verified_gaps": 6,
+    "invalidated_gaps": 0,
+    "needs_atomization": 4,
+    "implementation_status": "No formal warranty claim workflow exists. Currently warranty claims go through generic issues table with type='claim'. Basic claim submission exists via IssueForm with initialValues.type='claim' from warranty detail page. However, there is no: dedicated claim intake form with serial lookup, verification checklist, approval routing, resolution type handling (repair/replace/refund), product return handling, or claim analytics. All 6 stories represent genuine gaps requiring new schema, server functions, and UI.",
+    "dependencies_on_other_domains": {
+      "DOM-WAR-006": "Warranty Claim Workflow from warranty domain - this workflow PRD builds on that foundation",
+      "DOM-WAR-008": "Warranty Analytics - WF-WAR-006 depends on this for data",
+      "DOM-SUP-003": "RMA (Return Authorization) - WF-WAR-005 depends on RMA workflow for return handling"
+    }
+  },
+  "codebase_findings": {
+    "existing_claim_workflow": {
+      "location": "renoz-v2/src/routes/support/warranties/$warrantyId.tsx",
+      "description": "Quick issue creation from warranty detail page with type='claim' pre-selected",
+      "features": [
+        "Report Issue button opens IssueForm with warrantyId and type='claim' pre-filled",
+        "Issues linked to warranties shown in 'Related Issues' tab",
+        "Basic issue workflow: open -> in_progress -> resolved/closed"
+      ],
+      "limitations": [
+        "No serial number lookup/verification",
+        "No claim-specific form fields (evidence, reason codes)",
+        "No claim number generation (uses issue number ISS-YYYY-NNNN)",
+        "No warranty verification step",
+        "No approval routing",
+        "No resolution type integration (repair/replace/refund creates no follow-on actions)"
+      ]
+    },
+    "schema_files": [
+      "renoz-v2/lib/schema/issues.ts - issues table used for claims",
+      "renoz-v2/lib/schema/warranties.ts - warranties table"
+    ],
+    "missing_tables": [
+      "warranty_claims - dedicated claim entity with status workflow",
+      "claim_verifications - verification checklist records",
+      "claim_approvals - approval workflow tracking"
+    ],
+    "server_functions": [
+      "renoz-v2/src/server/functions/issues.ts - generic issue CRUD (createIssue, resolveIssue with resolutionType)",
+      "renoz-v2/src/server/functions/warranties.ts - warranty CRUD (no claim-specific functions)"
+    ],
+    "missing_server_functions": [
+      "createWarrantyClaim - with serial lookup and warranty validation",
+      "verifyWarrantyClaim - verification checklist processing",
+      "approveWarrantyClaim - approval workflow",
+      "processClaimResolution - create repair job/replacement order/credit note",
+      "processProductReturn - RMA creation and tracking"
+    ],
+    "components": [
+      "renoz-v2/src/components/domain/support/issue-form.tsx - generic issue form",
+      "renoz-v2/src/components/domain/support/resolution-workflow.tsx - issue resolution dialog"
+    ],
+    "missing_components": [
+      "warranty-claim-form.tsx - dedicated claim intake with serial lookup",
+      "claim-verification-checklist.tsx - verification step UI",
+      "claim-approval-dialog.tsx - approval workflow UI",
+      "claim-resolution-workflow.tsx - resolution with action creation",
+      "claim-return-tracking.tsx - return shipment status"
+    ],
+    "routes": [
+      "renoz-v2/src/routes/support/warranties/$warrantyId.tsx - warranty detail with 'Report Issue' button",
+      "renoz-v2/src/routes/support/issues/$issueId.tsx - issue detail page"
+    ],
+    "missing_routes": [
+      "/support/claims - dedicated claims list page",
+      "/support/claims/new - claim intake form",
+      "/support/claims/$claimId - claim detail with workflow",
+      "/reports/warranty-claims - claim analytics page"
+    ],
+    "existing_resolution_types": {
+      "location": "renoz-v2/lib/schemas/issues.ts",
+      "types": ["closed", "replaced", "refunded", "repaired"],
+      "notes": "Resolution types exist but don't trigger follow-on actions (no order creation for replacement, no credit note for refund, no service job for repair)"
+    },
+    "related_domain_dependencies": {
+      "warranty_audit": "memory-bank/prd/_audits/warranty-audit.json - DOM-WAR-006 covers claim workflow foundation",
+      "support_audit": "memory-bank/prd/_audits/support-audit.json - DOM-SUP-003 covers RMA workflow"
+    }
+  },
+  "prd_claims_verified": [
+    "Basic claim via issue - VERIFIED (IssueForm with type='claim' from warranty detail)",
+    "Warranty lookup - VERIFIED (listWarranties searches by serial number)"
+  ],
+  "prd_claims_invalid": [],
+  "stories_status": {
+    "WF-WAR-001": {
+      "name": "Add Warranty Claim Intake",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "Currently claims use generic IssueForm. This story adds dedicated claim intake with: serial number lookup, auto-populate warranty details, claim reason codes, evidence upload, claim number generation (CLM-XXXXXX), customer confirmation. Requires new schema (warranty_claims table), server functions, and UI components.",
+      "layers": ["schema", "server", "UI"],
+      "estimated_iterations": {
+        "original": 5,
+        "recommended_total": 12,
+        "breakdown": {
+          "schema": 2,
+          "server_functions": 4,
+          "ui_claim_form": 4,
+          "ui_confirmation": 2
+        }
+      },
+      "acceptance_criteria_review": {
+        "testable": true,
+        "file_referenced": false,
+        "missing_files": [
+          "lib/schema/warranty-claims.ts",
+          "lib/schemas/warranty-claims.ts",
+          "src/server/functions/warranty-claims.ts",
+          "src/components/domain/support/warranty-claim-form.tsx",
+          "src/routes/support/claims/new.tsx"
+        ]
+      },
+      "dependencies_on_other_prd": {
+        "DOM-WAR-006": "Warranty Claim Workflow from warranty domain provides foundation"
+      }
+    },
+    "WF-WAR-002": {
+      "name": "Add Warranty Verification Step",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No verification workflow exists. Claims go directly to issue status. This story adds: verification checklist (warranty active, coverage check, previous claims, product condition), auto-deny for expired warranty, escalation for ambiguous cases, verification notes. Requires verification_status field and checklist tracking.",
+      "layers": ["schema", "server", "UI"],
+      "estimated_iterations": {
+        "original": 4,
+        "recommended_total": 8,
+        "breakdown": {
+          "schema_verification_fields": 2,
+          "server_verification_logic": 3,
+          "ui_verification_checklist": 3
+        }
+      },
+      "acceptance_criteria_review": {
+        "testable": true,
+        "file_referenced": false,
+        "notes": "Auto-deny logic needs clear rules: expired warranty, claim outside coverage period, coverage type mismatch. Escalation path needs definition."
+      },
+      "dependencies_on_other_prd": {
+        "WF-WAR-001": "Claim intake must exist before verification"
+      }
+    },
+    "WF-WAR-003": {
+      "name": "Add Claim Approval Routing",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No approval workflow exists. Current claims can be resolved by anyone. This story adds: value-based thresholds (<$500 auto-approve, >$500 manager approval), approval queue, approve/deny with comments, approval notifications, denial reason with appeal option, audit trail. Requires role-based permissions and approval tracking.",
+      "layers": ["schema", "server", "UI"],
+      "estimated_iterations": {
+        "original": 4,
+        "recommended_total": 10,
+        "breakdown": {
+          "schema_approval_tracking": 2,
+          "server_approval_workflow": 4,
+          "ui_approval_queue": 2,
+          "ui_approval_dialog": 2
+        }
+      },
+      "acceptance_criteria_review": {
+        "testable": true,
+        "file_referenced": false,
+        "notes": "Approval thresholds configurable vs hardcoded? Appeal workflow adds complexity - consider deferring to later story."
+      },
+      "dependencies_on_other_prd": {
+        "WF-WAR-002": "Verification must complete before approval routing"
+      }
+    },
+    "WF-WAR-004": {
+      "name": "Add Resolution Options",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "Resolution types exist (replaced/refunded/repaired) but don't trigger actions. This story adds: replacement = create order with replacement product, repair = create service job, refund = create credit note. Resolution tracking until complete, customer notification. Significant integration with orders, jobs, and financial domains.",
+      "layers": ["server", "UI", "integrations"],
+      "estimated_iterations": {
+        "original": 5,
+        "recommended_total": 15,
+        "breakdown": {
+          "server_replacement_order": 4,
+          "server_repair_job": 4,
+          "server_credit_note": 3,
+          "ui_resolution_workflow": 4
+        }
+      },
+      "acceptance_criteria_review": {
+        "testable": true,
+        "file_referenced": false,
+        "notes": "Replacement order uses existing createOrder function. Repair job may need jobs domain integration. Credit note requires financial domain - verify credit_notes table exists."
+      },
+      "dependencies_on_other_prd": {
+        "WF-WAR-003": "Approval must complete before resolution",
+        "DOM-WAR-006": "Basic claim workflow foundation"
+      },
+      "cross_domain_integrations": [
+        "Orders domain - createOrder for replacement",
+        "Jobs domain - create service job for repair",
+        "Financial domain - create credit note for refund"
+      ]
+    },
+    "WF-WAR-005": {
+      "name": "Add Product Return Handling",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No return handling for warranty claims. This story adds: return label generation (manual), shipment tracking, receipt and inspection, disposition (scrap/refurbish/return to supplier), link return to claim, complete claim after return processed. Depends on DOM-SUP-003 RMA workflow.",
+      "layers": ["server", "UI"],
+      "estimated_iterations": {
+        "original": 5,
+        "recommended_total": 10,
+        "breakdown": {
+          "server_return_integration": 4,
+          "ui_return_tracking": 3,
+          "ui_disposition_workflow": 3
+        }
+      },
+      "acceptance_criteria_review": {
+        "testable": true,
+        "file_referenced": false,
+        "notes": "Manual return label = user uploads or enters tracking number. Disposition options affect inventory. Return to supplier may need supplier domain integration."
+      },
+      "dependencies_on_other_prd": {
+        "DOM-SUP-003": "RMA workflow from support domain - CRITICAL DEPENDENCY",
+        "WF-WAR-004": "Resolution must trigger return requirement"
+      },
+      "blocker_analysis": {
+        "blocker": "DOM-SUP-003 (RMA workflow) not implemented",
+        "impact": "Cannot implement return handling until RMA workflow exists",
+        "recommendation": "Defer WF-WAR-005 until DOM-SUP-003 complete, OR implement basic return tracking without full RMA integration"
+      }
+    },
+    "WF-WAR-006": {
+      "name": "Add Warranty Claim Analytics",
+      "status": "valid",
+      "change": "adjust_scope",
+      "reason": "No claim analytics exist. This story adds: claims by product/batch for quality issues, claim rate over time, average claim cost, root cause categorization, supplier quality correlation, export. Depends on DOM-WAR-008 warranty analytics which provides foundation.",
+      "layers": ["server", "UI"],
+      "estimated_iterations": {
+        "original": 4,
+        "recommended_total": 8,
+        "breakdown": {
+          "server_analytics_queries": 4,
+          "ui_analytics_page": 4
+        }
+      },
+      "acceptance_criteria_review": {
+        "testable": true,
+        "file_referenced": false,
+        "notes": "Root cause categorization needs claim reason codes. Supplier correlation needs supplier linkage on products."
+      },
+      "dependencies_on_other_prd": {
+        "DOM-WAR-008": "Warranty Analytics from warranty domain",
+        "WF-WAR-001": "Claims must exist with data"
+      },
+      "existing_foundation": {
+        "location": "renoz-v2/src/routes/reports/warranties.tsx",
+        "features": ["Warranty summary cards", "Date range filtering", "Basic warranty table", "CSV export"],
+        "can_extend": true
+      }
+    }
+  },
+  "recommended_stories": [
+    {
+      "id": "WF-WAR-001a",
+      "name": "Warranty Claims Schema",
+      "description": "Create warranty_claims table with claim number generation and basic status workflow",
+      "priority": 1,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "warranty_claims table created (id, claimNumber, warrantyId, customerId, status, claimType, claimReason, description, evidence JSONB, estimatedValue, submittedAt, organizationId)",
+        "Claim number generation function: get_next_claim_number returning CLM-NNNNNN format",
+        "Claim status enum: submitted, verifying, verified, pending_approval, approved, denied, processing, resolved",
+        "Claim type enum: defect, malfunction, damage, missing_parts, other",
+        "Indexes on organizationId, warrantyId, customerId, status",
+        "Types exported from lib/schema/index.ts",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": []
+    },
+    {
+      "id": "WF-WAR-001b",
+      "name": "Warranty Claims Server Functions",
+      "description": "Implement claim CRUD with warranty lookup and validation",
+      "priority": 2,
+      "estimated_iterations": 4,
+      "acceptance_criteria": [
+        "createWarrantyClaim function with warranty lookup by serial number",
+        "Auto-populate warranty details (product, customer, expiry) from warranty record",
+        "Validate warranty is active and not expired at submission time",
+        "Check for duplicate claims on same warranty (configurable: allow/block)",
+        "listWarrantyClaims with filters (status, customerId, warrantyId, dateRange)",
+        "getWarrantyClaim with full warranty context",
+        "updateWarrantyClaim with OCC (optimistic concurrency control)",
+        "Validation schemas in lib/schemas/warranty-claims.ts",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["WF-WAR-001a"]
+    },
+    {
+      "id": "WF-WAR-001c",
+      "name": "Warranty Claim Intake UI",
+      "description": "Dedicated claim submission form with serial lookup and evidence upload",
+      "priority": 3,
+      "estimated_iterations": 4,
+      "acceptance_criteria": [
+        "WarrantyClaimForm component with serial number lookup field",
+        "Serial lookup shows warranty details (product, expiry, customer, previous claims count)",
+        "Claim type and reason selection dropdowns",
+        "Description field with minimum character requirement",
+        "Evidence upload (photos/documents) with preview",
+        "Submission confirmation dialog with claim number",
+        "Route at /support/claims/new",
+        "Claims list page at /support/claims with status filters",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["WF-WAR-001b"]
+    },
+    {
+      "id": "WF-WAR-001d",
+      "name": "Warranty Claim Customer Notification",
+      "description": "Send confirmation email to customer on claim submission",
+      "priority": 4,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "Email template for claim submission confirmation",
+        "Includes: claim number, warranty details, expected timeline",
+        "Trigger.dev job for async email sending",
+        "Email history tracked on claim record",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["WF-WAR-001c"]
+    },
+    {
+      "id": "WF-WAR-002a",
+      "name": "Claim Verification Schema",
+      "description": "Add verification fields and checklist tracking to claims",
+      "priority": 5,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "warranty_claims.verificationStatus enum: pending, passed, failed, escalated",
+        "warranty_claims.verificationChecklist JSONB with standard checks",
+        "warranty_claims.verificationNotes text field",
+        "warranty_claims.verifiedAt timestamp",
+        "warranty_claims.verifiedByUserId FK to users",
+        "Standard checklist items: warranty_active, coverage_valid, no_prior_claims, product_unmodified",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["WF-WAR-001a"]
+    },
+    {
+      "id": "WF-WAR-002b",
+      "name": "Claim Verification Logic",
+      "description": "Implement verification workflow with auto-deny and escalation",
+      "priority": 6,
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "verifyWarrantyClaim server function with checklist processing",
+        "Auto-deny if warranty expired at claim date",
+        "Auto-deny if prior claim exists and policy is one-claim-only",
+        "Escalation trigger for ambiguous cases (flag set manually)",
+        "Status transitions: submitted -> verifying -> verified/denied/escalated",
+        "Verification creates activity record for audit",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["WF-WAR-002a"]
+    },
+    {
+      "id": "WF-WAR-002c",
+      "name": "Claim Verification UI",
+      "description": "Verification checklist UI with pass/fail controls",
+      "priority": 7,
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "ClaimVerificationChecklist component with checkbox items",
+        "Each item shows pass/fail/skip with reason field",
+        "Warranty status displayed prominently (active/expired)",
+        "Previous claims on warranty listed if any",
+        "Verify/Deny/Escalate action buttons",
+        "Verification notes field required on deny/escalate",
+        "Integrated into claim detail page",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["WF-WAR-002b"]
+    },
+    {
+      "id": "WF-WAR-003a",
+      "name": "Claim Approval Schema",
+      "description": "Add approval tracking to claims",
+      "priority": 8,
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "warranty_claims.approvalStatus enum: not_required, pending, approved, denied, appealed",
+        "warranty_claims.approvalRequired boolean (set based on value threshold)",
+        "warranty_claims.approvedAt timestamp",
+        "warranty_claims.approvedByUserId FK to users",
+        "warranty_claims.approvalNotes text field",
+        "warranty_claims.denialReason text field",
+        "claim_approval_thresholds table for configurable thresholds per org",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["WF-WAR-001a"]
+    },
+    {
+      "id": "WF-WAR-003b",
+      "name": "Claim Approval Workflow",
+      "description": "Implement approval routing based on claim value",
+      "priority": 9,
+      "estimated_iterations": 4,
+      "acceptance_criteria": [
+        "checkApprovalRequired function based on estimatedValue vs threshold",
+        "Claims below threshold auto-approve after verification",
+        "Claims above threshold enter pending_approval status",
+        "approveWarrantyClaim function (requires manager role)",
+        "denyWarrantyClaim function with required reason",
+        "Approval notification to claim submitter",
+        "Denial notification with reason to customer",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["WF-WAR-003a", "WF-WAR-002b"]
+    },
+    {
+      "id": "WF-WAR-003c",
+      "name": "Claim Approval UI",
+      "description": "Approval queue and decision UI",
+      "priority": 10,
+      "estimated_iterations": 4,
+      "acceptance_criteria": [
+        "Approval queue page showing pending claims",
+        "Queue filters: date range, value range, claim type",
+        "Queue sortable by value, age, customer priority",
+        "ClaimApprovalDialog with approve/deny options",
+        "Approval requires confirmation",
+        "Denial requires reason selection + notes",
+        "Approval history visible on claim detail",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["WF-WAR-003b"]
+    }
+  ],
+  "atomization_notes": {
+    "WF-WAR-001": "Split into 4 stories: schema (2), server (4), UI (4), notification (2) = 12 total iterations",
+    "WF-WAR-002": "Split into 3 stories: schema (2), server logic (3), UI checklist (3) = 8 total iterations",
+    "WF-WAR-003": "Split into 3 stories: schema (2), workflow (4), UI (4) = 10 total iterations",
+    "WF-WAR-004": "Split into 4 stories per resolution type: replacement order (4), repair job (4), credit note (3), UI (4) = 15 total iterations. Consider implementing one resolution type at a time.",
+    "WF-WAR-005": "Blocked by DOM-SUP-003 RMA. Split into 3 stories when unblocked: integration (4), return tracking UI (3), disposition (3) = 10 total iterations",
+    "WF-WAR-006": "Single story adjustable: server queries (4), UI analytics page (4) = 8 total iterations. Can leverage existing warranty report foundation."
+  },
+  "dependency_graph": {
+    "internal_dependencies": {
+      "WF-WAR-001a": [],
+      "WF-WAR-001b": ["WF-WAR-001a"],
+      "WF-WAR-001c": ["WF-WAR-001b"],
+      "WF-WAR-001d": ["WF-WAR-001c"],
+      "WF-WAR-002a": ["WF-WAR-001a"],
+      "WF-WAR-002b": ["WF-WAR-002a"],
+      "WF-WAR-002c": ["WF-WAR-002b"],
+      "WF-WAR-003a": ["WF-WAR-001a"],
+      "WF-WAR-003b": ["WF-WAR-003a", "WF-WAR-002b"],
+      "WF-WAR-003c": ["WF-WAR-003b"]
+    },
+    "external_dependencies": {
+      "DOM-WAR-006": {
+        "status": "pending",
+        "impact": "Provides warranty claim workflow foundation from warranty domain. WF-WARRANTY builds on this.",
+        "recommendation": "Can proceed independently since WF-WARRANTY is more comprehensive than DOM-WAR-006"
+      },
+      "DOM-WAR-008": {
+        "status": "pending",
+        "impact": "WF-WAR-006 analytics can leverage DOM-WAR-008 warranty analytics queries",
+        "recommendation": "Implement WF-WAR-006 independently or after DOM-WAR-008"
+      },
+      "DOM-SUP-003": {
+        "status": "pending",
+        "impact": "BLOCKER for WF-WAR-005 Product Return Handling",
+        "recommendation": "Defer WF-WAR-005 until DOM-SUP-003 implemented, OR implement basic return tracking without RMA"
+      }
+    },
+    "critical_path": [
+      "WF-WAR-001a (schema)",
+      "WF-WAR-001b (server)",
+      "WF-WAR-001c (UI)",
+      "WF-WAR-002b (verification)",
+      "WF-WAR-003b (approval)",
+      "WF-WAR-004 (resolution)"
+    ]
+  },
+  "priority_recommendation": [
+    {
+      "priority": 1,
+      "story": "WF-WAR-001",
+      "reason": "Foundation for all other stories. Claim intake is the entry point for the workflow."
+    },
+    {
+      "priority": 2,
+      "story": "WF-WAR-002",
+      "reason": "Verification prevents invalid claims from consuming approval resources."
+    },
+    {
+      "priority": 3,
+      "story": "WF-WAR-003",
+      "reason": "Approval routing controls costs and provides audit trail."
+    },
+    {
+      "priority": 4,
+      "story": "WF-WAR-004",
+      "reason": "Resolution options complete the workflow. Most business value here."
+    },
+    {
+      "priority": 5,
+      "story": "WF-WAR-006",
+      "reason": "Analytics provide quality insights. Can be implemented before WF-WAR-005."
+    },
+    {
+      "priority": 6,
+      "story": "WF-WAR-005",
+      "reason": "Blocked by DOM-SUP-003. Defer until RMA workflow exists."
+    }
+  ],
+  "execution_order_recommendation": [
+    "WF-WAR-001a (Schema) - 2 iterations",
+    "WF-WAR-001b (Server Functions) - 4 iterations",
+    "WF-WAR-001c (UI) - 4 iterations",
+    "WF-WAR-001d (Notification) - 2 iterations",
+    "WF-WAR-002a (Verification Schema) - 2 iterations - can parallel with WF-WAR-001c/d",
+    "WF-WAR-002b (Verification Logic) - 3 iterations",
+    "WF-WAR-002c (Verification UI) - 3 iterations",
+    "WF-WAR-003a (Approval Schema) - 2 iterations - can parallel with WF-WAR-002",
+    "WF-WAR-003b (Approval Workflow) - 4 iterations",
+    "WF-WAR-003c (Approval UI) - 4 iterations",
+    "WF-WAR-004a (Replacement Order Integration) - 4 iterations",
+    "WF-WAR-004b (Repair Job Integration) - 4 iterations",
+    "WF-WAR-004c (Credit Note Integration) - 3 iterations",
+    "WF-WAR-004d (Resolution UI) - 4 iterations",
+    "WF-WAR-006a (Analytics Server) - 4 iterations",
+    "WF-WAR-006b (Analytics UI) - 4 iterations",
+    "WF-WAR-005 (Product Returns) - 10 iterations - DEFERRED until DOM-SUP-003 complete"
+  ],
+  "total_estimated_iterations": 63,
+  "risks_and_mitigations": [
+    {
+      "risk": "DOM-SUP-003 RMA dependency blocks WF-WAR-005",
+      "mitigation": "Implement simplified return tracking without full RMA, or defer WF-WAR-005",
+      "severity": "medium"
+    },
+    {
+      "risk": "Resolution type integrations (orders, jobs, financial) add complexity",
+      "mitigation": "Implement one resolution type at a time. Start with replacement (uses existing orders).",
+      "severity": "medium"
+    },
+    {
+      "risk": "Approval workflow needs role-based permissions",
+      "mitigation": "Verify user roles exist and have appropriate permissions defined.",
+      "severity": "low"
+    },
+    {
+      "risk": "Claim number collisions in high-volume scenarios",
+      "mitigation": "Use Postgres function with advisory lock like existing warranty/issue number generation.",
+      "severity": "low"
+    },
+    {
+      "risk": "Evidence upload storage and size limits",
+      "mitigation": "Use existing attachment handling patterns. Consider compression for images.",
+      "severity": "low"
+    }
+  ],
+  "testing_requirements": [
+    "Unit tests for warranty validation logic (expired, coverage, duplicate claims)",
+    "Unit tests for approval threshold calculation",
+    "Integration tests for claim lifecycle (submit -> verify -> approve -> resolve)",
+    "Integration tests for resolution type action creation",
+    "E2E test for claim submission flow with serial lookup",
+    "E2E test for approval queue workflow"
+  ]
+}

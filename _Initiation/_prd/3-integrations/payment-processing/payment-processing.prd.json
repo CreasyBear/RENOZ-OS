@@ -1,0 +1,420 @@
+{
+  "id": "INT-PAYMENTS",
+  "name": "Payment Processing Integration",
+  "description": "Stripe integration for invoice payments, payment method management, and automated reconciliation. Supports card payments, bank transfers, and recurring billing.",
+  "created": "2026-01-13",
+  "updated": "2026-01-13",
+  "priority": 1,
+  "phase": "integration",
+  "version": "1.0",
+  "business_value": {
+    "revenue_collection": true,
+    "cash_flow_visibility": true,
+    "customer_convenience": true,
+    "description": "Enables customers to pay invoices online, reducing payment friction and improving cash flow"
+  },
+  "system_requirements": {
+    "infrastructure": {
+      "stripe": {
+        "description": "Payment processing via Stripe",
+        "sdk": "stripe package for server, @stripe/stripe-js for client",
+        "features": ["Payment Intents", "Payment Methods", "Webhooks", "Customer Portal"],
+        "required": true
+      }
+    },
+    "database": {
+      "paymentMethods": {
+        "description": "Customer payment methods from Stripe",
+        "fields": {
+          "id": "uuid PRIMARY KEY DEFAULT gen_random_uuid()",
+          "customerId": "uuid NOT NULL REFERENCES customers(id)",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "stripePaymentMethodId": "text UNIQUE NOT NULL",
+          "stripeCustomerId": "text NOT NULL",
+          "type": "text NOT NULL",
+          "last4": "text",
+          "brand": "text",
+          "expiryMonth": "integer",
+          "expiryYear": "integer",
+          "isDefault": "boolean DEFAULT false",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()",
+          "deletedAt": "timestamp"
+        },
+        "indexes": ["customerId", "organizationId", "stripePaymentMethodId"],
+        "rls": "users can only access own org's payment methods"
+      },
+      "paymentTransactions": {
+        "description": "Payment transaction history",
+        "fields": {
+          "id": "uuid PRIMARY KEY DEFAULT gen_random_uuid()",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id)",
+          "customerId": "uuid REFERENCES customers(id)",
+          "invoiceId": "uuid REFERENCES invoices(id)",
+          "stripePaymentIntentId": "text UNIQUE",
+          "stripeChargeId": "text",
+          "amountCents": "integer NOT NULL",
+          "currency": "text NOT NULL DEFAULT 'aud'",
+          "status": "text NOT NULL",
+          "paymentMethodId": "uuid REFERENCES payment_methods(id)",
+          "failureCode": "text",
+          "failureMessage": "text",
+          "metadata": "jsonb DEFAULT '{}'::jsonb",
+          "paidAt": "timestamp",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": ["organizationId", "invoiceId", "stripePaymentIntentId", "status"],
+        "rls": "users can only access own org's transactions"
+      }
+    },
+    "api_endpoints": {
+      "payments": {
+        "createIntent": {
+          "method": "POST",
+          "path": "/api/payments/intent",
+          "body": {
+            "invoiceId": "string",
+            "paymentMethodId": "string?"
+          },
+          "response": {
+            "clientSecret": "string",
+            "paymentIntentId": "string"
+          },
+          "description": "Create Stripe PaymentIntent for invoice"
+        },
+        "confirm": {
+          "method": "POST",
+          "path": "/api/payments/confirm",
+          "body": {
+            "paymentIntentId": "string"
+          },
+          "response": {
+            "transaction": "PaymentTransaction",
+            "invoice": "Invoice"
+          },
+          "description": "Confirm payment after client-side completion"
+        }
+      },
+      "paymentMethods": {
+        "list": {
+          "method": "GET",
+          "path": "/api/customers/:customerId/payment-methods",
+          "response": {
+            "paymentMethods": "PaymentMethod[]"
+          },
+          "description": "List customer's saved payment methods"
+        },
+        "setupIntent": {
+          "method": "POST",
+          "path": "/api/customers/:customerId/payment-methods/setup",
+          "response": {
+            "clientSecret": "string"
+          },
+          "description": "Create SetupIntent to save new payment method"
+        },
+        "setDefault": {
+          "method": "POST",
+          "path": "/api/customers/:customerId/payment-methods/:id/default",
+          "response": {
+            "paymentMethod": "PaymentMethod"
+          },
+          "description": "Set default payment method"
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "/api/customers/:customerId/payment-methods/:id",
+          "response": {
+            "success": "boolean"
+          },
+          "description": "Remove saved payment method"
+        }
+      },
+      "webhook": {
+        "stripe": {
+          "method": "POST",
+          "path": "/api/webhooks/stripe",
+          "description": "Handle Stripe webhook events"
+        }
+      }
+    },
+    "ui_components": {
+      "paymentForm": {
+        "description": "Stripe Elements payment form",
+        "features": ["Card input", "Saved methods", "Processing state"],
+        "location": "src/components/payments/payment-form.tsx"
+      },
+      "paymentMethodList": {
+        "description": "List of saved payment methods with management",
+        "location": "src/components/payments/payment-method-list.tsx"
+      },
+      "invoicePaymentPage": {
+        "description": "Public invoice payment page",
+        "location": "src/routes/pay/$invoiceId.tsx"
+      }
+    },
+    "environment_variables": {
+      "required": [
+        "STRIPE_SECRET_KEY",
+        "STRIPE_PUBLISHABLE_KEY",
+        "STRIPE_WEBHOOK_SECRET"
+      ]
+    }
+  },
+  "stories": [
+    {
+      "id": "PAY-001",
+      "name": "Payment Methods Schema",
+      "description": "Create database schema for storing customer payment methods",
+      "type": "schema",
+      "acceptance_criteria": [
+        "Table payment_methods exists in drizzle/schema/payments/payment-methods.ts",
+        "Fields: id (uuid PK), customerId (uuid FK customers NOT NULL), organizationId (uuid FK organizations NOT NULL), stripePaymentMethodId (text UNIQUE NOT NULL), stripeCustomerId (text NOT NULL), type (text NOT NULL: 'card', 'bank_account'), last4 (text), brand (text: 'visa', 'mastercard', 'amex'), expiryMonth (integer), expiryYear (integer), isDefault (boolean DEFAULT false), createdAt, deletedAt",
+        "Index on customerId for customer queries",
+        "Index on organizationId for RLS",
+        "Index on stripePaymentMethodId for webhook lookups",
+        "RLS policy: SELECT/DELETE restricted to rows where organizationId matches user's org",
+        "TypeScript type PaymentMethod exported from drizzle/schema/payments/index.ts",
+        "Migration file exists in drizzle/migrations/",
+        "bun run db:generate succeeds",
+        "bun run typecheck passes"
+      ],
+      "files_to_modify": [
+        "drizzle/schema/payments/payment-methods.ts",
+        "drizzle/schema/payments/index.ts",
+        "drizzle/schema/index.ts"
+      ],
+      "dependencies": [],
+      "completion_promise": "PAY_001_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending"
+    },
+    {
+      "id": "PAY-002",
+      "name": "Payment Transactions Schema",
+      "description": "Create database schema for payment transaction history",
+      "type": "schema",
+      "acceptance_criteria": [
+        "Table payment_transactions exists in drizzle/schema/payments/payment-transactions.ts",
+        "Fields: id (uuid PK), organizationId (uuid FK NOT NULL), customerId (uuid FK customers), invoiceId (uuid FK invoices), stripePaymentIntentId (text UNIQUE), stripeChargeId (text), amountCents (integer NOT NULL), currency (text NOT NULL DEFAULT 'aud'), status (text NOT NULL: 'pending', 'processing', 'succeeded', 'failed', 'refunded'), paymentMethodId (uuid FK payment_methods), failureCode (text), failureMessage (text), metadata (jsonb), paidAt (timestamp), createdAt",
+        "Index on organizationId for RLS",
+        "Index on invoiceId for invoice payment lookups",
+        "Index on stripePaymentIntentId for webhook updates",
+        "Index on status for reporting queries",
+        "RLS policy: SELECT restricted to rows where organizationId matches user's org",
+        "TypeScript type PaymentTransaction exported",
+        "Migration file exists",
+        "bun run typecheck passes"
+      ],
+      "files_to_modify": [
+        "drizzle/schema/payments/payment-transactions.ts",
+        "drizzle/schema/payments/index.ts"
+      ],
+      "dependencies": ["PAY-001"],
+      "completion_promise": "PAY_002_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending"
+    },
+    {
+      "id": "PAY-003",
+      "name": "Stripe Client Setup",
+      "description": "Configure Stripe SDK for server and client",
+      "type": "server",
+      "acceptance_criteria": [
+        "File src/lib/payments/stripe-server.ts creates Stripe instance with STRIPE_SECRET_KEY",
+        "Stripe instance configured with apiVersion: '2024-12-18.acacia' (latest stable)",
+        "File src/lib/payments/stripe-client.ts exports loadStripe() promise with STRIPE_PUBLISHABLE_KEY",
+        "loadStripe uses singleton pattern (loads once)",
+        "File src/lib/payments/index.ts re-exports stripe server and client",
+        "Environment variables validated at module load time",
+        "Throws PaymentConfigError if STRIPE_SECRET_KEY missing in production",
+        "bun run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/lib/payments/stripe-server.ts",
+        "src/lib/payments/stripe-client.ts",
+        "src/lib/payments/index.ts",
+        "src/lib/payments/errors.ts"
+      ],
+      "dependencies": [],
+      "completion_promise": "PAY_003_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending"
+    },
+    {
+      "id": "PAY-004",
+      "name": "Payment Intent API Routes",
+      "description": "Implement API routes for creating and confirming payments",
+      "type": "server",
+      "acceptance_criteria": [
+        "File src/routes/api/payments/intent.ts exports POST handler",
+        "POST validates invoiceId exists and belongs to user's org",
+        "POST validates invoice status is 'sent' or 'overdue' (not already paid)",
+        "Creates or retrieves Stripe Customer for invoice's customer (stores stripeCustomerId on customers table)",
+        "Creates PaymentIntent with amount_cents from invoice.totalCents, currency, customer, metadata.invoiceId",
+        "Creates pending payment_transaction record",
+        "Returns { clientSecret, paymentIntentId }",
+        "File src/routes/api/payments/confirm.ts exports POST handler",
+        "POST retrieves PaymentIntent from Stripe, verifies status is 'succeeded'",
+        "Updates payment_transaction: status='succeeded', paidAt=NOW()",
+        "Updates invoice: status='paid', paidAt=NOW()",
+        "Returns { transaction, invoice }",
+        "Both routes wrapped with createProtectedFn",
+        "Error: 400 if invoice already paid, 404 if invoice not found",
+        "bun run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/routes/api/payments/intent.ts",
+        "src/routes/api/payments/confirm.ts",
+        "src/lib/schemas/payments.ts"
+      ],
+      "dependencies": ["PAY-001", "PAY-002", "PAY-003"],
+      "completion_promise": "PAY_004_COMPLETE",
+      "estimated_iterations": 4,
+      "status": "pending"
+    },
+    {
+      "id": "PAY-005",
+      "name": "Payment Methods API Routes",
+      "description": "Implement API routes for managing saved payment methods",
+      "type": "server",
+      "acceptance_criteria": [
+        "File src/routes/api/customers/$customerId/payment-methods/index.ts exports GET handler",
+        "GET lists payment_methods WHERE customerId AND deletedAt IS NULL, ordered by isDefault DESC, createdAt DESC",
+        "File src/routes/api/customers/$customerId/payment-methods/setup.ts exports POST handler",
+        "POST creates Stripe SetupIntent for customer, returns { clientSecret }",
+        "File src/routes/api/customers/$customerId/payment-methods/$id/default.ts exports POST handler",
+        "POST sets isDefault=false for all customer's methods, then isDefault=true for target",
+        "Also calls stripe.customers.update with invoice_settings.default_payment_method",
+        "File src/routes/api/customers/$customerId/payment-methods/$id/index.ts exports DELETE handler",
+        "DELETE soft-deletes (deletedAt=NOW()) and calls stripe.paymentMethods.detach()",
+        "All routes validate customerId belongs to user's org",
+        "All routes wrapped with createProtectedFn",
+        "bun run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/routes/api/customers/$customerId/payment-methods/index.ts",
+        "src/routes/api/customers/$customerId/payment-methods/setup.ts",
+        "src/routes/api/customers/$customerId/payment-methods/$id/default.ts",
+        "src/routes/api/customers/$customerId/payment-methods/$id/index.ts"
+      ],
+      "dependencies": ["PAY-001", "PAY-003"],
+      "completion_promise": "PAY_005_COMPLETE",
+      "estimated_iterations": 4,
+      "status": "pending"
+    },
+    {
+      "id": "PAY-006",
+      "name": "Stripe Webhook Handler",
+      "description": "Implement webhook handler for Stripe events",
+      "type": "server",
+      "acceptance_criteria": [
+        "File src/routes/api/webhooks/stripe.ts exports POST handler",
+        "Verifies webhook signature using stripe.webhooks.constructEvent() with STRIPE_WEBHOOK_SECRET",
+        "Returns 400 if signature verification fails",
+        "Handles event 'payment_intent.succeeded': updates payment_transaction status='succeeded', paidAt=NOW(); updates invoice status='paid'",
+        "Handles event 'payment_intent.payment_failed': updates payment_transaction status='failed', failureCode, failureMessage",
+        "Handles event 'setup_intent.succeeded': creates payment_methods record from SetupIntent's payment_method",
+        "Handles event 'payment_method.detached': sets payment_methods.deletedAt=NOW()",
+        "Uses idempotency: checks if event already processed via stripePaymentIntentId before updating",
+        "Returns 200 for all handled events, 400 for unhandled (Stripe will retry)",
+        "Logs event type and id for debugging",
+        "Route does NOT use createProtectedFn (public webhook endpoint)",
+        "bun run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/routes/api/webhooks/stripe.ts",
+        "src/lib/payments/webhook-handlers.ts"
+      ],
+      "dependencies": ["PAY-001", "PAY-002", "PAY-003"],
+      "completion_promise": "PAY_006_COMPLETE",
+      "estimated_iterations": 5,
+      "status": "pending"
+    },
+    {
+      "id": "PAY-007",
+      "name": "Payment Form UI Component",
+      "description": "Create Stripe Elements payment form component",
+      "type": "ui",
+      "acceptance_criteria": [
+        "PaymentForm component in src/components/payments/payment-form.tsx",
+        "Props: { invoiceId: string, amount: number, currency: string, onSuccess: (transaction) => void, savedMethods?: PaymentMethod[] }",
+        "Wraps content in Elements provider from @stripe/react-stripe-js with clientSecret",
+        "Fetches clientSecret via POST /api/payments/intent on mount",
+        "If savedMethods provided, shows radio buttons to select saved method or 'New card'",
+        "PaymentElement from @stripe/react-stripe-js for new card entry",
+        "Submit button calls stripe.confirmPayment() with return_url",
+        "Shows Loader2 with animate-spin during processing",
+        "On success, calls POST /api/payments/confirm then onSuccess callback",
+        "Error state shows inline error message with AlertTriangle icon",
+        "Disabled state during processing",
+        "ARIA: aria-busy on form during processing, aria-invalid on error",
+        "Exported from src/components/payments/index.ts",
+        "bun run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/components/payments/payment-form.tsx",
+        "src/components/payments/index.ts"
+      ],
+      "dependencies": ["PAY-004"],
+      "completion_promise": "PAY_007_COMPLETE",
+      "estimated_iterations": 4,
+      "status": "pending"
+    },
+    {
+      "id": "PAY-008",
+      "name": "Invoice Payment Page",
+      "description": "Create public invoice payment page",
+      "type": "ui",
+      "acceptance_criteria": [
+        "Route src/routes/pay/$invoiceId.tsx created as public route (no auth required)",
+        "Fetches invoice via public API (invoice must have status 'sent' or 'overdue')",
+        "Displays invoice summary: number, customer name, amount, due date",
+        "Uses PaymentForm component with invoice amount",
+        "On payment success, shows success message with CheckCircle icon",
+        "If invoice already paid, shows 'Invoice already paid' with receipt link",
+        "If invoice not found or cancelled, shows 404 error",
+        "Responsive layout for mobile payments",
+        "Fetches customer's saved payment methods if customer is logged in",
+        "Stripe branding and security badge displayed",
+        "ARIA: aria-live region for payment status updates",
+        "bun run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/routes/pay/$invoiceId.tsx",
+        "src/routes/api/invoices/$invoiceId/public.ts"
+      ],
+      "dependencies": ["PAY-007"],
+      "completion_promise": "PAY_008_COMPLETE",
+      "estimated_iterations": 4,
+      "status": "pending"
+    }
+  ],
+  "cross_prd_dependencies": {
+    "note": "Requires invoices schema from DOM-ORDERS and customers from DOM-CUSTOMERS",
+    "required_prds": ["FOUND-AUTH", "FOUND-SCHEMA", "FOUND-SHARED", "DOM-CUSTOMERS"],
+    "rationale": "FOUND-AUTH for protected routes; FOUND-SCHEMA for Drizzle; DOM-CUSTOMERS for customer records and Stripe customer ID storage"
+  },
+  "success_criteria": [
+    "Payment methods table created with proper RLS",
+    "Payment transactions table created with proper RLS",
+    "Stripe SDK configured for server and client",
+    "PaymentIntent creation for invoice payments",
+    "Webhook handles payment success/failure events",
+    "Saved payment methods management",
+    "Public invoice payment page functional",
+    "TypeScript compiles with no errors",
+    "All 8 stories have testable acceptance criteria"
+  ],
+  "out_of_scope": [
+    "Recurring subscriptions (future enhancement)",
+    "Multi-currency support (uses AUD only for MVP)",
+    "Refund processing UI (manual via Stripe dashboard)",
+    "Payment links generation",
+    "Apple Pay / Google Pay (requires additional setup)",
+    "Bank transfers / Direct debit"
+  ],
+  "migration_notes": {
+    "stripe_setup": "Create Stripe account, configure webhooks endpoint, obtain API keys",
+    "webhook_url": "Configure webhook endpoint in Stripe dashboard: {app_url}/api/webhooks/stripe",
+    "test_mode": "Use Stripe test mode keys during development"
+  }
+}

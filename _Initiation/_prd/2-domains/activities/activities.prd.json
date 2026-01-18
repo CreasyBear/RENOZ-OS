@@ -1,0 +1,517 @@
+{
+  "id": "DOM-ACTIVITIES",
+  "name": "Audit Trail and Activity Logging System",
+  "description": "Comprehensive activity tracking and audit trail system providing complete visibility into user actions, system changes, and data modifications across all entities in the application. Enables compliance, debugging, and user behavior analysis.",
+  "created": "2026-01-11",
+  "updated": "2026-01-11",
+  "priority": 5,
+  "phase": "core-foundation",
+  "version": "1.0",
+  "enumSource": "$ref:../foundation/canonical-enums.json",
+  "columnSource": "$ref:../foundation/column-patterns.json",
+  "business_value": {
+    "compliance": true,
+    "security": true,
+    "debugging": true,
+    "analytics": true,
+    "description": "Essential audit trail system enabling regulatory compliance, security monitoring, debugging support, and user behavior analytics"
+  },
+  "system_requirements": {
+    "database": {
+      "activities": {
+        "description": "Comprehensive audit trail of all user and system actions",
+        "tableCategory": "appendOnly",
+        "fields": {
+          "id": "uuid PRIMARY KEY DEFAULT gen_random_uuid()",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE",
+          "userId": "uuid REFERENCES users(id) ON DELETE SET NULL",
+          "entityType": "$ref:canonical-enums.json#/enums/activityEntityType",
+          "entityId": "uuid NOT NULL",
+          "action": "$ref:canonical-enums.json#/enums/activityAction",
+          "changes": "jsonb",
+          "metadata": "jsonb DEFAULT '{}'",
+          "ipAddress": "inet",
+          "userAgent": "text",
+          "createdAt": "timestamptz NOT NULL DEFAULT now()",
+          "createdBy": "uuid REFERENCES users(id) ON DELETE SET NULL"
+        },
+        "indexes": [
+          {
+            "name": "idx_activities_org_entity",
+            "columns": [
+              "organizationId",
+              "entityType",
+              "entityId"
+            ],
+            "description": "Primary query pattern - find all activities for a specific entity"
+          },
+          {
+            "name": "idx_activities_org_created",
+            "columns": [
+              "organizationId",
+              "createdAt DESC"
+            ],
+            "description": "Activity feed chronological listing"
+          },
+          {
+            "name": "idx_activities_user",
+            "columns": [
+              "userId",
+              "createdAt DESC"
+            ],
+            "description": "User-specific activity history"
+          },
+          {
+            "name": "idx_activities_action",
+            "columns": [
+              "organizationId",
+              "action",
+              "createdAt DESC"
+            ],
+            "description": "Filter by action type (e.g., all 'deleted' actions)"
+          },
+          {
+            "name": "idx_activities_entity_type",
+            "columns": [
+              "organizationId",
+              "entityType",
+              "createdAt DESC"
+            ],
+            "description": "Filter by entity type (e.g., all 'customer' activities)"
+          }
+        ],
+        "constraints": [
+          "createdAt IS NOT NULL",
+          "action IS NOT NULL",
+          "entityType IS NOT NULL",
+          "entityId IS NOT NULL"
+        ],
+        "notes": [
+          "Append-only table - no updates or deletes allowed",
+          "Partition by createdAt monthly for performance at scale",
+          "Consider BRIN index on createdAt for very large tables",
+          "changes jsonb format: { field: { old: value, new: value } }",
+          "metadata jsonb format: free-form context data per action type"
+        ]
+      }
+    },
+    "api_endpoints": {
+      "activities": {
+        "getEntityActivities": {
+          "method": "GET",
+          "path": "/api/activities/:entityType/:entityId",
+          "query_params": [
+            "page",
+            "limit",
+            "action",
+            "userId",
+            "dateFrom",
+            "dateTo"
+          ],
+          "response": {
+            "activities": "Activity[]",
+            "total": "number",
+            "page": "number",
+            "limit": "number"
+          },
+          "description": "Get activity history for a specific entity (customer, order, etc.)"
+        },
+        "getActivityFeed": {
+          "method": "GET",
+          "path": "/api/activities/feed",
+          "query_params": [
+            "page",
+            "limit",
+            "entityType",
+            "action",
+            "userId",
+            "dateFrom",
+            "dateTo"
+          ],
+          "response": {
+            "activities": "Activity[]",
+            "total": "number",
+            "page": "number",
+            "limit": "number"
+          },
+          "description": "Organization-wide activity feed with filtering"
+        },
+        "getUserActivities": {
+          "method": "GET",
+          "path": "/api/activities/user/:userId",
+          "query_params": [
+            "page",
+            "limit",
+            "entityType",
+            "action",
+            "dateFrom",
+            "dateTo"
+          ],
+          "response": {
+            "activities": "Activity[]",
+            "total": "number",
+            "page": "number",
+            "limit": "number"
+          },
+          "description": "Get all activities performed by a specific user"
+        },
+        "exportActivities": {
+          "method": "POST",
+          "path": "/api/activities/export",
+          "body": {
+            "filters": "ActivityFilters",
+            "format": "ExportFormat"
+          },
+          "response": {
+            "jobId": "string"
+          },
+          "description": "Export activity data for compliance reporting (async job)"
+        },
+        "getActivityStats": {
+          "method": "GET",
+          "path": "/api/activities/stats",
+          "query_params": [
+            "dateFrom",
+            "dateTo",
+            "groupBy"
+          ],
+          "response": {
+            "stats": "ActivityStats[]"
+          },
+          "description": "Activity statistics for analytics dashboard"
+        }
+      }
+    },
+    "ui_components": {
+      "activityFeed": {
+        "description": "Real-time activity feed component showing recent actions",
+        "features": [
+          "Timeline view with grouping by date",
+          "User avatar and name display",
+          "Action type with icon indicators",
+          "Entity links to navigate to referenced records",
+          "Expandable details showing field changes",
+          "Filter by entity type, action, user, date range",
+          "Real-time updates via websocket/polling",
+          "Infinite scroll for large activity sets"
+        ],
+        "display": [
+          "Compact timeline view (default)",
+          "Detailed view with full change diffs",
+          "Grouped view (by entity, by user, by date)"
+        ]
+      },
+      "activityTimeline": {
+        "description": "Entity-specific activity timeline embedded in detail views",
+        "features": [
+          "Vertical timeline with event markers",
+          "Milestone indicators (created, status changes, completed)",
+          "User attribution with avatars",
+          "Timestamp with relative time",
+          "Expandable change details",
+          "Filter by action type",
+          "Export to PDF/CSV for audit reports"
+        ],
+        "placement": [
+          "Customer detail page - right sidebar",
+          "Order detail page - Activity tab",
+          "Opportunity detail page - Activity tab"
+        ]
+      },
+      "changeHistory": {
+        "description": "Detailed field-level change viewer",
+        "features": [
+          "Side-by-side diff view (old vs new)",
+          "Inline diff highlighting",
+          "Type-specific rendering (dates, currency, text)",
+          "Change reason display (if captured)",
+          "Revert capability (for specific record types)",
+          "Print/export change history"
+        ]
+      },
+      "activityDashboard": {
+        "description": "Analytics dashboard for activity monitoring",
+        "features": [
+          "Activity heatmap by time of day/day of week",
+          "Top active users leaderboard",
+          "Action type distribution pie chart",
+          "Activity trends over time (line chart)",
+          "Entity type breakdown (bar chart)",
+          "Anomaly detection alerts",
+          "Exportable reports"
+        ]
+      },
+      "auditSearch": {
+        "description": "Advanced search interface for compliance and investigations",
+        "features": [
+          "Multi-criteria filter builder",
+          "Date range picker with presets",
+          "User selector with autocomplete",
+          "Entity type and action type dropdowns",
+          "Free-text search in changes/metadata",
+          "Saved search templates",
+          "Export filtered results",
+          "Shareable filter URLs"
+        ]
+      }
+    },
+    "business_rules": {
+      "activity_logging": {
+        "automatic_capture": "All create, update, delete operations automatically logged via Drizzle hooks or DB triggers",
+        "field_changes": "Only changed fields captured in changes jsonb to minimize storage",
+        "sensitive_data": "Passwords, tokens, secrets excluded from activity logs",
+        "system_actions": "System-initiated actions (automated processes) logged with userId NULL",
+        "async_logging": "Activity logging happens asynchronously to not block main transaction",
+        "batch_logging": "Bulk operations log summarized activity (e.g., '50 records updated') with link to detailed change log"
+      },
+      "data_retention": {
+        "default_retention": "Activities retained for 7 years (compliance requirement)",
+        "archival_strategy": "Move activities older than 2 years to cold storage/archive table",
+        "deletion_policy": "Never delete activities - archival only",
+        "partition_strategy": "Monthly partitions for activities table to maintain query performance",
+        "compression": "Apply compression to archived partitions"
+      },
+      "access_control": {
+        "view_permissions": "Users can view activities for entities they have access to",
+        "admin_access": "Admins can view all organization activities",
+        "sensitive_actions": "Security-related actions (login, password change) require elevated permissions to view",
+        "export_permissions": "Only admins can export activity data",
+        "user_privacy": "User-specific activities (preferences, notifications) only visible to user or admin"
+      },
+      "performance": {
+        "query_optimization": "All queries must use organizationId in WHERE clause for partition pruning",
+        "index_strategy": "Composite indexes starting with organizationId for all query patterns",
+        "pagination_required": "All activity queries must use pagination (max 100 records per page)",
+        "caching": "Activity counts and stats cached with 5-minute TTL",
+        "rate_limiting": "Activity feed polling limited to 1 request per 10 seconds per user"
+      },
+      "data_format": {
+        "changes_structure": "{ fieldName: { old: previousValue, new: newValue } }",
+        "metadata_structure": "Free-form based on action type - e.g., { reason: 'Customer request', approvedBy: userId }",
+        "timestamp_format": "ISO 8601 with timezone",
+        "null_handling": "Use null for 'old' on creation, 'new' on deletion",
+        "array_changes": "For array fields, log full old/new arrays (not diffs)"
+      }
+    },
+    "integrations": {
+      "drizzle_hooks": {
+        "description": "Automatic activity logging via Drizzle lifecycle hooks",
+        "implementation": "onAfterInsert, onAfterUpdate, onAfterDelete hooks capture changes",
+        "context_injection": "Current user and request context injected via middleware"
+      },
+      "websocket_updates": {
+        "description": "Real-time activity feed updates",
+        "channels": "Per-organization activity channel, per-entity activity channel",
+        "events": "New activity event broadcasts to subscribed clients"
+      },
+      "analytics_pipeline": {
+        "description": "Activity data feeds analytics and BI systems",
+        "export_format": "JSON Lines for data warehouse ingestion",
+        "schedule": "Hourly incremental export of new activities"
+      },
+      "compliance_reporting": {
+        "description": "Automated compliance report generation",
+        "formats": "PDF, CSV, Excel",
+        "templates": "Audit report, user activity report, data access report, change log report"
+      }
+    },
+    "performance_requirements": {
+      "response_times": {
+        "entity_timeline": "< 300ms for 100 activities",
+        "activity_feed": "< 500ms for paginated feed (50 records)",
+        "activity_search": "< 1s for complex multi-filter queries",
+        "stats_dashboard": "< 2s for aggregated statistics with date range"
+      },
+      "scalability": {
+        "write_throughput": "10,000+ activities per minute",
+        "query_throughput": "1,000+ concurrent activity feed readers",
+        "retention_scale": "Efficiently handle 100M+ activity records",
+        "partition_management": "Automatic partition creation and archival"
+      },
+      "reliability": {
+        "logging_guarantee": "At-least-once delivery for activity logs (async queue with retries)",
+        "data_durability": "100% durability via WAL replication",
+        "backup_frequency": "Continuous backup with point-in-time recovery",
+        "disaster_recovery": "4-hour RTO, 1-hour RPO for activity data"
+      }
+    }
+  },
+  "stories": [
+    {
+      "id": "ACTIVITY-CORE-SCHEMA",
+      "name": "Activity Logging Core Schema",
+      "description": "Create activities table with proper indexes and partitioning strategy",
+      "type": "schema",
+      "acceptance_criteria": [
+        "activities table with all required fields",
+        "Composite indexes for all query patterns",
+        "Monthly partitioning setup on createdAt",
+        "RLS policies for organization-level isolation",
+        "TypeScript types exported",
+        "Migration script with proper indexes"
+      ],
+      "files_to_modify": [
+        "src/lib/schema/activities.ts",
+        "src/lib/schema/index.ts",
+        "drizzle/migrations/010_activities.ts"
+      ],
+      "completion_promise": "ACTIVITY_CORE_SCHEMA_COMPLETE",
+      "estimated_iterations": 1,
+      "status": "pending"
+    },
+    {
+      "id": "ACTIVITY-LOGGING-API",
+      "name": "Activity Logging API and Hooks",
+      "description": "Implement activity logging infrastructure with Drizzle hooks",
+      "type": "server-function",
+      "acceptance_criteria": [
+        "Drizzle lifecycle hooks for automatic logging",
+        "Context injection middleware for userId/ipAddress/userAgent",
+        "Manual activity logging utility functions",
+        "Activity retrieval endpoints with filtering",
+        "Activity statistics aggregation",
+        "Export functionality for compliance",
+        "Proper error handling and retry logic"
+      ],
+      "files_to_modify": [
+        "src/server/middleware/activity-context.ts",
+        "src/server/functions/activities.ts",
+        "src/lib/activity-logger.ts",
+        "src/lib/schemas/activities.ts"
+      ],
+      "dependencies": [
+        "ACTIVITY-CORE-SCHEMA"
+      ],
+      "completion_promise": "ACTIVITY_LOGGING_API_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending"
+    },
+    {
+      "id": "ACTIVITY-FEED-UI",
+      "name": "Activity Feed Component",
+      "description": "Real-time activity feed with filtering and infinite scroll",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Timeline view with date grouping",
+        "User attribution with avatars",
+        "Action type icons and color coding",
+        "Filter by entity type, action, user, date range",
+        "Infinite scroll pagination",
+        "Real-time updates (websocket or polling)",
+        "Link to entity detail pages",
+        "Expandable change details",
+        "Feed virtualized if >50 activities using @tanstack/react-virtual",
+        "Infinite scroll shows loading skeleton at bottom",
+        "Filter state reflected in URL (deep-linkable)",
+        "Real-time updates use aria-live='polite'",
+        "Empty state has clear next action (e.g., 'Log first activity')",
+        "All icon-only buttons have aria-label",
+        "Visible focus rings on all interactive elements"
+      ],
+      "files_to_modify": [
+        "src/components/activity/activity-feed.tsx",
+        "src/components/activity/activity-item.tsx",
+        "src/components/activity/activity-filters.tsx",
+        "src/hooks/use-activity-feed.ts"
+      ],
+      "dependencies": [
+        "ACTIVITY-LOGGING-API"
+      ],
+      "completion_promise": "ACTIVITY_FEED_UI_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending"
+    },
+    {
+      "id": "ACTIVITY-TIMELINE-UI",
+      "name": "Entity Activity Timeline Component",
+      "description": "Embeddable timeline showing activity history for specific entities",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Vertical timeline with milestone markers",
+        "Entity-specific activity filtering",
+        "Expandable change diff viewer",
+        "Export timeline to PDF/CSV",
+        "Responsive layout for sidebar/tab placement",
+        "Loading and empty states",
+        "Pagination controls",
+        "Timeline uses semantic list markup (ul/ol)",
+        "Collapsible date groups use aria-expanded",
+        "Change diff viewer uses tabular layout",
+        "Entity links use <a>/<Link>, not div onClick",
+        "Activity type icons have aria-label or visible text",
+        "Full keyboard navigation support"
+      ],
+      "files_to_modify": [
+        "src/components/activity/activity-timeline.tsx",
+        "src/components/activity/change-diff.tsx",
+        "src/hooks/use-entity-activities.ts"
+      ],
+      "dependencies": [
+        "ACTIVITY-LOGGING-API"
+      ],
+      "completion_promise": "ACTIVITY_TIMELINE_UI_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending"
+    },
+    {
+      "id": "ACTIVITY-DASHBOARD-UI",
+      "name": "Activity Analytics Dashboard",
+      "description": "Admin dashboard for activity monitoring and analytics",
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Activity heatmap by time",
+        "Top users leaderboard",
+        "Action distribution charts",
+        "Activity trends over time",
+        "Entity type breakdown",
+        "Date range selector",
+        "Export reports",
+        "Anomaly detection alerts",
+        "Heatmap uses accessible color scale with tooltip values",
+        "Date range picker has full keyboard support",
+        "Leaderboard uses tabular-nums for score alignment",
+        "Charts are color-blind-friendly (not color-only info)",
+        "Dashboard widgets have skeleton loaders matching final layout",
+        "Empty states have clear next actions"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/admin/activities/index.tsx",
+        "src/components/activity/activity-dashboard.tsx",
+        "src/components/activity/activity-charts.tsx",
+        "src/hooks/use-activity-stats.ts"
+      ],
+      "dependencies": [
+        "ACTIVITY-LOGGING-API"
+      ],
+      "completion_promise": "ACTIVITY_DASHBOARD_UI_COMPLETE",
+      "estimated_iterations": 3,
+      "status": "pending"
+    }
+  ],
+  "success_criteria": [
+    "100% of create/update/delete operations automatically logged",
+    "Activity queries return in < 500ms with proper pagination",
+    "Real-time activity feed updates with < 5 second latency",
+    "Activity retention policy enforced with automatic archival",
+    "Compliance-ready audit reports exportable in PDF/CSV",
+    "Activity dashboard provides actionable insights",
+    "Entity timelines embedded in all detail pages",
+    "User activity history accessible for investigations",
+    "Change diffs clearly show old vs new values",
+    "System handles 10,000+ activities per minute without degradation"
+  ],
+  "out_of_scope": [
+    "Video recording of user sessions",
+    "AI-powered anomaly detection (basic only)",
+    "Cross-organization activity tracking",
+    "Blockchain-based immutable audit trail",
+    "Real-time activity streaming to external SIEM systems",
+    "User behavior prediction and recommendations"
+  ],
+  "migration_notes": {
+    "initial_backfill": "No backfill needed - activities start logging from deployment date",
+    "partition_creation": "Create initial 12 monthly partitions on deployment",
+    "index_creation": "Create indexes concurrently to avoid blocking existing queries",
+    "data_retention": "Set up cron job for automatic partition archival after 2 years"
+  }
+}

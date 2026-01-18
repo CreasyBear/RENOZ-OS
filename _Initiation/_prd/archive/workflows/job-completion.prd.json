@@ -1,0 +1,602 @@
+{
+  "id": "WF-JOB",
+  "name": "Job Completion Workflow",
+  "description": "End-to-end installation job workflow from scheduling through execution, sign-off, and invoicing.",
+  "created": "2026-01-09",
+  "priority": 7,
+  "phase": "workflow",
+  "dependencies": {
+    "phase": "Workflow",
+    "executionOrder": 7,
+    "schemaRequired": [
+      {
+        "table": "orders",
+        "status": "EXISTS"
+      },
+      {
+        "table": "customers",
+        "status": "EXISTS"
+      },
+      {
+        "table": "contacts",
+        "status": "EXISTS"
+      },
+      {
+        "table": "addresses",
+        "status": "EXISTS"
+      },
+      {
+        "table": "users",
+        "status": "EXISTS"
+      },
+      {
+        "table": "job-assignments",
+        "status": "EXISTS"
+      },
+      {
+        "table": "notifications",
+        "status": "EXISTS"
+      },
+      {
+        "table": "email-history",
+        "status": "EXISTS"
+      }
+    ],
+    "schemaCreates": [],
+    "serverFunctionsRequired": [
+      {
+        "function": "getOrder",
+        "status": "EXISTS",
+        "domain": "DOM-ORDERS"
+      },
+      {
+        "function": "getCustomer",
+        "status": "EXISTS",
+        "domain": "DOM-CUSTOMERS"
+      },
+      {
+        "function": "createJob",
+        "status": "EXISTS",
+        "domain": "DOM-JOBS"
+      },
+      {
+        "function": "getJob",
+        "status": "EXISTS",
+        "domain": "DOM-JOBS"
+      },
+      {
+        "function": "updateJob",
+        "status": "EXISTS",
+        "domain": "DOM-JOBS"
+      },
+      {
+        "function": "assignJob",
+        "status": "EXISTS",
+        "domain": "DOM-JOBS"
+      },
+      {
+        "function": "completeJob",
+        "status": "EXISTS",
+        "domain": "DOM-JOBS"
+      },
+      {
+        "function": "getJobBySignOffToken",
+        "status": "EXISTS",
+        "domain": "DOM-JOBS"
+      },
+      {
+        "function": "submitSignOff",
+        "status": "EXISTS",
+        "domain": "DOM-JOBS"
+      }
+    ],
+    "serverFunctionsCreates": [
+      {
+        "function": "createJobFromOrder",
+        "story": "WF-JOB-001b"
+      },
+      {
+        "function": "requestCustomerConfirmation",
+        "story": "WF-JOB-002b"
+      },
+      {
+        "function": "getJobByConfirmationToken",
+        "story": "WF-JOB-002b"
+      },
+      {
+        "function": "confirmJobSchedule",
+        "story": "WF-JOB-002b"
+      },
+      {
+        "function": "requestScheduleChange",
+        "story": "WF-JOB-002b"
+      },
+      {
+        "function": "updateJobStatus",
+        "story": "WF-JOB-004b"
+      },
+      {
+        "function": "generateCompletionCertificate",
+        "story": "WF-JOB-005b"
+      },
+      {
+        "function": "triggerPostJobInvoice",
+        "story": "WF-JOB-006b"
+      }
+    ],
+    "prdDependencies": [
+      {
+        "prdId": "DOM-JOBS",
+        "status": "REQUIRED",
+        "reason": "Core job management and scheduling"
+      },
+      {
+        "prdId": "DOM-ORDERS",
+        "status": "REQUIRED",
+        "reason": "Jobs created from orders"
+      },
+      {
+        "prdId": "DOM-CUSTOMERS",
+        "status": "REQUIRED",
+        "reason": "Customer and site information"
+      },
+      {
+        "prdId": "DOM-FINANCIAL",
+        "status": "OPTIONAL",
+        "reason": "Auto-invoicing after completion"
+      },
+      {
+        "prdId": "WF-INVOICING",
+        "status": "OPTIONAL",
+        "reason": "Invoice workflow integration"
+      }
+    ],
+    "enables": []
+  },
+  "domains_involved": [
+    "jobs",
+    "orders",
+    "financial",
+    "customers"
+  ],
+  "references": {
+    "internal": [
+      "memory-bank/prd/domain/jobs.prd.json",
+      "memory-bank/prd/domain/financial.prd.json"
+    ]
+  },
+  "workflow_stages": [
+    "Order -> Schedule Job -> Assign Tech -> Execute -> Sign-Off -> Invoice"
+  ],
+  "current_state": {
+    "implemented": [
+      "Basic job creation",
+      "Job assignment",
+      "Sign-off page with signature capture",
+      "Photo capture during execution",
+      "Job completion wizard",
+      "Completion email via Trigger.dev"
+    ],
+    "gaps": [
+      "No job from order automation",
+      "No customer confirmation scheduling flow",
+      "No pre-job checklist",
+      "Partial execution tracking (no en_route/on_site status)",
+      "No PDF completion certificate",
+      "No automated invoicing"
+    ]
+  },
+  "stories": [
+    {
+      "id": "WF-JOB-001a",
+      "name": "Order Requires Installation Flag",
+      "description": "Add requiresInstallation flag and auto-suggest job creation",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Add requiresInstallation boolean to orders table",
+        "Toggle on order form to mark installation required",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "WF_JOB_001A_COMPLETE"
+    },
+    {
+      "id": "WF-JOB-001b",
+      "name": "Auto-Create Job from Order",
+      "description": "Server function to create job from order on confirmation",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "createJobFromOrder server function",
+        "Job linked to order and customer",
+        "BOM populated from order items",
+        "Site address from order shipping address",
+        "Job in 'pending schedule' status",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-JOB-001a",
+        "DOM-JOBS-002"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_JOB_001B_COMPLETE"
+    },
+    {
+      "id": "WF-JOB-001c",
+      "name": "Job Creation Prompt UI",
+      "description": "Banner on order detail prompting job scheduling",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Banner on order detail: 'This order requires installation - Schedule Job'",
+        "Auto-create job on order confirmation (if requiresInstallation)",
+        "Skip if job already exists",
+        "Alert banner with action button showing workflow state",
+        "Progress indicator if job creation is in progress",
+        "Toast notification on successful job creation with link to job",
+        "Confirmation dialog before auto-creating job",
+        "Loading state while checking existing jobs",
+        "Error recovery with retry option if creation fails",
+        "Responsive: full-width banner on all screen sizes",
+        "Breakpoints: button stacks below text on mobile (<640px)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-JOB-001b"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "WF_JOB_001C_COMPLETE",
+      "ui_spec": {
+        "component_type": "AlertBanner",
+        "workflow_visualization": "Contextual banner showing order-to-job workflow state with action CTA",
+        "accessibility": {
+          "aria_role": "alert for new banner, status for updates",
+          "focus_management": "Focus moves to banner when it appears",
+          "keyboard_navigation": "Action button keyboard accessible",
+          "screen_reader": "Banner content and action clearly announced"
+        }
+      }
+    },
+    {
+      "id": "WF-JOB-002a",
+      "name": "Customer Confirmation Schema",
+      "description": "Add confirmationStatus and confirmationToken fields to job_assignments",
+      "priority": 4,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Add confirmationStatus enum: pending, confirmed, change_requested",
+        "Add confirmationToken field for public URL",
+        "Add confirmationTokenExpiresAt timestamp",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "WF_JOB_002A_COMPLETE"
+    },
+    {
+      "id": "WF-JOB-002b",
+      "name": "Customer Confirmation Server Functions",
+      "description": "requestCustomerConfirmation and public confirmation handling",
+      "priority": 5,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "requestCustomerConfirmation server function generates token",
+        "Public getJobByConfirmationToken function",
+        "confirmJobSchedule function updates status",
+        "requestScheduleChange function for customer requests",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-JOB-002a"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "WF_JOB_002B_COMPLETE"
+    },
+    {
+      "id": "WF-JOB-002c",
+      "name": "Customer Confirmation UI",
+      "description": "Public customer confirmation page and scheduling UI",
+      "priority": 6,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Schedule from job detail or calendar",
+        "Check technician availability",
+        "Public customer confirmation page",
+        "Customer can confirm or request different time",
+        "Step indicator: Scheduled -> Confirmation Sent -> Confirmed/Change Requested",
+        "Form wizard for requesting schedule change with date/time picker",
+        "Toast notification on confirmation success",
+        "Confirmation dialog showing appointment summary before confirming",
+        "Loading state while processing confirmation",
+        "Error state with clear message if token expired or invalid",
+        "Responsive: mobile-optimized for customer confirmation page",
+        "Breakpoints: single column (<640px), centered card (>640px)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-JOB-002b",
+        "DOM-JOBS-005"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "WF_JOB_002C_COMPLETE",
+      "ui_spec": {
+        "component_type": "ConfirmationCard",
+        "workflow_visualization": "Status badge showing confirmation state with action buttons",
+        "accessibility": {
+          "aria_live_regions": "Confirmation status changes announced",
+          "focus_management": "Focus on primary action button on page load",
+          "keyboard_navigation": "Tab order optimized for quick confirmation",
+          "form_labels": "All form fields properly labeled with error states"
+        }
+      }
+    },
+    {
+      "id": "WF-JOB-002d",
+      "name": "Scheduling Email Triggers",
+      "description": "Confirmation request email and 24h reminder",
+      "priority": 7,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Customer confirmation request email via Trigger.dev",
+        "Confirmation updates job status",
+        "Reminder email 24h before job",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-JOB-002c"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_JOB_002D_COMPLETE"
+    },
+    {
+      "id": "WF-JOB-003",
+      "name": "Add Pre-Job Preparation",
+      "description": "Checklist before technician dispatch",
+      "priority": 8,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Pre-job checklist: materials ready, vehicle loaded, tools",
+        "Material allocation from inventory",
+        "Print job pack: work order, site info, checklist",
+        "GPS navigation link to site",
+        "Customer contact info accessible",
+        "Mark ready for dispatch",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "DOM-JOBS-002",
+        "DOM-JOBS-004"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_JOB_003_COMPLETE"
+    },
+    {
+      "id": "WF-JOB-004a",
+      "name": "Granular Job Status Schema",
+      "description": "Add en_route and on_site to job status enum",
+      "priority": 9,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Add en_route, on_site to job status enum",
+        "Migration for status field update",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "WF_JOB_004A_COMPLETE"
+    },
+    {
+      "id": "WF-JOB-004b",
+      "name": "Job Execution Status Updates",
+      "description": "updateJobStatus server function for field updates",
+      "priority": 10,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "updateJobStatus server function for field updates",
+        "Status updates: en route, on site, in progress, complete",
+        "Time tracking start/stop",
+        "Notes and issues logging",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-JOB-004a",
+        "DOM-JOBS-006"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_JOB_004B_COMPLETE"
+    },
+    {
+      "id": "WF-JOB-004c",
+      "name": "Operations Dashboard for Jobs",
+      "description": "Real-time job visibility for office",
+      "priority": 11,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Status update buttons on installer mobile view",
+        "Operations dashboard showing job locations/status",
+        "Real-time visibility for office",
+        "Job status timeline: Scheduled -> En Route -> On Site -> In Progress -> Complete",
+        "Map view showing technician locations (placeholder for future GPS)",
+        "Status cards with quick-action buttons for techs",
+        "Toast notification when job status changes",
+        "Confirmation dialog before status transitions",
+        "Loading state during status update submission",
+        "Error recovery with offline queue for mobile",
+        "Responsive: card-based mobile view, table/map on desktop",
+        "Breakpoints: mobile (<640px cards), tablet (640-1024px list), desktop (>1024px map+list)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-JOB-004b"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "WF_JOB_004C_COMPLETE",
+      "ui_spec": {
+        "component_type": "Dashboard",
+        "workflow_visualization": "Real-time status board with job cards showing timeline progression and location",
+        "accessibility": {
+          "aria_live_regions": "Status changes announced in real-time",
+          "focus_management": "Focus maintained after status update",
+          "keyboard_navigation": "All status buttons keyboard accessible",
+          "screen_reader": "Job status and location clearly announced"
+        }
+      }
+    },
+    {
+      "id": "WF-JOB-005a",
+      "name": "Sign-Off Feedback Field",
+      "description": "Add optional feedback/notes textarea to sign-off page",
+      "priority": 12,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Add optional feedback/notes textarea to sign-off page",
+        "Save feedback to job record",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_JOB_005A_COMPLETE"
+    },
+    {
+      "id": "WF-JOB-005b",
+      "name": "PDF Completion Certificate",
+      "description": "Generate PDF completion certificate on sign-off",
+      "priority": 13,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Generate PDF completion certificate on sign-off",
+        "Include job summary, signature, completion date",
+        "Certificate download link on success",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-JOB-005a"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_JOB_005B_COMPLETE"
+    },
+    {
+      "id": "WF-JOB-005c",
+      "name": "Certificate Email Attachment",
+      "description": "Attach completion certificate to confirmation email",
+      "priority": 14,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Attach certificate to confirmation email",
+        "Sign-off triggers warranty registration (already exists)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-JOB-005b"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_JOB_005C_COMPLETE"
+    },
+    {
+      "id": "WF-JOB-006a",
+      "name": "Job-Invoice Link Schema",
+      "description": "Add jobId reference to invoice",
+      "priority": 15,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Add jobId FK to orders/invoices table",
+        "Link invoice to job and order",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "WF_JOB_006A_COMPLETE"
+    },
+    {
+      "id": "WF-JOB-006b",
+      "name": "Post-Completion Auto-Invoice Trigger",
+      "description": "Trigger invoice generation after successful sign-off",
+      "priority": 16,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Option: auto-invoice on sign-off (configurable per org)",
+        "Trigger invoice generation on job completion",
+        "Invoice includes: order items + labor (if billable)",
+        "Additional items/time added during job",
+        "Push to Xero",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-JOB-006a",
+        "WF-JOB-005c",
+        "WF-INV-001"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "WF_JOB_006B_COMPLETE"
+    },
+    {
+      "id": "WF-JOB-006c",
+      "name": "Invoice Review Queue",
+      "description": "Review queue for auto-generated invoices before send",
+      "priority": 17,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Review before sending (optional)",
+        "Review queue for generated invoices",
+        "Approve and send invoice action",
+        "Queue table with sortable columns: job, customer, amount, created date",
+        "Bulk approve action for multiple invoices",
+        "Status indicators: pending review, approved, sent",
+        "Toast notification on approve/send actions",
+        "Confirmation dialog before bulk approve",
+        "Loading state during invoice operations",
+        "Error handling with retry for failed sends",
+        "Responsive: card view on mobile, table on desktop",
+        "Breakpoints: mobile (<640px), tablet (640-1024px), desktop (>1024px)",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "WF-JOB-006b"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "WF_JOB_006C_COMPLETE",
+      "ui_spec": {
+        "component_type": "DataTable",
+        "workflow_visualization": "Queue table with status badges and batch action toolbar",
+        "accessibility": {
+          "aria_labels": "Table headers and row actions labeled",
+          "focus_management": "Focus returns to table after bulk action",
+          "keyboard_navigation": "Full table navigation via keyboard",
+          "screen_reader": "Row selection state and actions announced"
+        }
+      }
+    }
+  ],
+  "success_criteria": [
+    "Jobs auto-created from orders",
+    "Scheduling includes customer confirmation",
+    "Pre-job prep ensures readiness",
+    "Execution tracked in real-time",
+    "Sign-off is digital and complete",
+    "Invoicing automated post-completion"
+  ],
+  "out_of_scope": [
+    "Gantt chart scheduling",
+    "Route optimization",
+    "Native mobile app"
+  ]
+}

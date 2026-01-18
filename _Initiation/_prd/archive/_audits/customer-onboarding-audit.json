@@ -1,0 +1,615 @@
+{
+  "prd_id": "WF-ONBOARDING",
+  "prd_name": "Customer Onboarding Workflow",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "prd_path": "memory-bank/prd/workflows/customer-onboarding.prd.json",
+  "summary": {
+    "total_stories": 6,
+    "verified_gaps": 6,
+    "invalidated_gaps": 0,
+    "needs_atomization": 4,
+    "implementation_status": "Basic customer creation exists. No onboarding-specific functionality implemented. Organization onboarding wizard exists (src/components/domain/settings/onboarding-wizard.tsx) but is for organization setup, not customer onboarding. Customer form (customer-form.tsx) is minimal with only companyName, status, notes fields. No checklist, profile completeness, welcome email automation, milestone tracking, or onboarding dashboard exists."
+  },
+  "codebase_findings": {
+    "existing_customer_infrastructure": {
+      "schema": {
+        "path": "renoz-v2/lib/schema/customers.ts",
+        "fields": ["id", "organizationId", "companyName", "status", "pricingTierId", "xeroContactId", "notes", "createdByUserId", "updatedByUserId", "createdAt", "updatedAt", "deletedAt", "version"],
+        "gaps_for_onboarding": [
+          "No onboardingStatus field",
+          "No onboardingCompletedAt timestamp",
+          "No firstQuoteAt timestamp",
+          "No firstOrderAt timestamp",
+          "No accountManagerId field",
+          "No profileCompleteness score field"
+        ]
+      },
+      "customer_form": {
+        "path": "renoz-v2/src/components/domain/customers/customer-form.tsx",
+        "current_fields": ["companyName", "status", "notes"],
+        "missing_onboarding_fields": [
+          "No contact info section (phone, email - handled separately in contacts)",
+          "No address section (handled separately in addresses)",
+          "No preferences section",
+          "No onboarding checklist display"
+        ]
+      },
+      "customer_detail": {
+        "path": "renoz-v2/src/routes/customers/$customerId.tsx",
+        "tabs": ["Overview", "Communications", "Orders", "Quotes", "Warranties", "Contacts", "Addresses", "Activity"],
+        "missing_for_onboarding": [
+          "No onboarding progress indicator",
+          "No checklist panel",
+          "No profile completeness display"
+        ]
+      },
+      "customer_summary_card": {
+        "path": "renoz-v2/src/components/domain/customers/customer-summary-card.tsx",
+        "current_metrics": ["primaryContact", "totalRevenue", "ytdRevenue", "openOrdersCount", "openQuotesCount", "activeWarrantiesCount", "lastActivityAt"],
+        "missing_for_onboarding": [
+          "No profile completeness score",
+          "No onboarding status",
+          "No days since created"
+        ]
+      }
+    },
+    "existing_email_infrastructure": {
+      "email_service": {
+        "path": "renoz-v2/lib/email/service.ts",
+        "current_templates": ["quote", "order_confirmation", "warranty_notification"],
+        "missing_templates": ["welcome_email", "onboarding_complete"]
+      },
+      "email_templates_react": {
+        "path": "renoz-v2/emails/templates/",
+        "existing": ["QuoteSent.tsx", "OrderConfirmation.tsx", "OrderShipped.tsx", "WarrantyRegistered.tsx", "IssueUpdate.tsx"],
+        "needed": ["WelcomeEmail.tsx", "OnboardingComplete.tsx"]
+      },
+      "trigger_jobs": {
+        "path": "renoz-v2/trigger/email-jobs.ts",
+        "existing_tasks": ["sendQuoteEmail", "sendOrderConfirmation", "sendShippingNotification", "sendWarrantyConfirmation", "sendIssueUpdate"],
+        "needed_tasks": ["sendWelcomeEmail", "sendOnboardingCompleteEmail"]
+      }
+    },
+    "existing_organization_onboarding": {
+      "path": "renoz-v2/src/components/domain/settings/onboarding-wizard.tsx",
+      "description": "Organization setup wizard with steps: company info, logo, address, currency/tax settings, team invites. NOT customer onboarding - this is for configuring the organization itself.",
+      "not_applicable": true
+    },
+    "existing_dashboard": {
+      "path": "renoz-v2/src/components/domain/dashboard/",
+      "components": ["dashboard-page.tsx", "enhanced-dashboard-page.tsx", "dashboard-settings.tsx"],
+      "widgets_available": "Configurable widget system exists",
+      "onboarding_widget_exists": false
+    }
+  },
+  "domain_dependencies": {
+    "customers": {
+      "prd_path": "memory-bank/prd/domains/customers.prd.json",
+      "status": "50% implemented",
+      "relevant_existing": [
+        "Customer CRUD fully working",
+        "Contacts and addresses management",
+        "Activity logging",
+        "Customer summary with metrics"
+      ],
+      "relevant_gaps": [
+        "No customer tags (DOM-CUST-001) - could be used for onboarding status tagging",
+        "No customer hierarchy (DOM-CUST-006) - parent/child for franchise onboarding"
+      ]
+    },
+    "communications": {
+      "prd_path": "memory-bank/prd/domains/communications.prd.json",
+      "status": "Partial implementation",
+      "dependency_story": "DOM-COMMS-001 (Email Open/Click Tracking)",
+      "dependency_status": "NOT implemented - WF-ONB-003 depends on this for email open tracking",
+      "relevant_existing": [
+        "Email sending via Resend",
+        "Email templates (not welcome email)",
+        "Email history tracking",
+        "Activity logging"
+      ],
+      "relevant_gaps": [
+        "No email open/click tracking (DOM-COMMS-001)",
+        "No email scheduling (DOM-COMMS-002)"
+      ]
+    },
+    "pipeline": {
+      "prd_path": "memory-bank/prd/domains/pipeline.prd.json",
+      "relevant_for": "WF-ONB-004 (First Quote Milestone)",
+      "existing": [
+        "Opportunities/quotes management",
+        "Stage tracking"
+      ]
+    }
+  },
+  "stories_audit": {
+    "WF-ONB-001": {
+      "name": "Add Onboarding Checklist",
+      "status": "valid_gap",
+      "change": "atomize",
+      "reason": "No onboarding checklist exists. Customer schema has no onboarding fields. Requires schema + server functions + UI component.",
+      "layers": ["schema", "server", "ui"],
+      "current_implementation": "None",
+      "estimated_iterations": 6,
+      "atomization_recommendation": {
+        "story_1": {
+          "id": "WF-ONB-001A",
+          "name": "Onboarding Checklist Schema",
+          "description": "Add onboarding fields to customers table and create checklist configuration table",
+          "layers": ["schema"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "customers table: onboardingStatus enum ('not_started', 'in_progress', 'completed') with default 'not_started'",
+            "customers table: onboardingCompletedAt timestamp nullable",
+            "customers table: onboardingChecklistProgress jsonb for tracking completed steps",
+            "onboarding_checklist_items table for configurable steps per organization",
+            "Migration runs successfully",
+            "npm run typecheck passes"
+          ]
+        },
+        "story_2": {
+          "id": "WF-ONB-001B",
+          "name": "Onboarding Checklist Server Functions",
+          "description": "Create server functions for checklist CRUD and progress tracking",
+          "layers": ["server"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "getOnboardingChecklist returns checklist items with completion status for customer",
+            "updateOnboardingProgress updates specific checklist item as complete/incomplete",
+            "calculateOnboardingProgress computes percentage from completed items",
+            "Auto-detect completions (has contact, has address, has quote) on customer load",
+            "npm run typecheck passes"
+          ],
+          "dependencies": ["WF-ONB-001A"]
+        },
+        "story_3": {
+          "id": "WF-ONB-001C",
+          "name": "Onboarding Checklist UI",
+          "description": "Display onboarding checklist on customer detail and list views",
+          "layers": ["ui"],
+          "estimated_iterations": 3,
+          "acceptance_criteria": [
+            "OnboardingChecklist component shows steps with check/uncheck state",
+            "Progress bar shows percentage complete",
+            "Checklist displayed on customer detail overview tab",
+            "Customer list has 'Onboarding' status column with progress indicator",
+            "Incomplete onboarding customers highlighted with amber/warning style",
+            "Filter customers by onboarding status (not_started, in_progress, completed)",
+            "npm run typecheck passes"
+          ],
+          "dependencies": ["WF-ONB-001B"]
+        }
+      }
+    },
+    "WF-ONB-002": {
+      "name": "Add Profile Completeness Tracking",
+      "status": "valid_gap",
+      "change": "atomize",
+      "reason": "No profile completeness score exists. Customer summary card exists but doesn't show completeness. Requires calculated field + UI display.",
+      "layers": ["server", "ui"],
+      "current_implementation": "customer-summary-card.tsx shows primary contact info but no completeness score",
+      "estimated_iterations": 4,
+      "atomization_recommendation": {
+        "story_1": {
+          "id": "WF-ONB-002A",
+          "name": "Profile Completeness Calculation",
+          "description": "Create server function to calculate profile completeness score",
+          "layers": ["server"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "calculateProfileCompleteness server function returns 0-100 score",
+            "Required fields: companyName (auto 20%), primaryContact (20%), phone (15%), email (15%), address (15%), ABN in notes (15%)",
+            "Optional fields boost: website, industry classification",
+            "Function used by getCustomerSummary to include in response",
+            "npm run typecheck passes"
+          ]
+        },
+        "story_2": {
+          "id": "WF-ONB-002B",
+          "name": "Profile Completeness UI",
+          "description": "Display profile completeness score with prompts to complete missing data",
+          "layers": ["ui"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "ProfileCompleteness component shows circular progress gauge (0-100%)",
+            "Color coding: red (<50%), yellow (50-80%), green (>80%)",
+            "Hover/expand shows which fields are missing",
+            "Quick links to complete missing data (e.g., 'Add primary contact')",
+            "Score visible on customer summary card",
+            "Customer list column for completeness score with filter",
+            "npm run typecheck passes"
+          ],
+          "dependencies": ["WF-ONB-002A"]
+        }
+      },
+      "dependencies_from_prd": ["WF-ONB-001"],
+      "dependencies_valid": true,
+      "note": "WF-ONB-001 provides the onboarding status framework; this story extends it with profile completeness as one checklist dimension"
+    },
+    "WF-ONB-003": {
+      "name": "Add Welcome Email Automation",
+      "status": "valid_gap_with_dependency",
+      "change": "atomize",
+      "reason": "No welcome email template or automation exists. Email infrastructure (Resend, templates, Trigger.dev) is in place but needs welcome email specific implementation.",
+      "layers": ["email-template", "trigger", "ui", "server"],
+      "current_implementation": {
+        "email_sending": "Working via Resend",
+        "templates_location": "renoz-v2/emails/templates/",
+        "trigger_jobs_location": "renoz-v2/trigger/email-jobs.ts"
+      },
+      "estimated_iterations": 5,
+      "atomization_recommendation": {
+        "story_1": {
+          "id": "WF-ONB-003A",
+          "name": "Welcome Email Template",
+          "description": "Create React Email template for welcome email",
+          "layers": ["email-template"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "WelcomeEmail.tsx template in emails/templates/",
+            "Template includes: company intro, key contacts, what to expect next",
+            "Personalized with customer name placeholder",
+            "Consistent styling with existing email templates",
+            "Preview renders correctly",
+            "npm run typecheck passes"
+          ]
+        },
+        "story_2": {
+          "id": "WF-ONB-003B",
+          "name": "Welcome Email Trigger Job",
+          "description": "Create Trigger.dev task to send welcome email on customer creation",
+          "layers": ["trigger", "server"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "sendWelcomeEmail task in trigger/email-jobs.ts",
+            "Triggered from createCustomer server function (optional, configurable)",
+            "Skips if customer has no valid email (checks primary contact email)",
+            "Records in email_history table",
+            "Organization setting to enable/disable welcome email automation",
+            "npm run typecheck passes"
+          ],
+          "dependencies": ["WF-ONB-003A"]
+        },
+        "story_3": {
+          "id": "WF-ONB-003C",
+          "name": "Welcome Email Configuration UI",
+          "description": "Add settings UI to configure welcome email automation",
+          "layers": ["ui"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "Settings page has 'Customer Onboarding' section",
+            "Toggle for 'Send welcome email on customer creation'",
+            "Preview welcome email button",
+            "Manual 'Send Welcome Email' action on customer detail (if not sent yet)",
+            "Indicator in activity log when welcome email was sent",
+            "npm run typecheck passes"
+          ],
+          "dependencies": ["WF-ONB-003B"]
+        }
+      },
+      "external_dependencies": {
+        "DOM-COMMS-001": {
+          "status": "NOT_IMPLEMENTED",
+          "impact": "'Track email open' acceptance criterion cannot be fully satisfied without DOM-COMMS-001 (Email Open/Click Tracking). Consider removing this criterion or noting it as deferred.",
+          "recommendation": "Remove 'Track email open' from acceptance criteria or add dependency on DOM-COMMS-001"
+        }
+      }
+    },
+    "WF-ONB-004": {
+      "name": "Add First Quote Milestone",
+      "status": "valid_gap",
+      "change": "atomize",
+      "reason": "No milestone tracking exists. Opportunities table exists but no 'first quote' detection or milestone events. Requires schema addition + server function + trigger job + UI.",
+      "layers": ["schema", "server", "trigger", "ui"],
+      "current_implementation": {
+        "opportunities_exist": true,
+        "milestone_tracking": false,
+        "reminder_system": false
+      },
+      "estimated_iterations": 5,
+      "atomization_recommendation": {
+        "story_1": {
+          "id": "WF-ONB-004A",
+          "name": "First Quote Milestone Schema",
+          "description": "Add milestone fields to customers table",
+          "layers": ["schema"],
+          "estimated_iterations": 1,
+          "acceptance_criteria": [
+            "customers table: firstQuoteAt timestamp nullable",
+            "customers table: firstOrderAt timestamp nullable (future use)",
+            "Migration runs successfully",
+            "npm run typecheck passes"
+          ]
+        },
+        "story_2": {
+          "id": "WF-ONB-004B",
+          "name": "First Quote Milestone Detection",
+          "description": "Detect and record first quote milestone when opportunity created",
+          "layers": ["server"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "createOpportunity server function checks if customer.firstQuoteAt is null",
+            "If first quote, sets firstQuoteAt timestamp on customer",
+            "Creates milestone customer_activity record",
+            "Updates onboarding checklist if WF-ONB-001 implemented",
+            "npm run typecheck passes"
+          ],
+          "dependencies": ["WF-ONB-004A"]
+        },
+        "story_3": {
+          "id": "WF-ONB-004C",
+          "name": "First Quote Milestone Reminders and Celebration",
+          "description": "Add reminder for customers without first quote and celebration notification",
+          "layers": ["trigger", "ui"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "Trigger.dev job runs daily to check customers without quote after X days (configurable)",
+            "Creates task for sales rep for overdue customers",
+            "Toast/notification when first quote milestone is reached",
+            "Milestone date visible on customer summary card",
+            "npm run typecheck passes"
+          ],
+          "dependencies": ["WF-ONB-004B"]
+        }
+      },
+      "dependencies_from_prd": ["WF-ONB-001"],
+      "dependencies_valid": true,
+      "note": "First quote milestone integrates with onboarding checklist from WF-ONB-001"
+    },
+    "WF-ONB-005": {
+      "name": "Add Onboarding Dashboard",
+      "status": "valid_gap",
+      "change": "atomize",
+      "reason": "No onboarding-specific dashboard exists. Dashboard infrastructure exists with configurable widgets. Requires server metrics function + dashboard widget + standalone page option.",
+      "layers": ["server", "ui"],
+      "current_implementation": {
+        "dashboard_system": "renoz-v2/src/components/domain/dashboard/",
+        "widget_system": "Configurable widgets via dashboard-settings.tsx",
+        "onboarding_widget": false
+      },
+      "estimated_iterations": 5,
+      "atomization_recommendation": {
+        "story_1": {
+          "id": "WF-ONB-005A",
+          "name": "Onboarding Metrics Server Function",
+          "description": "Create server function to aggregate onboarding metrics",
+          "layers": ["server"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "getOnboardingMetrics returns: customersInOnboarding, avgTimeToComplete, completionRate, stuckCustomersCount",
+            "Stuck = no progress in 7+ days",
+            "Metrics filtered by date range",
+            "Returns list of customers in onboarding with progress percentage",
+            "npm run typecheck passes"
+          ],
+          "dependencies": ["WF-ONB-001A"]
+        },
+        "story_2": {
+          "id": "WF-ONB-005B",
+          "name": "Onboarding Dashboard Widget",
+          "description": "Create onboarding status widget for main dashboard",
+          "layers": ["ui"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "OnboardingStatusWidget component shows key metrics at a glance",
+            "Count of customers in onboarding with progress breakdown",
+            "Stuck customers highlighted with warning",
+            "Click through to full onboarding dashboard",
+            "Widget available in dashboard settings for placement",
+            "npm run typecheck passes"
+          ],
+          "dependencies": ["WF-ONB-005A"]
+        },
+        "story_3": {
+          "id": "WF-ONB-005C",
+          "name": "Onboarding Dashboard Page",
+          "description": "Create dedicated onboarding dashboard page with detailed view",
+          "layers": ["ui"],
+          "estimated_iterations": 3,
+          "acceptance_criteria": [
+            "Route /reports/onboarding or /dashboard/onboarding",
+            "Table of customers in onboarding with columns: customer, created date, progress %, last activity, assigned to",
+            "Filters: stuck only, by assignee, by date range",
+            "Quick actions: view customer, send reminder, mark complete",
+            "Charts: completion rate trend, avg time to complete",
+            "npm run typecheck passes"
+          ],
+          "dependencies": ["WF-ONB-005A", "WF-ONB-005B"]
+        }
+      },
+      "dependencies_from_prd": ["WF-ONB-001"],
+      "dependencies_valid": true
+    },
+    "WF-ONB-006": {
+      "name": "Add Customer Handoff",
+      "status": "valid_gap",
+      "change": "atomize",
+      "reason": "No formal handoff process exists. Customer status field exists (active/inactive) but no onboarding completion workflow. Requires server function + UI dialog + notification trigger.",
+      "layers": ["server", "trigger", "ui"],
+      "current_implementation": {
+        "customer_status_field": true,
+        "status_values": ["active", "inactive"],
+        "handoff_workflow": false,
+        "account_manager_field": false
+      },
+      "estimated_iterations": 5,
+      "atomization_recommendation": {
+        "story_1": {
+          "id": "WF-ONB-006A",
+          "name": "Customer Handoff Schema",
+          "description": "Add account manager field to customers table",
+          "layers": ["schema"],
+          "estimated_iterations": 1,
+          "acceptance_criteria": [
+            "customers table: accountManagerId uuid nullable FK to users",
+            "Migration runs successfully",
+            "npm run typecheck passes"
+          ]
+        },
+        "story_2": {
+          "id": "WF-ONB-006B",
+          "name": "Customer Handoff Server Function",
+          "description": "Create server function to complete onboarding and handoff customer",
+          "layers": ["server"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "completeOnboarding server function validates checklist is complete",
+            "Sets onboardingStatus to 'completed' and onboardingCompletedAt timestamp",
+            "Sets accountManagerId from input",
+            "Changes status to 'active' if not already",
+            "Creates customer_activity record for handoff event",
+            "Returns success with customer data",
+            "npm run typecheck passes"
+          ],
+          "dependencies": ["WF-ONB-006A", "WF-ONB-001B"]
+        },
+        "story_3": {
+          "id": "WF-ONB-006C",
+          "name": "Customer Handoff Notifications",
+          "description": "Send notifications on customer handoff completion",
+          "layers": ["trigger"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "Internal notification to account manager on handoff assignment",
+            "OnboardingComplete email template to customer (if enabled)",
+            "Trigger.dev task for sending graduation email",
+            "npm run typecheck passes"
+          ],
+          "dependencies": ["WF-ONB-006B"]
+        },
+        "story_4": {
+          "id": "WF-ONB-006D",
+          "name": "Customer Handoff UI",
+          "description": "Create UI for completing onboarding and handoff",
+          "layers": ["ui"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "CompleteOnboarding dialog accessible from customer detail when in_progress",
+            "Review checklist completion status",
+            "Account manager selector dropdown",
+            "Send graduation email toggle",
+            "Confirmation before completion",
+            "Success toast with next steps",
+            "npm run typecheck passes"
+          ],
+          "dependencies": ["WF-ONB-006B", "WF-ONB-006C"]
+        }
+      },
+      "dependencies_from_prd": ["WF-ONB-001", "WF-ONB-004"],
+      "dependencies_valid": true
+    }
+  },
+  "recommended_implementation_order": [
+    {
+      "phase": 1,
+      "stories": ["WF-ONB-001A", "WF-ONB-001B", "WF-ONB-001C"],
+      "reason": "Foundation - onboarding checklist is prerequisite for all other stories",
+      "total_iterations": 7
+    },
+    {
+      "phase": 2,
+      "stories": ["WF-ONB-002A", "WF-ONB-002B", "WF-ONB-004A", "WF-ONB-004B"],
+      "reason": "Parallel - profile completeness and first quote milestone can be built together",
+      "total_iterations": 7,
+      "parallelizable": true
+    },
+    {
+      "phase": 3,
+      "stories": ["WF-ONB-003A", "WF-ONB-003B", "WF-ONB-003C", "WF-ONB-004C"],
+      "reason": "Email and notifications layer",
+      "total_iterations": 8
+    },
+    {
+      "phase": 4,
+      "stories": ["WF-ONB-005A", "WF-ONB-005B", "WF-ONB-005C"],
+      "reason": "Dashboard requires metrics from earlier phases",
+      "total_iterations": 7
+    },
+    {
+      "phase": 5,
+      "stories": ["WF-ONB-006A", "WF-ONB-006B", "WF-ONB-006C", "WF-ONB-006D"],
+      "reason": "Handoff is the culmination of the workflow",
+      "total_iterations": 7
+    }
+  ],
+  "total_estimated_iterations": 36,
+  "prd_issues_found": [
+    {
+      "story": "WF-ONB-003",
+      "issue": "'Track email open' acceptance criterion requires DOM-COMMS-001 which is not implemented",
+      "recommendation": "Either add explicit dependency on DOM-COMMS-001 or remove this criterion and add as future enhancement"
+    },
+    {
+      "story": "WF-ONB-001",
+      "issue": "Acceptance criterion 'Configurable steps per customer type' implies customer types exist, but no customer type field exists in schema",
+      "recommendation": "Simplify to 'Configurable steps per organization' or add customer type field to schema first"
+    }
+  ],
+  "schema_changes_required": [
+    {
+      "table": "customers",
+      "additions": [
+        "onboardingStatus enum ('not_started', 'in_progress', 'completed') DEFAULT 'not_started'",
+        "onboardingCompletedAt timestamp nullable",
+        "onboardingChecklistProgress jsonb",
+        "firstQuoteAt timestamp nullable",
+        "firstOrderAt timestamp nullable",
+        "accountManagerId uuid nullable FK users"
+      ]
+    },
+    {
+      "table": "onboarding_checklist_items (NEW)",
+      "fields": [
+        "id uuid PK",
+        "organizationId uuid FK",
+        "name varchar(100)",
+        "description text nullable",
+        "isRequired boolean default true",
+        "sortOrder integer",
+        "autoDetectType varchar(50) nullable (e.g., 'has_contact', 'has_address', 'has_quote')",
+        "createdAt timestamp",
+        "updatedAt timestamp"
+      ]
+    }
+  ],
+  "files_to_create": [
+    "renoz-v2/lib/schema/customer-onboarding.ts",
+    "renoz-v2/lib/schemas/customer-onboarding.ts",
+    "renoz-v2/src/server/functions/customer-onboarding.ts",
+    "renoz-v2/src/components/domain/customers/onboarding-checklist.tsx",
+    "renoz-v2/src/components/domain/customers/profile-completeness.tsx",
+    "renoz-v2/src/components/domain/customers/complete-onboarding-dialog.tsx",
+    "renoz-v2/src/components/domain/dashboard/widgets/onboarding-status-widget.tsx",
+    "renoz-v2/src/routes/reports/onboarding.tsx",
+    "renoz-v2/emails/templates/WelcomeEmail.tsx",
+    "renoz-v2/emails/templates/OnboardingComplete.tsx",
+    "renoz-v2/trigger/onboarding-jobs.ts"
+  ],
+  "files_to_modify": [
+    "renoz-v2/lib/schema/customers.ts (add onboarding fields)",
+    "renoz-v2/lib/schema/index.ts (export new tables)",
+    "renoz-v2/src/server/functions/customers.ts (integrate onboarding logic)",
+    "renoz-v2/src/server/functions/pipeline.ts (first quote detection)",
+    "renoz-v2/src/routes/customers/$customerId.tsx (add onboarding UI)",
+    "renoz-v2/src/components/domain/customers/customer-columns.tsx (add onboarding columns)",
+    "renoz-v2/src/components/domain/customers/customer-summary-card.tsx (add profile completeness)",
+    "renoz-v2/lib/email/service.ts (add welcome_email template)",
+    "renoz-v2/trigger/email-jobs.ts (add welcome email task)",
+    "renoz-v2/src/routes/settings/index.tsx (add onboarding settings section)"
+  ],
+  "risks_and_considerations": [
+    {
+      "risk": "Schema migration complexity",
+      "mitigation": "Add all schema changes in a single migration with nullable columns to avoid data issues"
+    },
+    {
+      "risk": "Email open tracking dependency",
+      "mitigation": "Implement WF-ONB-003 without open tracking initially, add when DOM-COMMS-001 is complete"
+    },
+    {
+      "risk": "Existing customers without onboarding status",
+      "mitigation": "Migration should set existing customers to 'completed' onboarding status to avoid false positives in dashboard"
+    }
+  ]
+}

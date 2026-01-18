@@ -1,0 +1,353 @@
+{
+  "id": "FOUND-REALTIME",
+  "name": "Realtime & Webhooks Foundation",
+  "description": "Implement Supabase Realtime subscriptions for live updates, database webhooks for event-driven architecture, and Edge Functions for background processing.",
+  "created": "2026-01-10",
+  "updated": "2026-01-10",
+  "priority": 4,
+  "phase": "foundation",
+  "version": "MVP",
+  "stack": {
+    "realtime": "Supabase Realtime (Broadcast)",
+    "webhooks": "Database Webhooks (pg_net)",
+    "functions": "Supabase Edge Functions (Deno)",
+    "background": "Trigger.dev",
+    "database": "Supabase PostgreSQL"
+  },
+  "references": {
+    "internal": [
+      "_Initiation/_ralph/backend-patterns/realtime-patterns.md - Realtime subscription patterns",
+      "_Initiation/_ralph/backend-patterns/webhooks-patterns.md - Webhook and Edge Function patterns",
+      "_Initiation/_ralph/backend-patterns/server-functions.md - Server function integration"
+    ],
+    "external": [
+      "https://supabase.com/docs/guides/realtime - Supabase Realtime",
+      "https://supabase.com/docs/guides/realtime/subscribing-to-database-changes - Broadcast patterns",
+      "https://supabase.com/docs/guides/database/webhooks - Database Webhooks",
+      "https://supabase.com/docs/guides/functions - Edge Functions",
+      "https://trigger.dev/docs/guides/frameworks/supabase-edge-functions-database-webhooks - Trigger.dev"
+    ]
+  },
+  "current_state": {
+    "implemented": [],
+    "gaps": [
+      "No realtime subscriptions - greenfield implementation",
+      "No database webhooks configured",
+      "No Edge Functions deployed",
+      "No background job infrastructure",
+      "No event-driven patterns for cross-domain updates"
+    ]
+  },
+  "stories": [
+    {
+      "id": "FOUND-REALTIME-001",
+      "name": "Setup Realtime Broadcast Triggers",
+      "description": "Create database triggers that broadcast changes via Supabase Realtime",
+      "priority": 1,
+      "status": "pending",
+      "type": "database",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "SQL function realtime.broadcast_changes() available (built-in)",
+        "Trigger on orders table broadcasts INSERT/UPDATE to orders:{org_id} channel",
+        "Trigger on pipeline table broadcasts INSERT/UPDATE to pipeline:{org_id} channel",
+        "Trigger on inventory table broadcasts UPDATE to inventory:{org_id} channel",
+        "Triggers use organization_id for channel scoping (multi-tenant)",
+        "Migration file created",
+        "Triggers tested locally with Supabase CLI",
+        "bun run db:push succeeds"
+      ],
+      "files_to_create": [
+        "drizzle/migrations/XXXX_realtime_triggers.sql",
+        "supabase/migrations/XXXX_realtime_triggers.sql"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-SCHEMA-006",
+        "FOUND-SCHEMA-007"
+      ],
+      "completion_promise": "FOUND_REALTIME_001_COMPLETE"
+    },
+    {
+      "id": "FOUND-REALTIME-002",
+      "name": "Create Realtime Subscription Hooks",
+      "description": "React hooks for subscribing to Supabase Realtime channels with TanStack Query integration",
+      "priority": 2,
+      "status": "pending",
+      "type": "foundation",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "File src/hooks/realtime/use-realtime.ts - generic subscription hook",
+        "File src/hooks/realtime/use-orders-realtime.ts - orders channel",
+        "File src/hooks/realtime/use-pipeline-realtime.ts - pipeline channel",
+        "File src/hooks/realtime/use-inventory-realtime.ts - inventory channel",
+        "Hooks auto-invalidate TanStack Query on updates",
+        "Proper cleanup on unmount (removeChannel)",
+        "Connection status exported (connected/disconnected/error)",
+        "Reconnection with exponential backoff",
+        "TypeScript types for channel payloads",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/hooks/realtime/use-realtime.ts",
+        "src/hooks/realtime/use-orders-realtime.ts",
+        "src/hooks/realtime/use-pipeline-realtime.ts",
+        "src/hooks/realtime/use-inventory-realtime.ts",
+        "src/hooks/realtime/index.ts"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-REALTIME-001",
+        "FOUND-AUTH-001"
+      ],
+      "completion_promise": "FOUND_REALTIME_002_COMPLETE"
+    },
+    {
+      "id": "FOUND-REALTIME-003",
+      "name": "Setup Database Webhooks for Orders",
+      "description": "Configure webhooks to trigger on order events for downstream processing",
+      "priority": 3,
+      "status": "pending",
+      "type": "database",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "Database webhook created for orders INSERT",
+        "Database webhook created for orders UPDATE (status change)",
+        "Webhook payload includes: record, old_record, type, table",
+        "Webhook targets Edge Function endpoint",
+        "Authorization header with webhook secret",
+        "Webhook tested with manual INSERT/UPDATE",
+        "Migration file created",
+        "bun run db:push succeeds"
+      ],
+      "files_to_create": [
+        "drizzle/migrations/XXXX_order_webhooks.sql"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-SCHEMA-006"
+      ],
+      "completion_promise": "FOUND_REALTIME_003_COMPLETE"
+    },
+    {
+      "id": "FOUND-REALTIME-004",
+      "name": "Create Order Processing Edge Function",
+      "description": "Edge Function to handle order webhook events",
+      "priority": 4,
+      "status": "pending",
+      "type": "edge-function",
+      "estimated_iterations": 4,
+      "acceptance_criteria": [
+        "File supabase/functions/order-webhook/index.ts created",
+        "Validates webhook secret from Authorization header",
+        "Handles INSERT: triggers quote PDF generation (queues to Trigger.dev)",
+        "Handles UPDATE (status=confirmed): sends confirmation email",
+        "Handles UPDATE (status=shipped): sends shipping notification",
+        "Error handling with proper HTTP status codes",
+        "Logging for debugging",
+        "Local testing with supabase functions serve",
+        "Deployed to Supabase"
+      ],
+      "files_to_create": [
+        "supabase/functions/order-webhook/index.ts",
+        "supabase/functions/order-webhook/types.ts"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-REALTIME-003"
+      ],
+      "completion_promise": "FOUND_REALTIME_004_COMPLETE"
+    },
+    {
+      "id": "FOUND-REALTIME-005",
+      "name": "Setup Inventory Alert Webhook",
+      "description": "Webhook and Edge Function for low stock alerts",
+      "priority": 5,
+      "status": "pending",
+      "type": "edge-function",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "Database webhook on inventory UPDATE",
+        "Trigger condition: stock_qty < reorder_point",
+        "File supabase/functions/inventory-alert/index.ts created",
+        "Edge Function checks if alert already sent (prevent duplicates)",
+        "Creates notification record in notifications table",
+        "Optionally triggers email to operations team",
+        "Local testing passes",
+        "Deployed to Supabase"
+      ],
+      "files_to_create": [
+        "supabase/functions/inventory-alert/index.ts",
+        "drizzle/migrations/XXXX_inventory_webhooks.sql"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-SCHEMA-007"
+      ],
+      "completion_promise": "FOUND_REALTIME_005_COMPLETE"
+    },
+    {
+      "id": "FOUND-REALTIME-006",
+      "name": "Setup Trigger.dev Integration",
+      "description": "Configure Trigger.dev for long-running background jobs",
+      "priority": 6,
+      "status": "pending",
+      "type": "foundation",
+      "estimated_iterations": 4,
+      "acceptance_criteria": [
+        "Trigger.dev project configured",
+        "File src/trigger/client.ts - Trigger.dev client setup",
+        "File src/trigger/jobs/generate-quote-pdf.ts - PDF generation job",
+        "File src/trigger/jobs/send-email.ts - Email sending job",
+        "File src/trigger/jobs/sync-xero.ts - Xero sync job (placeholder)",
+        "Jobs can be triggered from Edge Functions",
+        "Job status trackable via Trigger.dev dashboard",
+        "Environment variables configured",
+        "Local development tested",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/trigger/client.ts",
+        "src/trigger/jobs/generate-quote-pdf.ts",
+        "src/trigger/jobs/send-email.ts",
+        "src/trigger/jobs/sync-xero.ts",
+        "src/trigger/jobs/index.ts"
+      ],
+      "files_to_modify": [
+        "package.json"
+      ],
+      "dependencies": [],
+      "completion_promise": "FOUND_REALTIME_006_COMPLETE"
+    },
+    {
+      "id": "FOUND-REALTIME-007",
+      "name": "Create Pipeline Stage Change Webhook",
+      "description": "Webhook for opportunity stage changes to update metrics and notify sales",
+      "priority": 7,
+      "status": "pending",
+      "type": "edge-function",
+      "estimated_iterations": 3,
+      "acceptance_criteria": [
+        "Database webhook on pipeline UPDATE (stage change)",
+        "File supabase/functions/pipeline-webhook/index.ts created",
+        "Calculates stage transition time",
+        "Updates pipeline_metrics table with conversion data",
+        "Notifies assigned sales rep via notification",
+        "Handles closed_won: triggers Xero invoice sync job",
+        "Handles closed_lost: logs reason for analytics",
+        "Local testing passes",
+        "Deployed to Supabase"
+      ],
+      "files_to_create": [
+        "supabase/functions/pipeline-webhook/index.ts",
+        "drizzle/migrations/XXXX_pipeline_webhooks.sql"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-SCHEMA-007",
+        "FOUND-REALTIME-006"
+      ],
+      "completion_promise": "FOUND_REALTIME_007_COMPLETE"
+    },
+    {
+      "id": "FOUND-REALTIME-008",
+      "name": "Create Webhook Security Utilities",
+      "description": "Shared utilities for webhook signature verification and authorization",
+      "priority": 8,
+      "status": "pending",
+      "type": "foundation",
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "File supabase/functions/_shared/auth.ts created",
+        "verifyWebhookSecret(req) validates Authorization header",
+        "verifyHmacSignature(req, secret) for external webhooks",
+        "validateTimestamp(req) prevents replay attacks",
+        "Shared types for webhook payloads",
+        "Error responses follow consistent format",
+        "Unit tests for verification functions",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "supabase/functions/_shared/auth.ts",
+        "supabase/functions/_shared/types.ts",
+        "supabase/functions/_shared/errors.ts"
+      ],
+      "files_to_modify": [
+        "supabase/functions/order-webhook/index.ts",
+        "supabase/functions/inventory-alert/index.ts",
+        "supabase/functions/pipeline-webhook/index.ts"
+      ],
+      "dependencies": [
+        "FOUND-REALTIME-004"
+      ],
+      "completion_promise": "FOUND_REALTIME_008_COMPLETE"
+    },
+    {
+      "id": "FOUND-REALTIME-009",
+      "name": "Create Realtime README Documentation",
+      "description": "Document realtime and webhook patterns for developers",
+      "priority": 9,
+      "status": "pending",
+      "type": "documentation",
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "File supabase/functions/README.md created",
+        "Documents: Edge Function development workflow",
+        "Documents: Webhook payload format",
+        "Documents: Security verification patterns",
+        "Documents: Trigger.dev integration",
+        "File src/hooks/realtime/README.md created",
+        "Documents: Subscription hook usage",
+        "Documents: TanStack Query integration",
+        "Documents: Error handling patterns",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "supabase/functions/README.md",
+        "src/hooks/realtime/README.md"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-REALTIME-002",
+        "FOUND-REALTIME-008"
+      ],
+      "completion_promise": "FOUND_REALTIME_009_COMPLETE"
+    }
+  ],
+  "success_criteria": [
+    "Realtime broadcast triggers deployed for orders, pipeline, inventory",
+    "React hooks subscribe to realtime channels with TanStack Query integration",
+    "Database webhooks trigger Edge Functions on key events",
+    "Edge Functions handle order, inventory, pipeline events",
+    "Trigger.dev handles long-running jobs (PDF, email, sync)",
+    "Webhook security utilities protect all endpoints",
+    "Documentation covers all patterns",
+    "Local development workflow documented",
+    "bun run typecheck passes"
+  ],
+  "out_of_scope": [
+    "Customer-facing webhooks (V1)",
+    "Webhook management UI (V1)",
+    "Complex event sourcing patterns",
+    "Message queue infrastructure (using Trigger.dev instead)",
+    "Real-time presence (who's viewing what)"
+  ],
+  "pattern_references": [
+    {
+      "file": "_Initiation/_meta/patterns/testing-standards.md",
+      "applies_to": "all stories",
+      "reason": "Realtime hooks and Edge Functions require thorough testing for reliability"
+    },
+    {
+      "file": "_Initiation/_meta/patterns/error-recovery.md",
+      "applies_to": "FOUND-REALTIME-002, FOUND-REALTIME-004, FOUND-REALTIME-005, FOUND-REALTIME-006, FOUND-REALTIME-007",
+      "reason": "Apply Pattern 1 (Sync Failure Recovery) for webhook retries and Pattern 4 (Email Send Failure) for notification delivery"
+    },
+    {
+      "file": "_Initiation/_meta/patterns/performance-benchmarks.md",
+      "applies_to": "FOUND-REALTIME-002, all Edge Function stories",
+      "reason": "Realtime subscriptions must reconnect within performance targets; Edge Functions must respond quickly"
+    }
+  ],
+  "domain_completion_promise": "FOUND_REALTIME_COMPLETE"
+}

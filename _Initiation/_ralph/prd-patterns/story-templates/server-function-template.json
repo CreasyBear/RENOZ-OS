@@ -1,0 +1,74 @@
+{
+  "template_name": "Server Function Story Template",
+  "description": "For TanStack Router server functions and API endpoints",
+  "usage": "Copy this template and customize for server function stories",
+  "template": {
+    "id": "DOMAIN-NNNb",
+    "name": "Feature Name: Server Functions",
+    "description": "Create server functions for [feature operations]",
+    "priority": 2,
+    "status": "pending",
+    "acceptance_criteria": [
+      "File src/server/functions/[feature].ts exists",
+      "[functionName] function validates input using Zod schema and withRLSContext",
+      "[functionName] function [describe core operation: creates/updates/retrieves/deletes]",
+      "[List additional functions and their purposes]",
+      "All functions use withRLSContext pattern for organization scoping",
+      "Input validation using schemas from lib/schemas/[feature].ts",
+      "[List any database operations: inserts, updates, queries]",
+      "[Include any business logic validation rules]",
+      "[List any external API calls or integrations]",
+      "Proper error handling with descriptive error messages",
+      "npm run typecheck passes"
+    ],
+    "dependencies": [
+      "DOMAIN-NNNa"
+    ],
+    "estimated_iterations": 4,
+    "completion_promise": "DOMAIN_NNNB_COMPLETE",
+    "enhancements": {
+      "type": "server-function",
+      "functions_created": [
+        "List function names"
+      ],
+      "schemas_required": [
+        "List Zod schemas needed"
+      ],
+      "error_handling": "Standard API error responses",
+      "performance_notes": "Any caching or optimization requirements"
+    }
+  },
+  "customization_guide": {
+    "id": "Use 'b' suffix for server function stories (after schema 'a')",
+    "acceptance_criteria": [
+      "Start with file existence check",
+      "Specify each function's purpose and validation",
+      "Include withRLSContext requirement for data security",
+      "List exact Zod schemas to be used/created",
+      "Specify database operations clearly",
+      "Include error handling expectations",
+      "Always end with typecheck verification"
+    ],
+    "estimated_iterations": "Typically 3-5 for server function stories",
+    "dependencies": "Usually depends on corresponding schema story"
+  },
+  "examples": [
+    {
+      "id": "DOM-CUST-001b",
+      "name": "Customer Tags: Server Functions",
+      "acceptance_criteria": [
+        "File src/server/functions/customer-tags.ts exists",
+        "listTags: GET returns all tags for org, sorted by name",
+        "createTag: POST with CreateTagSchema validation, returns new tag",
+        "updateTag: POST with UpdateTagSchema validation, checks version for concurrency",
+        "deleteTag: POST soft-deletes tag, unassigns from all customers",
+        "assignTagToCustomer: POST assigns tag, prevents duplicates",
+        "removeTagFromCustomer: POST removes assignment",
+        "getCustomerTags: GET returns all tags for a customer",
+        "All functions use withRLSContext pattern from conventions.md",
+        "Zod schemas in lib/schemas/customer-tags.ts (CreateTagSchema, UpdateTagSchema, AssignTagSchema)",
+        "npm run typecheck passes"
+      ]
+    }
+  ]
+}

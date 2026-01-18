@@ -1,0 +1,296 @@
+{
+  "prd_id": "CC-NOTIFY",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "summary": {
+    "total_stories": 8,
+    "verified_gaps": 2,
+    "invalidated_gaps": 6,
+    "new_gaps_found": 0,
+    "implementation_status": "partially_complete"
+  },
+  "codebase_findings": {
+    "toast_system": {
+      "exists": true,
+      "location": "renoz-v2/src/components/ui/sonner.tsx",
+      "technology": "Sonner (react toast library)",
+      "variants": ["success", "error", "warning", "info", "loading"],
+      "features": [
+        "Theme-aware styling",
+        "Custom icons per variant",
+        "Action buttons supported",
+        "Auto-dismiss",
+        "Manual dismiss"
+      ]
+    },
+    "notification_bell": {
+      "exists": true,
+      "location": "renoz-v2/src/components/layout/notification-bell.tsx",
+      "features": [
+        "Bell icon in header",
+        "Unread count badge",
+        "Dropdown with recent notifications",
+        "Mark as read",
+        "Click to navigate to link",
+        "Realtime status indicator"
+      ]
+    },
+    "notification_center": {
+      "exists": true,
+      "location": "renoz-v2/src/components/domain/communications/notification-center.tsx",
+      "features": [
+        "Inbox/Archive tabs",
+        "Activity feed with icons per type",
+        "Mark as read",
+        "Archive all bulk action",
+        "Empty state",
+        "Settings link"
+      ]
+    },
+    "notifications_page": {
+      "exists": true,
+      "location": "renoz-v2/src/routes/notifications.tsx",
+      "features": [
+        "Full page notification list",
+        "All/Unread filter tabs",
+        "Search functionality",
+        "Type filter dropdown",
+        "Date grouping (Today, Yesterday, This Week)",
+        "Pagination",
+        "Mark all as read"
+      ]
+    },
+    "notification_schema": {
+      "exists": true,
+      "location": "renoz-v2/lib/schema/notifications.ts",
+      "fields": ["id", "userId", "type", "title", "message", "link", "isRead", "createdAt"],
+      "indexes": ["user_id", "is_read", "created_at"]
+    },
+    "notification_types": {
+      "exists": true,
+      "location": "renoz-v2/lib/integrations/notifications/types.ts",
+      "types": [
+        "quote_accepted", "quote_sent",
+        "order_created", "order_shipped", "order_status_changed",
+        "issue_assigned", "issue_updated",
+        "warranty_registered", "warranty_expiring",
+        "po_sent", "po_received",
+        "low_stock",
+        "job_assigned", "job_completed",
+        "email_failed"
+      ]
+    },
+    "notification_service": {
+      "exists": true,
+      "location": "renoz-v2/lib/integrations/notifications/custom-service.ts",
+      "methods": ["create", "markAsRead", "markAllAsRead", "getUnreadCount"],
+      "features": [
+        "User preferences check before creating",
+        "Supabase Realtime auto-broadcast on INSERT"
+      ]
+    },
+    "notification_handlers": {
+      "exists": true,
+      "location": "renoz-v2/lib/notifications/handlers/",
+      "handlers": [
+        "quote_sent",
+        "order_confirmed",
+        "payment_received",
+        "warranty_registered",
+        "customer_note_added"
+      ]
+    },
+    "realtime_notifications": {
+      "exists": true,
+      "location": "renoz-v2/src/hooks/use-realtime-notifications.ts",
+      "technology": "Supabase Realtime (postgres_changes)",
+      "features": [
+        "Connection status tracking (connected/disconnected/polling)",
+        "Fallback to polling on error",
+        "Callback on new notification"
+      ]
+    },
+    "notification_preferences": {
+      "exists": true,
+      "location": "renoz-v2/src/components/domain/communications/notification-preferences.tsx",
+      "features": [
+        "Per-type email toggle",
+        "Per-type in-app toggle",
+        "Team notifications toggle",
+        "Digest settings (enabled, frequency, time)",
+        "Test email button"
+      ]
+    },
+    "user_preferences_schema": {
+      "exists": true,
+      "location": "renoz-v2/lib/schema/user-preferences.ts",
+      "notification_fields": ["email", "inApp", "teamNotifications", "digest"]
+    },
+    "trigger_jobs": {
+      "exists": true,
+      "location": "renoz-v2/trigger/notification-jobs.ts",
+      "tasks": ["create-notification"]
+    },
+    "confirmation_toast": {
+      "exists": false,
+      "searched_patterns": ["ConfirmationToast", "undo", "destructive.*toast"]
+    },
+    "job_progress_notification": {
+      "exists": false,
+      "searched_patterns": ["JobProgress", "progress.*notification"]
+    }
+  },
+  "gap_verification": {
+    "no_toast_notification_system": {
+      "status": "invalidated",
+      "evidence": "Sonner toast system fully implemented at renoz-v2/src/components/ui/sonner.tsx with success/error/warning/info variants",
+      "conclusion": "Gap does not exist - toast system is complete"
+    },
+    "no_notification_center": {
+      "status": "invalidated",
+      "evidence": "NotificationCenter exists at renoz-v2/src/components/domain/communications/notification-center.tsx and NotificationBell at renoz-v2/src/components/layout/notification-bell.tsx",
+      "conclusion": "Gap does not exist - notification center is complete"
+    },
+    "no_midday_sdk_integration": {
+      "status": "verified_but_different",
+      "evidence": "Supabase Realtime is used instead of Midday SDK. Hook at renoz-v2/src/hooks/use-realtime-notifications.ts",
+      "conclusion": "Real-time updates work via Supabase Realtime - Midday SDK not needed unless specific features required"
+    },
+    "no_notification_preferences_ui": {
+      "status": "invalidated",
+      "evidence": "Full preferences UI at renoz-v2/src/components/domain/communications/notification-preferences.tsx with per-type toggles, digest settings",
+      "conclusion": "Gap does not exist - preferences UI is complete"
+    },
+    "no_notification_persistence": {
+      "status": "invalidated",
+      "evidence": "Notifications table exists in schema with proper persistence. Service uses db.insert() to persist",
+      "conclusion": "Gap does not exist - notifications persist in database"
+    },
+    "no_realtime_notification_updates": {
+      "status": "invalidated",
+      "evidence": "Supabase Realtime subscription in use-realtime-notifications.ts with connection status",
+      "conclusion": "Gap does not exist - real-time works via Supabase"
+    }
+  },
+  "stories_status": {
+    "CC-NOTIFY-001": {
+      "name": "Toast Notification System",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "Toast system already implemented using Sonner library. All requirements met: variants (success, error, warning, info), auto-dismiss, manual dismiss, action buttons, accessibility",
+      "layers": ["ui"],
+      "estimated_iterations": 0
+    },
+    "CC-NOTIFY-002": {
+      "name": "Toast Hook and Context",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "Sonner provides direct toast() API without need for custom context/provider. toast.success(), toast.error(), toast.info() etc. available via import. Already in use throughout codebase.",
+      "layers": ["ui"],
+      "estimated_iterations": 0
+    },
+    "CC-NOTIFY-003": {
+      "name": "Notification Center Component",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "NotificationBell and NotificationCenter components exist with: bell icon, unread badge, dropdown, mark as read, empty state, date grouping, link navigation. Full notifications page also exists.",
+      "layers": ["ui"],
+      "estimated_iterations": 0
+    },
+    "CC-NOTIFY-004": {
+      "name": "Notification Types and Categories",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "NotificationType enum exists in lib/integrations/notifications/types.ts with 15+ types. Handlers exist in lib/notifications/handlers/ for major business events.",
+      "layers": ["schema"],
+      "estimated_iterations": 0
+    },
+    "CC-NOTIFY-005": {
+      "name": "Midday SDK Integration",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "Implementation uses Supabase Realtime instead of Midday SDK. Real-time updates work without page refresh. Notifications persist in database. Cross-device sync happens via Supabase. The PRD assumption about Midday SDK appears outdated.",
+      "layers": ["server"],
+      "estimated_iterations": 0
+    },
+    "CC-NOTIFY-006": {
+      "name": "Notification Preferences",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "Full NotificationPreferences component exists with: per-category email/in-app toggles, team notifications toggle, digest settings (enabled, frequency, time), test email button. Schema supports preferences via user_preferences table.",
+      "layers": ["ui", "schema"],
+      "estimated_iterations": 0
+    },
+    "CC-NOTIFY-007": {
+      "name": "Action Confirmation Notifications",
+      "status": "valid",
+      "change": "none",
+      "reason": "No ConfirmationToast or undo pattern found in codebase. Destructive actions do not have undo capability. This is a genuine gap.",
+      "layers": ["ui"],
+      "estimated_iterations": 3,
+      "acceptance_criteria_notes": {
+        "testable": true,
+        "concerns": [
+          "May need to adjust from 5-second window to configurable duration",
+          "Keyboard shortcuts (Enter/Escape) should be tested for focus management conflicts"
+        ]
+      }
+    },
+    "CC-NOTIFY-008": {
+      "name": "Background Job Notifications",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "No JobProgressNotification component exists. No progress indicators for long-running operations. Trigger.dev tasks exist but no UI for progress/completion feedback. This is a genuine gap that spans multiple layers.",
+      "layers": ["ui", "server"],
+      "estimated_iterations": 5,
+      "atomization_reason": "Story spans server (job status tracking) and UI (progress component). Should split into: (1) Job status tracking API, (2) Progress notification component"
+    }
+  },
+  "recommended_stories": [
+    "CC-NOTIFY-007",
+    "CC-NOTIFY-008"
+  ],
+  "atomization_notes": {
+    "CC-NOTIFY-008": {
+      "original_name": "Background Job Notifications",
+      "split_into": [
+        {
+          "id": "CC-NOTIFY-008a",
+          "name": "Job Status Tracking API",
+          "description": "Create server-side infrastructure to track job progress and completion status from Trigger.dev tasks",
+          "layers": ["server"],
+          "estimated_iterations": 3,
+          "acceptance_criteria": [
+            "Job status enum includes: pending, running, completed, failed",
+            "Job progress percentage stored and queryable",
+            "Job completion triggers notification creation",
+            "API endpoint to query job status by ID",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "CC-NOTIFY-008b",
+          "name": "Job Progress Notification Component",
+          "description": "Create UI component to display progress for long-running background jobs",
+          "layers": ["ui"],
+          "estimated_iterations": 4,
+          "dependencies": ["CC-NOTIFY-008a"],
+          "acceptance_criteria": [
+            "JobProgressNotification component shows for active jobs",
+            "Progress bar or percentage indicator updates in real-time",
+            "Notification persists until job completes",
+            "Completion shows success/error toast based on outcome",
+            "Failed jobs show retry action button",
+            "Clicking shows job details or navigates to result",
+            "TypeScript compiles without errors"
+          ]
+        }
+      ]
+    }
+  },
+  "additional_recommendations": {
+    "update_prd_assumptions": "The PRD references Midday SDK for notifications but the codebase uses Supabase Realtime. Consider updating assumptions.md to reflect actual implementation.",
+    "remove_obsolete_stories": "Stories CC-NOTIFY-001 through CC-NOTIFY-006 should be removed from the PRD as they describe already-implemented functionality.",
+    "prd_current_state_update": "The 'current_state.implemented' section should be updated to reflect all the notification infrastructure that exists."
+  }
+}

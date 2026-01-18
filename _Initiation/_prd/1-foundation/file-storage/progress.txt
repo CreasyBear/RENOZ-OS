@@ -1,0 +1,49 @@
+# File Storage Foundation Progress
+# PRD: file-storage.prd.json
+# Started: 2026-01-17
+# Updated: 2026-01-17
+
+## Stories (7 total)
+
+- [x] FILE-001: Attachments Schema (1 iteration)
+- [x] FILE-002: R2 Storage Provider (1 iteration)
+- [x] FILE-003: File Upload API Routes (1 iteration)
+- [x] FILE-004: File Download and Delete API Routes (1 iteration)
+- [x] FILE-005: File Uploader UI Component (1 iteration)
+- [x] FILE-006: File Preview and Attachment List UI (1 iteration)
+- [x] FILE-007: File Query Hooks (1 iteration)
+
+## Current Story
+ALL COMPLETE
+
+## Iteration Count
+Total: 7
+Current Story: 0
+
+## Blockers
+None
+
+## Notes
+- Progress tracking initialized
+- FILE-001 completed: attachments table in drizzle/schema/files/attachments.ts with id, organizationId, uploadedBy, filename, originalFilename, mimeType, sizeBytes, storageKey (unique), bucket, entityType, entityId, metadata (jsonb), createdAt, deletedAt. 4 indexes, RLS policies, migration 0002_talented_celestials.sql generated
+- FILE-002 completed: R2 client in src/lib/storage/ with r2-client.ts (S3Client for Cloudflare R2), upload.ts (generatePresignedUploadUrl), download.ts (generatePresignedDownloadUrl), delete.ts (deleteObject), head.ts (headObject), errors.ts (StorageError classes), index.ts barrel export. Installed @aws-sdk/client-s3 and @aws-sdk/s3-request-presigner
+- FILE-003 completed: src/lib/schemas/files.ts with Zod schemas (presignedUploadRequestSchema, confirmUploadRequestSchema, etc.) and src/lib/server/files.ts with TanStack Start server functions (getPresignedUploadUrl, confirmUpload)
+- FILE-004 completed: getPresignedDownloadUrl, listAttachments, deleteAttachment server functions in src/lib/server/files.ts
+- FILE-007 completed: TanStack Query hooks in src/hooks/use-files.ts with useAttachments, useDownloadUrl, useUploadFile, useDeleteFile. Also fixed use-dismissed-hints.ts to use direct server function calls instead of useServerFn wrapper
+- FILE-005 completed: FileUploader component in src/components/files/file-uploader.tsx with react-dropzone drag-and-drop, progress bar, error/success states. Installed react-dropzone, added shadcn Progress and AlertDialog components
+- FILE-006 completed: FilePreview (image preview with lazy loading, PDF/file icons) and AttachmentList (with download/delete actions, AlertDialog confirmation) in src/components/files/. Created AttachmentInfo type for API response types. Fixed use-job-progress.ts server function calls
+
+## Pre-Mortem Hardening (11 fixes)
+- [x] FIX-001: MIME type validation - blocked executable content (text/html, text/javascript)
+- [x] FIX-002: Server-side MIME verification in confirmUpload handler
+- [x] FIX-003: Upload confirmation race condition prevention with isNotNull(deletedAt)
+- [x] FIX-004: Pending upload cleanup job (hourly, 24h+ old)
+- [x] FIX-005: Soft-deleted file cleanup job (daily, 7d+ old)
+- [x] FIX-006: Batch download URL endpoint (max 50 per request)
+- [x] FIX-007: Share download URL between FilePreview and AttachmentItem
+- [x] FIX-008: Scoped cache invalidation on delete
+- [x] FIX-009: XHR upload timeout (5 minutes)
+- [x] FIX-010: Upload retry logic (3 attempts, exponential backoff)
+- [x] FIX-011: AWS SDK maxAttempts=3 configuration
+
+Pre-mortem plan: thoughts/shared/plans/2026-01-17-foundation-premortem-fixes.md

@@ -1,0 +1,461 @@
+{
+  "prd_id": "DOM-USERS",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "summary": {
+    "total_stories": 8,
+    "verified_gaps": 5,
+    "invalidated_gaps": 3,
+    "new_gaps_found": 0,
+    "implementation_status": "partially_complete",
+    "requires_atomization": 4
+  },
+  "codebase_findings": {
+    "users_schema": {
+      "exists": true,
+      "location": "renoz-v2/lib/schema/users.ts",
+      "fields": ["id", "organizationId", "email", "firstName", "lastName", "phone", "avatarUrl", "department", "role", "userType", "installerCompany", "status", "lastActiveAt", "invitedAt", "activatedAt", "createdAt", "updatedAt", "version"],
+      "indexes": ["organization_id", "email", "role", "user_type"],
+      "notes": "avatarUrl already exists - profile photos partially implemented. lastActiveAt exists but tracks general activity, not login specifically"
+    },
+    "user_preferences_schema": {
+      "exists": true,
+      "location": "renoz-v2/lib/schema/user-preferences.ts",
+      "fields": ["userId", "notificationSettings", "theme", "dashboardLayout", "recentlyViewed", "favorites", "tableViews", "updatedAt"]
+    },
+    "audit_logs_schema": {
+      "exists": true,
+      "location": "renoz-v2/lib/schema/audit-logs.ts",
+      "fields": ["id", "organizationId", "userId", "action", "entityType", "entityId", "changes", "ipAddress", "userAgent", "createdAt"],
+      "indexes": ["organization_id", "entity_type_entity_id", "user_id", "created_at"]
+    },
+    "user_server_functions": {
+      "exists": true,
+      "location": "renoz-v2/src/server/functions/users.ts",
+      "functions": ["listOrgUsers", "listOrgUsersForAssignment", "updateUserRole", "deactivateUser", "reactivateUser", "inviteUser", "updateUserProfile", "uploadAvatar", "getUserActivityLogs"],
+      "features": ["OCC version check", "Supabase Auth integration", "Audit logging", "Last admin protection", "Email invite via Resend"]
+    },
+    "team_members_functions": {
+      "exists": true,
+      "location": "renoz-v2/src/server/functions/team-members.ts",
+      "functions": ["listTeamMembers", "getTeamMember"],
+      "features": ["Search by name/email", "Formatted name output"]
+    },
+    "audit_logs_functions": {
+      "exists": true,
+      "location": "renoz-v2/src/server/functions/audit-logs.ts",
+      "functions": ["getAuditLogs"],
+      "features": ["Filter by userId, action, entityType, entityId, date range", "Pagination", "User name join"]
+    },
+    "users_route": {
+      "exists": true,
+      "location": "renoz-v2/src/routes/users/index.tsx",
+      "features": ["User list with avatar", "Tabs: Members/Pending Invites", "Search/filter by role, status, department", "Bulk selection checkboxes", "Bulk actions: email, export, deactivate", "User detail sidebar on click", "Invite user dialog", "Stats cards", "Role editing inline"]
+    },
+    "settings_users_route": {
+      "exists": true,
+      "location": "renoz-v2/src/routes/settings/users/index.tsx",
+      "features": ["User list table", "Role editing", "Deactivate/reactivate", "Invite user dialog"],
+      "notes": "Duplicate functionality with /users route - simpler version"
+    },
+    "profile_settings_route": {
+      "exists": true,
+      "location": "renoz-v2/src/routes/settings/profile.tsx",
+      "features": ["View/edit first name, last name, email, phone", "Avatar upload with preview", "Password change", "Read-only: role, organization, member since, last active"]
+    },
+    "audit_log_route": {
+      "exists": true,
+      "location": "renoz-v2/src/routes/settings/audit-log.tsx",
+      "features": ["Filter by action, entityType, date range", "Expandable rows for changes detail", "Pagination", "User name display"]
+    },
+    "user_detail_sidebar": {
+      "exists": true,
+      "location": "renoz-v2/src/components/domain/settings/user-detail-sidebar.tsx",
+      "features": ["Avatar, name, role/status badges", "Contact info", "Account details", "Permissions list by role", "Recent activity from audit logs", "Actions: send email, reset password, edit, deactivate/reactivate"]
+    },
+    "invite_user_dialog": {
+      "exists": true,
+      "location": "renoz-v2/src/components/domain/settings/invite-user-dialog.tsx",
+      "features": ["Email input", "Role selection", "Validation", "Loading state"],
+      "missing": ["Personal message field", "Invitation preview", "CSV bulk upload"]
+    },
+    "onboarding_wizard": {
+      "exists": true,
+      "location": "renoz-v2/src/components/domain/settings/onboarding-wizard.tsx",
+      "features": ["Multi-step wizard for organization setup", "Company info, logo, address, currency, team invite step"],
+      "notes": "This is organization onboarding, not user onboarding checklist"
+    },
+    "bulk_operations": {
+      "exists": "partial",
+      "location": "renoz-v2/src/routes/users/index.tsx",
+      "evidence": ["BulkActionBar component integrated", "Checkbox selection on table", "Bulk actions: email, export, deactivate"],
+      "missing": ["Bulk role change not implemented", "Bulk add to group (groups don't exist)", "sendBulkUserEmails and exportUsersData functions referenced but not found in server functions"]
+    },
+    "user_groups_teams": {
+      "exists": false,
+      "searched_patterns": ["user_groups", "user_group_members", "groups table", "teams table"],
+      "conclusion": "No user groups/teams schema or functionality exists"
+    },
+    "user_delegation": {
+      "exists": false,
+      "searched_patterns": ["delegation", "out_of_office", "delegate"],
+      "conclusion": "No delegation/OOO functionality exists"
+    },
+    "last_login_tracking": {
+      "exists": "partial",
+      "evidence": "lastActiveAt column exists but is general activity tracking, not login-specific",
+      "missing": ["lastLoginAt column does not exist", "No login event logging", "No inactive user alert", "No login history view"]
+    },
+    "user_export": {
+      "exists": "partial",
+      "evidence": "exportUsersData referenced in users route but function not found in server functions",
+      "conclusion": "Export button exists in UI but server function missing or incomplete"
+    }
+  },
+  "gap_verification": {
+    "no_user_activity_log_view": {
+      "status": "partially_invalidated",
+      "evidence": "UserDetailSidebar shows recent activity from getUserActivityLogs. Audit log page at /settings/audit-log shows all logs with user filtering capability.",
+      "remaining_gap": "No dedicated user activity tab on user detail page, no export activity log option, date range filter exists in audit-log page but not per-user view"
+    },
+    "no_bulk_user_operations": {
+      "status": "partially_invalidated",
+      "evidence": "Users route has bulk selection, bulk action bar with deactivate/email/export options",
+      "remaining_gap": "Server functions sendBulkUserEmails and exportUsersData appear missing. Bulk role change not implemented. Progress indicator for large batches not implemented."
+    },
+    "no_user_groups_teams": {
+      "status": "verified",
+      "evidence": "No schema, server functions, or UI for user groups/teams",
+      "conclusion": "Gap exists - full implementation needed"
+    },
+    "no_delegation": {
+      "status": "verified",
+      "evidence": "No schema, server functions, or UI for delegation/OOO",
+      "conclusion": "Gap exists - full implementation needed"
+    },
+    "no_user_onboarding_checklist": {
+      "status": "verified",
+      "evidence": "OnboardingWizard exists but is for organization setup, not user-specific onboarding checklist. No per-user progress tracking for onboarding steps.",
+      "conclusion": "Gap exists - need user-specific onboarding checklist"
+    },
+    "no_profile_photos": {
+      "status": "invalidated",
+      "evidence": "avatarUrl column exists in users schema. uploadAvatar server function exists with: base64 upload, Supabase storage, crop not implemented but resize via storage. Profile page has avatar upload. UserDetailSidebar shows avatar. User tables show avatar.",
+      "remaining_gap": "No crop/resize before upload in client UI"
+    },
+    "no_last_login_tracking_visible": {
+      "status": "partially_invalidated",
+      "evidence": "lastActiveAt column exists and is displayed in user lists and detail views",
+      "remaining_gap": "This tracks general activity not specifically login. No dedicated lastLoginAt column. No inactive user alert. No login history view."
+    },
+    "no_user_export": {
+      "status": "partially_verified",
+      "evidence": "Export button exists in bulk actions but exportUsersData server function not found",
+      "conclusion": "UI stub exists but server implementation incomplete"
+    }
+  },
+  "stories_status": {
+    "DOM-USER-001": {
+      "name": "Add User Activity Log View",
+      "status": "partially_implemented",
+      "change": "reduce_scope",
+      "reason": "UserDetailSidebar already shows recent activity. Audit log page has filtering. Missing: dedicated activity tab, export option, pagination within sidebar.",
+      "layers": ["ui"],
+      "estimated_iterations": 2,
+      "revised_acceptance_criteria": [
+        "Activity tab on user detail sidebar (convert recent activity to full tab)",
+        "Pagination for activity in sidebar",
+        "Export activity log button with CSV download",
+        "TypeScript compiles without errors"
+      ],
+      "acceptance_criteria_notes": {
+        "testable": true,
+        "concerns": [
+          "Filter by date range exists in audit-log page - decide if needed in sidebar",
+          "Filter by action type exists in audit-log page - decide if needed in sidebar"
+        ]
+      }
+    },
+    "DOM-USER-002": {
+      "name": "Add User Groups/Teams",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "Story spans schema (2 tables), server functions, and UI. Should be split into schema, server, and UI stories.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 8,
+      "atomization_reason": "Crosses all layers with significant complexity in each"
+    },
+    "DOM-USER-003": {
+      "name": "Add Delegation (Out of Office)",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "Story spans schema, server (notification routing), and UI. Complex business logic for delegation receiving notifications and task visibility.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 8,
+      "atomization_reason": "Crosses all layers with complex notification logic"
+    },
+    "DOM-USER-004": {
+      "name": "Add User Profile Photos",
+      "status": "mostly_invalid",
+      "change": "reduce_scope",
+      "reason": "avatarUrl exists, uploadAvatar server function exists, profile page has upload, avatars display throughout app. Only missing: client-side crop/resize before upload.",
+      "layers": ["ui"],
+      "estimated_iterations": 2,
+      "revised_acceptance_criteria": [
+        "Add client-side image cropper before upload",
+        "Preview cropped image before save",
+        "TypeScript compiles without errors"
+      ],
+      "acceptance_criteria_notes": {
+        "testable": true,
+        "concerns": []
+      }
+    },
+    "DOM-USER-005": {
+      "name": "Add Last Login Display",
+      "status": "partially_implemented",
+      "change": "modify",
+      "reason": "lastActiveAt exists and is displayed, but it tracks general activity not login specifically. Need to add actual lastLoginAt tracking and inactive user alert.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 3,
+      "revised_acceptance_criteria": [
+        "Add lastLoginAt column to users schema (separate from lastActiveAt)",
+        "Update lastLoginAt in login server function",
+        "Show last login in user list and detail views",
+        "Add visual indicator for users inactive >30 days",
+        "Add sort by last login option",
+        "TypeScript compiles without errors"
+      ],
+      "acceptance_criteria_notes": {
+        "testable": true,
+        "concerns": [
+          "Login history view (optional) can be deferred - audit logs already track this"
+        ]
+      }
+    },
+    "DOM-USER-006": {
+      "name": "Add Bulk User Operations",
+      "status": "partially_implemented",
+      "change": "complete_implementation",
+      "reason": "UI has bulk selection and action bar. Missing: sendBulkUserEmails and exportUsersData server functions, bulk role change, progress indicator.",
+      "layers": ["server", "ui"],
+      "estimated_iterations": 3,
+      "dependencies": ["DOM-USER-002"],
+      "revised_acceptance_criteria": [
+        "Implement sendBulkUserEmails server function",
+        "Implement exportUsersData server function with CSV format",
+        "Add bulk role change action",
+        "Add progress indicator for operations on >10 users",
+        "Verify audit logging for each user in bulk operation",
+        "TypeScript compiles without errors"
+      ],
+      "acceptance_criteria_notes": {
+        "testable": true,
+        "concerns": [
+          "Bulk add to group depends on DOM-USER-002"
+        ]
+      }
+    },
+    "DOM-USER-007": {
+      "name": "Add User Onboarding Checklist",
+      "status": "valid",
+      "change": "atomize",
+      "reason": "Different from organization onboarding wizard that exists. Needs schema for tracking per-user progress, server function for updating steps, UI for displaying checklist.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 6,
+      "dependencies": ["DOM-USER-004"],
+      "atomization_reason": "Crosses all layers, depends on profile completion"
+    },
+    "DOM-USER-008": {
+      "name": "Enhance User Invitation Flow",
+      "status": "partially_implemented",
+      "change": "expand",
+      "reason": "Basic invitation exists. Missing: personal message, preview, resend, expiration handling, invitation history, CSV bulk upload.",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 5,
+      "revised_acceptance_criteria": [
+        "Add personal message field to invitation form",
+        "Add invitation preview before sending",
+        "Add resend invitation action to pending invites",
+        "Add invitation expiration tracking (expiresAt column)",
+        "Show invitation status/history in pending tab",
+        "Add CSV bulk upload for invitations",
+        "TypeScript compiles without errors"
+      ],
+      "acceptance_criteria_notes": {
+        "testable": true,
+        "concerns": [
+          "7-day expiration may conflict with Supabase invite link expiration",
+          "CSV upload validation needs clear error reporting"
+        ]
+      }
+    }
+  },
+  "recommended_stories": [
+    "DOM-USER-004",
+    "DOM-USER-001",
+    "DOM-USER-005",
+    "DOM-USER-006",
+    "DOM-USER-008",
+    "DOM-USER-002",
+    "DOM-USER-003",
+    "DOM-USER-007"
+  ],
+  "atomization_notes": {
+    "DOM-USER-002": {
+      "original_name": "Add User Groups/Teams",
+      "split_into": [
+        {
+          "id": "DOM-USER-002a",
+          "name": "User Groups Schema",
+          "description": "Create database tables for user groups/teams",
+          "layers": ["schema"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "user_groups table with id, organizationId, name, description, createdAt, updatedAt",
+            "user_group_members join table with groupId, userId, role (member/lead), joinedAt",
+            "Proper indexes on organizationId and userId",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-USER-002b",
+          "name": "User Groups Server Functions",
+          "description": "CRUD operations and membership management for user groups",
+          "layers": ["server"],
+          "estimated_iterations": 3,
+          "dependencies": ["DOM-USER-002a"],
+          "acceptance_criteria": [
+            "createGroup, updateGroup, deleteGroup functions",
+            "addUserToGroup, removeUserFromGroup functions",
+            "listGroups, getGroup, getUserGroups functions",
+            "RLS policy integration",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-USER-002c",
+          "name": "User Groups UI",
+          "description": "UI for managing user groups and membership",
+          "layers": ["ui"],
+          "estimated_iterations": 4,
+          "dependencies": ["DOM-USER-002b"],
+          "acceptance_criteria": [
+            "Group management section in settings",
+            "Create/edit group dialog",
+            "Add/remove users from groups",
+            "Group badge on user profile/detail",
+            "Filter user list by group",
+            "TypeScript compiles without errors"
+          ]
+        }
+      ]
+    },
+    "DOM-USER-003": {
+      "original_name": "Add Delegation (Out of Office)",
+      "split_into": [
+        {
+          "id": "DOM-USER-003a",
+          "name": "Delegation Schema",
+          "description": "Create database table for user delegations",
+          "layers": ["schema"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "user_delegations table with id, delegatorId, delegateId, startDate, endDate, reason, isActive, createdAt",
+            "Indexes on delegatorId, delegateId, date range",
+            "Check constraint for startDate < endDate",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-USER-003b",
+          "name": "Delegation Server Functions",
+          "description": "Create and manage delegations, handle notification routing",
+          "layers": ["server"],
+          "estimated_iterations": 4,
+          "dependencies": ["DOM-USER-003a"],
+          "acceptance_criteria": [
+            "createDelegation, updateDelegation, cancelDelegation functions",
+            "getActiveDelegation, getDelegationsForUser functions",
+            "Notification routing check for active delegations",
+            "Auto-deactivate expired delegations (scheduled job or on-access)",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-USER-003c",
+          "name": "Delegation UI",
+          "description": "UI for setting up and viewing delegations",
+          "layers": ["ui"],
+          "estimated_iterations": 3,
+          "dependencies": ["DOM-USER-003b"],
+          "acceptance_criteria": [
+            "Set delegation form in user settings",
+            "Delegate user picker",
+            "Date range picker for start/end",
+            "Delegation indicator on user profile when active",
+            "View assigned tasks of delegator (when you are delegate)",
+            "TypeScript compiles without errors"
+          ]
+        }
+      ]
+    },
+    "DOM-USER-007": {
+      "original_name": "Add User Onboarding Checklist",
+      "split_into": [
+        {
+          "id": "DOM-USER-007a",
+          "name": "User Onboarding Schema",
+          "description": "Track per-user onboarding progress",
+          "layers": ["schema"],
+          "estimated_iterations": 2,
+          "acceptance_criteria": [
+            "user_onboarding table or JSONB column in user_preferences",
+            "Track completion of: profile_complete, preferences_set, tutorial_viewed",
+            "completedAt timestamp per step",
+            "dismissedAt for skipping onboarding",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-USER-007b",
+          "name": "User Onboarding Server Functions",
+          "description": "Update onboarding progress and check completion",
+          "layers": ["server"],
+          "estimated_iterations": 2,
+          "dependencies": ["DOM-USER-007a"],
+          "acceptance_criteria": [
+            "getOnboardingStatus function",
+            "completeOnboardingStep function",
+            "dismissOnboarding function",
+            "Auto-check profile completion based on user fields",
+            "TypeScript compiles without errors"
+          ]
+        },
+        {
+          "id": "DOM-USER-007c",
+          "name": "User Onboarding UI",
+          "description": "Display onboarding checklist for new users",
+          "layers": ["ui"],
+          "estimated_iterations": 3,
+          "dependencies": ["DOM-USER-007b", "DOM-USER-004"],
+          "acceptance_criteria": [
+            "Onboarding checklist component on dashboard for new users",
+            "Steps: complete profile, set preferences, view tutorial",
+            "Progress indicator (1/3 complete etc)",
+            "Dismiss/skip option",
+            "Links to tutorial videos (placeholder)",
+            "Admin view of user onboarding status",
+            "TypeScript compiles without errors"
+          ]
+        }
+      ]
+    }
+  },
+  "additional_recommendations": {
+    "consolidate_user_routes": "There are two user management pages: /users and /settings/users. Consider removing /settings/users and keeping only /users as the full-featured version.",
+    "update_prd_current_state": "The 'current_state.implemented' section should add: avatar upload, user detail sidebar with permissions/activity, audit log viewer, bulk selection UI",
+    "update_prd_gaps": "Remove 'No profile photos' from gaps as avatarUrl and upload exist. Update 'No last login tracking visible' to clarify that lastActiveAt exists but login-specific tracking does not.",
+    "fix_bulk_operations": "The sendBulkUserEmails and exportUsersData functions are referenced in the UI but appear to be missing from server functions. This should be fixed before marking bulk operations complete."
+  }
+}

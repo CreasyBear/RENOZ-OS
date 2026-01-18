@@ -1,0 +1,188 @@
+domain_group: core_business
+domains_analyzed: [products, inventory, suppliers]
+total_stories: 47
+analysis_date: 2026-01-17
+
+tigers:
+  - risk: "Circular dependency between products and inventory schema migrations"
+    domain: products/inventory
+    severity: high
+    category: dependency
+    specific_story: PROD-CORE-SCHEMA, INV-CORE-SCHEMA
+    rationale: "Products schema creates inventoryMovements table (line 249-275 in products.prd.json), but Inventory schema creates inventoryItems that reference products. Migration 008_products.ts and 011_inventory.ts could fail if executed in wrong order or if both try to create the same table."
+    mitigation: "Consolidate inventory tables into single migration (011_inventory.ts), remove inventoryMovements from products schema, create explicit migration dependency chain"
+
+  - risk: "Supplier purchase order receipts must update inventory cost layers via FIFO"
+    domain: suppliers/inventory
+    severity: high
+    category: integration
+    specific_story: SUPP-GOODS-RECEIPT, INV-CORE-API
+    rationale: "Receipt API (purchaseOrderReceipts) must trigger inventoryCostLayers creation and update weighted average costs. Complex transaction spanning 2 domains with potential race conditions and data consistency issues."
+    mitigation: "Design receipts API to use database transactions, implement idempotent cost layer creation, add integration tests for receipt→inventory→cost flow"
+
+  - risk: "Product bundles inventory deduction logic unclear across domains"
+    domain: products/inventory
+    severity: medium
+    category: requirements
+    specific_story: PROD-BUNDLES-API, INV-CORE-API
+    rationale: "PRD states 'Components deducted individually on fulfillment' but doesn't specify which domain owns this logic. Bundle expansion for orders could bypass inventory allocation if not properly integrated."
+    mitigation: "Clarify bundle expansion ownership in requirements, add explicit bundle handling to inventory allocation API, create integration test suite"
+
+  - risk: "Supplier price lists vs product pricing conflicts"
+    domain: products/suppliers
+    severity: medium
+    category: integration
+    specific_story: SUPP-PRICING-MANAGEMENT, PROD-PRICING-API
+    rationale: "Products domain has customerProductPrices and productPriceTiers. Suppliers domain has supplierPriceLists. When creating POs, which price source is authoritative? No clear resolution order defined."
+    mitigation: "Define price resolution order in requirements: supplier price list → product cost price → product base price. Document in both PRDs."
+
+  - risk: "Performance requirement conflicts: Products wants <1s for 100 products, Inventory needs <100ms for lookups"
+    domain: products/inventory
+    severity: medium
+    category: performance
+    specific_story: PROD-CATALOG-UI, INV-CORE-API
+    rationale: "Product catalog browse loads products WITH inventory summaries per PRD (line 309 response includes 'inventory: InventorySummary'). Single page load could trigger 100 inventory lookups. Math: 100 products × 100ms inventory lookup = 10 seconds, violating <1s requirement."
+    mitigation: "Implement inventory summary denormalization or batch lookup API, add Redis caching layer for inventory summaries, reconsider embedding inventory in product list response"
+
+  - risk: "11 schema files + 3 separate migrations risk sequence errors and missing indexes"
+    domain: all
+    severity: high
+    category: dependency
+    specific_story: PROD-CORE-SCHEMA, INV-CORE-SCHEMA, SUPP-CORE-SCHEMA
+    rationale: "Products: 8 schema files → migration 008. Suppliers: 8 schema files → migration 010. Inventory: 7 schema files → migration 011. Gap at 009 suspicious. Foreign keys span domains (products←inventory, suppliers→products). Migration order critical but not specified."
+    mitigation: "Create migration dependency graph, use Drizzle's migration ordering, add validation script to check FK references exist before applying"
+
+  - risk: "Inventory FIFO cost layers will become performance bottleneck with 1M+ items"
+    domain: inventory
+    severity: medium
+    category: performance
+    specific_story: INV-CORE-SCHEMA
+    rationale: "inventoryCostLayers table grows unbounded (one row per receipt). With 1M inventory items × average 10 receipts = 10M rows. Query for COGS requires scanning all layers per product. No archival strategy defined."
+    mitigation: "Add layer consolidation logic (merge depleted layers), implement partitioning by date, consider materialized view for current weighted average cost"
+
+  - risk: "Three domains all create 'approvals' tables with different schemas"
+    domain: suppliers
+    severity: medium
+    category: requirements
+    specific_story: SUPP-CORE-SCHEMA
+    rationale: "Suppliers has purchaseOrderApprovals. Pattern likely repeats in other domains (e.g., inventory adjustments, product price changes). No shared approval workflow infrastructure."
+    mitigation: "Consider creating shared approval_workflows schema that all domains reference, or accept duplication but ensure consistent patterns"
+
+  - risk: "No test data generation strategy across 47 stories and 26+ tables"
+    domain: all
+    severity: medium
+    category: testing
+    specific_story: all
+    rationale: "Integration testing requires: active products, valid suppliers, inventory items, cost layers, locations, price tiers, bundles. Test data dependency graph complex. No seed scripts specified."
+    mitigation: "Create fixture factory pattern, implement db/seeds/ directory with domain-specific seed files, use Drizzle $inferSelect for type-safe factories"
+
+  - risk: "Supabase Storage for product images not integrated with RLS policies"
+    domain: products
+    severity: medium
+    category: integration
+    specific_story: PROD-IMAGES-API
+    rationale: "productImages table references Supabase Storage URLs (line 156 imageUrl field). PRD mentions 'Organization-level image access control' but doesn't specify Storage bucket policies. Images could leak across organizations."
+    mitigation: "Define Storage bucket RLS policies matching products table org isolation, implement signed URLs with org-scoped expiration, add integration test for cross-org access denial"
+
+elephants:
+  - risk: "Nobody wants to admit 17 UI stories is too many for initial release"
+    domain: all
+    severity: high
+    rationale: "Products: 7 UI stories. Inventory: 6 UI stories. Suppliers: 9 UI stories. Total 22 UI stories × 3 iterations = 66 iterations just for UI. That's 3-4 months of work assuming 1 story per day. But these are the 'core business' domains that block everything else."
+    
+  - risk: "The dependency chain means we can't parallelize: Products → Inventory → Suppliers must be sequential"
+    domain: all
+    severity: medium
+    rationale: "Inventory depends on Products (foreign key to products table). Suppliers depends on Products (purchase orders reference products). Can't start Suppliers until Products AND Inventory complete. Critical path is ~15 stories long."
+
+  - risk: "Performance requirements are aspirational, not validated"
+    domain: inventory
+    severity: medium
+    rationale: "Inventory PRD promises 1M+ items with <100ms lookups (line 1291), 1000+ movements/minute (line 1292), 100+ concurrent users (line 1293). No performance testing infrastructure specified. No benchmarks. No fallback if requirements aren't met."
+
+  - risk: "Full-text search requirements assume PostgreSQL text search is sufficient"
+    domain: products
+    severity: medium
+    rationale: "PROD-SEARCH-OPTIMIZATION story requires 'PostgreSQL full-text search setup' (line 1395) for 100k+ product catalogs. Postgres full-text search notoriously slow at scale. May need Elasticsearch/Algolia migration later, invalidating entire story."
+
+  - risk: "Mobile interface stories are afterthoughts but warehouses live on mobile"
+    domain: inventory
+    severity: high
+    rationale: "INV-MOBILE-INTERFACE is story #12 (last in domain). But warehouse reality is: receiving, picking, counting all happen on mobile scanners. If mobile UX fails, entire inventory system fails. Mobile should be Phase 1, not Phase 5."
+
+  - risk: "RLS policies mentioned everywhere but no testing strategy"
+    domain: all
+    severity: high
+    rationale: "Every schema story mentions 'RLS policies for organization data isolation' but no story includes 'test cross-org access denial'. Security requirement without test = security vulnerability waiting to happen."
+
+  - risk: "Cost accounting FIFO assumption may not match client's actual accounting method"
+    domain: inventory
+    severity: medium
+    rationale: "Inventory PRD hardcodes FIFO (line 1209). But business rule context mentions 'weighted average cost calculation' (line 868 in products, line 1201 in suppliers). FIFO and weighted average are different methods. If client uses LIFO or weighted average, entire cost layer system must be rebuilt."
+
+  - risk: "Bundle pricing 'can override calculated component total' creates pricing inconsistency"
+    domain: products
+    severity: medium
+    rationale: "Line 871 in products PRD: bundle pricing can override component total. But what happens when component prices change? Does bundle price auto-adjust or stay fixed? No conflict resolution specified. Leads to customer complaints when bundle is more expensive than buying components separately."
+
+  - risk: "Approval workflow requirements assume simple hierarchical org structure"
+    domain: suppliers
+    severity: medium
+    rationale: "purchaseOrderApprovals table has 'level' field for multi-level approval (line 148). But real orgs have matrix approvals (budget approver AND category approver). Single-level hierarchy too simplistic for $100k+ purchase orders."
+
+  - risk: "'Unlimited category nesting' will break UI performance"
+    domain: products
+    severity: medium
+    rationale: "Products PRD line 878: 'Unlimited category nesting'. But category tree navigation requires recursive queries. At 10+ levels deep, UI will be unusable. No max depth constraint or performance mitigation."
+
+paper_tigers:
+  - risk: "47 total stories looks scary"
+    reason: "Many are small schema/API pairs (2 iterations each). Real bottleneck is 22 UI stories. If we prioritize MVP UI (catalog, PO creation, basic inventory) and defer advanced features (forecasting, analytics), can ship with ~15 stories."
+
+  - risk: "'100k+ products' scalability sounds impossible"
+    reason: "Postgres handles this fine with proper indexing. organizationId + status composite index (line 50-51 products schema) plus pagination covers it. Real risk is full-text search, not basic queries."
+
+  - risk: "Multi-level approval workflow seems complex"
+    reason: "It's just a state machine with escalation timer. Standard pattern. purchaseOrderApprovals table schema (lines 141-169 suppliers) is actually well-designed. Implementation is straightforward."
+
+  - risk: "FIFO cost accounting sounds hard"
+    reason: "It's simpler than it looks. inventoryCostLayers table (lines 188-213 inventory) is the entire implementation. Query oldest layer with quantityRemaining > 0, deduct from it, move to next layer. Standard queue algorithm."
+
+  - risk: "Barcode scanning integration seems advanced"
+    reason: "It's just text input. Modern mobile cameras auto-detect barcodes via browser API. No custom scanner hardware needed. Falls back to manual entry if camera fails. Low risk."
+
+  - risk: "'Integration with financial system' sounds like months of work"
+    reason: "Looking at actual requirements (lines 1221-1228 suppliers), it's just: create invoice records, schedule payments, track budgets. No actual integration with external accounting software in scope. Just internal data structures."
+
+recommendations:
+  critical_path_optimization:
+    - "Merge inventoryMovements into inventory migration to break circular dependency"
+    - "Implement shared test fixture factory before starting UI stories"
+    - "Define explicit migration order: 008_products → 011_inventory → 010_suppliers"
+    - "Add RLS policy testing to EVERY schema story acceptance criteria"
+
+  scope_reduction:
+    - "Defer PROD-SEARCH-OPTIMIZATION to post-MVP (full-text search not critical for launch)"
+    - "Defer INV-FORECASTING-SYSTEM to post-MVP (can start with manual reorder points)"
+    - "Defer SUPP-ANALYTICS-REPORTING to post-MVP (basic reports sufficient initially)"
+    - "Promote INV-MOBILE-INTERFACE to Phase 2 (critical for warehouse operations)"
+
+  technical_debt_prevention:
+    - "Add performance benchmarking to INV-CORE-API acceptance criteria"
+    - "Implement Redis caching layer for inventory summaries before PROD-CATALOG-UI"
+    - "Create shared approval workflow pattern before SUPP-APPROVAL-WORKFLOW"
+    - "Define max category depth (8 levels) and enforce in PROD-CATEGORY-MANAGEMENT"
+
+  risk_mitigation_sequence:
+    - "Week 1: Resolve migration order and schema conflicts (products vs inventory tables)"
+    - "Week 2: Implement test fixture factories for all three domains"
+    - "Week 3-4: Products core (schema + API + basic catalog UI)"
+    - "Week 5-6: Inventory core (schema + API + browser UI + MOBILE receiving)"
+    - "Week 7-8: Suppliers core (schema + API + PO creation + approval workflow)"
+    - "Week 9-10: Integration testing and performance validation"
+    - "Week 11-12: Polish and advanced features based on actual usage"
+
+estimated_timeline:
+  optimistic: "8 weeks (if perfect execution, no blockers, scope reduced)"
+  realistic: "12 weeks (with normal blockers, full scope, some rework)"
+  pessimistic: "16 weeks (if major schema conflicts, performance issues, requirement changes)"

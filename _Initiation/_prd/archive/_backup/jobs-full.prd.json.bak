@@ -1,0 +1,1141 @@
+{
+  "id": "domain-jobs-full",
+  "name": "Jobs/Project Management - Complete System",
+  "description": "Comprehensive project and installation management system for lithium-ion battery OEM. Includes full project lifecycle management with Gantt scheduling, BOM with costing, punchlists, time tracking, progress billing, change orders, templates, QA workflows, and analytics.",
+  "version": "1.0.0",
+  "phase": "full",
+  "priority": "P0",
+  "domain": "jobs",
+  "completion_promise": "JOBS_FULL_COMPLETE",
+  "max_iterations": 250,
+
+  "phase_breakdown": {
+    "mvp": {
+      "stories": "JOB-001 to JOB-035",
+      "focus": "Core job management, scheduling, BOM, punchlists, time tracking, mobile",
+      "completion_promise": "JOBS_MVP_COMPLETE"
+    },
+    "phase2": {
+      "stories": "JOB-036 to JOB-055",
+      "focus": "Finance features - progress billing, full costing, variance, change orders",
+      "completion_promise": "JOBS_PHASE2_COMPLETE"
+    },
+    "phase3": {
+      "stories": "JOB-056 to JOB-075",
+      "focus": "Advanced features - templates, resource planning, QA, analytics",
+      "completion_promise": "JOBS_PHASE3_COMPLETE"
+    }
+  },
+
+  "assumptions": {
+    "confirmed": [
+      "Job types: installation (single site), project (multi-phase), service (repair/maintenance)",
+      "Fixed price projects with internal margin tracking",
+      "Jobs relate to: Quote -> Order -> Job -> Site -> Customer",
+      "Four user types: Project Manager, Dispatcher, Installer/Technician, Finance",
+      "Mobile needs full CRUD access, not just read-only",
+      "Progress billing at milestones",
+      "Site entity needed, can default from customer address",
+      "Change orders for scope/cost changes after quote",
+      "Full job costing: materials + labor + overhead"
+    ],
+    "technical": [
+      "Gantt library: frappe-gantt or react-gantt-chart",
+      "File uploads via existing Supabase Storage patterns",
+      "Mobile: Responsive web app (PWA potential for Phase 3)",
+      "Time tracking: Hours entry, GPS optional in Phase 3",
+      "Use existing TanStack patterns",
+      "Resource calendar integrates with user availability",
+      "Template system uses JSONB for flexibility"
+    ],
+    "business": [
+      "Labor rates are per-technician or per-skill-level",
+      "Overhead is percentage or fixed amount per job type",
+      "One job = one primary site (multi-site = multiple linked jobs)",
+      "Technicians can be assigned to multiple jobs concurrently",
+      "Change orders require approval workflow",
+      "Progress billing tied to phase completion",
+      "Customer sign-off required before final invoice"
+    ]
+  },
+
+  "dependencies": {
+    "requires": ["foundation/schema", "foundation/appshell", "domains/customers", "domains/products", "domains/inventory"],
+    "optional": ["domains/orders", "domains/pipeline", "domains/financial"],
+    "blocks": ["workflows/job-completion", "workflows/order-fulfillment"],
+    "related": ["domains/support", "domains/users", "integrations/xero"]
+  },
+
+  "entities": {
+    "new": [
+      {
+        "name": "Site",
+        "description": "Physical location where jobs are performed",
+        "phase": "mvp"
+      },
+      {
+        "name": "Job",
+        "description": "Core job/project entity",
+        "phase": "mvp"
+      },
+      {
+        "name": "JobPhase",
+        "description": "Project phases/milestones with billing percentages",
+        "phase": "mvp"
+      },
+      {
+        "name": "JobTask",
+        "description": "Individual tasks within a job with dependencies",
+        "phase": "mvp"
+      },
+      {
+        "name": "JobBOM",
+        "description": "Bill of Materials with costing",
+        "phase": "mvp"
+      },
+      {
+        "name": "JobTimeEntry",
+        "description": "Time tracking with labor rates",
+        "phase": "mvp"
+      },
+      {
+        "name": "JobPunchlistItem",
+        "description": "Punchlist items with photos",
+        "phase": "mvp"
+      },
+      {
+        "name": "JobDocument",
+        "description": "Job attachments and files",
+        "phase": "mvp"
+      },
+      {
+        "name": "JobChangeOrder",
+        "description": "Formal scope/cost change requests",
+        "phase": "phase2"
+      },
+      {
+        "name": "JobInvoice",
+        "description": "Progress billing invoices linked to phases",
+        "phase": "phase2"
+      },
+      {
+        "name": "JobCostEntry",
+        "description": "Detailed cost tracking (overhead, misc)",
+        "phase": "phase2"
+      },
+      {
+        "name": "JobTemplate",
+        "description": "Reusable job configurations",
+        "phase": "phase3"
+      },
+      {
+        "name": "TaskTemplate",
+        "description": "Reusable task lists",
+        "phase": "phase3"
+      },
+      {
+        "name": "BOMTemplate",
+        "description": "Reusable material lists",
+        "phase": "phase3"
+      },
+      {
+        "name": "JobQAChecklist",
+        "description": "Quality assurance checklists",
+        "phase": "phase3"
+      },
+      {
+        "name": "ResourceCalendar",
+        "description": "Technician availability and capacity",
+        "phase": "phase3"
+      }
+    ]
+  },
+
+  "stories": [
+    "<<< MVP STORIES (JOB-001 to JOB-035) - See jobs-mvp.prd.json >>>",
+
+    {
+      "id": "JOB-036",
+      "name": "Job Costing Configuration",
+      "description": "Configure labor rates, overhead rules, and costing parameters",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase2",
+      "category": "finance",
+      "acceptance_criteria": [
+        "Labor rate tiers configurable (standard, overtime, weekend)",
+        "Per-user labor rate override",
+        "Overhead percentage configurable per job type",
+        "Fixed overhead amount option",
+        "Markup percentage for margin calculation",
+        "Settings accessible from admin/settings"
+      ],
+      "technical_requirements": [
+        "Create job costing settings schema",
+        "Add to organization settings",
+        "UI in settings page"
+      ],
+      "completion_promise": "<promise>JOB-036-COSTING-CONFIG-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-037",
+      "name": "Full Job Costing Calculation",
+      "description": "Calculate complete job cost with materials, labor, overhead",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase2",
+      "category": "finance",
+      "dependencies": ["JOB-036"],
+      "acceptance_criteria": [
+        "Material cost from BOM with actual prices",
+        "Labor cost from time entries with rates",
+        "Overhead calculated per configuration",
+        "Total estimated vs actual cost",
+        "Gross margin calculation",
+        "Cost breakdown by category"
+      ],
+      "technical_requirements": [
+        "Create calculateJobCost server function",
+        "Handle rate tiers for labor",
+        "Apply overhead rules"
+      ],
+      "completion_promise": "<promise>JOB-037-FULL-COSTING-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-038",
+      "name": "Job Cost Entry for Misc Costs",
+      "description": "Track miscellaneous job costs beyond materials and labor",
+      "status": "pending",
+      "priority": "P1",
+      "phase": "phase2",
+      "category": "finance",
+      "acceptance_criteria": [
+        "JobCostEntry entity for misc costs",
+        "Cost categories (travel, equipment, permits, subcontractor, other)",
+        "Add/edit/delete cost entries",
+        "Include in total job cost",
+        "Receipts/documents attachable"
+      ],
+      "technical_requirements": [
+        "Create JobCostEntry schema",
+        "CRUD server functions",
+        "UI in job detail finance section"
+      ],
+      "completion_promise": "<promise>JOB-038-MISC-COSTS-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-039",
+      "name": "Variance Analysis",
+      "description": "Analyze cost and schedule variances",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase2",
+      "category": "finance",
+      "dependencies": ["JOB-037"],
+      "acceptance_criteria": [
+        "Cost variance (estimated - actual) displayed",
+        "Schedule variance (planned - actual dates)",
+        "Variance by category (materials, labor, overhead)",
+        "Visual indicators (green/yellow/red)",
+        "Variance trends over job lifecycle",
+        "Alerts for significant variances"
+      ],
+      "technical_requirements": [
+        "Create getJobVariance server function",
+        "Variance threshold configuration",
+        "Variance display component"
+      ],
+      "completion_promise": "<promise>JOB-039-VARIANCE-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-040",
+      "name": "Change Order Entity",
+      "description": "Create change order schema and CRUD",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase2",
+      "category": "finance",
+      "acceptance_criteria": [
+        "JobChangeOrder table with all fields",
+        "Status workflow (draft, submitted, approved, rejected)",
+        "Links to job, requested by, approved by",
+        "Cost impact (additional amount)",
+        "Schedule impact (days added)",
+        "Scope description and reason",
+        "CRUD server functions"
+      ],
+      "technical_requirements": [
+        "Create schema and migration",
+        "Create server functions",
+        "Approval workflow logic"
+      ],
+      "completion_promise": "<promise>JOB-040-CHANGE-ORDER-ENTITY-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-041",
+      "name": "Change Order UI",
+      "description": "Create change order management interface",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase2",
+      "category": "finance",
+      "dependencies": ["JOB-040"],
+      "acceptance_criteria": [
+        "Change Orders tab on job detail",
+        "Create change order form",
+        "View change order details",
+        "Approve/reject actions (with permissions)",
+        "Change order history",
+        "Impact on job totals visible"
+      ],
+      "technical_requirements": [
+        "Create ChangeOrdersTab component",
+        "Create ChangeOrderForm component",
+        "Permission checks for approval"
+      ],
+      "completion_promise": "<promise>JOB-041-CHANGE-ORDER-UI-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-042",
+      "name": "Progress Billing Configuration",
+      "description": "Configure billing milestones per phase",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase2",
+      "category": "finance",
+      "acceptance_criteria": [
+        "Phase billing percentage editable",
+        "Total must equal 100%",
+        "Billing amount calculated from job total",
+        "Phase completion triggers billing eligibility",
+        "Hold billing option per phase"
+      ],
+      "technical_requirements": [
+        "Add billingPercentage to JobPhase",
+        "Validation for 100% total",
+        "UI in phase management"
+      ],
+      "completion_promise": "<promise>JOB-042-BILLING-CONFIG-COMPLETE</promise>",
+      "estimated_iterations": 2
+    },
+    {
+      "id": "JOB-043",
+      "name": "Progress Invoice Generation",
+      "description": "Generate invoices for completed phases",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase2",
+      "category": "finance",
+      "dependencies": ["JOB-042"],
+      "acceptance_criteria": [
+        "JobInvoice entity created",
+        "Generate invoice for phase completion",
+        "Invoice shows phase details and amount",
+        "Links to job and phase",
+        "Invoice status (draft, sent, paid)",
+        "Sync to Xero option"
+      ],
+      "technical_requirements": [
+        "Create JobInvoice schema",
+        "Create generateProgressInvoice function",
+        "Invoice PDF generation",
+        "Xero integration hook"
+      ],
+      "completion_promise": "<promise>JOB-043-PROGRESS-INVOICE-COMPLETE</promise>",
+      "estimated_iterations": 5
+    },
+    {
+      "id": "JOB-044",
+      "name": "Invoice Management UI",
+      "description": "Manage job-related invoices",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase2",
+      "category": "finance",
+      "dependencies": ["JOB-043"],
+      "acceptance_criteria": [
+        "Invoices tab on job detail",
+        "List invoices with status",
+        "Generate invoice button per phase",
+        "View/download invoice PDF",
+        "Mark as sent/paid",
+        "Total invoiced vs job value"
+      ],
+      "technical_requirements": [
+        "Create InvoicesTab component",
+        "Invoice list and detail views",
+        "PDF viewer/download"
+      ],
+      "completion_promise": "<promise>JOB-044-INVOICE-UI-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-045",
+      "name": "Job Financial Summary",
+      "description": "Comprehensive financial view for job",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase2",
+      "category": "finance",
+      "dependencies": ["JOB-037", "JOB-039", "JOB-044"],
+      "acceptance_criteria": [
+        "Financial summary card on job overview",
+        "Quote amount vs actual cost vs invoiced",
+        "Margin percentage and amount",
+        "Cost breakdown chart",
+        "Variance indicators",
+        "Change order impact shown"
+      ],
+      "technical_requirements": [
+        "Create JobFinancialSummary component",
+        "Aggregate all financial data",
+        "Charts for visualization"
+      ],
+      "completion_promise": "<promise>JOB-045-FINANCIAL-SUMMARY-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-046",
+      "name": "Job Profitability Report",
+      "description": "Generate profitability report for jobs",
+      "status": "pending",
+      "priority": "P1",
+      "phase": "phase2",
+      "category": "finance",
+      "dependencies": ["JOB-045"],
+      "acceptance_criteria": [
+        "Report shows margin by job",
+        "Filter by date range, job type, customer",
+        "Sort by margin, revenue, cost",
+        "Export to CSV/PDF",
+        "Aggregate totals"
+      ],
+      "technical_requirements": [
+        "Create job profitability server function",
+        "Report page in reports section",
+        "Export functionality"
+      ],
+      "completion_promise": "<promise>JOB-046-PROFITABILITY-REPORT-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-047",
+      "name": "Quote-to-Job Linking",
+      "description": "Create job from approved quote",
+      "status": "pending",
+      "priority": "P1",
+      "phase": "phase2",
+      "category": "workflow",
+      "acceptance_criteria": [
+        "Create job button on approved quote",
+        "Pre-populate job from quote data",
+        "Link job to quote",
+        "Quote BOM becomes job BOM",
+        "Quote price becomes job estimate"
+      ],
+      "technical_requirements": [
+        "Create job from quote function",
+        "Copy BOM items",
+        "Maintain relationship"
+      ],
+      "completion_promise": "<promise>JOB-047-QUOTE-TO-JOB-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-048",
+      "name": "Order-to-Job Linking",
+      "description": "Create job from order for fulfillment",
+      "status": "pending",
+      "priority": "P1",
+      "phase": "phase2",
+      "category": "workflow",
+      "acceptance_criteria": [
+        "Create job button on order",
+        "Job linked to order",
+        "Order items populate BOM",
+        "Job completion updates order status"
+      ],
+      "technical_requirements": [
+        "Create job from order function",
+        "Bidirectional status updates",
+        "Order fulfillment workflow"
+      ],
+      "completion_promise": "<promise>JOB-048-ORDER-TO-JOB-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-049",
+      "name": "Job Baseline Tracking",
+      "description": "Save and compare schedule baselines",
+      "status": "pending",
+      "priority": "P1",
+      "phase": "phase2",
+      "category": "scheduling",
+      "acceptance_criteria": [
+        "Save baseline snapshot of schedule",
+        "Multiple baselines supported",
+        "Compare current vs baseline in Gantt",
+        "Baseline dates shown as markers",
+        "Baseline cost captured"
+      ],
+      "technical_requirements": [
+        "Store baselines in job metadata",
+        "Baseline comparison in Gantt",
+        "Save baseline function"
+      ],
+      "completion_promise": "<promise>JOB-049-BASELINE-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-050",
+      "name": "Critical Path Calculation",
+      "description": "Calculate and display critical path",
+      "status": "pending",
+      "priority": "P1",
+      "phase": "phase2",
+      "category": "scheduling",
+      "dependencies": ["JOB-018"],
+      "acceptance_criteria": [
+        "Critical path calculated from dependencies",
+        "Critical tasks highlighted in Gantt",
+        "Slack time shown for non-critical tasks",
+        "Recalculate on schedule change"
+      ],
+      "technical_requirements": [
+        "Implement critical path algorithm",
+        "Visual highlighting in Gantt",
+        "Slack calculation"
+      ],
+      "completion_promise": "<promise>JOB-050-CRITICAL-PATH-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-051",
+      "name": "Labor Rate Tiers",
+      "description": "Apply different rates for overtime and weekend work",
+      "status": "pending",
+      "priority": "P1",
+      "phase": "phase2",
+      "category": "finance",
+      "dependencies": ["JOB-036"],
+      "acceptance_criteria": [
+        "Time entry detects overtime hours",
+        "Weekend work flagged automatically",
+        "Rate multipliers applied correctly",
+        "Time entry shows rate applied",
+        "Configurable thresholds (8hrs/day, 40hrs/week)"
+      ],
+      "technical_requirements": [
+        "Rate tier detection logic",
+        "Apply to labor cost calculation",
+        "Configuration for thresholds"
+      ],
+      "completion_promise": "<promise>JOB-051-LABOR-TIERS-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-052",
+      "name": "Job Notifications",
+      "description": "Notifications for job events",
+      "status": "pending",
+      "priority": "P1",
+      "phase": "phase2",
+      "category": "workflow",
+      "acceptance_criteria": [
+        "Assignment notification to technician",
+        "Status change notifications",
+        "Schedule change notifications",
+        "Approaching deadline warnings",
+        "Email and in-app notifications"
+      ],
+      "technical_requirements": [
+        "Integrate with notification system",
+        "Trigger notifications on events",
+        "Configurable notification preferences"
+      ],
+      "completion_promise": "<promise>JOB-052-NOTIFICATIONS-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-053",
+      "name": "Job Activity Log",
+      "description": "Comprehensive activity history for jobs",
+      "status": "pending",
+      "priority": "P1",
+      "phase": "phase2",
+      "category": "workflow",
+      "acceptance_criteria": [
+        "Activity log on job detail",
+        "Track status changes, assignments, edits",
+        "Track comments and notes",
+        "User and timestamp shown",
+        "Filter by activity type"
+      ],
+      "technical_requirements": [
+        "Create job activity entries",
+        "Activity log component",
+        "Auto-log on key actions"
+      ],
+      "completion_promise": "<promise>JOB-053-ACTIVITY-LOG-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-054",
+      "name": "Job Comments and Notes",
+      "description": "Internal communication on jobs",
+      "status": "pending",
+      "priority": "P1",
+      "phase": "phase2",
+      "category": "workflow",
+      "acceptance_criteria": [
+        "Add comments to job",
+        "Comment thread with replies",
+        "@mention users",
+        "Comments on tasks and punchlist items",
+        "Comment notifications"
+      ],
+      "technical_requirements": [
+        "Job comments schema",
+        "Comment UI component",
+        "Mention parsing and notification"
+      ],
+      "completion_promise": "<promise>JOB-054-COMMENTS-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-055",
+      "name": "Job Print/Export",
+      "description": "Export job details for print or PDF",
+      "status": "pending",
+      "priority": "P2",
+      "phase": "phase2",
+      "category": "workflow",
+      "acceptance_criteria": [
+        "Export job summary to PDF",
+        "Export BOM to PDF/CSV",
+        "Export punchlist to PDF",
+        "Export schedule/Gantt to PDF",
+        "Print-friendly layouts"
+      ],
+      "technical_requirements": [
+        "PDF generation library",
+        "Print stylesheet",
+        "Export functions"
+      ],
+      "completion_promise": "<promise>JOB-055-EXPORT-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-056",
+      "name": "Job Template Entity",
+      "description": "Create job template schema and CRUD",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase3",
+      "category": "templates",
+      "acceptance_criteria": [
+        "JobTemplate table with configuration",
+        "Stores default phases, tasks, BOM",
+        "Template name and description",
+        "Associated job type",
+        "CRUD server functions"
+      ],
+      "technical_requirements": [
+        "Schema with JSONB for configuration",
+        "Clone job to template",
+        "Create job from template"
+      ],
+      "completion_promise": "<promise>JOB-056-JOB-TEMPLATE-ENTITY-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-057",
+      "name": "Job Template Management UI",
+      "description": "UI for managing job templates",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase3",
+      "category": "templates",
+      "dependencies": ["JOB-056"],
+      "acceptance_criteria": [
+        "Templates list page in settings",
+        "Create/edit template",
+        "Preview template contents",
+        "Delete template",
+        "Duplicate template"
+      ],
+      "technical_requirements": [
+        "Template management page",
+        "Template editor UI",
+        "Settings navigation"
+      ],
+      "completion_promise": "<promise>JOB-057-JOB-TEMPLATE-UI-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-058",
+      "name": "Create Job from Template",
+      "description": "Initialize job from selected template",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase3",
+      "category": "templates",
+      "dependencies": ["JOB-057"],
+      "acceptance_criteria": [
+        "Template selector in job creation",
+        "Selecting template populates phases/tasks",
+        "BOM items copied from template",
+        "Can modify after template applied",
+        "Template source tracked"
+      ],
+      "technical_requirements": [
+        "Integrate template selection in create flow",
+        "Clone template data to new job",
+        "Allow customization"
+      ],
+      "completion_promise": "<promise>JOB-058-CREATE-FROM-TEMPLATE-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-059",
+      "name": "Task Template Library",
+      "description": "Reusable task list templates",
+      "status": "pending",
+      "priority": "P1",
+      "phase": "phase3",
+      "category": "templates",
+      "acceptance_criteria": [
+        "TaskTemplate entity with task list",
+        "Apply task template to phase",
+        "Manage task templates in settings",
+        "Multiple templates per job type"
+      ],
+      "technical_requirements": [
+        "TaskTemplate schema",
+        "Apply to phase function",
+        "Template library UI"
+      ],
+      "completion_promise": "<promise>JOB-059-TASK-TEMPLATE-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-060",
+      "name": "BOM Template Library",
+      "description": "Reusable bill of materials templates",
+      "status": "pending",
+      "priority": "P1",
+      "phase": "phase3",
+      "category": "templates",
+      "acceptance_criteria": [
+        "BOMTemplate entity with material list",
+        "Apply BOM template to job",
+        "Manage BOM templates in settings",
+        "Product references validated"
+      ],
+      "technical_requirements": [
+        "BOMTemplate schema",
+        "Apply to job function",
+        "Template library UI"
+      ],
+      "completion_promise": "<promise>JOB-060-BOM-TEMPLATE-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-061",
+      "name": "QA Checklist Entity",
+      "description": "Quality assurance checklists for jobs",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase3",
+      "category": "qa",
+      "acceptance_criteria": [
+        "JobQAChecklist entity",
+        "Checklist items with pass/fail",
+        "Photo evidence per item",
+        "Notes per item",
+        "Completion status"
+      ],
+      "technical_requirements": [
+        "Schema and migration",
+        "CRUD server functions",
+        "Link to job phases"
+      ],
+      "completion_promise": "<promise>JOB-061-QA-CHECKLIST-ENTITY-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-062",
+      "name": "QA Checklist UI",
+      "description": "UI for completing QA checklists",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase3",
+      "category": "qa",
+      "dependencies": ["JOB-061"],
+      "acceptance_criteria": [
+        "QA tab on job detail",
+        "Checklist with pass/fail toggles",
+        "Add photos and notes per item",
+        "QA completion percentage",
+        "Block phase completion if QA incomplete"
+      ],
+      "technical_requirements": [
+        "QA tab component",
+        "Checklist item component",
+        "Photo upload integration"
+      ],
+      "completion_promise": "<promise>JOB-062-QA-UI-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-063",
+      "name": "QA Checklist Templates",
+      "description": "Reusable QA checklist templates",
+      "status": "pending",
+      "priority": "P1",
+      "phase": "phase3",
+      "category": "qa",
+      "dependencies": ["JOB-062"],
+      "acceptance_criteria": [
+        "QA template management in settings",
+        "Apply QA template to job/phase",
+        "Templates per job type",
+        "Standard checklist items"
+      ],
+      "technical_requirements": [
+        "QA template schema",
+        "Template management UI",
+        "Apply function"
+      ],
+      "completion_promise": "<promise>JOB-063-QA-TEMPLATES-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-064",
+      "name": "Customer Sign-off",
+      "description": "Customer approval workflow for job completion",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase3",
+      "category": "qa",
+      "acceptance_criteria": [
+        "Request sign-off action",
+        "Digital signature capture",
+        "Sign-off required before final invoice",
+        "Sign-off document generated",
+        "Email to customer with sign-off link"
+      ],
+      "technical_requirements": [
+        "Signature capture component",
+        "Sign-off document generation",
+        "Customer portal link"
+      ],
+      "completion_promise": "<promise>JOB-064-CUSTOMER-SIGNOFF-COMPLETE</promise>",
+      "estimated_iterations": 5
+    },
+    {
+      "id": "JOB-065",
+      "name": "Resource Calendar Entity",
+      "description": "Technician availability and capacity tracking",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase3",
+      "category": "resources",
+      "acceptance_criteria": [
+        "ResourceCalendar entries for users",
+        "Availability (working hours, time off)",
+        "Capacity calculation per day/week",
+        "Sync with job assignments"
+      ],
+      "technical_requirements": [
+        "Schema for availability entries",
+        "Capacity calculation functions",
+        "Integration with user profile"
+      ],
+      "completion_promise": "<promise>JOB-065-RESOURCE-CALENDAR-ENTITY-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-066",
+      "name": "Resource Calendar UI",
+      "description": "Visual resource calendar and scheduling",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase3",
+      "category": "resources",
+      "dependencies": ["JOB-065"],
+      "acceptance_criteria": [
+        "Calendar view of resource availability",
+        "See assigned jobs per technician",
+        "Add time off/availability blocks",
+        "Capacity utilization indicators",
+        "Week/month view toggle"
+      ],
+      "technical_requirements": [
+        "Calendar component integration",
+        "Resource swimlanes",
+        "Availability management UI"
+      ],
+      "completion_promise": "<promise>JOB-066-RESOURCE-CALENDAR-UI-COMPLETE</promise>",
+      "estimated_iterations": 5
+    },
+    {
+      "id": "JOB-067",
+      "name": "Resource Leveling",
+      "description": "Balance workload across technicians",
+      "status": "pending",
+      "priority": "P1",
+      "phase": "phase3",
+      "category": "resources",
+      "dependencies": ["JOB-066"],
+      "acceptance_criteria": [
+        "Identify overallocated resources",
+        "Suggest rescheduling options",
+        "Apply leveling to balance",
+        "Manual override available",
+        "Show before/after comparison"
+      ],
+      "technical_requirements": [
+        "Resource leveling algorithm",
+        "Suggestion UI",
+        "Apply leveling function"
+      ],
+      "completion_promise": "<promise>JOB-067-RESOURCE-LEVELING-COMPLETE</promise>",
+      "estimated_iterations": 5
+    },
+    {
+      "id": "JOB-068",
+      "name": "Technician Skills and Certifications",
+      "description": "Track technician qualifications",
+      "status": "pending",
+      "priority": "P1",
+      "phase": "phase3",
+      "category": "resources",
+      "acceptance_criteria": [
+        "Skills list per user profile",
+        "Certifications with expiry dates",
+        "Filter assignments by skill",
+        "Expiry warnings",
+        "Skill requirements per job type"
+      ],
+      "technical_requirements": [
+        "Skills schema on user",
+        "Skills management UI",
+        "Assignment filtering"
+      ],
+      "completion_promise": "<promise>JOB-068-SKILLS-CERTIFICATIONS-COMPLETE</promise>",
+      "estimated_iterations": 3
+    },
+    {
+      "id": "JOB-069",
+      "name": "Jobs Dashboard",
+      "description": "Comprehensive jobs overview dashboard",
+      "status": "pending",
+      "priority": "P0",
+      "phase": "phase3",
+      "category": "analytics",
+      "acceptance_criteria": [
+        "Jobs by status chart",
+        "Jobs by type chart",
+        "Active jobs timeline",
+        "Upcoming deadlines list",
+        "Resource utilization summary",
+        "Recent activity feed"
+      ],
+      "technical_requirements": [
+        "Dashboard widget components",
+        "Aggregation queries",
+        "Role-based dashboard variants"
+      ],
+      "completion_promise": "<promise>JOB-069-DASHBOARD-COMPLETE</promise>",
+      "estimated_iterations": 5
+    },
+    {
+      "id": "JOB-070",
+      "name": "Job Analytics",
+      "description": "Analytics and reporting for jobs",
+      "status": "pending",
+      "priority": "P1",
+      "phase": "phase3",
+      "category": "analytics",
+      "acceptance_criteria": [
+        "Average job duration by type",
+        "On-time completion rate",
+        "Cost accuracy (estimate vs actual)",
+        "Resource efficiency metrics",
+        "Trend charts over time"
+      ],
+      "technical_requirements": [
+        "Analytics calculation functions",
+        "Charts and visualizations",
+        "Date range filtering"
+      ],
+      "completion_promise": "<promise>JOB-070-ANALYTICS-COMPLETE</promise>",
+      "estimated_iterations": 5
+    },
+    {
+      "id": "JOB-071",
+      "name": "Job Forecasting",
+      "description": "Forecast job pipeline and capacity",
+      "status": "pending",
+      "priority": "P2",
+      "phase": "phase3",
+      "category": "analytics",
+      "dependencies": ["JOB-070"],
+      "acceptance_criteria": [
+        "Revenue forecast from scheduled jobs",
+        "Capacity forecast based on resources",
+        "Identify bottlenecks",
+        "What-if scenarios",
+        "Pipeline visualization"
+      ],
+      "technical_requirements": [
+        "Forecasting algorithms",
+        "Scenario modeling",
+        "Forecast charts"
+      ],
+      "completion_promise": "<promise>JOB-071-FORECASTING-COMPLETE</promise>",
+      "estimated_iterations": 5
+    },
+    {
+      "id": "JOB-072",
+      "name": "PWA Offline Support",
+      "description": "Offline capability for mobile field app",
+      "status": "pending",
+      "priority": "P1",
+      "phase": "phase3",
+      "category": "mobile",
+      "acceptance_criteria": [
+        "Service worker caching",
+        "Offline task viewing",
+        "Offline time entry (queued)",
+        "Offline punchlist updates (queued)",
+        "Sync when online",
+        "Conflict resolution"
+      ],
+      "technical_requirements": [
+        "PWA manifest and service worker",
+        "IndexedDB for offline storage",
+        "Sync queue implementation",
+        "Conflict detection"
+      ],
+      "completion_promise": "<promise>JOB-072-PWA-OFFLINE-COMPLETE</promise>",
+      "estimated_iterations": 6
+    },
+    {
+      "id": "JOB-073",
+      "name": "GPS Location Tracking",
+      "description": "Optional GPS for time tracking",
+      "status": "pending",
+      "priority": "P2",
+      "phase": "phase3",
+      "category": "mobile",
+      "acceptance_criteria": [
+        "Capture location on clock in/out",
+        "Verify technician at job site",
+        "Optional per organization",
+        "Privacy controls",
+        "Location history"
+      ],
+      "technical_requirements": [
+        "Geolocation API integration",
+        "Store location with time entries",
+        "Privacy settings"
+      ],
+      "completion_promise": "<promise>JOB-073-GPS-TRACKING-COMPLETE</promise>",
+      "estimated_iterations": 4
+    },
+    {
+      "id": "JOB-074",
+      "name": "Job Map View",
+      "description": "Map visualization of job locations",
+      "status": "pending",
+      "priority": "P2",
+      "phase": "phase3",
+      "category": "ui",
+      "acceptance_criteria": [
+        "Map showing job site locations",
+        "Job markers with status colors",
+        "Click marker for job summary",
+        "Filter jobs on map",
+        "Route optimization suggestion"
+      ],
+      "technical_requirements": [
+        "Map component (Google Maps or Mapbox)",
+        "Geocode site addresses",
+        "Job marker clustering"
+      ],
+      "completion_promise": "<promise>JOB-074-MAP-VIEW-COMPLETE</promise>",
+      "estimated_iterations": 5
+    },
+    {
+      "id": "JOB-075",
+      "name": "Job Calendar Integration",
+      "description": "Sync jobs with external calendars",
+      "status": "pending",
+      "priority": "P2",
+      "phase": "phase3",
+      "category": "integration",
+      "acceptance_criteria": [
+        "Export job to Google Calendar",
+        "Export to Outlook/iCal",
+        "Calendar feed URL per user",
+        "Include job details in event",
+        "Update syncs changes"
+      ],
+      "technical_requirements": [
+        "iCal feed generation",
+        "Google Calendar API integration",
+        "Per-user calendar URLs"
+      ],
+      "completion_promise": "<promise>JOB-075-CALENDAR-INTEGRATION-COMPLETE</promise>",
+      "estimated_iterations": 4
+    }
+  ],
+
+  "out_of_scope": [
+    "Native mobile app (iOS/Android)",
+    "Integration with external PM tools (MS Project, Asana)",
+    "AI-powered scheduling optimization",
+    "Subcontractor portal",
+    "Customer self-service portal (beyond sign-off)",
+    "Multi-currency support",
+    "Multi-language support"
+  ],
+
+  "success_metrics": {
+    "mvp": {
+      "job_lifecycle": "Complete job from creation to completion",
+      "scheduling": "Gantt with dependencies works correctly",
+      "costing": "Estimate vs actual tracked",
+      "mobile": "Field workers can update from mobile"
+    },
+    "phase2": {
+      "billing": "Progress invoices generated correctly",
+      "variance": "Cost and schedule variance tracked",
+      "change_orders": "Formal change process works",
+      "profitability": "Job margins analyzed"
+    },
+    "phase3": {
+      "templates": "Jobs created from templates",
+      "qa": "Quality checklists completed with sign-off",
+      "resources": "Capacity planning works",
+      "analytics": "Comprehensive job analytics available"
+    }
+  },
+
+  "verification": {
+    "all_phases": {
+      "route_renders": "npm run dev -> /jobs loads",
+      "crud_works": "Create, read, update, delete jobs",
+      "no_regressions": "npm run test passes",
+      "mobile_works": "UI functional on mobile viewport"
+    }
+  }
+}

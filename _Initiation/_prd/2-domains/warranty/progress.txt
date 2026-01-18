@@ -1,0 +1,40 @@
+# Warranty Domain Progress
+# PRD: warranty.prd.json
+# Started: 2026-01-17
+# Updated: 2026-01-17
+
+## Stories (20 total)
+
+- [ ] DOM-WAR-001a: Warranty Policies: Schema
+- [ ] DOM-WAR-001b: Warranty Policies: Server Functions
+- [ ] DOM-WAR-001c: Warranty Policies: UI
+- [ ] DOM-WAR-002: Complete Auto-Registration Notifications
+- [ ] DOM-WAR-003a: Warranty Expiry Alerts: Notification Creation
+- [ ] DOM-WAR-003b: Warranty Expiry Alerts: Dashboard Widget
+- [ ] DOM-WAR-003c: Warranty Expiry Alerts: Report Page
+- [ ] DOM-WAR-003d: Warranty Expiry Alerts: Opt-Out Setting
+- [ ] DOM-WAR-004a: Warranty Certificate: PDF Template
+- [ ] DOM-WAR-004b: Warranty Certificate: Server Functions
+- [ ] DOM-WAR-004c: Warranty Certificate: UI
+- [ ] DOM-WAR-005a: CSV Bulk Warranty Registration: Server Functions
+- [ ] DOM-WAR-005b: CSV Bulk Warranty Registration: UI
+- [ ] DOM-WAR-006a: Warranty Claim Workflow: Schema
+- [ ] DOM-WAR-006b: Warranty Claim Workflow: Server Functions
+- [ ] DOM-WAR-006c: Warranty Claim Workflow: UI
+- [ ] DOM-WAR-007a: Warranty Extensions: Schema
+- [ ] DOM-WAR-007b: Warranty Extensions: Server Functions
+- [ ] DOM-WAR-007c: Warranty Extensions: UI
+- [ ] DOM-WAR-008: Warranty Analytics Enhancement
+
+## Current Story
+Not started
+
+## Iteration Count
+Total: 0
+Current Story: 0
+
+## Blockers
+None
+
+## Notes
+- Progress tracking initialized

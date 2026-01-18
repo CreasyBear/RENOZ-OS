@@ -1,0 +1,406 @@
+{
+  "prd_id": "WF-LEAD-ORDER",
+  "prd_file": "memory-bank/prd/workflows/lead-to-order.prd.json",
+  "audit_date": "2026-01-09",
+  "audit_type": "workflow",
+  "summary": {
+    "description": "End-to-end sales process workflow from opportunity through quote creation, customer approval, and order conversion",
+    "implementation_status": "partial",
+    "implementation_percentage": 35,
+    "verdict": "5 of 6 stories need work; core components exist but lack guided workflow and automation"
+  },
+  "codebase_findings": {
+    "existing_infrastructure": {
+      "quote_builder": {
+        "file": "renoz-v2/src/components/domain/pipeline/quote-builder.tsx",
+        "status": "implemented",
+        "capabilities": [
+          "Product search and add to quote",
+          "Quantity and pricing editing",
+          "Discount percentages",
+          "GST tax calculation",
+          "Draft auto-save to localStorage",
+          "Unsaved changes warning"
+        ],
+        "gaps": [
+          "No step-by-step wizard flow",
+          "No customer/contact selection step",
+          "Embedded in opportunity panel, not standalone wizard"
+        ]
+      },
+      "opportunity_panel": {
+        "file": "renoz-v2/src/components/domain/pipeline/opportunity-panel.tsx",
+        "status": "implemented",
+        "capabilities": [
+          "View opportunity details",
+          "Quote tab with QuoteBuilder",
+          "Activities tab",
+          "Customer order history display",
+          "Send quote email button",
+          "PDF generation button (QuotePDFButton)",
+          "Log call dialog",
+          "Mark as lost dialog"
+        ],
+        "gaps": [
+          "No guided workflow UI",
+          "No quote approval tracking display",
+          "No conversion analytics"
+        ]
+      },
+      "quote_acceptance": {
+        "file": "renoz-v2/src/server/functions/quote-accept.ts",
+        "status": "implemented",
+        "capabilities": [
+          "Generate accept token for quotes",
+          "Public quote viewing by token",
+          "Token expiration validation",
+          "Quote acceptance (marks stage as 'ordered')"
+        ],
+        "gaps": [
+          "No quote view tracking/notification",
+          "No approval timestamp display in UI",
+          "No notification when customer views quote"
+        ]
+      },
+      "follow_up_dialog": {
+        "file": "renoz-v2/src/components/domain/pipeline/follow-up-dialog.tsx",
+        "status": "partial",
+        "capabilities": [
+          "Template-based follow-up emails (friendly, urgent, custom)",
+          "Email composition UI"
+        ],
+        "gaps": [
+          "Email sending disabled (TODO comment in code)",
+          "No automated sequence scheduling",
+          "No auto-pause on response"
+        ]
+      },
+      "order_creation": {
+        "file": "renoz-v2/src/components/domain/orders/order-creation-dialog.tsx",
+        "status": "implemented",
+        "capabilities": [
+          "Three creation modes: Pipeline, Quick Order, Full Order",
+          "Customer selection",
+          "Order item builder",
+          "Navigates to pipeline for quote-based orders"
+        ],
+        "gaps": [
+          "No direct one-click conversion from approved quote",
+          "No stock availability pre-check",
+          "Manual navigation required"
+        ]
+      },
+      "pipeline_funnel": {
+        "file": "renoz-v2/src/components/domain/dashboard/widgets/pipeline-funnel.tsx",
+        "status": "implemented",
+        "capabilities": [
+          "Funnel visualization by stage",
+          "Conversion rates between stages",
+          "Cross-filtering support"
+        ],
+        "gaps": [
+          "No quote-to-view-to-approve-to-order funnel",
+          "No time-between-stages metrics",
+          "No drop-off analysis by stage"
+        ]
+      },
+      "schema_support": {
+        "file": "renoz-v2/lib/schema/opportunities.ts",
+        "existing_fields": [
+          "stage (new/quoted/pending/ordered/won/lost)",
+          "quoteSentAt - when quote was emailed",
+          "quoteExpiresAt - expiration date",
+          "acceptToken - for public quote acceptance",
+          "acceptTokenExpiresAt - token expiry",
+          "orderId - linked order after conversion",
+          "convertedAt - conversion timestamp"
+        ],
+        "missing_fields": [
+          "quoteViewedAt - no view tracking",
+          "quoteApprovedAt - no approval timestamp",
+          "approvalIp - no IP logging",
+          "probability - needed for win probability",
+          "followUpSequenceStatus - no automation state"
+        ]
+      }
+    },
+    "domain_dependencies": {
+      "pipeline": {
+        "prd_file": "memory-bank/prd/domains/pipeline.prd.json",
+        "required_stories": ["DOM-PIPE-001 (forecasting fields for probability)", "DOM-PIPE-002 (quote PDF integration)"],
+        "status": "45% implemented"
+      },
+      "customers": {
+        "prd_file": "memory-bank/prd/domain/customers.prd.json",
+        "required_stories": ["Customer CRUD - exists"],
+        "status": "available"
+      },
+      "orders": {
+        "prd_file": "memory-bank/prd/domain/orders.prd.json",
+        "required_stories": ["Order creation - exists", "convertToOrder - exists"],
+        "status": "63% implemented"
+      }
+    }
+  },
+  "stories_status": [
+    {
+      "id": "WF-LTO-001",
+      "name": "Create Guided Sales Workflow",
+      "prd_status": "pending",
+      "audit_status": "needs_work",
+      "audit_rationale": "No wizard UI exists. Quote builder is embedded in opportunity panel, not a step-by-step wizard. Would need new component with stage progress indicator, step navigation, and auto-save per step. The onboarding-wizard.tsx could serve as a pattern reference.",
+      "existing_components": [
+        "quote-builder.tsx (product/pricing step)",
+        "customer-combobox.tsx (customer selection)",
+        "status-stepper.tsx (progress indicator pattern)"
+      ],
+      "required_new_components": [
+        "sales-wizard.tsx (main wizard component)",
+        "sales-wizard-steps/ (step components)"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 7,
+      "iteration_breakdown": {
+        "ui_component": 7
+      },
+      "recommendation": "HIGH PRIORITY. This is the main workflow story. Build wizard UI using existing quote-builder as foundation. Reference onboarding-wizard.tsx and status-stepper.tsx patterns."
+    },
+    {
+      "id": "WF-LTO-002",
+      "name": "Add Quote Approval Tracking",
+      "prd_status": "pending",
+      "audit_status": "partially_exists",
+      "audit_rationale": "Quote acceptance mechanism exists via quote-accept.ts but lacks view tracking and notifications. acceptToken and acceptance flow work, but no quoteViewedAt tracking or notification triggers.",
+      "existing_components": [
+        "quote-accept.ts (token generation, acceptance)",
+        "getQuoteByToken (public quote viewing)"
+      ],
+      "required_changes": [
+        "Add quoteViewedAt column to schema",
+        "Track view on getQuoteByToken call",
+        "Add notification triggers (quote viewed, quote approved)",
+        "Add approval IP logging"
+      ],
+      "dependencies": ["DOM-PIPE-002 (quote PDF integration for complete experience)"],
+      "estimated_iterations": 4,
+      "iteration_breakdown": {
+        "schema": 1,
+        "server_function": 2,
+        "ui_component": 1
+      },
+      "recommendation": "MEDIUM PRIORITY. Extend existing quote-accept.ts with view tracking and notification hooks."
+    },
+    {
+      "id": "WF-LTO-003",
+      "name": "Add Automated Follow-Up Sequences",
+      "prd_status": "pending",
+      "audit_status": "needs_work",
+      "audit_rationale": "Follow-up dialog exists but email sending is disabled (TODO in code). No automation, scheduling, or sequence management. Would need trigger.dev job or background worker for automation.",
+      "existing_components": [
+        "follow-up-dialog.tsx (manual follow-up templates)"
+      ],
+      "required_new_components": [
+        "follow-up-sequences schema table",
+        "follow-up scheduler server functions",
+        "trigger.dev job for automated sending",
+        "follow-up history display"
+      ],
+      "dependencies": ["WF-LTO-002 (needs approval tracking to know when to pause)"],
+      "estimated_iterations": 6,
+      "iteration_breakdown": {
+        "schema": 2,
+        "server_function": 3,
+        "ui_component": 1
+      },
+      "recommendation": "LOWER PRIORITY. Complex automation requiring background jobs. Consider after WF-LTO-002 complete."
+    },
+    {
+      "id": "WF-LTO-004",
+      "name": "Add One-Click Order Conversion",
+      "prd_status": "pending",
+      "audit_status": "partially_exists",
+      "audit_rationale": "convertToOrder server function exists. Order creation dialog redirects to pipeline for quote-based orders. Missing: direct conversion button on approved opportunities, stock availability check, pre-fill from quote data.",
+      "existing_components": [
+        "convertToOrder (server function)",
+        "order-creation-dialog.tsx",
+        "quote-accept.ts (sets stage to 'ordered')"
+      ],
+      "required_changes": [
+        "Add 'Convert to Order' button in opportunity panel for stage='ordered'",
+        "Stock availability check before conversion",
+        "Auto-mark opportunity as 'won' on conversion",
+        "Handle partial stock with user options"
+      ],
+      "dependencies": ["WF-LTO-002 (needs approval tracking to show button)"],
+      "estimated_iterations": 4,
+      "iteration_breakdown": {
+        "server_function": 2,
+        "ui_component": 2
+      },
+      "recommendation": "HIGH PRIORITY. Core conversion UX. Mostly wiring existing functions with UI improvements."
+    },
+    {
+      "id": "WF-LTO-005",
+      "name": "Add Sales Conversion Analytics",
+      "prd_status": "pending",
+      "audit_status": "needs_work",
+      "audit_rationale": "Pipeline funnel exists but shows stage counts only, not quote-to-order conversion tracking. No time-between-stages metrics, no drop-off analysis, no comparison by sales rep/product/customer.",
+      "existing_components": [
+        "pipeline-funnel.tsx (basic funnel)",
+        "reports/pipeline.tsx (basic pipeline report)"
+      ],
+      "required_new_components": [
+        "conversion-analytics.tsx widget",
+        "conversion report route",
+        "server functions for conversion metrics"
+      ],
+      "dependencies": ["WF-LTO-004 (needs conversion data to analyze)"],
+      "estimated_iterations": 5,
+      "iteration_breakdown": {
+        "server_function": 2,
+        "ui_component": 3
+      },
+      "recommendation": "LOWER PRIORITY. Analytics valuable but requires data from prior stories."
+    },
+    {
+      "id": "WF-LTO-006",
+      "name": "Add Dynamic Win Probability",
+      "prd_status": "pending",
+      "audit_status": "needs_work",
+      "audit_rationale": "No probability field on opportunities schema. Would need schema changes, probability calculation logic, and UI integration. Depends on DOM-PIPE-001 which adds forecasting fields.",
+      "existing_components": [],
+      "required_new_components": [
+        "probability field on opportunities (from DOM-PIPE-001)",
+        "probability calculation server function",
+        "probability display in opportunity card",
+        "manual override support"
+      ],
+      "dependencies": ["DOM-PIPE-001 (adds probability field to schema)"],
+      "estimated_iterations": 5,
+      "iteration_breakdown": {
+        "server_function": 3,
+        "ui_component": 2
+      },
+      "recommendation": "DEFER. Wait for DOM-PIPE-001 completion from pipeline domain PRD."
+    }
+  ],
+  "recommended_stories": [
+    {
+      "id": "WF-LTO-001",
+      "name": "Create Guided Sales Workflow",
+      "priority": 1,
+      "status": "ready_to_build",
+      "rationale": "Core workflow story. No blocking dependencies. Uses existing components as foundation."
+    },
+    {
+      "id": "WF-LTO-004",
+      "name": "Add One-Click Order Conversion",
+      "priority": 2,
+      "status": "ready_to_build",
+      "rationale": "High impact with existing infrastructure. convertToOrder exists, needs UI wiring."
+    },
+    {
+      "id": "WF-LTO-002",
+      "name": "Add Quote Approval Tracking",
+      "priority": 3,
+      "status": "ready_to_build",
+      "rationale": "Extends existing quote-accept.ts. Provides visibility for sales team."
+    },
+    {
+      "id": "WF-LTO-005",
+      "name": "Add Sales Conversion Analytics",
+      "priority": 4,
+      "status": "blocked",
+      "blocker": "Requires WF-LTO-004 data",
+      "rationale": "Valuable analytics but needs conversion data first."
+    },
+    {
+      "id": "WF-LTO-003",
+      "name": "Add Automated Follow-Up Sequences",
+      "priority": 5,
+      "status": "complex",
+      "rationale": "Requires background job infrastructure. Consider after core workflow complete."
+    },
+    {
+      "id": "WF-LTO-006",
+      "name": "Add Dynamic Win Probability",
+      "priority": 6,
+      "status": "blocked",
+      "blocker": "Requires DOM-PIPE-001 from pipeline PRD",
+      "rationale": "Depends on forecasting fields from pipeline domain."
+    }
+  ],
+  "atomization_notes": {
+    "wf_lto_001": {
+      "current_estimate": 6,
+      "adjusted_estimate": 7,
+      "reason": "Complex wizard UI with 4 steps, progress tracking, navigation, and auto-save. Consider splitting into: (a) wizard shell with navigation, (b) individual step components.",
+      "suggested_split": [
+        "WF-LTO-001a: Wizard shell and step navigation (4 iterations)",
+        "WF-LTO-001b: Step content components (3 iterations)"
+      ]
+    },
+    "wf_lto_002": {
+      "current_estimate": 4,
+      "adjusted_estimate": 4,
+      "reason": "Estimate appropriate. Schema change + server functions + simple UI updates."
+    },
+    "wf_lto_003": {
+      "current_estimate": 5,
+      "adjusted_estimate": 6,
+      "reason": "Automation complexity underestimated. Background job setup, sequence state management, and pause/resume logic add complexity.",
+      "suggested_split": [
+        "WF-LTO-003a: Follow-up sequence schema and manual trigger (3 iterations)",
+        "WF-LTO-003b: Automated scheduling with trigger.dev (3 iterations)"
+      ]
+    },
+    "wf_lto_004": {
+      "current_estimate": 4,
+      "adjusted_estimate": 4,
+      "reason": "Estimate appropriate. Stock check may add minor complexity."
+    },
+    "wf_lto_005": {
+      "current_estimate": 4,
+      "adjusted_estimate": 5,
+      "reason": "Analytics complexity slightly underestimated. Multiple dimensions (rep, product, customer) require more server logic."
+    },
+    "wf_lto_006": {
+      "current_estimate": 5,
+      "adjusted_estimate": 5,
+      "reason": "Estimate appropriate contingent on DOM-PIPE-001 completion."
+    }
+  },
+  "cross_domain_integration_points": [
+    {
+      "workflow_story": "WF-LTO-001",
+      "integrates_with": ["pipeline (opportunity form)", "customers (combobox)", "products (search)"],
+      "integration_type": "uses_existing"
+    },
+    {
+      "workflow_story": "WF-LTO-002",
+      "integrates_with": ["notifications (quote viewed/approved)", "resend (email triggers)"],
+      "integration_type": "extends"
+    },
+    {
+      "workflow_story": "WF-LTO-004",
+      "integrates_with": ["orders (createOrder)", "inventory (stock check)", "pipeline (opportunity update)"],
+      "integration_type": "orchestrates"
+    },
+    {
+      "workflow_story": "WF-LTO-006",
+      "integrates_with": ["pipeline DOM-PIPE-001 (probability field)"],
+      "integration_type": "depends_on"
+    }
+  ],
+  "test_coverage": {
+    "existing_e2e": [
+      "renoz-v2/e2e/quote-to-order.spec.ts (partial - some tests skipped)"
+    ],
+    "test_gaps": [
+      "No guided wizard flow tests",
+      "No quote approval tracking tests",
+      "No follow-up sequence tests",
+      "No conversion analytics tests"
+    ]
+  }
+}

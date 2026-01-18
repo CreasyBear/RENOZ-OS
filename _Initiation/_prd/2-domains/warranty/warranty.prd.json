@@ -1,0 +1,1136 @@
+{
+  "id": "DOM-WARRANTY",
+  "name": "Warranty Domain",
+  "description": "Battery and inverter warranty registration, tracking, and claims. Manages warranty lifecycle from installation through claims resolution and transfers.",
+  "created": "2026-01-09",
+  "updated": "2026-01-10",
+  "priority": 10,
+  "phase": "domain-v2",
+  "version": "v2.1",
+  "dependencies": {
+    "phase": "Domain",
+    "executionOrder": 10,
+    "schemaRequired": [
+      {
+        "table": "organizations",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "users",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "customers",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "products",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "warranties",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "orders",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "issues",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "notifications",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      }
+    ],
+    "schemaCreates": [
+      {
+        "table": "warranty_policies",
+        "story": "DOM-WAR-001a"
+      },
+      {
+        "table": "warranty_claims",
+        "story": "DOM-WAR-006a"
+      },
+      {
+        "table": "warranty_extensions",
+        "story": "DOM-WAR-007a"
+      }
+    ],
+    "serverFunctionsRequired": [],
+    "serverFunctionsCreates": [
+      {
+        "function": "createWarrantyPolicy",
+        "story": "DOM-WAR-001b"
+      },
+      {
+        "function": "updateWarrantyPolicy",
+        "story": "DOM-WAR-001b"
+      },
+      {
+        "function": "deleteWarrantyPolicy",
+        "story": "DOM-WAR-001b"
+      },
+      {
+        "function": "listWarrantyPolicies",
+        "story": "DOM-WAR-001b"
+      },
+      {
+        "function": "getDefaultPolicy",
+        "story": "DOM-WAR-001b"
+      },
+      {
+        "function": "resolveWarrantyPolicy",
+        "story": "DOM-WAR-001b"
+      },
+      {
+        "function": "generateWarrantyCertificate",
+        "story": "DOM-WAR-004b"
+      },
+      {
+        "function": "previewBulkWarrantyImport",
+        "story": "DOM-WAR-005a"
+      },
+      {
+        "function": "bulkRegisterWarrantiesFromCsv",
+        "story": "DOM-WAR-005a"
+      },
+      {
+        "function": "createWarrantyClaim",
+        "story": "DOM-WAR-006b"
+      },
+      {
+        "function": "updateClaimStatus",
+        "story": "DOM-WAR-006b"
+      },
+      {
+        "function": "approveClaim",
+        "story": "DOM-WAR-006b"
+      },
+      {
+        "function": "denyClaim",
+        "story": "DOM-WAR-006b"
+      },
+      {
+        "function": "resolveClaim",
+        "story": "DOM-WAR-006b"
+      },
+      {
+        "function": "extendWarranty",
+        "story": "DOM-WAR-007b"
+      },
+      {
+        "function": "listExtensions",
+        "story": "DOM-WAR-007b"
+      }
+    ],
+    "prdDependencies": [
+      {
+        "prdId": "schema-foundation",
+        "status": "REQUIRED",
+        "reason": "Base schema must exist (organizations, users, customers, products, warranties, orders)"
+      },
+      {
+        "prdId": "DOM-CATALOG",
+        "status": "REQUIRED",
+        "reason": "Products for warranty policy assignment"
+      },
+      {
+        "prdId": "DOM-ORD",
+        "status": "REQUIRED",
+        "reason": "Orders for auto-registration on delivery"
+      }
+    ],
+    "enables": [
+      {
+        "prdId": "DOM-SUPPORT",
+        "reason": "Support domain links warranty claims to issues"
+      },
+      {
+        "prdId": "DOM-REPORTS",
+        "reason": "Reports domain uses warranty metrics and claim data"
+      }
+    ]
+  },
+  "audit": {
+    "date": "2026-01-09",
+    "audit_file": "memory-bank/prd/_audits/warranty-audit.json"
+  },
+  "references": {
+    "internal": [
+      "memory-bank/_meta/glossary.md - Warranty terminology",
+      "src/lib/schema/warranties.ts - Warranty schema",
+      "src/lib/schemas/warranties.ts - Validation schemas",
+      "src/server/functions/warranties.ts - Server functions",
+      "trigger/warranty-jobs.ts - Auto-registration and expiry alert jobs"
+    ],
+    "external": [
+      "No external dependencies"
+    ]
+  },
+  "current_state": {
+    "implemented": [
+      "Warranty registration CRUD",
+      "Warranty lookup by serial number",
+      "Basic warranty claims via issues table",
+      "Warranty transfer between owners",
+      "Warranty list with filters",
+      "Auto-registration from order delivery (trigger job exists)",
+      "Expiry check cron job (runs daily, logs only)",
+      "Bulk registration from orders",
+      "Warranty reports page"
+    ],
+    "gaps": [
+      "No warranty policies (configurable terms per battery/inverter model)",
+      "Auto-registration notification not wired up",
+      "Expiry alerts only log (no notifications/widget)",
+      "No warranty certificate PDF generation",
+      "No CSV bulk upload for standalone registration",
+      "No formal warranty claim workflow for cell degradation, BMS faults, inverter failures",
+      "No warranty extensions tracking for performance-based extensions"
+    ]
+  },
+  "stories": [
+    {
+      "id": "DOM-WAR-001a",
+      "name": "Warranty Policies: Schema (Unified SLA Reference)",
+      "description": "Create warranty_policies table for battery (10-year/10k cycles), inverter (5-year), and installation (2-year) warranties. SLA terms reference unified engine.",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "type": "schema",
+      "acceptance_criteria": [
+        "warranty_policies table created (id, organizationId, name, type ENUM(battery_performance, inverter_manufacturer, installation_workmanship), durationMonths, cycleLimit, terms JSONB, slaConfigurationId UUID FK, isDefault, createdAt, updatedAt)",
+        "slaConfigurationId references unified sla_configurations table (replaces inline slaResponseHours, slaResolutionDays)",
+        "products.warrantyPolicyId FK added (nullable)",
+        "categories.defaultWarrantyPolicyId FK added (nullable)",
+        "Indexes on organizationId, isDefault, type, slaConfigurationId",
+        "Types exported from lib/schema/index.ts",
+        "Migration file created with default policies (Battery 120 months/10k cycles, Inverter 60 months, Installation 24 months)",
+        "npm run typecheck passes"
+      ],
+      "remediation_notes": {
+        "source": "_meta/remediation-sla-engine.md",
+        "key_changes": [
+          "Replace inline slaResponseHours/slaResolutionDays with slaConfigurationId FK",
+          "SLA terms stored in unified sla_configurations table with domain='warranty'",
+          "Default warranty SLA config: 24h response, 5 business days resolution"
+        ]
+      },
+      "files_to_modify": [
+        "src/lib/schema/warranty-policies.ts (create)",
+        "src/lib/schema/products.ts (modify)",
+        "src/lib/schema/index.ts (export)",
+        "drizzle/migrations/*.sql (generated)"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "DOM_WAR_001A_COMPLETE"
+    },
+    {
+      "id": "DOM-WAR-001b",
+      "name": "Warranty Policies: Server Functions (Unified SLA Config)",
+      "description": "Implement warranty policy CRUD. SLA terms reference unified sla_configurations table.",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "type": "server-function",
+      "acceptance_criteria": [
+        "createWarrantyPolicy, updateWarrantyPolicy, deleteWarrantyPolicy functions",
+        "listWarrantyPolicies function with organizationId and type filters",
+        "getDefaultPolicy function - returns org default policy by type",
+        "resolveWarrantyPolicy(productId) returns: product > category > org default policy",
+        "calculateWarrantyExpiry updated to use policy duration and cycle limit",
+        "WARRANTY SLA CONFIG: Create sla_configurations entry with domain='warranty' for SLA terms",
+        "Default warranty SLA: 24h response (hours), 5 resolution (business_days)",
+        "Link warranty_policies.slaConfigurationId to sla_configurations for SLA terms",
+        "Validation schemas in lib/schemas/warranty-policies.ts",
+        "npm run typecheck passes"
+      ],
+      "remediation_notes": {
+        "source": "_meta/remediation-sla-engine.md",
+        "key_changes": [
+          "DO NOT store SLA values directly in warranty_policies table",
+          "warranty_policies should have slaConfigurationId FK to sla_configurations",
+          "SLA terms (24h response, 5 business days resolution) stored in unified engine",
+          "This allows warranty policies to share SLA behavior with other domains"
+        ]
+      },
+      "files_to_modify": [
+        "src/server/functions/warranty-policies.ts (create)",
+        "src/lib/schemas/warranty-policies.ts (create)",
+        "src/server/functions/warranties.ts (modify)"
+      ],
+      "dependencies": [
+        "DOM-WAR-001a"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "DOM_WAR_001B_COMPLETE"
+    },
+    {
+      "id": "DOM-WAR-001c",
+      "name": "Warranty Policies: UI",
+      "description": "Add warranty policy management in settings and display on warranty detail",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Warranty Policy management page in Settings using DataTable for policy list with type badge (Battery/Inverter/Installation)",
+        "Create/edit/delete policy Dialog with Form: name, type Select, duration (months), cycle limit NumberInput (battery only), SLA fields (response hours, resolution days), terms (rich text)",
+        "Set default policy toggle using Switch component with confirmation per policy type",
+        "Product form shows warranty policy Select dropdown filtered by product type (battery/inverter)",
+        "Category form shows default warranty policy Select dropdown",
+        "Warranty detail page displays policy terms with cycle limit remaining for battery warranties",
+        "Warranty form auto-calculates expiry from policy duration with preview display",
+        "Common claim types displayed: Cell degradation, BMS faults, Inverter failures, Installation defects",
+        "Responsive layout: mobile stacked form, tablet/desktop multi-column",
+        "Loading skeleton for policy list and form fields while fetching",
+        "Empty state for no policies with 'No warranty policies defined' and CTA to create first policy",
+        "Error boundary wrapping policy management with retry",
+        "Keyboard navigation: Tab through policy list, Enter to edit, Delete to remove with confirmation",
+        "ARIA labels for policy table, form fields, and toggle controls",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/settings/warranty-policies.tsx (create)",
+        "src/components/domain/settings/warranty-policy-manager.tsx (create)",
+        "src/components/domain/products/product-form.tsx (modify)",
+        "src/routes/support/warranties/$warrantyId.tsx (modify)"
+      ],
+      "dependencies": [
+        "DOM-WAR-001b"
+      ],
+      "estimated_iterations": 5,
+      "completion_promise": "DOM_WAR_001C_COMPLETE",
+      "ui_spec": {
+        "component_type": "Settings page with DataTable and Form Dialog",
+        "layout": {
+          "mobile": "Full-width policy cards, bottom sheet for edit",
+          "tablet": "DataTable with slide-over edit panel",
+          "desktop": "DataTable with modal edit dialog"
+        },
+        "accessibility": {
+          "aria_labels": [
+            "Warranty policies table",
+            "Create policy button",
+            "Edit policy dialog",
+            "Default policy toggle"
+          ],
+          "keyboard_nav": "Tab through table rows, Enter to edit, Space for toggle",
+          "focus_management": "Focus policy name on dialog open",
+          "screen_reader": "Announce policy changes and default status"
+        },
+        "uiPatterns": {
+          "reui": [
+            "data-grid.tsx - Main table for policy list with sorting and filtering",
+            "dialog.tsx - Modal for create/edit policy form",
+            "form.tsx - Form component with validation",
+            "base-select.tsx - Dropdown for policy type selection",
+            "base-switch.tsx - Toggle for default policy",
+            "base-input.tsx - Text inputs for policy name",
+            "base-number-field.tsx - Number input for duration and cycle limits",
+            "badge.tsx - Policy type badges (Battery/Inverter/Installation)",
+            "button.tsx - Action buttons (Create, Save, Cancel)",
+            "skeleton.tsx - Loading states for table and forms"
+          ],
+          "midday": [
+            "tables/customers/data-table.tsx - Reference for virtualized table implementation",
+            "forms/customer-form.tsx - Form pattern with accordion sections",
+            "forms/product-form.tsx - Product form integration example"
+          ]
+        }
+      }
+    },
+    {
+      "id": "DOM-WAR-002",
+      "name": "Complete Auto-Registration Notifications",
+      "description": "Wire up customer notification after auto-registration from order delivery",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "type": "server-function",
+      "acceptance_criteria": [
+        "autoRegisterWarranties job sends warranty confirmation email to customer after installation",
+        "Email uses WarrantyRegistered template with warranty details, policy type (battery/inverter/installation), and certificate link",
+        "Email includes important info: 24h response SLA, 5 day resolution SLA",
+        "Notification record created for each registered warranty",
+        "Skip notification if customer has no primary contact email",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "trigger/warranty-jobs.ts (modify)",
+        "src/server/functions/warranties.ts (modify)"
+      ],
+      "dependencies": [
+        "DOM-WAR-001c"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "DOM_WAR_002_COMPLETE"
+    },
+    {
+      "id": "DOM-WAR-003a",
+      "name": "Warranty Expiry Alerts: Notification Creation",
+      "description": "Create notification records when expiring warranties are found",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "type": "server-function",
+      "acceptance_criteria": [
+        "checkExpiringWarranties creates internal notification records for battery and inverter warranties",
+        "Email sent to customer at 30/60/90 day intervals (configurable) with battery cycle status",
+        "Internal alert created for assigned sales rep or account manager",
+        "Renewal/extension option link included in notification for battery performance warranties",
+        "Battery warranties show cycle count alongside time-based expiry",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "trigger/warranty-jobs.ts (modify)",
+        "src/components/email-templates/warranty-expiring.tsx (create)"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "DOM_WAR_003A_COMPLETE"
+    },
+    {
+      "id": "DOM-WAR-003b",
+      "name": "Warranty Expiry Alerts: Dashboard Widget",
+      "description": "Add expiring warranties widget to dashboard",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Dashboard widget Card showing warranties expiring in next 30 days",
+        "Compact list with warranty number, customer name, expiry date columns",
+        "Click row navigates to warranty detail page",
+        "Sorted by expiry date ascending (soonest first)",
+        "Badge showing count of expiring warranties in widget header",
+        "Responsive layout: mobile shows 3 items with 'View all' link, tablet/desktop shows 5 items",
+        "Loading skeleton while fetching expiring warranties",
+        "Empty state with 'No warranties expiring soon' message and checkmark icon",
+        "Error boundary with retry for widget data fetch",
+        "Keyboard navigation: Tab to widget, arrow keys through list, Enter to navigate",
+        "ARIA labels for widget and list items",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/components/domain/dashboard/widgets/expiring-warranties-widget.tsx (create)",
+        "src/routes/_authed/index.tsx (modify)"
+      ],
+      "dependencies": [
+        "DOM-WAR-003a"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "DOM_WAR_003B_COMPLETE",
+      "ui_spec": {
+        "component_type": "Dashboard widget Card with list",
+        "layout": {
+          "mobile": "Compact 3-item list, full-width card",
+          "tablet": "5-item list, 2-column dashboard grid",
+          "desktop": "5-item list with hover states, 3-column grid"
+        },
+        "accessibility": {
+          "aria_labels": [
+            "Expiring warranties widget",
+            "Warranty {number} expires {date}",
+            "View all expiring warranties"
+          ],
+          "keyboard_nav": "Tab to widget, arrow up/down through items",
+          "focus_management": "Focus first item when widget receives focus",
+          "screen_reader": "Announce expiry count and dates"
+        },
+        "uiPatterns": {
+          "reui": [
+            "card.tsx - Widget container with header and content",
+            "badge.tsx - Count badge in widget header",
+            "skeleton.tsx - Loading state for widget data",
+            "button.tsx - View all link button"
+          ],
+          "midday": [
+            "components/charts/selectable-chart-wrapper.tsx - Dashboard widget wrapper pattern"
+          ]
+        }
+      }
+    },
+    {
+      "id": "DOM-WAR-003c",
+      "name": "Warranty Expiry Alerts: Report Page",
+      "description": "Dedicated report page for expiring warranties",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Route at /reports/expiring-warranties using ReportLayout component",
+        "Filters using FilterBar: expiry range Select (7/30/60/90 days), customer Combobox, product Combobox",
+        "DataTable with columns: warranty number, product, customer, expiry date, days until expiry, status",
+        "Days until expiry column with color coding (red <7, yellow <30, green >30)",
+        "CSV export Button in report header",
+        "Responsive layout: mobile filter drawer + card list, tablet/desktop inline filters + table",
+        "Loading skeleton for report data",
+        "Empty state with 'No warranties match filters' and CTA to adjust filters",
+        "Error boundary with retry for report data fetch",
+        "Keyboard navigation: Tab through filters, arrow keys in table, Enter to view warranty",
+        "ARIA labels for filters, table, and export button",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/routes/_authed/reports/expiring-warranties.tsx (create)"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "DOM_WAR_003C_COMPLETE",
+      "ui_spec": {
+        "component_type": "ReportLayout with FilterBar and DataTable",
+        "layout": {
+          "mobile": "Filter drawer, card-based list with swipe actions",
+          "tablet": "Collapsible filter bar, compact DataTable",
+          "desktop": "Inline filters, full DataTable with all columns"
+        },
+        "accessibility": {
+          "aria_labels": [
+            "Expiring warranties report",
+            "Filter by expiry range",
+            "Filter by customer",
+            "Export to CSV"
+          ],
+          "keyboard_nav": "Tab through filters then table, Enter to select",
+          "focus_management": "Focus first filter on page load",
+          "screen_reader": "Announce result count and filter changes"
+        },
+        "uiPatterns": {
+          "reui": [
+            "data-grid.tsx - Main report table with filtering and export",
+            "filters.tsx - Filter bar component for report controls",
+            "base-select.tsx - Dropdown for expiry range selection",
+            "base-combobox.tsx - Searchable customer and product filters",
+            "button.tsx - Export CSV action button",
+            "badge.tsx - Status and urgency indicators",
+            "drawer.tsx - Mobile filter drawer"
+          ],
+          "midday": [
+            "tables/transactions/data-table.tsx - Report table pattern with filters",
+            "components/filters.tsx - Advanced filtering component"
+          ]
+        }
+      }
+    },
+    {
+      "id": "DOM-WAR-003d",
+      "name": "Warranty Expiry Alerts: Opt-Out Setting",
+      "description": "Allow opt-out of expiry notifications per warranty or customer",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "type": "schema",
+      "acceptance_criteria": [
+        "warranties.expiryAlertOptOut boolean column",
+        "customers.warrantyExpiryAlertOptOut boolean column",
+        "Opt-out toggle on warranty detail page",
+        "Opt-out toggle on customer settings",
+        "checkExpiringWarranties respects opt-out",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/lib/schema/warranties.ts (modify)",
+        "src/lib/schema/customers.ts (modify)",
+        "drizzle/migrations/*.sql (generated)",
+        "trigger/warranty-jobs.ts (modify)",
+        "src/routes/support/warranties/$warrantyId.tsx (modify)"
+      ],
+      "dependencies": [
+        "DOM-WAR-003a"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "DOM_WAR_003D_COMPLETE",
+      "uiPatterns": {
+        "reui": [
+          "base-switch.tsx - Toggle component for opt-out settings"
+        ]
+      }
+    },
+    {
+      "id": "DOM-WAR-004a",
+      "name": "Warranty Certificate: PDF Template",
+      "description": "Create warranty certificate PDF template with branding",
+      "priority": 4,
+      "status": "pending",
+      "passes": false,
+      "type": "server-function",
+      "acceptance_criteria": [
+        "Certificate template with Renoz Energy branding",
+        "Includes: battery/inverter model, serial, owner, installation date, expiry date, cycle limit (battery), warranty terms",
+        "Warranty type badge (Battery Performance / Inverter Manufacturer / Installation Workmanship)",
+        "SLA terms displayed: 24h response, 5 day resolution",
+        "QR code linking to warranty lookup page",
+        "Use @react-pdf/renderer or similar",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/lib/pdf/warranty-certificate.tsx (create)"
+      ],
+      "dependencies": [
+        "DOM-WAR-001c"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "DOM_WAR_004A_COMPLETE"
+    },
+    {
+      "id": "DOM-WAR-004b",
+      "name": "Warranty Certificate: Server Functions",
+      "description": "Create certificate generation and storage",
+      "priority": 4,
+      "status": "pending",
+      "passes": false,
+      "type": "server-function",
+      "acceptance_criteria": [
+        "generateWarrantyCertificate server function",
+        "Store PDF in Supabase storage bucket 'warranty-certificates'",
+        "Return public URL for download",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/server/functions/warranty-certificates.ts (create)",
+        "src/lib/schemas/warranty-certificates.ts (create)"
+      ],
+      "dependencies": [
+        "DOM-WAR-004a"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "DOM_WAR_004B_COMPLETE"
+    },
+    {
+      "id": "DOM-WAR-004c",
+      "name": "Warranty Certificate: UI",
+      "description": "Add certificate download and email actions",
+      "priority": 4,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Generate PDF Button on warranty detail page with loading state and icon",
+        "PDF opens in new tab for preview using browser native PDF viewer",
+        "Download Button in action bar after generation",
+        "Email certificate to customer Dialog with recipient preview and send confirmation",
+        "Regenerate Button if warranty details change with confirmation prompt",
+        "Responsive layout: mobile action buttons stack, tablet/desktop inline action bar",
+        "Loading state during PDF generation with progress indicator",
+        "Error state with retry for generation failures",
+        "Error boundary wrapping certificate actions",
+        "Keyboard navigation: Tab through action buttons, Enter to activate",
+        "ARIA labels for all certificate actions",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/routes/support/warranties/$warrantyId.tsx (modify)",
+        "src/components/domain/support/warranty-certificate-preview.tsx (create)"
+      ],
+      "dependencies": [
+        "DOM-WAR-004b"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "DOM_WAR_004C_COMPLETE",
+      "ui_spec": {
+        "component_type": "DetailPanel action bar with Dialog",
+        "layout": {
+          "mobile": "Stacked action buttons, full-screen preview",
+          "tablet": "Inline action bar, slide-over preview",
+          "desktop": "Inline action bar, modal preview dialog"
+        },
+        "accessibility": {
+          "aria_labels": [
+            "Generate certificate button",
+            "Download certificate button",
+            "Email certificate button",
+            "Regenerate certificate button"
+          ],
+          "keyboard_nav": "Tab through actions, Enter to activate",
+          "focus_management": "Focus download button after generation",
+          "screen_reader": "Announce generation status and completion"
+        },
+        "uiPatterns": {
+          "reui": [
+            "button.tsx - Action buttons with loading states",
+            "dialog.tsx - Email confirmation dialog",
+            "progress.tsx - PDF generation progress indicator",
+            "alert-dialog.tsx - Regenerate confirmation prompt"
+          ],
+          "midday": [
+            "components/invoice/form.tsx - Reference for document action patterns"
+          ]
+        }
+      }
+    },
+    {
+      "id": "DOM-WAR-005a",
+      "name": "CSV Bulk Warranty Registration: Server Functions",
+      "description": "Create CSV upload and validation for standalone bulk registration",
+      "priority": 5,
+      "status": "pending",
+      "passes": false,
+      "type": "server-function",
+      "acceptance_criteria": [
+        "previewBulkWarrantyImport function parses CSV with battery/inverter serial numbers",
+        "Validate serial numbers against battery and inverter inventory",
+        "Detect duplicates and already-registered serials",
+        "Validate warranty type matches product type (battery warranties for batteries, inverter warranties for inverters)",
+        "bulkRegisterWarrantiesFromCsv creates warranties with correct policy type",
+        "Return success/error summary with policy type breakdown",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/server/functions/warranties.ts (modify)",
+        "src/lib/schemas/warranties.ts (modify)"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "DOM_WAR_005A_COMPLETE"
+    },
+    {
+      "id": "DOM-WAR-005b",
+      "name": "CSV Bulk Warranty Registration: UI",
+      "description": "Create CSV upload dialog for standalone bulk registration",
+      "priority": 5,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Bulk CSV registration Dialog (separate from order-based) triggered from warranties list page",
+        "CSV file upload with drag-drop zone and file picker fallback",
+        "Single customer assignment Combobox for batch",
+        "Preview DataTable with validation status column (valid/invalid/duplicate badges)",
+        "Progress indicator ProgressBar for large batches",
+        "Summary Card showing registered count vs error count",
+        "Download error rows as CSV for correction",
+        "Responsive layout: mobile full-screen dialog, tablet/desktop modal",
+        "Loading skeleton for preview while parsing",
+        "Error state for invalid CSV format with helpful message",
+        "Error boundary with retry for upload failures",
+        "Keyboard navigation: Tab through upload zone, preview table, action buttons",
+        "ARIA labels for upload zone, preview table, and progress",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/components/domain/support/bulk-warranty-csv-dialog.tsx (create)",
+        "src/routes/support/warranties/index.tsx (modify)"
+      ],
+      "dependencies": [
+        "DOM-WAR-005a"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "DOM_WAR_005B_COMPLETE",
+      "ui_spec": {
+        "component_type": "Dialog with FileUpload, DataTable, and ProgressBar",
+        "layout": {
+          "mobile": "Full-screen dialog, stacked upload and preview",
+          "tablet": "Large modal, side-by-side upload and preview",
+          "desktop": "Wide modal with full preview table"
+        },
+        "accessibility": {
+          "aria_labels": [
+            "Bulk warranty upload dialog",
+            "CSV file drop zone",
+            "Customer select",
+            "Preview table",
+            "Import progress"
+          ],
+          "keyboard_nav": "Tab through upload, customer select, preview, actions",
+          "focus_management": "Focus drop zone on dialog open, focus summary on completion",
+          "screen_reader": "Announce validation results and import progress"
+        },
+        "uiPatterns": {
+          "reui": [
+            "dialog.tsx - Main modal container for bulk upload",
+            "data-grid.tsx - Preview table with validation status",
+            "badge.tsx - Validation status badges (valid/invalid/duplicate)",
+            "progress.tsx - Upload and processing progress bar",
+            "card.tsx - Summary statistics card",
+            "button.tsx - Upload, import, and download error actions",
+            "base-combobox.tsx - Customer selection dropdown"
+          ],
+          "midday": [
+            "components/add-transactions.tsx - File upload and preview pattern"
+          ]
+        }
+      }
+    },
+    {
+      "id": "DOM-WAR-006a",
+      "name": "Warranty Claim Workflow: Schema (Unified SLA Integration)",
+      "description": "Create warranty_claims table for formal claim tracking with unified SLA engine integration",
+      "priority": 6,
+      "status": "pending",
+      "passes": false,
+      "type": "schema",
+      "acceptance_criteria": [
+        "warranty_claims table (id, warrantyId, issueId FK, claimType ENUM(cell_degradation, bms_fault, inverter_failure, installation_defect, other), status enum, resolutionType, approvedByUserId, cost, cycleCountAtClaim, notes, sla_tracking_id UUID FK)",
+        "sla_tracking_id references unified sla_tracking table",
+        "Status enum: submitted, under_review, approved, denied, resolved",
+        "Resolution type enum: repair, replace, refund, warranty_extension",
+        "Indexes on warrantyId, status, claimType, sla_tracking_id",
+        "Types exported from lib/schema/index.ts",
+        "Migration file created",
+        "npm run typecheck passes"
+      ],
+      "remediation_notes": {
+        "source": "_meta/remediation-sla-engine.md",
+        "key_changes": [
+          "Add sla_tracking_id FK to warranty_claims table",
+          "SLA tracking uses unified engine instead of hardcoded values",
+          "Create default warranty SLA config: 24h response, 5 business days resolution"
+        ]
+      },
+      "files_to_modify": [
+        "src/lib/schema/warranty-claims.ts (create)",
+        "src/lib/schema/index.ts (export)",
+        "drizzle/migrations/*.sql (generated)"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "completion_promise": "DOM_WAR_006A_COMPLETE"
+    },
+    {
+      "id": "DOM-WAR-006b",
+      "name": "Warranty Claim Workflow: Server Functions (Unified SLA)",
+      "description": "Create claim lifecycle for cell degradation, BMS faults, inverter failures using unified SLA engine",
+      "priority": 6,
+      "status": "pending",
+      "passes": false,
+      "type": "server-function",
+      "acceptance_criteria": [
+        "createWarrantyClaim calls SLA State Manager startTracking() with domain='warranty', entityType='warranty_claim'",
+        "Use sla_configurations entry for warranty domain (24h response, 5 business_days resolution)",
+        "updateClaimStatus uses SLA State Manager for pause/resume if status implies waiting",
+        "approveClaim and denyClaim check SLA breach status from sla_tracking",
+        "resolveClaim calls SLA State Manager recordResolution() with resolution timestamp",
+        "High-value claims require approval (configurable threshold)",
+        "Battery claims capture cycle count at time of claim",
+        "Claim resolution can extend warranty period for performance-based claims",
+        "SLA events audit trail created for all claim state changes",
+        "Validation schemas in lib/schemas/warranty-claims.ts",
+        "npm run typecheck passes"
+      ],
+      "remediation_notes": {
+        "source": "_meta/remediation-sla-engine.md",
+        "key_changes": [
+          "DO NOT hardcode SLA values - use sla_configurations with domain='warranty'",
+          "Use SLA State Manager for all timing operations",
+          "SLA breach warnings come from sla_tracking.responseBreached/resolutionBreached",
+          "Business days calculated using organization's business_hours_config and organization_holidays"
+        ],
+        "default_config": {
+          "response_target": "24 hours",
+          "resolution_target": "5 business_days",
+          "at_risk_threshold": "25%"
+        }
+      },
+      "files_to_modify": [
+        "src/server/functions/warranty-claims.ts (create)",
+        "src/lib/schemas/warranty-claims.ts (create)"
+      ],
+      "dependencies": [
+        "DOM-WAR-006a"
+      ],
+      "estimated_iterations": 5,
+      "completion_promise": "DOM_WAR_006B_COMPLETE"
+    },
+    {
+      "id": "DOM-WAR-006c",
+      "name": "Warranty Claim Workflow: UI",
+      "description": "Create claim submission and approval UI",
+      "priority": 6,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Create Claim action Button on warranty detail page with icon",
+        "Claim Form Dialog with: claim type Select (Cell degradation/BMS fault/Inverter failure/Installation defect), description textarea, resolution preference RadioGroup (repair/replace/refund)",
+        "Battery claim form shows current cycle count field (auto-populated if available)",
+        "SLA countdown timer displayed: Response due in X hours, Resolution due in Y days",
+        "Claim links to issue for detailed tracking with clickable Badge",
+        "Claim approval Dialog for high-value claims with approve/deny buttons, SLA status indicator, and comment field",
+        "Claim history Tab on warranty detail showing DataTable: date, claim type badge, status, resolution, cost, cycle count (battery), approver",
+        "Status Badge with color coding per claim status and SLA breach warning (red if overdue)",
+        "Responsive layout: mobile bottom sheet for claim form, tablet/desktop modal",
+        "Loading skeleton for claim history while fetching",
+        "Empty state for no claims with 'No claims filed' message",
+        "Error boundary wrapping claim components with retry",
+        "Keyboard navigation: Tab through form fields, RadioGroup via arrow keys",
+        "ARIA labels for claim form, claim type, status badges, and approval dialog",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/components/domain/support/warranty-claim-form.tsx (create)",
+        "src/components/domain/support/claim-approval-dialog.tsx (create)",
+        "src/routes/support/warranties/$warrantyId.tsx (modify)"
+      ],
+      "dependencies": [
+        "DOM-WAR-006b"
+      ],
+      "estimated_iterations": 5,
+      "completion_promise": "DOM_WAR_006C_COMPLETE",
+      "ui_spec": {
+        "component_type": "Form Dialog with Tab and DataTable",
+        "layout": {
+          "mobile": "Bottom sheet form, stacked claim cards in history",
+          "tablet": "Side panel form, compact claim table",
+          "desktop": "Modal form, full claim DataTable with all columns"
+        },
+        "accessibility": {
+          "aria_labels": [
+            "Create claim button",
+            "Claim form",
+            "Resolution preference",
+            "Claim status",
+            "Approval dialog",
+            "Claim history tab"
+          ],
+          "keyboard_nav": "Tab through form, arrow keys for radio selection",
+          "focus_management": "Focus description field on form open",
+          "screen_reader": "Announce claim status changes and approvals"
+        },
+        "uiPatterns": {
+          "reui": [
+            "dialog.tsx - Claim form and approval dialogs",
+            "sheet.tsx - Mobile bottom sheet for claim form",
+            "form.tsx - Form with validation for claim submission",
+            "base-select.tsx - Claim type dropdown",
+            "base-radio-group.tsx - Resolution preference selection",
+            "base-tabs.tsx - Claim history tab on warranty detail",
+            "data-grid.tsx - Claim history table",
+            "badge.tsx - Status and claim type badges with color coding",
+            "button.tsx - Action buttons (Submit, Approve, Deny)",
+            "textarea.tsx - Description and comment fields",
+            "base-number-field.tsx - Cycle count input"
+          ],
+          "midday": [
+            "forms/transaction-create-form.tsx - Form dialog pattern",
+            "tables/transactions/data-table.tsx - History table pattern"
+          ]
+        }
+      }
+    },
+    {
+      "id": "DOM-WAR-007a",
+      "name": "Warranty Extensions: Schema",
+      "description": "Create warranty_extensions table",
+      "priority": 7,
+      "status": "pending",
+      "passes": false,
+      "type": "schema",
+      "acceptance_criteria": [
+        "warranty_extensions table (id, warrantyId, months, reason, approvedByUserId, createdAt)",
+        "Index on warrantyId",
+        "Types exported from lib/schema/index.ts",
+        "Migration file created",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/lib/schema/warranty-extensions.ts (create)",
+        "src/lib/schema/index.ts (export)",
+        "drizzle/migrations/*.sql (generated)"
+      ],
+      "dependencies": [
+        "DOM-WAR-001c"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "DOM_WAR_007A_COMPLETE"
+    },
+    {
+      "id": "DOM-WAR-007b",
+      "name": "Warranty Extensions: Server Functions",
+      "description": "Create extension request and approval functions",
+      "priority": 7,
+      "status": "pending",
+      "passes": false,
+      "type": "server-function",
+      "acceptance_criteria": [
+        "extendWarranty server function for performance-based extensions",
+        "Extension requires approval (configurable)",
+        "Support cycle limit extensions for battery warranties",
+        "Update warranty expiryDate and cycleLimit on approval",
+        "Extension tied to claim resolution (e.g., warranty extension as resolution type)",
+        "listExtensions function for warranty",
+        "Validation schemas in lib/schemas/warranty-extensions.ts",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/server/functions/warranty-extensions.ts (create)",
+        "src/lib/schemas/warranty-extensions.ts (create)",
+        "src/server/functions/warranties.ts (modify)"
+      ],
+      "dependencies": [
+        "DOM-WAR-007a"
+      ],
+      "estimated_iterations": 3,
+      "completion_promise": "DOM_WAR_007B_COMPLETE"
+    },
+    {
+      "id": "DOM-WAR-007c",
+      "name": "Warranty Extensions: UI",
+      "description": "Create extension action and history display",
+      "priority": 7,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Extend Warranty action Button on warranty detail with icon",
+        "Extension Dialog with Form: months NumberInput, cycle limit NumberInput (battery only), reason Textarea",
+        "New expiry date and cycle limit preview calculated and displayed in dialog",
+        "Extension type badge: Time-based (months) or Cycle-based (for batteries)",
+        "Extension history visible on warranty detail in Card or Tab section",
+        "Extension history DataTable: date, months added, cycles added (battery), reason, approved by, extension type",
+        "Report page at /reports/warranty-extensions using ReportLayout with filter by extension type",
+        "Responsive layout: mobile bottom sheet dialog, tablet/desktop modal",
+        "Loading skeleton for extension history",
+        "Empty state for no extensions with informative message",
+        "Error boundary with retry for extension operations",
+        "Keyboard navigation: Tab through form fields, Enter to submit",
+        "ARIA labels for extension form and history",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/components/domain/support/extend-warranty-dialog.tsx (create)",
+        "src/routes/support/warranties/$warrantyId.tsx (modify)",
+        "src/routes/_authed/reports/warranty-extensions.tsx (create)"
+      ],
+      "dependencies": [
+        "DOM-WAR-007b"
+      ],
+      "estimated_iterations": 4,
+      "completion_promise": "DOM_WAR_007C_COMPLETE",
+      "ui_spec": {
+        "component_type": "Dialog Form with DataTable and ReportLayout",
+        "layout": {
+          "mobile": "Bottom sheet dialog, card-based history",
+          "tablet": "Side panel dialog, compact history table",
+          "desktop": "Modal dialog, full history DataTable"
+        },
+        "accessibility": {
+          "aria_labels": [
+            "Extend warranty button",
+            "Extension form",
+            "Months input",
+            "Extension history",
+            "Extensions report"
+          ],
+          "keyboard_nav": "Tab through form, Enter to submit",
+          "focus_management": "Focus months input on dialog open",
+          "screen_reader": "Announce new expiry date calculation"
+        },
+        "uiPatterns": {
+          "reui": [
+            "dialog.tsx - Extension form dialog",
+            "sheet.tsx - Mobile bottom sheet",
+            "form.tsx - Extension request form with validation",
+            "base-number-field.tsx - Months and cycle limit inputs",
+            "textarea.tsx - Reason field",
+            "badge.tsx - Extension type badges",
+            "card.tsx - Extension history card",
+            "data-grid.tsx - Extension history table and report table",
+            "button.tsx - Extend and submit buttons"
+          ],
+          "midday": [
+            "forms/tracker-project-form.tsx - Form dialog pattern"
+          ]
+        }
+      }
+    },
+    {
+      "id": "DOM-WAR-008",
+      "name": "Warranty Analytics Enhancement",
+      "description": "Add claims by battery model, claim type analysis, and SLA compliance metrics",
+      "priority": 8,
+      "status": "pending",
+      "passes": false,
+      "type": "ui-component",
+      "acceptance_criteria": [
+        "Claims by battery model Chart for quality insights using bar/horizontal bar chart",
+        "Claims by type breakdown Chart (Cell degradation, BMS faults, Inverter failures, Installation defects) using pie/donut chart",
+        "SLA compliance metrics Card: % claims meeting 24h response, % meeting 5 day resolution",
+        "Trend analysis Charts over time using line chart for claims volume by claim type",
+        "Average cycle count at claim time for battery warranties (helps identify degradation patterns)",
+        "Warranty extension vs claim resolution type breakdown",
+        "Export data Button for CSV/Excel download",
+        "Filter controls: date range DateRangePicker, warranty type Select (Battery/Inverter/Installation), claim type Select",
+        "Responsive layout: mobile stacked charts, tablet 2-col, desktop full dashboard",
+        "Loading skeletons for each chart/metric",
+        "Empty states for charts with no data and helpful messaging",
+        "Error boundaries per chart section",
+        "Keyboard navigation: Tab between charts, interact with chart elements",
+        "ARIA labels for charts and data visualizations",
+        "npm run typecheck passes"
+      ],
+      "files_to_modify": [
+        "src/server/functions/warranty-analytics.ts (create)",
+        "src/routes/reports/warranties.tsx (modify)",
+        "src/components/domain/support/warranty-analytics-charts.tsx (create)"
+      ],
+      "dependencies": [
+        "DOM-WAR-006c"
+      ],
+      "estimated_iterations": 8,
+      "completion_promise": "DOM_WAR_008_COMPLETE",
+      "ui_spec": {
+        "component_type": "Analytics dashboard with Charts and Cards",
+        "layout": {
+          "mobile": "Single column, stacked charts with scroll",
+          "tablet": "2-column grid, charts resize responsively",
+          "desktop": "Multi-column dashboard with full charts"
+        },
+        "accessibility": {
+          "aria_labels": [
+            "Warranty analytics",
+            "Claims by product chart",
+            "Claims trend chart",
+            "Revenue vs cost comparison"
+          ],
+          "keyboard_nav": "Tab between chart sections, arrow keys for chart interaction",
+          "focus_management": "Focus first filter on page load",
+          "screen_reader": "Provide text alternatives for chart data"
+        },
+        "uiPatterns": {
+          "reui": [
+            "chart.tsx - Recharts wrapper for bar, pie, and line charts",
+            "card.tsx - Metric cards for SLA compliance stats",
+            "base-select.tsx - Filter dropdowns for warranty and claim types",
+            "datefield.tsx - Date range picker for trend analysis",
+            "button.tsx - Export data button",
+            "skeleton.tsx - Loading states for charts"
+          ],
+          "midday": [
+            "components/canvas/metrics-breakdown-summary-canvas.tsx - Dashboard layout pattern",
+            "components/charts/selectable-chart-wrapper.tsx - Interactive chart wrapper"
+          ]
+        }
+      }
+    }
+  ],
+  "success_criteria": [
+    "Warranty policies define terms for Battery (10yr/10k cycles), Inverter (5yr), Installation (2yr)",
+    "Auto-registration sends customer notifications with SLA terms (24h response, 5 day resolution)",
+    "Expiry alerts enable renewal with dashboard widget showing cycle count for batteries",
+    "Certificates professional with Renoz Energy branding and warranty type badges",
+    "Claims tracked through formal workflow with claim types (cell degradation, BMS faults, inverter failures, installation defects)",
+    "SLA compliance tracked and displayed (24h response, 5 business day resolution)",
+    "Extensions formalized with approval for both time and cycle limits",
+    "Analytics show claims by battery model, claim type, and SLA performance",
+    "npm run typecheck passes",
+    "No warranty functionality regressions"
+  ],
+  "out_of_scope": [
+    "Extended warranty sales (revenue tracking)",
+    "Third-party warranty providers",
+    "Product recall management"
+  ]
+}

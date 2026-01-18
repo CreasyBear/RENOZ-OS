@@ -1,0 +1,600 @@
+# Execution Graph for Full PRD Sequence
+# Generated: 2026-01-09
+# Total PRDs: 41 | Total Stories: ~500+
+# See execution-sequence.md for human-readable version
+
+# ============================================================
+# PHASE DEFINITIONS
+# ============================================================
+
+phases:
+  phase_1_refactoring:
+    order: 1
+    name: "Refactoring"
+    description: "Establish clean code patterns before new features"
+    weeks: "1-2"
+    gate: "gate-1-refactoring.sh"
+    completion_promise: "PHASE_1_COMPLETE"
+
+    prds:
+      REF-SERVER:
+        file: "memory-bank/prd/refactoring/server-functions.prd.json"
+        stories: 8
+        blocking: true
+        reason: "Server patterns for ALL server code"
+        completion_promise: "REF_SERVER_COMPLETE"
+
+      REF-COMPONENTS:
+        file: "memory-bank/prd/refactoring/components.prd.json"
+        stories: 8
+        blocking: false
+        depends_on: [REF-SERVER]
+        completion_promise: "REF_COMPONENTS_COMPLETE"
+
+      REF-HOOKS:
+        file: "memory-bank/prd/refactoring/hooks.prd.json"
+        stories: 8
+        blocking: false
+        depends_on: [REF-SERVER]
+        completion_promise: "REF_HOOKS_COMPLETE"
+
+      REF-AI:
+        file: "memory-bank/prd/refactoring/ai-architecture.prd.json"
+        stories: 8
+        blocking: false
+        depends_on: [REF-SERVER]
+        completion_promise: "REF_AI_COMPLETE"
+
+    execution_order:
+      sequential: [REF-SERVER]
+      parallel_after: [REF-COMPONENTS, REF-HOOKS, REF-AI]
+
+  phase_2_foundation:
+    order: 2
+    name: "Foundation"
+    description: "Infrastructure for everything"
+    weeks: "2-4"
+    gate: "gate-2-foundation.sh"
+    completion_promise: "PHASE_2_COMPLETE"
+    depends_on: [phase_1_refactoring]
+
+    prds:
+      FOUND-SCHEMA:
+        file: "memory-bank/prd/foundation/schema-foundation.prd.json"
+        stories: 8
+        blocking: true
+        reason: "Base schema patterns for all domains"
+        completion_promise: "FOUND_SCHEMA_COMPLETE"
+
+      FOUND-AUTH:
+        file: "memory-bank/prd/foundation/auth-foundation.prd.json"
+        stories: 8
+        blocking: true
+        depends_on: [FOUND-SCHEMA]
+        reason: "Permission matrix for all features"
+        completion_promise: "FOUND_AUTH_COMPLETE"
+
+      FOUND-APPSHELL:
+        file: "memory-bank/prd/foundation/appshell-foundation.prd.json"
+        stories: 8
+        blocking: false
+        depends_on: [FOUND-AUTH]
+        completion_promise: "FOUND_APPSHELL_COMPLETE"
+
+      FOUND-SHARED:
+        file: "memory-bank/prd/foundation/shared-components-foundation.prd.json"
+        stories: 8
+        blocking: false
+        depends_on: [FOUND-AUTH]
+        completion_promise: "FOUND_SHARED_COMPLETE"
+
+    execution_order:
+      sequential: [FOUND-SCHEMA, FOUND-AUTH]
+      parallel_after: [FOUND-APPSHELL, FOUND-SHARED]
+
+  phase_2_5_early_role:
+    order: 2.5
+    name: "Early Role"
+    description: "Admin role for testing (pulled forward)"
+    weeks: "4"
+    completion_promise: "ROLE_ADMIN_COMPLETE"
+    depends_on: [FOUND-AUTH]
+
+    prds:
+      ROLE-ADMIN:
+        file: "memory-bank/prd/roles/admin.prd.json"
+        stories: 8
+        blocking: false
+        reason: "Needed for testing all subsequent work"
+        completion_promise: "ROLE_ADMIN_COMPLETE"
+
+  phase_3_cross_cutting:
+    order: 3
+    name: "Cross-Cutting"
+    description: "UX patterns used everywhere"
+    weeks: "4-6"
+    gate: "gate-3-crosscutting.sh"
+    completion_promise: "PHASE_3_COMPLETE"
+    depends_on: [phase_2_foundation]
+
+    prds:
+      CC-ERROR:
+        file: "memory-bank/prd/cross-cutting/error-handling.prd.json"
+        stories: 8
+        blocking: true
+        reason: "Error patterns referenced by all other states"
+        completion_promise: "CC_ERROR_COMPLETE"
+
+      CC-LOADING:
+        file: "memory-bank/prd/cross-cutting/loading-states.prd.json"
+        stories: 8
+        blocking: false
+        depends_on: [CC-ERROR]
+        completion_promise: "CC_LOADING_COMPLETE"
+
+      CC-EMPTY:
+        file: "memory-bank/prd/cross-cutting/empty-states.prd.json"
+        stories: 8
+        blocking: false
+        depends_on: [CC-ERROR]
+        completion_promise: "CC_EMPTY_COMPLETE"
+
+      CC-NOTIFY:
+        file: "memory-bank/prd/cross-cutting/notifications.prd.json"
+        stories: 8
+        blocking: false
+        depends_on: [CC-ERROR]
+        completion_promise: "CC_NOTIFY_COMPLETE"
+
+      CC-A11Y:
+        file: "memory-bank/prd/cross-cutting/accessibility.prd.json"
+        stories: 8
+        blocking: false
+        continuous: true
+        note: "Runs throughout all phases, not a gate requirement"
+        completion_promise: "CC_A11Y_COMPLETE"
+
+    execution_order:
+      sequential: [CC-ERROR]
+      parallel_after: [CC-LOADING, CC-EMPTY, CC-NOTIFY]
+      continuous: [CC-A11Y]
+
+  phase_4_domains:
+    order: 4
+    name: "Domains"
+    description: "Business value delivery"
+    weeks: "6-10"
+    gate: "gate-4-domains.sh"
+    completion_promise: "PHASE_4_COMPLETE"
+    depends_on: [phase_3_cross_cutting]
+
+    # Core 3 already complete
+    completed:
+      DOM-CUSTOMERS:
+        file: "memory-bank/prd/domains/customers.prd.json"
+        stories: 17
+        status: "COMPLETE"
+        completion_promise: "CUSTOMERS_DOMAIN_COMPLETE"
+
+      DOM-ORDERS:
+        file: "memory-bank/prd/domains/orders.prd.json"
+        stories: 19
+        status: "COMPLETE"
+        completion_promise: "ORDERS_DOMAIN_COMPLETE"
+
+      DOM-PIPELINE:
+        file: "memory-bank/prd/domains/pipeline.prd.json"
+        stories: 16
+        status: "COMPLETE"
+        completion_promise: "PIPELINE_DOMAIN_COMPLETE"
+
+    # Remaining 9 domains
+    prds:
+      # Track A: Product Line
+      DOM-PRODUCTS:
+        file: "memory-bank/prd/domains/products.prd.json"
+        stories: 15
+        track: A
+        blocking: false
+        completion_promise: "PRODUCTS_DOMAIN_COMPLETE"
+
+      DOM-INVENTORY:
+        file: "memory-bank/prd/domains/inventory.prd.json"
+        stories: 12
+        track: A
+        depends_on: [DOM-PRODUCTS]
+        completion_promise: "INVENTORY_DOMAIN_COMPLETE"
+
+      DOM-SUPPLIERS:
+        file: "memory-bank/prd/domains/suppliers.prd.json"
+        stories: 10
+        track: A
+        depends_on: [DOM-INVENTORY]
+        completion_promise: "SUPPLIERS_DOMAIN_COMPLETE"
+
+      # Track B: Service Line
+      DOM-JOBS:
+        file: "memory-bank/prd/domains/jobs.prd.json"
+        stories: 15
+        track: B
+        blocking: false
+        completion_promise: "JOBS_DOMAIN_COMPLETE"
+
+      DOM-SUPPORT:
+        file: "memory-bank/prd/domains/support.prd.json"
+        stories: 12
+        track: B
+        depends_on: [DOM-JOBS]
+        completion_promise: "SUPPORT_DOMAIN_COMPLETE"
+
+      DOM-WARRANTY:
+        file: "memory-bank/prd/domains/warranty.prd.json"
+        stories: 10
+        track: B
+        depends_on: [DOM-SUPPORT, DOM-PRODUCTS]
+        completion_promise: "WARRANTY_DOMAIN_COMPLETE"
+
+      # Track C: Analytics
+      DOM-FINANCIAL:
+        file: "memory-bank/prd/domains/financial.prd.json"
+        stories: 15
+        track: C
+        blocking: false
+        depends_on: [DOM-PRODUCTS]  # Needs COGS data
+        completion_promise: "FINANCIAL_DOMAIN_COMPLETE"
+
+      DOM-DASHBOARD:
+        file: "memory-bank/prd/domains/dashboard.prd.json"
+        stories: 12
+        track: C
+        depends_on: [DOM-FINANCIAL]
+        completion_promise: "DASHBOARD_DOMAIN_COMPLETE"
+
+      # Track D: Independent
+      DOM-COMMUNICATIONS:
+        file: "memory-bank/prd/domains/communications.prd.json"
+        stories: 12
+        track: D
+        blocking: false
+        completion_promise: "COMMUNICATIONS_DOMAIN_COMPLETE"
+
+    parallel_tracks:
+      track_A:
+        name: "Product Line"
+        sequence: [DOM-PRODUCTS, DOM-INVENTORY, DOM-SUPPLIERS]
+
+      track_B:
+        name: "Service Line"
+        sequence: [DOM-JOBS, DOM-SUPPORT, DOM-WARRANTY]
+
+      track_C:
+        name: "Analytics"
+        sequence: [DOM-FINANCIAL, DOM-DASHBOARD]
+
+      track_D:
+        name: "Independent"
+        sequence: [DOM-COMMUNICATIONS]
+
+  phase_5_integrations_roles:
+    order: 5
+    name: "Integrations + Roles"
+    description: "External connectivity and access control"
+    weeks: "10-12"
+    gate: "gate-5-integrations-roles.sh"
+    completion_promise: "PHASE_5_COMPLETE"
+    depends_on: [phase_4_domains]
+
+    prds:
+      # Integrations Track
+      INT-XERO:
+        file: "memory-bank/prd/integrations/xero.prd.json"
+        stories: 12
+        track: integrations
+        depends_on: [DOM-FINANCIAL, DOM-ORDERS]
+        completion_promise: "INT_XERO_COMPLETE"
+        reference: ".midday-reference/packages/accounting/src/providers/xero.ts"
+
+      INT-RESEND:
+        file: "memory-bank/prd/integrations/resend.prd.json"
+        stories: 10
+        track: integrations
+        depends_on: [DOM-COMMUNICATIONS]
+        completion_promise: "INT_RESEND_COMPLETE"
+
+      INT-CLAUDE:
+        file: "memory-bank/prd/integrations/claude-ai.prd.json"
+        stories: 12
+        track: integrations
+        depends_on: [REF-AI]
+        completion_promise: "INT_CLAUDE_COMPLETE"
+
+      # Roles Track (ROLE-ADMIN already done in phase 2.5)
+      ROLE-SALES:
+        file: "memory-bank/prd/roles/sales.prd.json"
+        stories: 8
+        track: roles
+        depends_on: [ROLE-ADMIN, DOM-PIPELINE]
+        completion_promise: "ROLE_SALES_COMPLETE"
+
+      ROLE-OPS:
+        file: "memory-bank/prd/roles/operations.prd.json"
+        stories: 8
+        track: roles
+        depends_on: [ROLE-SALES, DOM-ORDERS]
+        completion_promise: "ROLE_OPS_COMPLETE"
+
+      ROLE-WAREHOUSE:
+        file: "memory-bank/prd/roles/warehouse.prd.json"
+        stories: 8
+        track: roles
+        depends_on: [ROLE-OPS, DOM-INVENTORY]
+        completion_promise: "ROLE_WAREHOUSE_COMPLETE"
+
+      ROLE-PORTAL:
+        file: "memory-bank/prd/roles/customer-portal.prd.json"
+        stories: 10
+        track: roles
+        depends_on: [ROLE-WAREHOUSE]
+        completion_promise: "ROLE_PORTAL_COMPLETE"
+
+    parallel_tracks:
+      track_integrations:
+        name: "External Integrations"
+        parallel: [INT-XERO, INT-RESEND, INT-CLAUDE]
+
+      track_roles:
+        name: "User Roles"
+        sequence: [ROLE-SALES, ROLE-OPS, ROLE-WAREHOUSE, ROLE-PORTAL]
+
+  phase_6_workflows:
+    order: 6
+    name: "Workflows"
+    description: "Business process orchestration"
+    weeks: "12-14"
+    gate: "gate-6-workflows.sh"
+    completion_promise: "PHASE_6_COMPLETE"
+    depends_on: [phase_5_integrations_roles]
+
+    prds:
+      # Sales Pipeline
+      WF-LTO:
+        file: "memory-bank/prd/workflows/lead-to-opportunity.prd.json"
+        stories: 8
+        track: sales
+        completion_promise: "WF_LTO_COMPLETE"
+
+      WF-OTQ:
+        file: "memory-bank/prd/workflows/opportunity-to-quote.prd.json"
+        stories: 8
+        track: sales
+        depends_on: [WF-LTO]
+        completion_promise: "WF_OTQ_COMPLETE"
+
+      WF-QTO:
+        file: "memory-bank/prd/workflows/quote-to-order.prd.json"
+        stories: 10
+        track: sales
+        depends_on: [WF-OTQ]
+        completion_promise: "WF_QTO_COMPLETE"
+
+      WF-FULFILL:
+        file: "memory-bank/prd/workflows/order-fulfillment.prd.json"
+        stories: 10
+        track: sales
+        depends_on: [WF-QTO]
+        completion_promise: "WF_FULFILL_COMPLETE"
+
+      # Service Pipeline
+      WF-ISSUE:
+        file: "memory-bank/prd/workflows/issue-resolution.prd.json"
+        stories: 8
+        track: service
+        completion_promise: "WF_ISSUE_COMPLETE"
+
+      WF-WARRANTY:
+        file: "memory-bank/prd/workflows/warranty-claims.prd.json"
+        stories: 8
+        track: service
+        depends_on: [WF-ISSUE]
+        completion_promise: "WF_WARRANTY_COMPLETE"
+
+      # Supply Pipeline
+      WF-SUPPLIER:
+        file: "memory-bank/prd/workflows/supplier-orders.prd.json"
+        stories: 8
+        track: supply
+        completion_promise: "WF_SUPPLIER_COMPLETE"
+
+      WF-FINANCIAL:
+        file: "memory-bank/prd/workflows/financial-reconciliation.prd.json"
+        stories: 10
+        track: supply
+        depends_on: [WF-SUPPLIER, INT-XERO]
+        completion_promise: "WF_FINANCIAL_COMPLETE"
+
+    parallel_tracks:
+      track_sales:
+        name: "Sales Pipeline"
+        sequence: [WF-LTO, WF-OTQ, WF-QTO, WF-FULFILL]
+
+      track_service:
+        name: "Service Pipeline"
+        sequence: [WF-ISSUE, WF-WARRANTY]
+
+      track_supply:
+        name: "Supply Pipeline"
+        sequence: [WF-SUPPLIER, WF-FINANCIAL]
+
+# ============================================================
+# BLOCKING STORIES (Critical Path)
+# ============================================================
+
+blocking_stories:
+  phase_1:
+    - story: REF-SERVER-001
+      reason: "Validation pattern for all server functions"
+      blocks: [REF-COMPONENTS, REF-HOOKS, REF-AI]
+
+  phase_2:
+    - story: FOUND-SCHEMA-001
+      reason: "Base column patterns for all schemas"
+      blocks: [FOUND-AUTH]
+
+    - story: FOUND-AUTH-001
+      reason: "Permission matrix for all features"
+      blocks: [FOUND-APPSHELL, FOUND-SHARED, ROLE-ADMIN]
+
+  phase_3:
+    - story: CC-ERROR-001
+      reason: "Error boundary pattern for all states"
+      blocks: [CC-LOADING, CC-EMPTY, CC-NOTIFY]
+
+# ============================================================
+# CRITICAL PATH ANALYSIS
+# ============================================================
+
+critical_path:
+  description: "Longest dependency chain across all phases"
+
+  chain:
+    - REF-SERVER-001  # Phase 1 blocker
+    - FOUND-SCHEMA-001  # Phase 2 blocker
+    - FOUND-AUTH-001  # Phase 2 blocker
+    - CC-ERROR-001  # Phase 3 blocker
+    - DOM-PRODUCTS  # Phase 4 (enables financial, warranty)
+    - DOM-FINANCIAL  # Phase 4 (enables Xero)
+    - INT-XERO  # Phase 5 (enables financial reconciliation)
+    - WF-FINANCIAL  # Phase 6 (final workflow)
+
+  estimated_iterations: 80+
+
+  by_phase:
+    phase_1: [REF-SERVER]
+    phase_2: [FOUND-SCHEMA, FOUND-AUTH]
+    phase_3: [CC-ERROR]
+    phase_4: [DOM-PRODUCTS, DOM-FINANCIAL]
+    phase_5: [INT-XERO]
+    phase_6: [WF-SUPPLIER, WF-FINANCIAL]
+
+# ============================================================
+# METRICS SUMMARY
+# ============================================================
+
+metrics:
+  total_prds: 41
+  total_stories_estimated: 500
+  total_weeks: 14
+
+  by_phase:
+    phase_1:
+      prds: 4
+      stories: 32
+      weeks: 2
+
+    phase_2:
+      prds: 4
+      stories: 32
+      weeks: 2
+
+    phase_2_5:
+      prds: 1
+      stories: 8
+      weeks: 0.5
+
+    phase_3:
+      prds: 5
+      stories: 40
+      weeks: 2
+
+    phase_4:
+      prds: 12  # 3 complete + 9 remaining
+      stories: 163  # 52 complete + ~111 remaining
+      weeks: 4
+
+    phase_5:
+      prds: 7  # 3 integrations + 4 roles
+      stories: 68
+      weeks: 2
+
+    phase_6:
+      prds: 8
+      stories: 70
+      weeks: 2
+
+  parallel_potential:
+    phase_1: 3  # After REF-SERVER
+    phase_2: 2  # After FOUND-AUTH
+    phase_3: 3  # After CC-ERROR
+    phase_4: 4  # Four domain tracks
+    phase_5: 2  # Integrations + Roles
+    phase_6: 3  # Three pipeline tracks
+
+  already_complete:
+    core_domains:
+      customers: 17
+      orders: 19
+      pipeline: 16
+      total: 52
+
+# ============================================================
+# REFERENCE PATTERNS
+# ============================================================
+
+reference_patterns:
+  midday:
+    path: ".midday-reference/"
+    use_for:
+      - INT-XERO (Xero provider pattern)
+      - Rate limiting
+      - OAuth token refresh
+
+  reui:
+    path: ".reui-reference/"
+    use_for:
+      - UI components
+      - Accessibility patterns
+      - Badge/tag styling
+
+  square_ui:
+    path: ".square-ui-reference/templates/"
+    use_for:
+      - Dashboard layouts
+      - Kanban boards
+      - List/grid views
+      - Timeline views
+
+# ============================================================
+# FILE OWNERSHIP BY PHASE
+# ============================================================
+
+file_ownership:
+  phase_1_refactoring:
+    - "src/server/functions/**/*.ts"
+    - "src/components/**/*.tsx"
+    - "src/hooks/**/*.ts"
+    - "src/lib/ai/**/*.ts"
+
+  phase_2_foundation:
+    - "src/db/schema/**/*.ts"
+    - "src/lib/auth/**/*.ts"
+    - "src/routes/**/__root.tsx"
+    - "src/components/shared/**/*.tsx"
+
+  phase_3_cross_cutting:
+    - "src/components/shared/error-*.tsx"
+    - "src/components/shared/loading-*.tsx"
+    - "src/components/shared/empty-*.tsx"
+    - "src/components/shared/notification*.tsx"
+
+  phase_4_domains:
+    - "src/routes/_authed/[domain]/**/*.tsx"
+    - "src/components/domain/[domain]/**/*.tsx"
+    - "src/server/functions/[domain].ts"
+
+  phase_5_integrations:
+    - "src/lib/integrations/**/*.ts"
+    - "src/lib/auth/roles/**/*.ts"
+
+  phase_6_workflows:
+    - "src/lib/workflows/**/*.ts"
+    - "src/server/functions/workflows/**/*.ts"

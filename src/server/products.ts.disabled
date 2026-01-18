@@ -1,0 +1,200 @@
+/**
+ * Product Server Functions
+ *
+ * Server-side functions for product catalog operations.
+ * Uses Drizzle ORM with Zod validation.
+ */
+
+import { createServerFn } from "@tanstack/react-start";
+import { eq, and, ilike, desc, asc, sql, gte, lte } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { products } from "@/../drizzle/schema";
+import {
+  createProductSchema,
+  updateProductSchema,
+  productListQuerySchema,
+  productParamsSchema,
+} from "@/lib/schemas/products";
+
+// ============================================================================
+// GET PRODUCTS (List with pagination and filters)
+// ============================================================================
+
+export const getProducts = createServerFn({ method: "GET" })
+  .inputValidator(productListQuerySchema)
+  .handler(async ({ data }) => {
+    const {
+      page,
+      pageSize,
+      sortBy,
+      sortOrder,
+      search,
+      type,
+      category,
+      isActive,
+      isSellable,
+      minPrice,
+      maxPrice,
+    } = data;
+
+    // Build where conditions
+    const conditions = [];
+
+    // TODO: Add organizationId filter from session context
+    // conditions.push(eq(products.organizationId, ctx.organizationId));
+
+    if (search) {
+      conditions.push(
+        sql`(${ilike(products.name, `%${search}%`)} OR ${ilike(products.sku, `%${search}%`)})`
+      );
+    }
+    if (type) {
+      conditions.push(eq(products.type, type));
+    }
+    if (category) {
+      conditions.push(eq(products.category, category));
+    }
+    if (isActive !== undefined) {
+      conditions.push(eq(products.isActive, isActive));
+    }
+    if (isSellable !== undefined) {
+      conditions.push(eq(products.isSellable, isSellable));
+    }
+    if (minPrice !== undefined) {
+      conditions.push(gte(products.unitPrice, minPrice));
+    }
+    if (maxPrice !== undefined) {
+      conditions.push(lte(products.unitPrice, maxPrice));
+    }
+
+    // Soft delete filter
+    conditions.push(sql`${products.deletedAt} IS NULL`);
+
+    // Build query
+    const whereClause =
+      conditions.length > 0 ? and(...conditions) : undefined;
+
+    // Get total count
+    const countResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(products)
+      .where(whereClause);
+    const totalItems = Number(countResult[0]?.count ?? 0);
+
+    // Get paginated results
+    const offset = (page - 1) * pageSize;
+    const orderColumn =
+      sortBy === "name"
+        ? products.name
+        : sortBy === "sku"
+          ? products.sku
+          : sortBy === "price"
+            ? products.unitPrice
+            : products.createdAt;
+    const orderDirection = sortOrder === "asc" ? asc : desc;
+
+    const items = await db
+      .select()
+      .from(products)
+      .where(whereClause)
+      .orderBy(orderDirection(orderColumn))
+      .limit(pageSize)
+      .offset(offset);
+
+    return {
+      items,
+      pagination: {
+        page,
+        pageSize,
+        totalItems,
+        totalPages: Math.ceil(totalItems / pageSize),
+      },
+    };
+  });
+
+// ============================================================================
+// GET PRODUCT BY ID
+// ============================================================================
+
+export const getProductById = createServerFn({ method: "GET" })
+  .inputValidator(productParamsSchema)
+  .handler(async ({ data }) => {
+    const { id } = data;
+
+    const result = await db
+      .select()
+      .from(products)
+      .where(and(eq(products.id, id), sql`${products.deletedAt} IS NULL`))
+      .limit(1);
+
+    if (result.length === 0) {
+      throw new Error("Product not found");
+    }
+
+    return result[0];
+  });
+
+// ============================================================================
+// CREATE PRODUCT
+// ============================================================================
+
+export const createProduct = createServerFn({ method: "POST" })
+  .inputValidator(createProductSchema)
+  .handler(async ({ data }) => {
+    // TODO: Get organizationId from session context
+    const organizationId = "00000000-0000-0000-0000-000000000000"; // Placeholder
+
+    const result = await db
+      .insert(products)
+      .values({
+        ...data,
+        organizationId,
+      })
+      .returning();
+
+    return result[0];
+  });
+
+// ============================================================================
+// UPDATE PRODUCT
+// ============================================================================
+
+export const updateProduct = createServerFn({ method: "POST" })
+  .inputValidator(productParamsSchema.merge(updateProductSchema))
+  .handler(async ({ data }) => {
+    const { id, ...updateData } = data;
+
+    const result = await db
+      .update(products)
+      .set(updateData)
+      .where(and(eq(products.id, id), sql`${products.deletedAt} IS NULL`))
+      .returning();
+
+    if (result.length === 0) {
+      throw new Error("Product not found");
+    }
+
+    return result[0];
+  });
+
+// ============================================================================
+// DELETE PRODUCT (Soft Delete)
+// ============================================================================
+
+export const deleteProduct = createServerFn({ method: "POST" })
+  .inputValidator(productParamsSchema)
+  .handler(async ({ data }) => {
+    const { id } = data;
+
+    const result = await db
+      .update(products)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(products.id, id), sql`${products.deletedAt} IS NULL`))
+      .returning();
+
+    if (result.length === 0) {
+      throw new Error("Product not found");
+    }
+
+    return { success: true };
+  });

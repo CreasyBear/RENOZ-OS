@@ -1,0 +1,105 @@
+{
+  "template_name": "UI Component Story Template",
+  "description": "For React components with accessibility, responsiveness, and performance requirements",
+  "usage": "Copy this template and customize for UI component stories",
+  "template": {
+    "id": "DOMAIN-NNNc",
+    "name": "Feature Name: UI Components",
+    "description": "Create UI components for [feature functionality]",
+    "priority": 3,
+    "status": "pending",
+    "acceptance_criteria": [
+      "File src/components/domain/[domain]/[component].tsx exists and [describe core rendering]",
+      "File src/components/domain/[domain]/[component].tsx [describe additional components if needed]",
+      "[Describe component props interface and required props]",
+      "[Describe core interaction: click, select, input, etc.]",
+      "[Describe visual states: loading, empty, error]",
+      "[Describe integration: where/how component is used in parent]",
+      "[RESPONSIVE] Component adapts to mobile/tablet/desktop breakpoints",
+      "[LOADING] Shows skeleton/loading states during data fetch",
+      "[EMPTY] Shows appropriate empty state when no data",
+      "[ERROR] Shows error state with retry option when applicable",
+      "[KEYBOARD] All interactions accessible via keyboard navigation",
+      "[A11Y] Proper ARIA labels, roles, and screen reader support",
+      "[PERFORMANCE] Component loads in < 200ms [or appropriate metric]",
+      "npm run typecheck passes"
+    ],
+    "dependencies": [
+      "DOMAIN-NNNb"
+    ],
+    "estimated_iterations": 5,
+    "completion_promise": "DOMAIN_NNNC_COMPLETE",
+    "enhancements": {
+      "type": "ui-component",
+      "component_type": "Specify: Form, List, Detail, Wizard, etc.",
+      "ui_spec": {
+        "layout": {
+          "mobile": "Description of mobile layout",
+          "tablet": "Description of tablet layout",
+          "desktop": "Description of desktop layout"
+        },
+        "accessibility": {
+          "aria_labels": [
+            "List key aria-label values"
+          ],
+          "keyboard_nav": "Describe keyboard navigation pattern",
+          "focus_management": "Describe focus behavior"
+        },
+        "states": {
+          "loading": "Describe loading state appearance",
+          "empty": "Describe empty state messaging",
+          "error": "Describe error state handling"
+        }
+      },
+      "wireframe_reference": "memory-bank/prd/_wireframes/domains/DOMAIN-NNNc.wireframe.md"
+    }
+  },
+  "customization_guide": {
+    "id": "Use 'c' suffix for UI component stories (after server functions 'b')",
+    "acceptance_criteria": [
+      "Always include file existence checks with specific paths",
+      "Specify component props and core functionality",
+      "Include all required UI states: RESPONSIVE, LOADING, EMPTY, ERROR",
+      "Include accessibility requirements: KEYBOARD, A11Y",
+      "Include performance requirements with measurable metrics",
+      "End with typecheck verification"
+    ],
+    "enhancements": [
+      "Move detailed UI specs here, not in main criteria",
+      "Reference wireframe files for complex interactions",
+      "Include component type for pattern matching",
+      "Document responsive breakpoints clearly"
+    ],
+    "estimated_iterations": "Typically 4-6 for UI component stories",
+    "dependencies": "Usually depends on server functions for data"
+  },
+  "examples": [
+    {
+      "id": "DOM-CUST-001c",
+      "name": "Customer Tags: UI Components",
+      "acceptance_criteria": [
+        "File src/components/domain/customers/tag-badge.tsx renders colored tag badge",
+        "File src/components/domain/customers/tag-selector.tsx provides multi-select combobox for tags",
+        "File src/components/domain/customers/tag-manager-dialog.tsx provides CRUD UI in settings",
+        "Customer detail page (src/routes/_authed/customers/$customerId.tsx) shows tags below customer name",
+        "Tag selector on customer detail allows assign/remove",
+        "Customer list (src/components/domain/customers/customer-columns.tsx) shows tags as badges column",
+        "Filter by tag added to customer list filters",
+        "Settings page has 'Manage Tags' option linking to tag-manager-dialog",
+        "RESPONSIVE: Mobile (< 640px) shows max 2 tags with '+N more' overflow badge",
+        "RESPONSIVE: Tablet (640-1024px) shows max 4 tags inline",
+        "RESPONSIVE: Desktop (> 1024px) shows all tags with horizontal scroll on overflow",
+        "LOADING: Tag selector shows skeleton loader while fetching tags",
+        "LOADING: Tag badges show pulse animation during assignment operations",
+        "EMPTY STATE: 'No tags yet' with 'Add your first tag' CTA button in tag selector",
+        "ERROR: Error boundary wraps tag components with retry action",
+        "KEYBOARD: Tab navigates between tags, Enter/Space toggles selection",
+        "KEYBOARD: Escape closes tag selector dropdown",
+        "A11Y: Tag badges have role='status' and aria-label describing tag name and color",
+        "A11Y: Tag selector has aria-expanded, aria-haspopup='listbox' attributes",
+        "A11Y: Remove tag button has aria-label='Remove tag: {tagName}'",
+        "npm run typecheck passes"
+      ]
+    }
+  ]
+}

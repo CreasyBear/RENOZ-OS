@@ -1,0 +1,419 @@
+{
+  "id": "FOUND-MIGRATE",
+  "name": "Data Migration & Import",
+  "description": "Import existing customer, product, and order data from spreadsheets and legacy systems. Critical for customer onboarding - every customer will ask 'how do I import my existing data?'",
+  "created": "2026-01-17",
+  "updated": "2026-01-17",
+  "priority": 3,
+  "phase": "foundation",
+  "version": "MVP",
+  "stack": {
+    "runtime": "Bun",
+    "database": "PostgreSQL + Drizzle ORM",
+    "storage": "Supabase Storage (for uploaded CSVs)",
+    "parsing": "papaparse (CSV parsing)",
+    "validation": "Zod"
+  },
+  "references": {
+    "internal": [
+      "_Initiation/_prd/_meta/conventions.md - Server function patterns",
+      "_Initiation/_ralph/backend-patterns/server-functions.md - Batch processing patterns",
+      "drizzle/schema/customers.ts - Customer table structure",
+      "drizzle/schema/products.ts - Product table structure",
+      "drizzle/schema/orders.ts - Order table structure",
+      "src/lib/schemas/ - Zod validation schemas"
+    ],
+    "external": [
+      "https://www.papaparse.com/docs - Papa Parse CSV library",
+      "https://supabase.com/docs/guides/storage - Supabase Storage for file uploads"
+    ]
+  },
+  "current_state": {
+    "implemented": [],
+    "gaps": [
+      "No CSV import functionality",
+      "No column mapping UI for flexible imports",
+      "No duplicate detection for imports",
+      "No import templates for customers to use",
+      "No import history or rollback capability",
+      "No batch processing for large files"
+    ]
+  },
+  "key_patterns": {
+    "batch_processing": "Process 100 records at a time to avoid memory issues and timeouts",
+    "transaction_per_batch": "Each batch wrapped in transaction - rollback on error preserves partial progress",
+    "detailed_error_log": "Track row number, column, and reason for every validation failure",
+    "organization_scoped": "All imports scoped to current user's organization - cannot import to other tenants"
+  },
+  "stories": [
+    {
+      "id": "FOUND-MIGRATE-001",
+      "name": "CSV Import Framework",
+      "description": "Create a generic CSV import framework with file upload, parsing, column mapping UI, validation preview, and batch processing with progress indication",
+      "priority": 1,
+      "status": "pending",
+      "type": "foundation",
+      "layers": ["server", "ui"],
+      "estimated_iterations": 5,
+      "acceptance_criteria": [
+        "File src/lib/import/csv-parser.ts created using papaparse for CSV parsing",
+        "File upload component accepts .csv files up to 10MB",
+        "Column mapping UI allows user to map CSV columns to entity fields",
+        "Preview shows first 10 rows with mapped column values highlighted",
+        "Validation runs on all rows BEFORE import begins (show all errors upfront)",
+        "Validation error display shows: row number, column name, error message",
+        "Progress indicator shows: X of Y records processed, with cancel button",
+        "Batch processing: 100 records per batch with transaction per batch",
+        "File src/lib/import/types.ts exports ImportConfig, ImportResult, ColumnMapping types",
+        "Unit test in tests/unit/import/csv-parser.spec.ts passes",
+        "bun run typecheck passes",
+        "bun run test passes"
+      ],
+      "files_to_create": [
+        "src/lib/import/csv-parser.ts",
+        "src/lib/import/types.ts",
+        "src/lib/import/batch-processor.ts",
+        "src/components/import/file-uploader.tsx",
+        "src/components/import/column-mapper.tsx",
+        "src/components/import/preview-table.tsx",
+        "src/components/import/validation-errors.tsx",
+        "src/components/import/import-progress.tsx",
+        "tests/unit/import/csv-parser.spec.ts"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-SCHEMA-006"
+      ],
+      "completion_promise": "FOUND_MIGRATE_001_COMPLETE"
+    },
+    {
+      "id": "FOUND-MIGRATE-002",
+      "name": "Customer Import",
+      "description": "Import customers from CSV with column mapping, duplicate detection, and optional contact import as related records",
+      "priority": 2,
+      "status": "pending",
+      "type": "feature",
+      "layers": ["server", "ui"],
+      "estimated_iterations": 4,
+      "acceptance_criteria": [
+        "Route src/routes/_authenticated/settings/import/customers.tsx created",
+        "Column mapping supports: name (required), email, phone, address, city, state, postcode, ABN",
+        "Additional optional columns: notes, source, tags (comma-separated)",
+        "Duplicate detection based on email OR ABN - configurable matching field",
+        "Duplicate handling options: skip (don't import), merge (update existing), create (allow duplicate)",
+        "Contacts column (optional) accepts 'Name:Email:Phone' format, creates contact records",
+        "Server function src/server/import/customers.ts with importCustomers action",
+        "Zod schema src/lib/schemas/import/customers.ts for import validation",
+        "organizationId set from session context - cannot import to other orgs",
+        "Import creates activity log entries for each customer created/updated",
+        "bun run typecheck passes",
+        "bun run test passes"
+      ],
+      "files_to_create": [
+        "src/routes/_authenticated/settings/import/customers.tsx",
+        "src/server/import/customers.ts",
+        "src/lib/schemas/import/customers.ts",
+        "tests/unit/import/customers.spec.ts"
+      ],
+      "files_to_modify": [
+        "src/routes/_authenticated/settings/index.tsx"
+      ],
+      "dependencies": [
+        "FOUND-MIGRATE-001",
+        "FOUND-SCHEMA-006"
+      ],
+      "completion_promise": "FOUND_MIGRATE_002_COMPLETE"
+    },
+    {
+      "id": "FOUND-MIGRATE-003",
+      "name": "Product Import",
+      "description": "Import products from CSV with SKU validation, category handling, and price formatting",
+      "priority": 3,
+      "status": "pending",
+      "type": "feature",
+      "layers": ["server", "ui"],
+      "estimated_iterations": 4,
+      "acceptance_criteria": [
+        "Route src/routes/_authenticated/settings/import/products.tsx created",
+        "Column mapping supports: name (required), SKU (required), price (required), description",
+        "Additional columns: category, unit, minStock, supplier, costPrice, taxRate",
+        "Price parsing handles: '$1,234.56', '1234.56', '1,234' formats correctly",
+        "SKU uniqueness validated within organization before import",
+        "Category column creates new categories on-the-fly if they don't exist",
+        "Category matching is case-insensitive (e.g., 'Windows' matches 'windows')",
+        "Server function src/server/import/products.ts with importProducts action",
+        "Zod schema src/lib/schemas/import/products.ts for import validation",
+        "organizationId set from session context",
+        "bun run typecheck passes",
+        "bun run test passes"
+      ],
+      "files_to_create": [
+        "src/routes/_authenticated/settings/import/products.tsx",
+        "src/server/import/products.ts",
+        "src/lib/schemas/import/products.ts",
+        "tests/unit/import/products.spec.ts"
+      ],
+      "files_to_modify": [
+        "src/routes/_authenticated/settings/index.tsx"
+      ],
+      "dependencies": [
+        "FOUND-MIGRATE-001",
+        "FOUND-SCHEMA-006"
+      ],
+      "completion_promise": "FOUND_MIGRATE_003_COMPLETE"
+    },
+    {
+      "id": "FOUND-MIGRATE-004",
+      "name": "Historical Orders Import",
+      "description": "Import past orders for customer history tracking. Simplified format without full line items - just summary data for historical reference",
+      "priority": 4,
+      "status": "pending",
+      "type": "feature",
+      "layers": ["server", "ui"],
+      "estimated_iterations": 4,
+      "acceptance_criteria": [
+        "Route src/routes/_authenticated/settings/import/orders.tsx created",
+        "Column mapping supports: customer (required - email or name), date (required), total (required)",
+        "Additional columns: status, reference, notes, paymentMethod",
+        "Customer matching: first try email, then name - show warning if ambiguous",
+        "Date parsing handles: 'YYYY-MM-DD', 'DD/MM/YYYY', 'MM/DD/YYYY' formats",
+        "Total parsing handles currency symbols and thousands separators",
+        "Status defaults to 'completed' if not provided",
+        "Imported orders marked with isImported: true flag to distinguish from new orders",
+        "Imported orders skip workflow triggers (no emails, no inventory updates)",
+        "Server function src/server/import/orders.ts with importOrders action",
+        "Zod schema src/lib/schemas/import/orders.ts for import validation",
+        "organizationId set from session context",
+        "bun run typecheck passes",
+        "bun run test passes"
+      ],
+      "files_to_create": [
+        "src/routes/_authenticated/settings/import/orders.tsx",
+        "src/server/import/orders.ts",
+        "src/lib/schemas/import/orders.ts",
+        "tests/unit/import/orders.spec.ts"
+      ],
+      "files_to_modify": [
+        "src/routes/_authenticated/settings/index.tsx",
+        "drizzle/schema/orders.ts"
+      ],
+      "dependencies": [
+        "FOUND-MIGRATE-001",
+        "FOUND-MIGRATE-002",
+        "FOUND-SCHEMA-006"
+      ],
+      "completion_promise": "FOUND_MIGRATE_004_COMPLETE"
+    },
+    {
+      "id": "FOUND-MIGRATE-005",
+      "name": "Import Templates",
+      "description": "Provide downloadable CSV templates with sample data and instructions for each entity type",
+      "priority": 5,
+      "status": "pending",
+      "type": "feature",
+      "layers": ["ui"],
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "Directory public/templates/ created with template CSV files",
+        "Template public/templates/customers-import-template.csv with all supported columns",
+        "Template public/templates/products-import-template.csv with all supported columns",
+        "Template public/templates/orders-import-template.csv with all supported columns",
+        "Each template includes: header row, instruction row (ignored on import), 3 sample data rows",
+        "Instruction row starts with '#' and explains each column format",
+        "Component src/components/import/template-download.tsx with download buttons",
+        "Template download buttons shown on each import page",
+        "Templates use realistic Australian business data (ABN format, AU addresses)",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "public/templates/customers-import-template.csv",
+        "public/templates/products-import-template.csv",
+        "public/templates/orders-import-template.csv",
+        "src/components/import/template-download.tsx"
+      ],
+      "files_to_modify": [
+        "src/routes/_authenticated/settings/import/customers.tsx",
+        "src/routes/_authenticated/settings/import/products.tsx",
+        "src/routes/_authenticated/settings/import/orders.tsx"
+      ],
+      "dependencies": [
+        "FOUND-MIGRATE-002",
+        "FOUND-MIGRATE-003",
+        "FOUND-MIGRATE-004"
+      ],
+      "completion_promise": "FOUND_MIGRATE_005_COMPLETE"
+    },
+    {
+      "id": "FOUND-MIGRATE-006",
+      "name": "Import History & Rollback",
+      "description": "Track all imports with ability to undo recent imports. Provides audit trail and safety net for accidental imports",
+      "priority": 6,
+      "status": "pending",
+      "type": "feature",
+      "layers": ["schema", "server", "ui"],
+      "estimated_iterations": 5,
+      "acceptance_criteria": [
+        "drizzle/schema/import-history.ts created with importHistory and importedRecords tables",
+        "importHistory table: id, organizationId, userId, entityType, fileName, recordCount, status, createdAt",
+        "importedRecords table: id, importId (FK), entityType, entityId, createdAt - tracks each imported record",
+        "RLS policies enforce organization isolation",
+        "Route src/routes/_authenticated/settings/import/history.tsx shows import history list",
+        "History list shows: date, user, entity type, file name, record count, status, undo button",
+        "Undo button only visible for imports within 24 hours",
+        "Server function src/server/import/rollback.ts with rollbackImport action",
+        "Rollback deletes all records from importedRecords for that importId",
+        "Rollback updates importHistory status to 'rolled_back'",
+        "Rollback is transactional - all or nothing",
+        "Confirmation dialog warns: 'This will delete X records. This cannot be undone.'",
+        "Migration file created via bun run db:generate",
+        "bun run typecheck passes",
+        "bun run test passes"
+      ],
+      "files_to_create": [
+        "drizzle/schema/import-history.ts",
+        "src/routes/_authenticated/settings/import/history.tsx",
+        "src/server/import/history.ts",
+        "src/server/import/rollback.ts",
+        "src/lib/schemas/import/history.ts",
+        "tests/unit/import/rollback.spec.ts"
+      ],
+      "files_to_modify": [
+        "drizzle/schema/index.ts",
+        "src/routes/_authenticated/settings/index.tsx",
+        "src/server/import/customers.ts",
+        "src/server/import/products.ts",
+        "src/server/import/orders.ts"
+      ],
+      "dependencies": [
+        "FOUND-MIGRATE-002",
+        "FOUND-MIGRATE-003",
+        "FOUND-MIGRATE-004"
+      ],
+      "completion_promise": "FOUND_MIGRATE_006_COMPLETE"
+    },
+    {
+      "id": "FOUND-MIGRATE-007",
+      "name": "Import Settings Hub",
+      "description": "Central settings page for all import functionality with navigation and status overview",
+      "priority": 7,
+      "status": "pending",
+      "type": "feature",
+      "layers": ["ui"],
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "Route src/routes/_authenticated/settings/import/index.tsx created as import hub",
+        "Hub displays cards for: Customer Import, Product Import, Order Import, Import History",
+        "Each card shows: icon, title, description, 'Start Import' button",
+        "Import History card shows recent imports count (last 7 days)",
+        "Cards use consistent styling from shared-components",
+        "Settings navigation updated to include 'Data Import' section",
+        "Permission check: only admin/manager roles can access import features",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/routes/_authenticated/settings/import/index.tsx"
+      ],
+      "files_to_modify": [
+        "src/routes/_authenticated/settings/index.tsx"
+      ],
+      "dependencies": [
+        "FOUND-MIGRATE-002",
+        "FOUND-MIGRATE-003",
+        "FOUND-MIGRATE-004",
+        "FOUND-MIGRATE-006"
+      ],
+      "completion_promise": "FOUND_MIGRATE_007_COMPLETE"
+    },
+    {
+      "id": "FOUND-MIGRATE-008",
+      "name": "Import Documentation",
+      "description": "Create comprehensive documentation for the import system including patterns, troubleshooting, and API reference",
+      "priority": 8,
+      "status": "pending",
+      "type": "documentation",
+      "layers": [],
+      "estimated_iterations": 2,
+      "acceptance_criteria": [
+        "File src/lib/import/README.md created documenting import architecture",
+        "Documents: CSV parsing configuration and supported formats",
+        "Documents: Column mapping API and custom mapper creation",
+        "Documents: Batch processing configuration (batch size, transaction handling)",
+        "Documents: Duplicate detection strategies and configuration",
+        "Documents: Error handling and validation patterns",
+        "Documents: Rollback mechanism and limitations (24-hour window)",
+        "Documents: Security considerations (org isolation, file size limits)",
+        "Includes code examples for adding new entity import types",
+        "Troubleshooting section for common import errors",
+        "bun run typecheck passes"
+      ],
+      "files_to_create": [
+        "src/lib/import/README.md"
+      ],
+      "files_to_modify": [],
+      "dependencies": [
+        "FOUND-MIGRATE-006"
+      ],
+      "completion_promise": "FOUND_MIGRATE_008_COMPLETE"
+    }
+  ],
+  "success_criteria": [
+    "CSV files up to 10MB can be uploaded and parsed",
+    "Column mapping UI allows flexible field assignment",
+    "Validation runs before import with clear error display",
+    "Customers, products, and historical orders can be imported",
+    "Duplicate detection prevents accidental data corruption",
+    "Categories are created on-the-fly during product import",
+    "Historical orders are marked as imported and skip workflows",
+    "Downloadable templates guide users on expected format",
+    "Import history tracks all imports with record counts",
+    "Recent imports (within 24h) can be rolled back",
+    "All imports are organization-scoped (multi-tenant safe)",
+    "bun run typecheck passes",
+    "bun run test passes"
+  ],
+  "out_of_scope": [
+    "Real-time sync with external systems (one-time import only)",
+    "Excel (.xlsx) file support (CSV only for MVP)",
+    "Scheduled/automated imports",
+    "Import from third-party CRM APIs (Salesforce, HubSpot, etc.)",
+    "Full order line item import (summary only for historical)",
+    "Merge/deduplication wizards beyond import time",
+    "Export functionality (separate PRD)"
+  ],
+  "security_requirements": {
+    "file_upload": [
+      "Maximum file size: 10MB enforced server-side",
+      "Only .csv files accepted (MIME type validation)",
+      "Files stored temporarily, deleted after import completes",
+      "File content scanned for basic injection patterns"
+    ],
+    "organization_isolation": [
+      "All imports scoped to current user's organizationId",
+      "Cannot import records to other organizations",
+      "RLS policies provide defense-in-depth"
+    ],
+    "permission_control": [
+      "Import features restricted to admin/manager roles",
+      "Import actions logged with userId for audit",
+      "Rollback requires same permission level as import"
+    ]
+  },
+  "pattern_references": [
+    {
+      "file": "_Initiation/_meta/patterns/testing-standards.md",
+      "applies_to": "all stories",
+      "reason": "Import functionality requires thorough unit and integration tests for data integrity"
+    },
+    {
+      "file": "_Initiation/_meta/patterns/error-recovery.md",
+      "applies_to": "all stories - critical for data migration",
+      "reason": "Batch import failures MUST use Pattern 3 (Saga with compensation) for rollback capability. Partial transaction failure handling is essential."
+    },
+    {
+      "file": "_Initiation/_meta/patterns/performance-benchmarks.md",
+      "applies_to": "FOUND-MIGRATE-001, FOUND-MIGRATE-002, FOUND-MIGRATE-003, FOUND-MIGRATE-004",
+      "reason": "Large file imports must stream efficiently - batch processing at 100 records to stay within memory limits"
+    }
+  ],
+  "domain_completion_promise": "FOUND_MIGRATE_COMPLETE"
+}

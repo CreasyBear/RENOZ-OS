@@ -1,0 +1,1016 @@
+{
+  "id": "ROLE-ADMIN",
+  "name": "Admin/Manager Role Optimization",
+  "description": "Optimized experience for Owner/Manager. Focus on business health visibility, exception alerts, and approval workflows.",
+  "created": "2026-01-09",
+  "priority": 5,
+  "phase": "role",
+  "persona": "Owner / Manager",
+  "dependencies": {
+    "phase": "Role",
+    "executionOrder": 6,
+    "schemaRequired": [
+      {
+        "table": "users",
+        "status": "EXISTS"
+      },
+      {
+        "table": "organizations",
+        "status": "EXISTS"
+      },
+      {
+        "table": "orders",
+        "status": "EXISTS"
+      },
+      {
+        "table": "opportunities",
+        "status": "EXISTS"
+      },
+      {
+        "table": "products",
+        "status": "EXISTS"
+      },
+      {
+        "table": "issues",
+        "status": "EXISTS"
+      },
+      {
+        "table": "purchase-orders",
+        "status": "EXISTS"
+      }
+    ],
+    "prdDependencies": [
+      {
+        "prdId": "DOM-CUST",
+        "status": "REQUIRED",
+        "reason": "Admin dashboard needs customer metrics and data"
+      },
+      {
+        "prdId": "DOM-ORD",
+        "status": "REQUIRED",
+        "reason": "Admin needs order KPIs and exception detection"
+      },
+      {
+        "prdId": "DOM-PIPE",
+        "status": "REQUIRED",
+        "reason": "Admin needs pipeline metrics for business health"
+      },
+      {
+        "prdId": "DOM-INV",
+        "status": "REQUIRED",
+        "reason": "Admin needs inventory alerts for low stock exceptions"
+      },
+      {
+        "prdId": "DOM-ISS",
+        "status": "REQUIRED",
+        "reason": "Admin needs issues KPI and tracking"
+      },
+      {
+        "prdId": "DOM-SUPP",
+        "status": "OPTIONAL",
+        "reason": "Approval queue depends on PO approvals from supplier domain"
+      }
+    ],
+    "enables": []
+  },
+  "ui_spec": {
+    "target_role": "admin",
+    "primary_device": "desktop",
+    "priority_actions": [
+      "View Exceptions",
+      "Approve Items",
+      "View Reports"
+    ],
+    "accessibility": {
+      "keyboard_navigation": true,
+      "screen_reader_support": true,
+      "color_contrast": "WCAG AA",
+      "focus_indicators": "visible ring on all interactive elements",
+      "data_tables": "Proper header associations and sortable columns"
+    },
+    "dashboard_layout": {
+      "type": "executive-overview",
+      "columns": 4,
+      "primary_section": "kpi-summary",
+      "widget_arrangement": [
+        {
+          "widget": "revenue-kpi",
+          "position": "top-1",
+          "span": 1
+        },
+        {
+          "widget": "orders-kpi",
+          "position": "top-2",
+          "span": 1
+        },
+        {
+          "widget": "pipeline-kpi",
+          "position": "top-3",
+          "span": 1
+        },
+        {
+          "widget": "issues-kpi",
+          "position": "top-4",
+          "span": 1
+        },
+        {
+          "widget": "exceptions",
+          "position": "middle-left",
+          "span": 2
+        },
+        {
+          "widget": "approval-queue",
+          "position": "middle-right",
+          "span": 2
+        },
+        {
+          "widget": "trend-chart",
+          "position": "bottom-left",
+          "span": 2
+        },
+        {
+          "widget": "team-performance",
+          "position": "bottom-right",
+          "span": 2
+        }
+      ]
+    },
+    "quick_action_panel": {
+      "position": "top-right dropdown",
+      "actions": [
+        {
+          "label": "View Exceptions",
+          "icon": "alert-triangle",
+          "shortcut": "Cmd+E"
+        },
+        {
+          "label": "Approval Queue",
+          "icon": "check-square",
+          "shortcut": "Cmd+A"
+        },
+        {
+          "label": "Run Report",
+          "icon": "bar-chart-2",
+          "shortcut": "Cmd+R"
+        }
+      ]
+    },
+    "notification_preferences": {
+      "exception_alert": {
+        "default": true,
+        "channels": [
+          "in-app",
+          "email"
+        ],
+        "timing": "immediate for critical"
+      },
+      "approval_pending": {
+        "default": true,
+        "channels": [
+          "in-app"
+        ],
+        "timing": "immediate"
+      },
+      "daily_digest": {
+        "default": true,
+        "channels": [
+          "email"
+        ],
+        "timing": "8am daily"
+      },
+      "weekly_report": {
+        "default": true,
+        "channels": [
+          "email"
+        ],
+        "timing": "Monday 8am"
+      }
+    }
+  },
+  "references": {
+    "internal": [
+      "memory-bank/VISION.md - User personas",
+      "memory-bank/_meta/assumptions.md - Role definitions"
+    ],
+    "external": []
+  },
+  "current_state": {
+    "implemented": [
+      "Basic dashboard",
+      "User management"
+    ],
+    "gaps": [
+      "No business health dashboard",
+      "No exception alerts",
+      "No approval queue",
+      "No team performance metrics",
+      "No trend analysis"
+    ]
+  },
+  "stories": [
+    {
+      "id": "ROLE-ADMIN-001a",
+      "name": "Add Date Range Selector to Dashboard Header",
+      "description": "Add visible date range selector in dashboard header for admin view",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Date range selector visible in dashboard header",
+        "Presets: Today, This Week, This Month, This Quarter, YTD",
+        "Custom date range picker",
+        "Selected range affects all widgets",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_001A_COMPLETE",
+      "ui_spec": {
+        "target_role": "admin",
+        "primary_device": "desktop",
+        "priority_actions": [
+          "Select Preset",
+          "Custom Range",
+          "Apply"
+        ],
+        "accessibility": {
+          "keyboard_navigation": "Tab to selector, arrow keys for presets",
+          "date_picker": "Accessible calendar with keyboard support",
+          "screen_reader_support": "Announce selected range"
+        },
+        "layout": {
+          "position": "dashboard header, right side",
+          "dropdown": {
+            "trigger": "Button showing current range",
+            "presets": "Quick select buttons at top",
+            "custom": "Date pickers below presets"
+          }
+        },
+        "interaction": {
+          "preset_click": "Immediately applies and closes",
+          "custom_range": "Select start/end then Apply button",
+          "persistence": "Remember last selection in session"
+        }
+      }
+    },
+    {
+      "id": "ROLE-ADMIN-001b",
+      "name": "Add KPI Drill-Down Navigation",
+      "description": "Make KPI widgets clickable to navigate to relevant list pages with context",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Revenue KPI links to orders filtered by date range",
+        "Orders KPI links to orders by status",
+        "Pipeline KPI links to pipeline page",
+        "Issues KPI links to issues list",
+        "URL params preserve date context",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "ROLE-ADMIN-001a"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_001B_COMPLETE",
+      "ui_spec": {
+        "target_role": "admin",
+        "primary_device": "desktop",
+        "priority_actions": [
+          "Click KPI",
+          "View Details",
+          "Return"
+        ],
+        "accessibility": {
+          "clickable_cards": "role='button' or link semantics",
+          "focus_indicator": "Clear hover and focus states",
+          "screen_reader_support": "Announce 'Click to view details'"
+        },
+        "layout": {
+          "kpi_card": {
+            "hover_state": "Subtle lift/shadow effect",
+            "cursor": "pointer",
+            "drill_icon": "Small arrow or external link icon"
+          }
+        },
+        "navigation": {
+          "url_params": "Include dateFrom, dateTo from dashboard",
+          "back_navigation": "Browser back returns to dashboard"
+        }
+      }
+    },
+    {
+      "id": "ROLE-ADMIN-002a",
+      "name": "Add Exception Detection Server Functions",
+      "description": "Server functions to detect various exception categories",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "getExceptionSummary returns counts for: overdue invoices, stuck orders, low stock, stale quotes",
+        "Stuck orders: orders pending > 7 days",
+        "Stale quotes: quoted opportunities > 14 days without activity",
+        "Low stock: products below reorder point",
+        "Overdue invoices: unpaid past due date",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_002A_COMPLETE"
+    },
+    {
+      "id": "ROLE-ADMIN-002b",
+      "name": "Add Exceptions Widget",
+      "description": "Dashboard widget showing exception categories with counts",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "ExceptionsWidget component with category cards",
+        "Count badge per category with color coding (red for critical)",
+        "Click category to see detail list",
+        "Acknowledge button per exception",
+        "Add to widget registry and catalog",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "ROLE-ADMIN-002a"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_002B_COMPLETE",
+      "ui_spec": {
+        "target_role": "admin",
+        "primary_device": "desktop",
+        "priority_actions": [
+          "View Category",
+          "Acknowledge",
+          "Take Action"
+        ],
+        "accessibility": {
+          "color_independence": "Icons and text labels with colors",
+          "badge_announcement": "Screen reader announces count changes",
+          "keyboard_navigation": "Tab through categories"
+        },
+        "layout": {
+          "widget_structure": {
+            "type": "grid of category cards",
+            "categories": [
+              "Overdue Invoices",
+              "Stuck Orders",
+              "Low Stock",
+              "Stale Quotes"
+            ],
+            "card_content": "Icon, label, count badge"
+          },
+          "severity_coding": {
+            "critical": "Red badge, filled background",
+            "warning": "Amber badge",
+            "info": "Blue badge"
+          },
+          "detail_panel": {
+            "trigger": "Click category",
+            "type": "slide-out panel or modal",
+            "content": "List of items with acknowledge/action buttons"
+          }
+        },
+        "interaction": {
+          "acknowledge": "Marks exception as seen, removes from count",
+          "take_action": "Navigate to relevant page (order, invoice, etc.)"
+        }
+      }
+    },
+    {
+      "id": "ROLE-ADMIN-002c",
+      "name": "Add Exception Alert Badge in Navigation",
+      "description": "Show unacknowledged exception count in nav/header",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Exception count badge near notification bell or dashboard link",
+        "Badge shows total unacknowledged count",
+        "Badge hidden when zero",
+        "Click navigates to exceptions widget",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "ROLE-ADMIN-002b"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_002C_COMPLETE",
+      "ui_spec": {
+        "target_role": "admin",
+        "primary_device": "desktop",
+        "priority_actions": [
+          "View Badge",
+          "Click to Exceptions"
+        ],
+        "accessibility": {
+          "badge_visibility": "High contrast, min 18px diameter",
+          "live_region": "ARIA live for count changes",
+          "screen_reader_support": "Announce 'X exceptions require attention'"
+        },
+        "layout": {
+          "position": "Header, near notification icon or dashboard nav item",
+          "badge_style": "Red circle with white number",
+          "hidden_when_zero": true
+        }
+      }
+    },
+    {
+      "id": "ROLE-ADMIN-003",
+      "name": "Approval Queue",
+      "description": "Centralized approvals",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Approval queue page",
+        "Pending: quotes over threshold, POs over threshold",
+        "Preview item without leaving queue",
+        "Approve/reject with comment",
+        "Notification to requestor",
+        "Approval history",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "SUPP-APPROVAL-WORKFLOW"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_003_COMPLETE",
+      "ui_spec": {
+        "target_role": "admin",
+        "primary_device": "desktop",
+        "priority_actions": [
+          "Review Item",
+          "Approve",
+          "Reject"
+        ],
+        "accessibility": {
+          "queue_navigation": "Keyboard navigable list",
+          "preview_panel": "Accessible preview without navigation",
+          "action_buttons": "Clear approve/reject with confirmation"
+        },
+        "layout": {
+          "page_structure": {
+            "type": "master-detail",
+            "left_panel": "Queue list with filters",
+            "right_panel": "Preview of selected item"
+          },
+          "queue_list": {
+            "columns": [
+              "Type",
+              "Requestor",
+              "Amount",
+              "Submitted",
+              "Actions"
+            ],
+            "filters": [
+              "All",
+              "Quotes",
+              "Purchase Orders"
+            ],
+            "sorting": "By submission date (oldest first)"
+          },
+          "preview_panel": {
+            "content": "Full item details (quote or PO)",
+            "actions": "Approve / Reject with comment field"
+          },
+          "approval_dialog": {
+            "fields": [
+              "Decision (Approve/Reject)",
+              "Comment (required for reject)"
+            ],
+            "confirmation": "Summary before submission"
+          }
+        },
+        "notification": {
+          "on_decision": "Email and in-app to requestor",
+          "content": "Decision, comment, approver name"
+        }
+      }
+    },
+    {
+      "id": "ROLE-ADMIN-004a",
+      "name": "Add Team Performance Server Functions",
+      "description": "Server functions to aggregate user activity metrics",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "getTeamPerformanceMetrics(dateRange, role?) returns per-user stats",
+        "Metrics: orders processed count, quotes sent count, jobs completed count",
+        "Aggregate from orders, opportunities, jobs tables by user",
+        "Support filtering by role and date range",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_004A_COMPLETE"
+    },
+    {
+      "id": "ROLE-ADMIN-004b",
+      "name": "Add Team Performance Page",
+      "description": "Admin page showing team productivity metrics",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Performance page in settings/admin section",
+        "Table with user name, role, and metrics columns",
+        "Leaderboard toggle view (ranked by total activity)",
+        "Date range filter and role filter",
+        "Link to individual user detail",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "ROLE-ADMIN-004a"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_004B_COMPLETE",
+      "ui_spec": {
+        "target_role": "admin",
+        "primary_device": "desktop",
+        "priority_actions": [
+          "Filter by Role",
+          "Change Date Range",
+          "View User Detail"
+        ],
+        "accessibility": {
+          "sortable_table": "ARIA sort indicators on headers",
+          "filters": "Accessible dropdown and date picker",
+          "leaderboard": "Rank numbers announced"
+        },
+        "layout": {
+          "page_header": {
+            "title": "Team Performance",
+            "filters": "Date range, Role dropdown",
+            "view_toggle": "Table / Leaderboard"
+          },
+          "table_view": {
+            "columns": [
+              "User",
+              "Role",
+              "Orders",
+              "Quotes",
+              "Jobs",
+              "Total Activity"
+            ],
+            "row_action": "Click to view user detail"
+          },
+          "leaderboard_view": {
+            "type": "ranked cards",
+            "top_3": "Highlighted with medal icons",
+            "metrics": "Primary metric with sparkline trend"
+          }
+        }
+      }
+    },
+    {
+      "id": "ROLE-ADMIN-004c",
+      "name": "Add User Trend Charts",
+      "description": "Activity trend over time per user",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Expandable row or sidebar showing user trend",
+        "Line chart of weekly activity",
+        "Compare to previous period",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "ROLE-ADMIN-004b"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_004C_COMPLETE",
+      "ui_spec": {
+        "target_role": "admin",
+        "primary_device": "desktop",
+        "priority_actions": [
+          "Expand User",
+          "View Trend",
+          "Compare"
+        ],
+        "accessibility": {
+          "chart_accessibility": "Data table alternative",
+          "expand_trigger": "Keyboard accessible expand/collapse"
+        },
+        "layout": {
+          "trigger": "Expand icon on table row",
+          "expanded_content": {
+            "chart": "Line chart of activity by week",
+            "comparison": "Dashed line for previous period"
+          }
+        }
+      }
+    },
+    {
+      "id": "ROLE-ADMIN-005a",
+      "name": "Create Trends Page Route",
+      "description": "Add dedicated trends/analytics page for admins",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "New route /reports/trends or /analytics",
+        "Page layout with multiple chart areas",
+        "Period selector: daily, weekly, monthly",
+        "Date range selector",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_005A_COMPLETE",
+      "ui_spec": {
+        "target_role": "admin",
+        "primary_device": "desktop",
+        "priority_actions": [
+          "Select Period",
+          "Change Date Range",
+          "View Chart"
+        ],
+        "accessibility": {
+          "page_structure": "ARIA landmarks for main sections",
+          "period_selector": "Tab-like navigation",
+          "charts": "Data tables as alternatives"
+        },
+        "layout": {
+          "page_header": {
+            "title": "Business Trends",
+            "controls": "Period toggle, Date range picker"
+          },
+          "chart_grid": {
+            "type": "2x2 or 2x3 grid",
+            "responsive": "Stack on smaller screens"
+          }
+        }
+      }
+    },
+    {
+      "id": "ROLE-ADMIN-005b",
+      "name": "Add Multiple Trend Charts",
+      "description": "Revenue, order volume, and pipeline trend charts",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Revenue trend chart with comparison line",
+        "Order volume trend chart",
+        "Pipeline value trend chart",
+        "Charts respect period and date range",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "ROLE-ADMIN-005a"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_005B_COMPLETE",
+      "ui_spec": {
+        "target_role": "admin",
+        "primary_device": "desktop",
+        "priority_actions": [
+          "View Trend",
+          "Compare Periods",
+          "Drill Down"
+        ],
+        "accessibility": {
+          "chart_labels": "Clear axis labels and legends",
+          "data_tables": "Toggle to view as table",
+          "keyboard_navigation": "Arrow keys to navigate data points"
+        },
+        "layout": {
+          "charts": [
+            {
+              "title": "Revenue Trend",
+              "type": "line chart",
+              "comparison": "Previous period dashed line"
+            },
+            {
+              "title": "Order Volume",
+              "type": "bar chart",
+              "comparison": "Previous period overlay"
+            },
+            {
+              "title": "Pipeline Value",
+              "type": "area chart",
+              "breakdown": "By stage"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ROLE-ADMIN-005c",
+      "name": "Add Chart Export",
+      "description": "Export trend charts as images",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Export button per chart",
+        "Download as PNG",
+        "Include chart title and date range in export",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "ROLE-ADMIN-005b"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_005C_COMPLETE",
+      "ui_spec": {
+        "target_role": "admin",
+        "primary_device": "desktop",
+        "priority_actions": [
+          "Export Chart",
+          "Download"
+        ],
+        "accessibility": {
+          "export_button": "Clear label and keyboard accessible"
+        },
+        "layout": {
+          "export_button": {
+            "position": "top-right of each chart card",
+            "icon": "download icon"
+          },
+          "exported_image": {
+            "includes": "Chart, title, date range, timestamp"
+          }
+        }
+      }
+    },
+    {
+      "id": "ROLE-ADMIN-006a",
+      "name": "Add System Health Server Function",
+      "description": "Server function to check all system components",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "getSystemHealth returns status for each component",
+        "Check Xero connection status (existing function)",
+        "Check Resend API status (basic ping)",
+        "Check AI service availability",
+        "Return overall health indicator",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_006A_COMPLETE"
+    },
+    {
+      "id": "ROLE-ADMIN-006b",
+      "name": "Add System Health Section in Settings",
+      "description": "Settings section showing all integration statuses",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "System health section in settings page",
+        "Integration cards: Xero, Resend, AI - each with green/yellow/red status",
+        "Last successful operation timestamp per integration",
+        "Quick link to integration-specific settings",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "ROLE-ADMIN-006a"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_006B_COMPLETE",
+      "ui_spec": {
+        "target_role": "admin",
+        "primary_device": "desktop",
+        "priority_actions": [
+          "View Status",
+          "Configure Integration",
+          "Test Connection"
+        ],
+        "accessibility": {
+          "status_indicators": "Icon + text, not just color",
+          "card_navigation": "Keyboard accessible cards",
+          "screen_reader_support": "Announce status of each integration"
+        },
+        "layout": {
+          "section_location": "Settings page, dedicated section or tab",
+          "integration_cards": {
+            "per_card": "Integration name, status indicator, last success time, configure link",
+            "layout": "horizontal row or grid"
+          },
+          "status_indicators": {
+            "green": "Connected, operational",
+            "yellow": "Warning, degraded",
+            "red": "Error, disconnected"
+          }
+        }
+      }
+    },
+    {
+      "id": "ROLE-ADMIN-007a",
+      "name": "Add Customer Quick Stats Server Function",
+      "description": "Server function to get customer summary stats",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "getCustomerQuickStats(customerId) returns total revenue, order count, avg order value",
+        "Include last order date",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_007A_COMPLETE"
+    },
+    {
+      "id": "ROLE-ADMIN-007b",
+      "name": "Add Product Quick Stats Server Function",
+      "description": "Server function to get product summary stats",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "getProductQuickStats(productId) returns units sold, total revenue, margin",
+        "Include stock on hand",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_007B_COMPLETE"
+    },
+    {
+      "id": "ROLE-ADMIN-007c",
+      "name": "Add Quick Stats Component to Detail Pages",
+      "description": "Display quick stats on customer and product detail pages",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "QuickStats component showing key metrics",
+        "Add to customer detail page header/sidebar",
+        "Add to product detail page header/sidebar",
+        "Compact card layout with icons",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "ROLE-ADMIN-007a",
+        "ROLE-ADMIN-007b"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_007C_COMPLETE",
+      "ui_spec": {
+        "target_role": "admin",
+        "primary_device": "desktop",
+        "priority_actions": [
+          "View Stats",
+          "Drill into Metric"
+        ],
+        "accessibility": {
+          "metric_labels": "Clear labels for each stat",
+          "number_formatting": "Proper currency and number formatting"
+        },
+        "layout": {
+          "component_type": "Compact card or inline stats row",
+          "customer_stats": [
+            "Total Revenue",
+            "Order Count",
+            "Avg Order Value",
+            "Last Order"
+          ],
+          "product_stats": [
+            "Units Sold",
+            "Total Revenue",
+            "Margin %",
+            "Stock on Hand"
+          ],
+          "position": "Header area or sidebar of detail page"
+        }
+      }
+    },
+    {
+      "id": "ROLE-ADMIN-008a",
+      "name": "Create Scheduled Reports Schema",
+      "description": "Add scheduled_reports table for report scheduling configuration",
+      "priority": 4,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "scheduled_reports table: id, name, reportType, frequency, recipients, format, filters, orgId, createdBy, isActive, lastRunAt, nextRunAt",
+        "Migration runs successfully",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_008A_COMPLETE"
+    },
+    {
+      "id": "ROLE-ADMIN-008b",
+      "name": "Add Scheduled Reports Server Functions",
+      "description": "CRUD for scheduled reports configuration",
+      "priority": 4,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "createScheduledReport, getScheduledReports, updateScheduledReport, deleteScheduledReport",
+        "getNextRunTime calculates next delivery based on frequency",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "ROLE-ADMIN-008a"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_008B_COMPLETE"
+    },
+    {
+      "id": "ROLE-ADMIN-008c",
+      "name": "Add Scheduled Reports UI",
+      "description": "Settings page for managing scheduled reports",
+      "priority": 4,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Scheduled reports management page in settings",
+        "Create report schedule form: name, report type, frequency (daily/weekly/monthly), recipients, format (PDF/CSV)",
+        "List of scheduled reports with edit/delete",
+        "Toggle active/inactive",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "ROLE-ADMIN-008b"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_008C_COMPLETE",
+      "ui_spec": {
+        "target_role": "admin",
+        "primary_device": "desktop",
+        "priority_actions": [
+          "Create Schedule",
+          "Edit Schedule",
+          "Toggle Active"
+        ],
+        "accessibility": {
+          "form_labels": "All inputs properly labeled",
+          "toggle_switch": "Clear on/off state announcement",
+          "delete_confirmation": "Confirmation dialog before delete"
+        },
+        "layout": {
+          "page_structure": {
+            "header": "Title + Create New button",
+            "list": "Table of scheduled reports"
+          },
+          "report_table": {
+            "columns": [
+              "Name",
+              "Type",
+              "Frequency",
+              "Recipients",
+              "Next Run",
+              "Active",
+              "Actions"
+            ]
+          },
+          "create_form": {
+            "type": "modal or slide-out",
+            "fields": [
+              "Name",
+              "Report Type (dropdown)",
+              "Frequency (radio)",
+              "Recipients (email input)",
+              "Format (PDF/CSV)"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "ROLE-ADMIN-008d",
+      "name": "Add Trigger.dev Cron Job for Delivery",
+      "description": "Background job to execute scheduled reports",
+      "priority": 4,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Trigger.dev cron job checks for due reports (daily at 6 AM)",
+        "Job triggers existing emailReport task for each due report",
+        "Updates lastRunAt and nextRunAt after execution",
+        "Logs success/failure",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [
+        "ROLE-ADMIN-008b"
+      ],
+      "estimated_iterations": 2,
+      "completion_promise": "ROLE_ADMIN_008D_COMPLETE"
+    }
+  ],
+  "success_criteria": [
+    "Business health visible at a glance",
+    "Exceptions don't fall through cracks",
+    "Approvals don't bottleneck operations",
+    "Team performance trackable",
+    "npm run typecheck passes"
+  ],
+  "out_of_scope": [
+    "Advanced BI/analytics",
+    "Custom report builder",
+    "Budget management"
+  ]
+}

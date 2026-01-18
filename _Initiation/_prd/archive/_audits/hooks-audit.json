@@ -1,0 +1,143 @@
+{
+  "audit_date": "2026-01-09",
+  "prd_id": "REF-HOOKS",
+  "prd_path": "memory-bank/prd/refactoring/hooks.prd.json",
+  "codebase_path": "renoz-v2/src/hooks/",
+  "summary": {
+    "total_hooks": 25,
+    "hooks_over_100_lines": 7,
+    "max_hook_size": 405,
+    "prd_claims_verified": true
+  },
+  "findings": {
+    "hook_sizes": {
+      "use-query-options.ts": {
+        "prd_claim": "405 lines - not a hook, is config",
+        "actual": 405,
+        "status": "VERIFIED",
+        "note": "Should be moved to lib/queries/, not a hook"
+      },
+      "use-realtime.ts": {
+        "prd_claim": null,
+        "actual": 209,
+        "status": "NOT_IN_PRD",
+        "note": "Over 100 line limit, consider splitting"
+      },
+      "use-url-filters.ts": {
+        "prd_claim": "Should extract search debounce logic",
+        "actual": 188,
+        "status": "VERIFIED",
+        "note": "Over 100 line limit"
+      },
+      "use-global-shortcuts.ts": {
+        "prd_claim": null,
+        "actual": 154,
+        "status": "NOT_IN_PRD",
+        "note": "Over 100 line limit"
+      },
+      "use-po-mutations.ts": {
+        "prd_claim": null,
+        "actual": 140,
+        "status": "NOT_IN_PRD",
+        "note": "Over 100 line limit"
+      },
+      "use-optimistic-mutation.ts": {
+        "prd_claim": null,
+        "actual": 136,
+        "status": "NOT_IN_PRD",
+        "note": "Over 100 line limit"
+      },
+      "use-communications.ts": {
+        "prd_claim": "7 hooks in 1 file",
+        "actual": 133,
+        "actual_hook_count": 8,
+        "status": "VERIFIED_WORSE",
+        "note": "Actually 8 hooks: useCommunicationSummary, useCommunicationHistory, useSendTemplateEmail, useCreateBusinessActivity, useActivities, useUpdateActivityStatus, useBulkUpdateActivityStatus, useUserPreferences, useUpdateUserPreferences (9 total)"
+      },
+      "use-tanstack-form-draft.ts": {
+        "prd_claim": "Duplicate form draft hook",
+        "actual": 113,
+        "status": "VERIFIED"
+      },
+      "use-form-draft.ts": {
+        "prd_claim": "Duplicate form draft hook - delete this one",
+        "actual": 102,
+        "status": "VERIFIED",
+        "note": "Keep TanStack version, delete this"
+      }
+    },
+    "hooks_under_limit": [
+      { "file": "use-entity-search.ts", "lines": 110 },
+      { "file": "use-pipeline-keyboard.ts", "lines": 105 },
+      { "file": "use-pipeline-drag-drop.ts", "lines": 91 },
+      { "file": "use-session-timeout.ts", "lines": 76 },
+      { "file": "use-error-handler.ts", "lines": 75 },
+      { "file": "use-realtime-notifications.ts", "lines": 72 },
+      { "file": "use-user-routing.ts", "lines": 71 },
+      { "file": "use-theme.ts", "lines": 68 },
+      { "file": "use-favorites.ts", "lines": 63 },
+      { "file": "use-table-view.ts", "lines": 59 },
+      { "file": "use-offline-mutation.ts", "lines": 52 },
+      { "file": "use-recently-viewed.ts", "lines": 50 },
+      { "file": "use-debounced-callback.ts", "lines": 40 },
+      { "file": "use-debounce.ts", "lines": 39 },
+      { "file": "use-can-mutate.ts", "lines": 34 },
+      { "file": "use-unsaved-changes.ts", "lines": 28 }
+    ],
+    "duplicate_hooks": {
+      "form-draft": {
+        "prd_claim": "Two form draft hooks",
+        "actual_status": "VERIFIED",
+        "versions": [
+          {
+            "file": "use-form-draft.ts",
+            "lines": 102,
+            "note": "react-hook-form version"
+          },
+          {
+            "file": "use-tanstack-form-draft.ts",
+            "lines": 113,
+            "note": "TanStack Form version - KEEP"
+          }
+        ]
+      }
+    },
+    "barrel_export": {
+      "prd_claim": "No barrel exports",
+      "actual_status": "VERIFIED",
+      "note": "No index.ts exists in hooks directory"
+    }
+  },
+  "recommended_story_changes": [
+    {
+      "story_id": "REF-HOOKS-001",
+      "change": "Verified: use-query-options.ts is 405 lines, not a hook",
+      "priority": "high"
+    },
+    {
+      "story_id": "REF-HOOKS-002",
+      "change": "Update: use-communications.ts has 9 hooks (not 7) at 133 lines",
+      "priority": "high"
+    },
+    {
+      "story_id": "REF-HOOKS-003",
+      "change": "Verified: Two form draft hooks exist",
+      "priority": "medium"
+    },
+    {
+      "story_id": "NEW",
+      "change": "Add story to split use-realtime.ts (209 lines, over limit)",
+      "priority": "medium"
+    },
+    {
+      "story_id": "NEW",
+      "change": "Add story to split use-global-shortcuts.ts (154 lines, over limit)",
+      "priority": "low"
+    }
+  ],
+  "metrics": {
+    "hooks_over_100_lines": 9,
+    "hooks_compliant": 16,
+    "compliance_percentage": 64
+  }
+}

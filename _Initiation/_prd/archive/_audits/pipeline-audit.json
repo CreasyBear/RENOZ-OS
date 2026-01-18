@@ -1,0 +1,76 @@
+{
+  "domain": "pipeline",
+  "audit_date": "2026-01-09",
+  "implementation_percentage": 45,
+  "server_functions": [
+    "listOpportunities",
+    "getOpportunity",
+    "createOpportunity",
+    "updateOpportunity",
+    "updateStage",
+    "logOpportunityActivity",
+    "logOpportunityCall",
+    "markAsLost",
+    "reopenOpportunity",
+    "sendOpportunityQuoteEmail"
+  ],
+  "components": [
+    "opportunity-card.tsx",
+    "pipeline-column.tsx",
+    "pipeline-filters.tsx",
+    "opportunity-panel.tsx",
+    "pipeline-metrics.tsx",
+    "follow-up-dialog.tsx",
+    "opportunity-form.tsx",
+    "quote-builder.tsx",
+    "mark-lost-dialog.tsx",
+    "log-call-dialog.tsx",
+    "quote-pdf.tsx"
+  ],
+  "routes": [
+    "/pipeline/index.tsx",
+    "/reports/pipeline.tsx"
+  ],
+  "schema_tables": ["opportunities", "opportunityActivities"],
+  "prd_claims_verified": [
+    "Opportunity CRUD operations",
+    "Stage progression (new → quoted → pending → ordered → won/lost)",
+    "Quote snapshot on opportunity",
+    "Pipeline board (Kanban) view",
+    "Pipeline list view with filters",
+    "Activity logging on opportunities",
+    "Quote expiration tracking (quoteExpiresAt field)",
+    "Lost reason tracking (lostReason, lostNotes fields)"
+  ],
+  "prd_claims_missing": [
+    "DOM-PIPE-001: Weighted pipeline (no probability field)",
+    "DOM-PIPE-001: Expected close date (no expectedCloseDate column)",
+    "DOM-PIPE-002: Quote PDF integration (component exists, not wired up)",
+    "DOM-PIPE-003: Quote versioning (no quote_versions table)",
+    "DOM-PIPE-004: Quote validity enforcement (field exists, not enforced)",
+    "DOM-PIPE-005: Win/loss reason reference table (only text fields)",
+    "DOM-PIPE-006: Pipeline forecasting report (basic only)",
+    "DOM-PIPE-007: Enhanced Kanban (no weighted totals, no stale highlighting)",
+    "DOM-PIPE-008: Quick quote creation from customer"
+  ],
+  "actual_features_not_in_prd": [
+    "Public quote acceptance links with token",
+    "Quote email sending with notifications",
+    "Quote draft auto-save in localStorage",
+    "Customer context enrichment (repeat customer detection)",
+    "Quote expiration status on cards",
+    "Opportunity reopening from lost",
+    "CSV export functionality",
+    "Keyboard navigation shortcuts"
+  ],
+  "stories_ready_to_build": [
+    "DOM-PIPE-001: Forecasting Fields (schema + API + UI)",
+    "DOM-PIPE-002: Quote PDF Integration (UI wiring)",
+    "DOM-PIPE-003: Quote Versioning (schema + API + UI)",
+    "DOM-PIPE-004: Quote Validity Enforcement (API + UI)",
+    "DOM-PIPE-005: Win/Loss Reference Table (schema + API + UI)",
+    "DOM-PIPE-006: Forecasting Report (complex)",
+    "DOM-PIPE-007: Enhanced Kanban (UI)",
+    "DOM-PIPE-008: Quick Quote (API + UI)"
+  ]
+}

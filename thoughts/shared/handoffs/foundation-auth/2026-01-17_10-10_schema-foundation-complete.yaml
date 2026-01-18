@@ -1,0 +1,64 @@
+---
+session: foundation-auth
+date: 2026-01-17
+status: complete
+outcome: PARTIAL_MINUS
+---
+
+goal: Complete FOUND-SCHEMA PRD - all 12 schema stories done
+now: Start FOUND-AUTH PRD - authentication and authorization
+
+test: bun run typecheck
+
+done_this_session:
+  - task: FOUND-SCHEMA-009 Create Query Layer Organization
+    files: [src/server/customers.ts, src/server/orders.ts, src/server/products.ts]
+  - task: FOUND-SCHEMA-010 Cursor Pagination Pattern
+    files: [src/lib/db/pagination.ts, src/lib/schemas/customers.ts, src/lib/schemas/orders.ts]
+  - task: FOUND-SCHEMA-011 Create Activities Audit Table
+    files: [drizzle/schema/activities.ts, src/lib/schemas/activities.ts, tests/unit/schemas/activities.spec.ts]
+
+blockers: []
+
+questions:
+  - Vitest test runner hangs indefinitely - investigate vitest config
+  - Consider switching to bun test for faster execution
+
+decisions:
+  - polymorphic_audit: Used entityType+entityId pattern for flexible audit tracking across all entity types without schema changes
+  - cursor_pagination: Implemented composite cursor (createdAt+id) encoded as base64 for deterministic pagination
+  - append_only_activities: Activities table has only createdAt (no updatedAt/deletedAt) for audit compliance
+
+findings:
+  - zod_v4_record: z.record() requires two arguments in Zod v4 - z.record(z.string(), z.unknown())
+  - jsonb_index_signature: TanStack Start serialization requires constrained index signatures - use specific types not unknown
+
+worked:
+  - bun eval for quick schema validation when vitest hangs
+  - Composite cursor pattern with fetch N+1 for hasNextPage detection
+  - Polymorphic references with dedicated indexes per query pattern
+
+failed:
+  - vitest run hangs indefinitely - needs investigation
+  - z.record(z.unknown()) - Zod v4 API changed
+
+next:
+  - Start FOUND-AUTH PRD implementation
+  - Investigate vitest hanging issue
+  - Run drizzle generate to create migration for activities table
+
+files:
+  created:
+    - drizzle/schema/activities.ts
+    - src/lib/schemas/activities.ts
+    - src/lib/db/pagination.ts
+    - src/server/customers.ts
+    - src/server/orders.ts
+    - src/server/products.ts
+    - tests/unit/schemas/activities.spec.ts
+  modified:
+    - drizzle/schema/index.ts
+    - drizzle/schema/enums.ts
+    - src/lib/schemas/customers.ts
+    - src/lib/schemas/orders.ts
+    - progress.txt

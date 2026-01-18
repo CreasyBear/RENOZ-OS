@@ -1,0 +1,488 @@
+{
+  "id": "CROSS-SEARCH",
+  "name": "Global Search Infrastructure",
+  "description": "Cross-domain search enabling users to find customers, orders, quotes, jobs by any identifier. Cmd+K command palette for power users.",
+  "created": "2026-01-17",
+  "updated": "2026-01-17",
+  "priority": 1,
+  "phase": "cross-domain",
+  "version": "1.0",
+  "business_value": {
+    "productivity_boost": true,
+    "user_experience": true,
+    "power_user_enablement": true,
+    "description": "Instant access to any entity across the system reduces navigation time and improves operational efficiency"
+  },
+  "dependencies": [
+    "DOM-CUSTOMERS",
+    "DOM-PIPELINE",
+    "DOM-ORDERS",
+    "DOM-JOBS"
+  ],
+  "system_requirements": {
+    "database": {
+      "searchIndex": {
+        "description": "Unified full-text search index for cross-domain entity discovery",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE",
+          "entityType": "enum('customer', 'order', 'quote', 'job', 'product', 'contact') NOT NULL",
+          "entityId": "uuid NOT NULL",
+          "displayText": "text NOT NULL",
+          "searchVector": "tsvector NOT NULL",
+          "entityNumber": "varchar(50)",
+          "entityName": "varchar(255)",
+          "entityEmail": "varchar(255)",
+          "entityPhone": "varchar(50)",
+          "entityStatus": "varchar(50)",
+          "metadata": "jsonb DEFAULT '{}'",
+          "createdAt": "timestamp NOT NULL DEFAULT NOW()",
+          "updatedAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": {
+          "idx_search_org": "CREATE INDEX idx_search_org ON search_index(organization_id)",
+          "idx_search_entity_type": "CREATE INDEX idx_search_entity_type ON search_index(organization_id, entity_type)",
+          "idx_search_entity_id": "CREATE UNIQUE INDEX idx_search_entity_id ON search_index(organization_id, entity_type, entity_id)",
+          "idx_search_vector": "CREATE INDEX idx_search_vector ON search_index USING GIN(search_vector)",
+          "idx_search_number": "CREATE INDEX idx_search_number ON search_index(organization_id, entity_number)",
+          "idx_search_name": "CREATE INDEX idx_search_name ON search_index(organization_id, entity_name)"
+        },
+        "constraints": [
+          "searchVector IS NOT NULL"
+        ]
+      },
+      "recentItems": {
+        "description": "User-specific recently accessed entities for quick access",
+        "fields": {
+          "id": "uuid PRIMARY KEY",
+          "organizationId": "uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE",
+          "userId": "uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE",
+          "entityType": "enum('customer', 'order', 'quote', 'job', 'product', 'contact') NOT NULL",
+          "entityId": "uuid NOT NULL",
+          "displayText": "text NOT NULL",
+          "accessedAt": "timestamp NOT NULL DEFAULT NOW()"
+        },
+        "indexes": {
+          "idx_recent_user": "CREATE INDEX idx_recent_user ON recent_items(organization_id, user_id, accessed_at DESC)",
+          "idx_recent_entity": "CREATE UNIQUE INDEX idx_recent_entity ON recent_items(organization_id, user_id, entity_type, entity_id)"
+        },
+        "constraints": [
+          "Keep max 50 recent items per user (handled by trigger)"
+        ]
+      }
+    },
+    "api_endpoints": {
+      "search": {
+        "globalSearch": {
+          "method": "GET",
+          "path": "/api/search",
+          "query_params": [
+            "q",
+            "types",
+            "limit"
+          ],
+          "response": {
+            "results": "SearchResult[]",
+            "query": "string",
+            "totalCount": "number",
+            "timing": "number"
+          },
+          "description": "Global search across all entity types with <500ms response time"
+        },
+        "quickSearch": {
+          "method": "GET",
+          "path": "/api/search/quick",
+          "query_params": [
+            "q",
+            "limit"
+          ],
+          "response": {
+            "results": "SearchResult[]"
+          },
+          "description": "Lightweight search for command palette autocomplete"
+        }
+      },
+      "recentItems": {
+        "list": {
+          "method": "GET",
+          "path": "/api/recent-items",
+          "query_params": [
+            "limit",
+            "types"
+          ],
+          "response": {
+            "items": "RecentItem[]"
+          },
+          "description": "Get user's recently accessed items"
+        },
+        "track": {
+          "method": "POST",
+          "path": "/api/recent-items",
+          "body": {
+            "entityType": "EntityType",
+            "entityId": "uuid",
+            "displayText": "string"
+          },
+          "response": {
+            "success": "boolean"
+          },
+          "description": "Track entity access for recent items"
+        }
+      },
+      "indexing": {
+        "reindex": {
+          "method": "POST",
+          "path": "/api/search/reindex",
+          "body": {
+            "entityType": "EntityType?"
+          },
+          "response": {
+            "jobId": "string",
+            "estimatedCount": "number"
+          },
+          "description": "Trigger full or partial reindexing (admin only)"
+        },
+        "status": {
+          "method": "GET",
+          "path": "/api/search/index-status",
+          "response": {
+            "lastFullIndex": "timestamp",
+            "indexCounts": "Record<EntityType, number>",
+            "health": "healthy | degraded | stale"
+          },
+          "description": "Get search index health status"
+        }
+      }
+    },
+    "ui_components": {
+      "commandPalette": {
+        "description": "Global Cmd+K command palette for power users",
+        "trigger": "Cmd+K / Ctrl+K keyboard shortcut",
+        "layout": {
+          "mobile": "Full-screen modal",
+          "tablet": "Centered modal (600px width)",
+          "desktop": "Centered modal (640px width, max-height 400px)"
+        },
+        "sections": [
+          {
+            "name": "Recent",
+            "description": "Recently accessed items when query is empty",
+            "maxItems": 5
+          },
+          {
+            "name": "Results",
+            "description": "Search results grouped by entity type",
+            "maxItems": 10
+          },
+          {
+            "name": "Actions",
+            "description": "Quick actions like 'Create new customer'",
+            "maxItems": 5
+          }
+        ],
+        "features": [
+          "Keyboard navigation (up/down arrows)",
+          "Enter to select highlighted result",
+          "Escape to close",
+          "Debounced search (300ms)",
+          "Result type icons and badges",
+          "Keyboard shortcut hints"
+        ],
+        "accessibility": {
+          "role": "dialog",
+          "ariaLabel": "Command palette",
+          "focusTrap": true,
+          "announceResults": "Search results announced to screen readers"
+        }
+      },
+      "searchResultItem": {
+        "description": "Individual search result display",
+        "layout": {
+          "icon": "Entity type icon (left)",
+          "primary": "Display text / name",
+          "secondary": "Entity number / identifier",
+          "badge": "Entity type label",
+          "status": "Status indicator (optional)"
+        },
+        "interaction": {
+          "click": "Navigate to entity detail",
+          "hover": "Highlight with background",
+          "keyboard": "Arrow keys to navigate, Enter to select"
+        }
+      },
+      "searchInput": {
+        "description": "Search input component within command palette",
+        "features": [
+          "Auto-focus on open",
+          "Clear button when has value",
+          "Loading spinner during search",
+          "Placeholder with keyboard hint"
+        ]
+      }
+    },
+    "business_rules": {
+      "search_behavior": {
+        "debounce": "300ms debounce on keystroke",
+        "minChars": "Search triggers after 1 character",
+        "maxResults": "Return max 20 results per search",
+        "timeout": "Search must complete within 500ms or return partial results",
+        "ranking": "Exact matches first, then prefix matches, then fuzzy matches"
+      },
+      "indexing_behavior": {
+        "triggerBased": "Index updates triggered by entity INSERT/UPDATE/DELETE",
+        "batchWindow": "Batch index updates within 100ms window for performance",
+        "fullReindex": "Full reindex available for admin (scheduled nightly recommended)",
+        "staleThreshold": "Index considered stale if not updated in 24 hours"
+      },
+      "recent_items": {
+        "maxPerUser": "50 recent items per user",
+        "deduplication": "Same entity access updates timestamp, doesn't create duplicate",
+        "retention": "Items older than 30 days automatically cleaned up"
+      },
+      "entity_indexing": {
+        "customer": {
+          "searchFields": ["name", "customerCode", "email", "phone"],
+          "displayFormat": "{name} ({customerCode})"
+        },
+        "order": {
+          "searchFields": ["orderNumber", "customerName"],
+          "displayFormat": "Order {orderNumber} - {customerName}"
+        },
+        "quote": {
+          "searchFields": ["quoteNumber", "customerName", "title"],
+          "displayFormat": "Quote {quoteNumber} - {title}"
+        },
+        "job": {
+          "searchFields": ["jobNumber", "customerName", "description"],
+          "displayFormat": "Job {jobNumber} - {description}"
+        }
+      }
+    },
+    "performance_requirements": {
+      "response_times": {
+        "search_query": "< 500 milliseconds for any query",
+        "command_palette_open": "< 100 milliseconds",
+        "recent_items_load": "< 200 milliseconds",
+        "index_update": "< 50 milliseconds per entity"
+      },
+      "scalability": {
+        "index_size": "Support 1M+ indexed entities",
+        "concurrent_searches": "100+ concurrent search requests",
+        "index_refresh": "Near real-time indexing (< 1 second lag)"
+      },
+      "reliability": {
+        "uptime_target": "99.9% availability for search service",
+        "fallback": "Degrade gracefully if index is stale",
+        "recovery": "Auto-recover from index corruption within 1 hour"
+      }
+    }
+  },
+  "stories": [
+    {
+      "id": "CROSS-SEARCH-001",
+      "name": "Search Index Schema",
+      "description": "PostgreSQL full-text search index tables for cross-domain entity discovery",
+      "type": "schema",
+      "layers": ["schema"],
+      "acceptance_criteria": [
+        "search_index table with tsvector column for full-text search",
+        "Searchable fields: customer name/email/phone, order number, quote number, job number",
+        "GIN index on search_vector for fast full-text queries",
+        "Composite unique index on (organization_id, entity_type, entity_id)",
+        "recent_items table with user-specific access tracking",
+        "Trigger to limit recent_items to 50 per user",
+        "RLS policies for organization and user data isolation",
+        "TypeScript types exported for SearchIndex and RecentItem entities"
+      ],
+      "files_to_modify": [
+        "src/lib/schema/search-index.ts",
+        "src/lib/schema/recent-items.ts",
+        "src/lib/schema/index.ts",
+        "drizzle/migrations/020_search_index.ts"
+      ],
+      "completion_promise": "CROSS_SEARCH_001_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending"
+    },
+    {
+      "id": "CROSS-SEARCH-002",
+      "name": "Search Indexing Service",
+      "description": "Background job to index new/updated entities with trigger-based incremental updates",
+      "type": "server-function",
+      "layers": ["server"],
+      "dependencies": ["CROSS-SEARCH-001"],
+      "acceptance_criteria": [
+        "Database trigger functions for customer/order/quote/job INSERT/UPDATE/DELETE",
+        "Triggers automatically update search_index when entities change",
+        "indexEntity() server function for manual single-entity indexing",
+        "reindexAll() server function for full organization reindex (admin only)",
+        "Batch processing for bulk operations to avoid performance impact",
+        "Error handling with retry logic for failed index operations",
+        "Index status tracking with last_indexed timestamp",
+        "Zod validation on all inputs; try-catch with appropriate error responses"
+      ],
+      "files_to_modify": [
+        "src/server/functions/search-indexing.ts",
+        "drizzle/migrations/021_search_triggers.ts",
+        "src/lib/schemas/search.ts"
+      ],
+      "completion_promise": "CROSS_SEARCH_002_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending"
+    },
+    {
+      "id": "CROSS-SEARCH-003",
+      "name": "Search API",
+      "description": "Server function for global search with ranked results",
+      "type": "server-function",
+      "layers": ["server"],
+      "dependencies": ["CROSS-SEARCH-002"],
+      "acceptance_criteria": [
+        "globalSearch(query, filters?, limit?) server function",
+        "Uses PostgreSQL ts_query and ts_rank for full-text search",
+        "Returns ranked results with entity type, ID, and display text",
+        "Optional type filter to search specific entity types only",
+        "Response time < 500ms for any query",
+        "Pagination support with offset/limit",
+        "Query timing included in response for performance monitoring",
+        "Zod validation on inputs; try-catch with 400/404/500 responses"
+      ],
+      "files_to_modify": [
+        "src/server/functions/search.ts",
+        "src/lib/schemas/search.ts"
+      ],
+      "completion_promise": "CROSS_SEARCH_003_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending"
+    },
+    {
+      "id": "CROSS-SEARCH-004",
+      "name": "Command Palette UI",
+      "description": "Global Cmd+K command palette with keyboard navigation and search",
+      "type": "ui-component",
+      "layers": ["ui"],
+      "dependencies": ["CROSS-SEARCH-003"],
+      "acceptance_criteria": [
+        "Global keyboard shortcut Cmd+K (Mac) / Ctrl+K (Windows/Linux)",
+        "Modal dialog centered on screen with focus trap",
+        "Search input with auto-focus and debounced search (300ms)",
+        "Results grouped by entity type with icons",
+        "Keyboard navigation: up/down arrows to navigate, Enter to select",
+        "Escape key closes palette; click outside closes palette",
+        "Loading state with spinner during search",
+        "Empty state when no results found"
+      ],
+      "ui_spec": {
+        "accessibility": {
+          "role": "dialog",
+          "aria-label": "Search command palette",
+          "focus_trap": true,
+          "keyboard_nav": "Full arrow key + Enter + Escape support"
+        },
+        "layout": {
+          "width": "640px max on desktop, full-width on mobile",
+          "maxHeight": "400px with scrollable results",
+          "position": "Centered vertically in top third of screen"
+        },
+        "interaction": {
+          "open": "Cmd+K / Ctrl+K from anywhere in app",
+          "close": "Escape or click outside",
+          "navigate": "Up/Down arrows",
+          "select": "Enter or click"
+        }
+      },
+      "files_to_modify": [
+        "src/components/shared/command-palette.tsx",
+        "src/components/shared/search-result-item.tsx",
+        "src/hooks/use-global-search.ts",
+        "src/hooks/use-command-palette.ts"
+      ],
+      "completion_promise": "CROSS_SEARCH_004_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending"
+    },
+    {
+      "id": "CROSS-SEARCH-005",
+      "name": "Recent Items Service",
+      "description": "Track and display recently viewed entities per user",
+      "type": "server-function",
+      "layers": ["server", "ui"],
+      "dependencies": ["CROSS-SEARCH-001", "CROSS-SEARCH-004"],
+      "acceptance_criteria": [
+        "trackRecentItem() server function to record entity access",
+        "getRecentItems() server function to fetch user's recent items",
+        "Automatic tracking when user visits entity detail pages",
+        "Recent items shown in command palette when query is empty",
+        "Maximum 50 recent items per user with automatic cleanup",
+        "Deduplication: accessing same entity updates timestamp only",
+        "Recent items grouped by entity type in palette",
+        "Clear recent items action available"
+      ],
+      "ui_spec": {
+        "accessibility": {
+          "list_role": "listbox",
+          "item_role": "option",
+          "aria_label": "Recently viewed items"
+        },
+        "layout": {
+          "section_header": "Recent heading when showing recent items",
+          "max_items": "5 items shown, rest accessible via 'See all'"
+        },
+        "interaction": {
+          "navigate": "Same keyboard navigation as search results",
+          "select": "Navigate to entity detail page"
+        }
+      },
+      "files_to_modify": [
+        "src/server/functions/recent-items.ts",
+        "src/hooks/use-recent-items.ts",
+        "src/components/shared/recent-items-section.tsx"
+      ],
+      "completion_promise": "CROSS_SEARCH_005_COMPLETE",
+      "estimated_iterations": 2,
+      "status": "pending"
+    }
+  ],
+  "success_criteria": [
+    "Global search returns relevant results across all entity types in < 500ms",
+    "Command palette accessible via Cmd+K / Ctrl+K from any page",
+    "Full keyboard navigation support for power users",
+    "Recent items provide instant access to frequently used entities",
+    "Search index stays synchronized with entity changes automatically",
+    "Graceful degradation if search index becomes stale",
+    "Mobile-responsive command palette experience",
+    "Full accessibility compliance (WCAG 2.1 AA)",
+    "Search scales to 1M+ indexed entities without performance degradation"
+  ],
+  "out_of_scope": [
+    "AI-powered semantic search",
+    "Search analytics and query logging",
+    "Saved searches / search history",
+    "Advanced search syntax (AND/OR/NOT operators)",
+    "Search result highlighting in entity pages",
+    "Voice search",
+    "External search engine integration (Elasticsearch, Algolia)"
+  ],
+  "migration_notes": {
+    "initial_indexing": "Run full reindex after deploying schema to populate search_index",
+    "existing_data": "Batch index existing entities in chunks of 1000 to avoid timeout",
+    "monitoring": "Monitor index health for first 48 hours after deployment"
+  },
+  "pattern_references": [
+    {
+      "file": "_Initiation/_meta/patterns/testing-standards.md",
+      "applies_to": "all stories",
+      "reason": "All stories must follow testing standards including TDD flow, coverage expectations (80% server functions, 90% utilities), and story-level testing requirements"
+    },
+    {
+      "file": "_Initiation/_meta/patterns/performance-benchmarks.md",
+      "applies_to": "CROSS-SEARCH-002 (API), CROSS-SEARCH-003 (Command Palette), all stories",
+      "reason": "Search must return <500ms (specified in success_criteria). Must scale to 1M+ entities. Use PostgreSQL FTS with proper indexing"
+    },
+    {
+      "file": "_Initiation/_meta/patterns/ux-3-click-rule.md",
+      "applies_to": "CROSS-SEARCH-003 (Command Palette), CROSS-SEARCH-004 (Recent Items)",
+      "reason": "Cmd+K accessible from any page (1 action to search). Recent items when empty. Full keyboard navigation for power users"
+    }
+  ]
+}

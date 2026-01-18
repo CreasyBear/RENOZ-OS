@@ -1,0 +1,341 @@
+{
+  "id": "CC-EMPTY",
+  "name": "Empty States",
+  "description": "Helpful empty state patterns across the Renoz application. Implements first-run experience guidance, empty states with clear calls-to-action, zero-data illustrations, and onboarding hints. Ensures users never feel lost when encountering empty views.",
+  "created": "2026-01-09",
+  "updated": "2026-01-17",
+  "priority": 2,
+  "phase": "cross-cutting",
+  "dependencies": {
+    "phase": "Cross-cutting",
+    "executionOrder": 3,
+    "schemaRequired": [
+      {
+        "table": "organizations",
+        "status": "EXISTS",
+        "reason": "WelcomeChecklist reads/writes organization onboarding settings"
+      },
+      {
+        "table": "user-preferences",
+        "status": "EXISTS",
+        "reason": "FeatureHint dismissed state persisted to user preferences"
+      },
+      {
+        "table": "customers",
+        "status": "EXISTS",
+        "reason": "Checklist tracks first customer creation"
+      },
+      {
+        "table": "products",
+        "status": "EXISTS",
+        "reason": "Checklist tracks first product creation"
+      },
+      {
+        "table": "opportunities",
+        "status": "EXISTS",
+        "reason": "Checklist tracks first quote/opportunity creation"
+      }
+    ],
+    "schemaCreates": [],
+    "serverFunctionsRequired": [
+      {
+        "function": "getOrganizationSettings",
+        "reason": "Read onboarding completion status"
+      },
+      {
+        "function": "updateOrganizationSettings",
+        "reason": "Persist checklist dismissal"
+      }
+    ],
+    "serverFunctionsCreates": [
+      { "function": "EmptyStateContainer", "story": "CC-EMPTY-001" },
+      { "function": "EmptyState", "story": "CC-EMPTY-001" },
+      { "function": "EmptyStateWithCTA", "story": "CC-EMPTY-002" },
+      { "function": "EmptyStateIllustration", "story": "CC-EMPTY-003" },
+      { "function": "WelcomeChecklist", "story": "CC-EMPTY-004" },
+      { "function": "FeatureHint", "story": "CC-EMPTY-005" },
+      { "function": "useDismissedHints", "story": "CC-EMPTY-005" },
+      { "function": "SearchEmptyState", "story": "CC-EMPTY-007" },
+      { "function": "FilterEmptyState", "story": "CC-EMPTY-008" },
+      { "function": "AccessDeniedState", "story": "CC-EMPTY-009" }
+    ],
+    "prdDependencies": [
+      {
+        "prdId": "CC-A11Y",
+        "status": "RECOMMENDED",
+        "reason": "Empty states need accessible role='status' and aria-live announcements"
+      },
+      {
+        "prdId": "CC-LOADING",
+        "status": "RECOMMENDED",
+        "reason": "Empty states shown after loading completes, skeleton transitions to empty"
+      }
+    ],
+    "enables": [
+      {
+        "prdId": "all",
+        "reason": "All domain PRDs use empty states for zero-data scenarios, filtered results, and first-run experiences"
+      }
+    ]
+  },
+  "references": {
+    "internal": [
+      "memory-bank/VISION.md#the-gasp-test",
+      "memory-bank/_meta/conventions.md#component-states"
+    ],
+    "external": [
+      "https://emptystat.es/",
+      "https://www.smashingmagazine.com/2017/02/designing-empty-states-mobile/"
+    ]
+  },
+  "current_state": {
+    "implemented": [
+      "EmptyState component at src/components/shared/empty-state.tsx",
+      "EmptyStateContainer with variants (page/inline/card)",
+      "DataTable integrates emptyState and filteredEmptyState props",
+      "WelcomeChecklist at src/components/domain/dashboard/welcome-checklist.tsx",
+      "FeatureHint with tooltip/popover/spotlight variants",
+      "EmptyStateIllustration with 12 variants"
+    ],
+    "gaps": [
+      "SearchEmptyState with suggestions",
+      "FilterEmptyState with broaden options",
+      "AccessDeniedState with permission request",
+      "Analytics tracking for empty state occurrences"
+    ]
+  },
+  "stories": [
+    {
+      "id": "CC-EMPTY-001",
+      "name": "Empty State Component Patterns",
+      "description": "Create base empty state components that all other empty states build upon. Includes EmptyStateContainer with variants and accessibility.",
+      "priority": 1,
+      "status": "complete",
+      "passes": true,
+      "acceptance_criteria": [
+        "EmptyState component exists at src/components/shared/empty-state.tsx",
+        "EmptyStateContainer component with page/inline/card variants",
+        "Container has role='status' and aria-live='polite'",
+        "Icon has aria-hidden='true' (decorative)",
+        "Icon size is 48x48 (h-12 w-12)",
+        "Spacing follows spec: icon-title 16px, title-message 4px, message-action 16px",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 1,
+      "completion_promise": "CC_EMPTY_001_COMPLETE",
+      "layer": "ui",
+      "wireframe": "./wireframes/CC-EMPTY-001a.wireframe.md"
+    },
+    {
+      "id": "CC-EMPTY-002",
+      "name": "Empty States with Call-to-Action",
+      "description": "Extend empty states with clear, actionable CTAs including primary, secondary, and link variants.",
+      "priority": 1,
+      "status": "complete",
+      "passes": true,
+      "acceptance_criteria": [
+        "EmptyState supports primaryAction prop with icon",
+        "EmptyState supports secondaryAction prop (outline variant)",
+        "EmptyState supports learnMoreLink prop (text link with arrow)",
+        "CTAs are accessible with clear action-oriented labels",
+        "Focus order: Primary → Secondary → Link",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["CC-EMPTY-001"],
+      "estimated_iterations": 1,
+      "completion_promise": "CC_EMPTY_002_COMPLETE",
+      "layer": "ui",
+      "wireframe": "./wireframes/CC-EMPTY-002a.wireframe.md"
+    },
+    {
+      "id": "CC-EMPTY-003",
+      "name": "Empty State Illustrations",
+      "description": "Create SVG illustration components for empty states with consistent style and theme support.",
+      "priority": 1,
+      "status": "complete",
+      "passes": true,
+      "acceptance_criteria": [
+        "EmptyStateIllustration component at src/components/ui/illustrations/",
+        "6 generic variants: no-data, no-results, error, success, offline, empty-inbox",
+        "6 domain variants: no-customers, no-orders, no-products, no-inventory, no-quotes, no-opportunities",
+        "Uses currentColor for automatic theme adaptation",
+        "3 sizes: sm (80px), md (120px), lg (200px)",
+        "Optional float animation that respects prefers-reduced-motion",
+        "aria-hidden='true' on all illustrations",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["CC-EMPTY-001"],
+      "estimated_iterations": 2,
+      "completion_promise": "CC_EMPTY_003_COMPLETE",
+      "layer": "ui",
+      "wireframe": "./wireframes/CC-EMPTY-003a.wireframe.md"
+    },
+    {
+      "id": "CC-EMPTY-004",
+      "name": "Dashboard Welcome Checklist",
+      "description": "Create a checklist widget for the dashboard that tracks new user progress: add first customer, add first product, create first quote.",
+      "priority": 2,
+      "status": "complete",
+      "passes": true,
+      "acceptance_criteria": [
+        "WelcomeChecklist component exists at src/components/domain/dashboard/welcome-checklist.tsx",
+        "Checklist shows on dashboard for users who haven't completed onboarding tasks",
+        "Items include: Add first customer, Add first product, Create first quote",
+        "Completed items show checkmark and are linked for review",
+        "Progress indicator shows completion percentage",
+        "Checklist can be dismissed permanently",
+        "Dismissed state persisted to organization settings",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["CC-EMPTY-002"],
+      "estimated_iterations": 3,
+      "completion_promise": "CC_EMPTY_004_COMPLETE",
+      "layer": "ui",
+      "wireframe": "./wireframes/CC-EMPTY-004a.wireframe.md"
+    },
+    {
+      "id": "CC-EMPTY-005",
+      "name": "Contextual Help Tooltips",
+      "description": "Create tooltip components that appear near empty or new features to guide users.",
+      "priority": 2,
+      "status": "complete",
+      "passes": true,
+      "acceptance_criteria": [
+        "FeatureHint component shows contextual help near new features",
+        "Hints can be dismissed and don't reappear for that user",
+        "Hints use info color token and subtle animation to draw attention",
+        "Hints include 'Got it' button and optional 'Learn more' link",
+        "Hint state persisted in user preferences",
+        "Hints are accessible and announced to screen readers",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["CC-EMPTY-001"],
+      "estimated_iterations": 3,
+      "completion_promise": "CC_EMPTY_005_COMPLETE",
+      "layer": "ui",
+      "wireframe": "./wireframes/CC-EMPTY-005a.wireframe.md"
+    },
+    {
+      "id": "CC-EMPTY-006",
+      "name": "Zero Data State Messaging",
+      "description": "Create domain-specific empty state messages with helpful context and clear next actions.",
+      "priority": 2,
+      "status": "complete",
+      "passes": true,
+      "acceptance_criteria": [
+        "Empty state messages defined for each domain (customers, orders, products, etc.)",
+        "Messages explain why the state is empty",
+        "Messages provide clear next action",
+        "Messages are friendly, not blaming",
+        "Constants file at src/lib/empty-states/constants/empty-messages.ts",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["CC-EMPTY-002", "CC-EMPTY-003"],
+      "estimated_iterations": 2,
+      "completion_promise": "CC_EMPTY_006_COMPLETE",
+      "layer": "ui",
+      "wireframe": "./wireframes/CC-EMPTY-006a.wireframe.md"
+    },
+    {
+      "id": "CC-EMPTY-007",
+      "name": "Search Results Empty State",
+      "description": "Create empty state for search queries that return no results, with suggestions and refinement options.",
+      "priority": 2,
+      "status": "complete",
+      "passes": true,
+      "acceptance_criteria": [
+        "SearchEmptyState component shows when search returns no results",
+        "Displays the search query in the message",
+        "Clear Search button resets the search",
+        "Optional suggestions list with fuzzy matches",
+        "If filters are active, shows Clear Filters button",
+        "Accessible with role='status' and aria-live",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["CC-EMPTY-002"],
+      "estimated_iterations": 2,
+      "completion_promise": "CC_EMPTY_007_COMPLETE",
+      "layer": "ui",
+      "wireframe": "./wireframes/CC-EMPTY-007a.wireframe.md"
+    },
+    {
+      "id": "CC-EMPTY-008",
+      "name": "Filter Results Empty State",
+      "description": "Create empty state for filtered results that return nothing, with options to broaden the search.",
+      "priority": 2,
+      "status": "complete",
+      "passes": true,
+      "acceptance_criteria": [
+        "FilterEmptyState component shows when filters return no results",
+        "Shows active filter chips with remove buttons",
+        "Clear All Filters button resets all filters",
+        "Broaden suggestions show impact of removing each filter",
+        "Handles positive empty states (e.g., 'No issues - that's good!')",
+        "Accessible with role='status' and aria-live",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["CC-EMPTY-002"],
+      "estimated_iterations": 2,
+      "completion_promise": "CC_EMPTY_008_COMPLETE",
+      "layer": "ui",
+      "wireframe": "./wireframes/CC-EMPTY-008a.wireframe.md"
+    },
+    {
+      "id": "CC-EMPTY-009",
+      "name": "Permission and Access Empty States",
+      "description": "Create empty states for access denied, insufficient permissions, and upgrade prompts.",
+      "priority": 2,
+      "status": "complete",
+      "passes": true,
+      "acceptance_criteria": [
+        "AccessDeniedState component with 4 variants: no-permission, role-required, plan-limit, suspended",
+        "Shows current role vs required role for role-required variant",
+        "Shows benefits list for plan-limit/upgrade variant",
+        "Request Access button with optional message form",
+        "Contact Admin or Update Billing buttons as appropriate",
+        "Accessible with role='alert' and aria-live='assertive'",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["CC-EMPTY-001"],
+      "estimated_iterations": 3,
+      "completion_promise": "CC_EMPTY_009_COMPLETE",
+      "layer": "ui",
+      "wireframe": "./wireframes/CC-EMPTY-009a.wireframe.md"
+    },
+    {
+      "id": "CC-EMPTY-010",
+      "name": "Empty State Analytics and Monitoring",
+      "description": "Track empty state occurrences to understand user guidance effectiveness.",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "useEmptyStateAnalytics hook tracks when empty states are shown",
+        "Tracks: empty state type, domain, user action taken",
+        "Analytics events sent to tracking service",
+        "Dashboard can show empty state occurrence frequency",
+        "Privacy-respecting: no PII in events",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["CC-EMPTY-001", "CC-EMPTY-007", "CC-EMPTY-008", "CC-EMPTY-009"],
+      "estimated_iterations": 2,
+      "completion_promise": "CC_EMPTY_010_COMPLETE",
+      "layer": "infrastructure"
+    }
+  ],
+  "success_criteria": [
+    "New users complete The Gasp Test - immediately understand navigation",
+    "Empty views always provide clear next action",
+    "Users never feel 'stuck' when data is empty",
+    "Filtered empty states clearly differentiate from zero-data states",
+    "First-run experience guides users through initial setup"
+  ],
+  "out_of_scope": [
+    "Interactive product tours",
+    "Video tutorials embedded in empty states",
+    "Sample/demo data generation",
+    "Complex multi-step onboarding wizards"
+  ],
+  "domain_completion_promise": "CC_EMPTY_COMPLETE"
+}

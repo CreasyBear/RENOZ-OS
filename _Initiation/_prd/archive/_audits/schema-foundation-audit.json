@@ -1,0 +1,118 @@
+{
+  "prd_id": "FOUND-SCHEMA",
+  "audit_date": "2026-01-09",
+  "auditor": "Claude Opus 4.5",
+  "summary": {
+    "total_stories": 8,
+    "verified_gaps": 5,
+    "invalidated_gaps": 3,
+    "new_gaps_found": 0,
+    "implementation_status": "partially_complete"
+  },
+  "codebase_findings": {
+    "schema_location": "lib/schema/ (21 files)",
+    "zod_schemas_location": "lib/schemas/ (19 files)",
+    "tables_count": 21,
+    "zod_files_count": 19
+  },
+  "gap_verification": {
+    "categories_soft_delete": {
+      "claim": "categories: No soft delete support",
+      "verified": false,
+      "finding": "No categories.ts file found in lib/schema/. Categories table does not exist in schema directory. This may be defined elsewhere or not needed.",
+      "recommendation": "Remove this story - categories table not in scope"
+    },
+    "email_history_campaign": {
+      "claim": "email_history: Incomplete campaign tracking",
+      "verified": true,
+      "finding": "lib/schema/email-history.ts exists with status tracking (pending/sent/delivered/failed), sentAt, deliveredAt, failedAt. Missing campaignId, templateId, openedAt, clickedAt fields.",
+      "recommendation": "Keep story FOUND-SCHEMA-005 but adjust scope"
+    },
+    "notifications_delivery": {
+      "claim": "notifications: No delivery status tracking",
+      "verified": true,
+      "finding": "lib/schema/notifications.ts has minimal fields: type, title, message, link, isRead, createdAt. Missing deliveryStatus enum, sentAt, readAt, dismissedAt, failureReason.",
+      "recommendation": "Keep story FOUND-SCHEMA-004"
+    },
+    "user_preferences_limited": {
+      "claim": "user_preferences: Limited preference types",
+      "verified": false,
+      "finding": "lib/schema/user-preferences.ts is comprehensive with NotificationPreferences interface, digest frequency (daily/weekly/never), theme, dashboardLayout, recentlyViewed, favorites, tableViews.",
+      "recommendation": "Remove story FOUND-SCHEMA-006 - preferences are already robust"
+    },
+    "suppliers_minimal": {
+      "claim": "suppliers: Minimal fields, needs contact consolidation",
+      "verified": false,
+      "finding": "lib/schema/suppliers.ts has: companyName, contactName, email, phone, address fields (street/city/state/postalCode/country), paymentTerms, xeroContactId, isActive, category, notes, audit fields, deletedAt. Very comprehensive.",
+      "recommendation": "Remove story FOUND-SCHEMA-007 - suppliers schema is complete"
+    },
+    "schema_readme_missing": {
+      "claim": "No schema README documenting patterns",
+      "verified": true,
+      "finding": "No README.md in lib/schema/ or lib/schemas/ directories",
+      "recommendation": "Keep stories FOUND-SCHEMA-001 and FOUND-SCHEMA-002"
+    },
+    "patterns_module_missing": {
+      "claim": "No reusable schema patterns module",
+      "verified": true,
+      "finding": "No patterns.ts file in either schema directory. Common patterns (timestamps, audit, softDelete) are repeated across files.",
+      "recommendation": "Keep story FOUND-SCHEMA-008"
+    }
+  },
+  "stories_status": {
+    "FOUND-SCHEMA-001": {
+      "name": "Create Schema Documentation README",
+      "status": "valid",
+      "change": "none"
+    },
+    "FOUND-SCHEMA-002": {
+      "name": "Create Zod Schemas Documentation README",
+      "status": "valid",
+      "change": "none"
+    },
+    "FOUND-SCHEMA-003": {
+      "name": "Enhance Categories Table with Soft Delete",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "Categories table does not exist in lib/schema/"
+    },
+    "FOUND-SCHEMA-004": {
+      "name": "Enhance Notifications with Delivery Tracking",
+      "status": "valid",
+      "change": "none"
+    },
+    "FOUND-SCHEMA-005": {
+      "name": "Enhance Email History with Campaign Tracking",
+      "status": "valid",
+      "change": "adjust_scope",
+      "reason": "Email history already has status tracking, focus on campaign/template/open/click fields"
+    },
+    "FOUND-SCHEMA-006": {
+      "name": "Expand User Preferences Schema",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "User preferences schema already has digest frequency, theme, dashboard layout, and rich JSONB fields"
+    },
+    "FOUND-SCHEMA-007": {
+      "name": "Enhance Suppliers with Contact Consolidation",
+      "status": "invalid",
+      "change": "remove",
+      "reason": "Suppliers schema already has contactName, email, phone, paymentTerms, notes, and full address"
+    },
+    "FOUND-SCHEMA-008": {
+      "name": "Create Common Schema Patterns Module",
+      "status": "valid",
+      "change": "none"
+    }
+  },
+  "recommended_stories": [
+    "FOUND-SCHEMA-001: Create Schema Documentation README",
+    "FOUND-SCHEMA-002: Create Zod Schemas Documentation README",
+    "FOUND-SCHEMA-004: Enhance Notifications with Delivery Tracking",
+    "FOUND-SCHEMA-005a: Add Campaign Tracking to Email History (schema only)",
+    "FOUND-SCHEMA-008: Create Common Schema Patterns Module"
+  ],
+  "atomization_notes": {
+    "FOUND-SCHEMA-005": "Should be split into schema-only story since email tracking exists. Focus on adding campaignId, templateId, openedAt, clickedAt columns."
+  }
+}

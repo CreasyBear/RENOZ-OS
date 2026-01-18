@@ -1,0 +1,35 @@
+# Data Migration & Import Progress
+# PRD: data-migration.prd.json
+# Started: 2026-01-17
+# Updated: 2026-01-17
+
+## Stories (8 total)
+
+- [ ] FOUND-MIGRATE-001: CSV Import Framework
+- [ ] FOUND-MIGRATE-002: Customer Import
+- [ ] FOUND-MIGRATE-003: Product Import
+- [ ] FOUND-MIGRATE-004: Historical Orders Import
+- [ ] FOUND-MIGRATE-005: Import Templates
+- [ ] FOUND-MIGRATE-006: Import History & Rollback
+- [ ] FOUND-MIGRATE-007: Import Settings Hub
+- [ ] FOUND-MIGRATE-008: Import Documentation
+
+## Current Story
+Not started
+
+## Iteration Count
+Total: 0
+Current Story: 0
+
+## Dependencies
+- Requires FOUND-SCHEMA-006 (Core Entity Schemas) for customer/product/order tables
+
+## Blockers
+None
+
+## Notes
+- Progress tracking initialized
+- Critical for customer onboarding - every customer will ask about importing data
+- Uses papaparse for CSV parsing
+- Batch processing (100 records) with transaction per batch
+- 24-hour rollback window for safety net

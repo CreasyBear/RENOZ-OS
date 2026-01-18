@@ -1,0 +1,37 @@
+# Xero Accounting Integration Progress
+# PRD: xero.prd.json
+# Started: 2026-01-17
+# Updated: 2026-01-17
+
+## Stories (17 total)
+
+- [ ] INT-XERO-001-A: Pull Contacts from Xero
+- [ ] INT-XERO-001-B: Contact Matching and Import UI
+- [ ] INT-XERO-002-A: Automatic Invoice Push on Ship
+- [ ] INT-XERO-002-B: Partial Payment and Invoice UI Polish
+- [ ] INT-XERO-003-A: Credit Notes Schema
+- [ ] INT-XERO-003-B: Credit Note Xero Sync
+- [ ] INT-XERO-003-C: Credit Note Sync UI
+- [ ] INT-XERO-004-A: Webhook Logs Schema and Capture
+- [ ] INT-XERO-004-B: Webhook Logs UI and Retry
+- [ ] INT-XERO-005-A: Sync Errors Schema and Capture
+- [ ] INT-XERO-005-B: Sync Errors UI
+- [ ] INT-XERO-006-A: Sync Logs Schema and Capture
+- [ ] INT-XERO-006-B: Sync History UI
+- [ ] INT-XERO-007-A: Bulk Sync Progress Tracking Server
+- [ ] INT-XERO-007-B: Bulk Sync Progress UI
+- [ ] INT-XERO-008: Xero Dashboard Widget
+- [ ] INT-XERO-009: Xero Rate Limit Management
+
+## Current Story
+Not started
+
+## Iteration Count
+Total: 0
+Current Story: 0
+
+## Blockers
+None
+
+## Notes
+- Progress tracking initialized
