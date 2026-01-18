@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Database Client Configuration
  *
