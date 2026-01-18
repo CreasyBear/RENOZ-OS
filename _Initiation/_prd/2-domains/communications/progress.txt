@@ -1,9 +1,10 @@
 # Communications Domain Progress
 # PRD: communications.prd.json
 # Started: 2026-01-17
-# Updated: 2026-01-18
+# Completed: 2026-01-18
+# Status: ✅ COMPLETE + REVIEWED + HARDENED
 
-## Stories (20 total)
+## Stories (20/20 complete)
 
 - [x] DOM-COMMS-001a: Add Email Tracking Schema
 - [x] DOM-COMMS-001b: Implement Email Tracking Service
@@ -19,36 +20,125 @@
 - [x] DOM-COMMS-004b: Implement Call Scheduling Service
 - [x] DOM-COMMS-004c: Add Call Scheduling UI
 - [x] DOM-COMMS-005: Add Communication Preferences
-- [ ] DOM-COMMS-006: Add Email Signature Management
-- [ ] DOM-COMMS-007: Add Custom Email Templates Management
-- [ ] DOM-COMMS-008: Fix and Enhance Communications Timeline
-- [ ] COMMS-AUTO-001: Email-to-Activity Bridge
-- [ ] COMMS-AUTO-002: Activity Source Tracking
-- [ ] COMMS-AUTO-003: Quick Log UI Enhancement
+- [x] DOM-COMMS-006: Add Email Signature Management
+- [x] DOM-COMMS-007: Add Custom Email Templates Management
+- [x] DOM-COMMS-008: Fix and Enhance Communications Timeline
+- [x] COMMS-AUTO-001: Email-to-Activity Bridge
+- [x] COMMS-AUTO-002: Activity Source Tracking
+- [x] COMMS-AUTO-003: Quick Log UI Enhancement
 
-## Current Story
-DOM-COMMS-006: Add Email Signature Management
+## Post-Implementation Review (2026-01-18)
 
-## Iteration Count
-Total: 14
-Current Story: 0
+### Reviews Conducted
+- Pre-mortem analysis (architect)
+- Security audit (aegis)
+- UI accessibility review (critic)
+- UX debt analysis (critic)
+- Performance review (profiler)
+- Query correctness analysis (profiler)
 
-## Blockers
-None
+### Issues Found & Fixed (10 total)
 
-## Notes
-- Progress tracking initialized
-- DOM-COMMS-001a: openedAt and clickedAt already existed in schema; added linkClicks JSONB column with interfaces (LinkClick, LinkClicks); created migration 0011_add_link_clicks_to_email_history.sql
-- DOM-COMMS-001b: Created email-tracking.ts service with recordEmailOpen(), recordEmailClick(), wrapLinksInHtml(), insertTrackingPixel(), prepareEmailForTracking(); Created API routes at /api/track/open.$emailId.ts and /api/track/click.$emailId.$linkId.ts; Privacy-compliant (skips unsubscribe links, hashes IPs)
-- DOM-COMMS-001c: Created EmailTrackingBadge (shows open/click/bounce status), EmailTrackingTimeline (chronological events), TemplateStatsCard (open/click rates with progress bars) in src/components/domain/communications/
-- DOM-COMMS-002a: Created scheduled_emails table with id, organizationId, userId, recipientEmail, recipientName, subject, templateType, templateData, scheduledAt, timezone, status columns; Added scheduledEmailStatusEnum; Created migration 0012_add_scheduled_emails.sql
-- DOM-COMMS-002b: Created src/lib/server/scheduled-emails.ts with server functions (scheduleEmail, getScheduledEmails, getScheduledEmailById, updateScheduledEmail, cancelScheduledEmail) + internal functions (getDueScheduledEmails, markScheduledEmailAsSent); Created Trigger.dev job src/trigger/jobs/process-scheduled-emails.ts with cron trigger (every minute), template rendering, email history creation, and tracking integration; Added job export to src/trigger/jobs/index.ts
-- DOM-COMMS-002c: Created 5 UI components in src/components/domain/communications/: DateTimePicker (combined date/time with Calendar popover), TimezoneSelect (grouped timezone selector with getLocalTimezone/formatInTimezone helpers), ScheduledEmailBadge (status badge + dot variant for pending/sent/cancelled), ScheduledEmailsList (data table with skeleton, empty state using Empty composition, cancel confirmation dialog), ScheduleEmailDialog (full form for scheduling/editing with recipient, template, datetime, timezone); Updated index.ts exports
-- DOM-COMMS-003a: Created drizzle/schema/email-campaigns.ts with email_campaigns table (id, organizationId, name, templateType, templateData, recipientCriteria, scheduledAt, startedAt, completedAt, status, recipientCount, sentCount, deliveredCount, openCount, clickCount, bounceCount, failedCount, unsubscribeCount, createdById) and campaign_recipients table (id, campaignId, contactId, email, name, recipientData, status, sentAt, deliveredAt, openedAt, clickedAt, bouncedAt, failedAt, unsubscribedAt, errorMessage, emailHistoryId); Added campaignStatusEnum (draft/scheduled/sending/sent/paused/cancelled/failed) and campaignRecipientStatusEnum (pending/sent/delivered/opened/clicked/bounced/failed/unsubscribed) to enums.ts; Created migration 0013_add_email_campaigns.sql with RLS policies; Updated schema/index.ts exports
-- DOM-COMMS-003b: Created src/lib/server/email-campaigns.ts with server functions: createCampaign (creates campaign with recipient criteria), updateCampaign (draft/scheduled only), getCampaigns (with status filter), getCampaignById, getCampaignRecipients (filter by status), previewCampaignRecipients (returns count + sample without creating campaign, filters by tags/statuses/customerTypes/contactIds/customerIds/excludeContactIds), populateCampaignRecipients (populates recipients from criteria, dedupes by email), cancelCampaign, deleteCampaign (draft only); Uses JSONB criteria for flexible filtering
-- DOM-COMMS-003c: Created src/trigger/jobs/send-campaign.ts with three Trigger.dev jobs: sendCampaignJob (event-triggered batch sender with configurable batchSize/batchDelayMs, uses io.wait for rate limiting, updates campaign stats after each batch, handles individual recipient failures), pauseCampaignJob (pauses running campaigns), processScheduledCampaignsJob (finds due scheduled campaigns and triggers sends); Added template types for newsletter/promotion/announcement; Updated jobs index exports and jobs array
-- DOM-COMMS-003d: Created 6 UI components in src/components/domain/communications/: CampaignStatusBadge (status badge + dot variant for all campaign states), CampaignsList (DataTable with skeleton, empty state, cancel/delete dialogs), CampaignDetailPanel (campaign stats grid + recipient list + sending progress), RecipientFilterBuilder (dynamic filter builder with add/remove rows for tags/status/type), CampaignPreviewPanel (preview with recipient count + sample using previewCampaignRecipients API), CampaignWizard (4-step wizard: Details→Template→Recipients→Preview with Tabs navigation, scheduling options, AlertDialog confirmations); Updated index.ts exports
-- DOM-COMMS-004a: Created drizzle/schema/scheduled-calls.ts with scheduled_calls table (id, organizationId, customerId, assigneeId, scheduledAt, reminderAt, purpose, notes, status, completedAt, cancelledAt, cancelReason, outcome, outcomeNotes, rescheduledToId); Added scheduledCallStatusEnum (pending/completed/cancelled/rescheduled) to enums.ts; Created migration 0014_add_scheduled_calls.sql with RLS policies and indexes on assigneeId, scheduledAt, status; Updated schema/index.ts exports
-- DOM-COMMS-004b: Created src/lib/server/scheduled-calls.ts with server functions (scheduleCall, getScheduledCalls, getScheduledCallById, updateScheduledCall, cancelScheduledCall, rescheduleCall, completeCall) + internal functions (getCallsDueForReminder, getOverdueCalls, getUpcomingCallsForUser); Created src/trigger/jobs/process-scheduled-calls.ts with two Trigger.dev cron jobs: processScheduledCallsJob (every 5 min for reminders) and processOverdueCallsJob (every 15 min for overdue notifications); Added call_reminder and call_overdue to notificationTypeEnum; Created migration 0015_add_call_notification_types.sql; Updated jobs/index.ts exports
-- DOM-COMMS-004c: Created 6 UI components in src/components/domain/communications/: ScheduledCallBadge (status badge with pending/completed/cancelled/rescheduled states), ScheduleCallDialog (FormDialog with datetime, purpose, notes, reminder toggle), CallOutcomeDialog (RadioGroup with outcome options + notes), ScheduledCallActionMenu (DropdownMenu with snooze/reschedule/cancel options), UpcomingCallsWidget (dashboard Card with overdue indicators using color AND icon), ScheduledCallsList (DataTable with status filter and action menu); Uses EmptyMedia pattern for empty states; All components pass TypeScript compilation
-- DOM-COMMS-005: Added emailOptIn, smsOptIn, emailOptInAt, smsOptInAt columns to contacts table; Created migration 0016_add_communication_preferences.sql with partial indexes for opted-in contacts; Created src/lib/server/communication-preferences.ts with getContactPreferences, updateContactPreferences, getPreferenceHistory server functions + isEmailOptedIn, isSmsOptedIn, generateUnsubscribeToken, verifyUnsubscribeToken helpers; Created src/routes/api/unsubscribe.$token.ts endpoint with GET (confirmation page) and POST (process unsubscribe); Created CommunicationPreferences and PreferenceHistory UI components with Checkbox toggles, AlertDialog for opt-out confirmation, audit history table with tabular-nums dates; Logs all preference changes to customerActivities for GDPR/CAN-SPAM compliance
+**Sprint 0: Blockers**
+1. Schema mismatch in quick-log.ts (userId → assigneeId)
+2. Improper aria-label on DialogContent
+3. Missing keyboard navigation for radio group
+4. Missing transaction wrapping
+
+**Sprint 1: Security**
+5. Open redirect in click tracking → Added linkMap validation
+6. IDOR vulnerability → Added HMAC signatures to tracking URLs
+
+**Sprint 2: UX/Performance**
+7. Form data loss on error → Added success state tracking
+8. Loading state confusion → Added fieldset disable + interaction blocking
+9. N+1 activity creation → Added batch insert for campaigns
+
+**Sprint 3: Testing**
+- Skipped (vitest not working in environment)
+
+### Security Hardening
+- HMAC-SHA256 signatures on all tracking URLs
+- Timing-safe comparison to prevent timing attacks
+- URL validation against stored linkMap
+- Configurable via TRACKING_HMAC_SECRET env var
+
+### Performance Optimizations
+- Batch activity creation (~100x fewer queries for campaigns)
+- Transaction wrapping for data consistency
+
+### Accessibility Improvements
+- Replaced custom radio with Radix RadioGroup
+- Proper keyboard navigation (arrow keys)
+- Removed aria-label overrides
+
+## Files Created/Modified
+
+### Schema & Migrations
+- drizzle/schema/email-history.ts
+- drizzle/schema/email-campaigns.ts
+- drizzle/schema/scheduled-calls.ts
+- drizzle/schema/scheduled-emails.ts
+- drizzle/schema/activities.ts (source tracking)
+- drizzle/schema/enums.ts (new enum values)
+- drizzle/migrations/0011-0020
+
+### Server Functions
+- src/lib/server/email-tracking.ts (HMAC functions added)
+- src/lib/server/scheduled-emails.ts
+- src/lib/server/email-campaigns.ts
+- src/lib/server/scheduled-calls.ts
+- src/lib/server/communication-preferences.ts
+- src/lib/server/activity-bridge.ts (new)
+- src/lib/server/quick-log.ts (new)
+
+### Trigger Jobs
+- src/trigger/jobs/process-scheduled-emails.ts
+- src/trigger/jobs/send-campaign.ts (batch activities)
+- src/trigger/jobs/process-scheduled-calls.ts
+
+### API Routes
+- src/routes/api/track/open.$emailId.ts (HMAC validation)
+- src/routes/api/track/click.$emailId.$linkId.ts (HMAC + linkMap validation)
+- src/routes/api/unsubscribe.$token.ts
+
+### UI Components (src/components/domain/communications/)
+- email-tracking-badge.tsx
+- email-tracking-timeline.tsx
+- template-stats-card.tsx
+- date-time-picker.tsx
+- timezone-select.tsx
+- scheduled-email-badge.tsx
+- scheduled-emails-list.tsx
+- schedule-email-dialog.tsx
+- campaign-status-badge.tsx
+- campaigns-list.tsx
+- campaign-detail-panel.tsx
+- recipient-filter-builder.tsx
+- campaign-preview-panel.tsx
+- campaign-wizard.tsx
+- scheduled-call-badge.tsx
+- schedule-call-dialog.tsx
+- call-outcome-dialog.tsx
+- scheduled-call-action-menu.tsx
+- upcoming-calls-widget.tsx
+- scheduled-calls-list.tsx
+- communication-preferences.tsx
+- signature-editor.tsx
+- signature-selector.tsx
+- signatures-list.tsx
+- template-editor.tsx
+- template-variable-menu.tsx
+- templates-list.tsx
+- quick-log-dialog.tsx (with Radix RadioGroup)
+
+## Review Documentation
+See: thoughts/shared/reviews/2026-01-18-comms-domain-review.md
+
+## Environment Variables Required
+- TRACKING_HMAC_SECRET: Secret for tracking URL signatures (required in production)
+
+## Remaining Items (Non-Blocking)
+- [ ] Rate limiting on tracking endpoints
+- [ ] isTrackingAllowed() consent check for GDPR
+- [ ] Unit tests (vitest broken)

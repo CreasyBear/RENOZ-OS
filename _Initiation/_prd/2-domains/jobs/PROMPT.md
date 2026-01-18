@@ -20,6 +20,7 @@ Build the Jobs/Projects domain for battery installation and field work managemen
 | Error Recovery | `_Initiation/_meta/patterns/error-recovery.md` | Server stories (DOM-JOBS-001b, time tracking, templates) | Offline conflict resolution for mobile, saga for templates |
 | Performance | `_Initiation/_meta/patterns/performance-benchmarks.md` | API & UI stories | Calendar <1s, costing reports <3s, time entries <500ms |
 | 3-Click Rule | `_Initiation/_meta/patterns/ux-3-click-rule.md` | UI stories | FAB timer (1 tap), swipe task complete (1 action), 48px targets |
+| Mobile UI Patterns | `_Initiation/_meta/patterns/mobile-ui-patterns.md` | All mobile UI stories | min-h-dvh, AlertDialog, useOfflineQueue, iOS safe areas, 44px targets |
 
 ## Premortem Remediation: Optional SLA Tracking for Job Completion
 
@@ -233,6 +234,75 @@ Jobs domain is primarily used by field technicians. All UI stories MUST follow:
 - **Outdoor visibility**: High contrast, no subtle grays, bold typography
 - **Glove-friendly**: Extra padding, forgiving hit areas
 - **Offline-capable**: Clear sync status indicators
+
+### Mobile UI Implementation Patterns (from Inventory Domain)
+
+These patterns are MANDATORY for all mobile UI stories. Violations cause real device bugs.
+
+#### Layout & Viewport
+| Pattern | Correct | Wrong | Why |
+|---------|---------|-------|-----|
+| Full-height containers | `min-h-dvh` | `min-h-screen` | `h-screen` ignores mobile browser chrome |
+| iOS safe areas | `pb-[env(safe-area-inset-bottom)]` | (none) | Fixed footers get hidden behind home indicator |
+| Page wrapper | `<div className="min-h-dvh bg-muted/30">` | (none) | Consistent mobile page structure |
+
+#### Confirmations & Dialogs
+| Pattern | Correct | Wrong | Why |
+|---------|---------|-------|-----|
+| Destructive actions | `<AlertDialog>` from shadcn/ui | `window.confirm()` | Native dialogs block JS, break SSR, inconsistent UX |
+| Confirmation flow | `handleXClick` → show dialog → `handleConfirmedX` | Direct action | Separates trigger from execution |
+
+#### Offline Sync
+```typescript
+// CORRECT: Use abstracted hook
+import { useOfflineQueue, useOnlineStatus } from "@/hooks";
+const { addToQueue, syncQueue, isSyncing, queueLength } = useOfflineQueue<T>("key");
+const isOnline = useOnlineStatus();
+
+// WRONG: Manual useState + localStorage + sync logic in each component
+```
+
+#### Forms & Accessibility
+| Pattern | Correct | Wrong | Why |
+|---------|---------|-------|-----|
+| Label association | `<Label htmlFor="qty">` + `<Input id="qty">` | Missing id/htmlFor | WCAG 1.3.1 violation |
+| Input font size | `text-base` (16px+) | `text-sm` | Prevents iOS auto-zoom on focus |
+| Touch target padding | `min-h-[44px] min-w-[44px]` | Smaller | 44px minimum for accessibility |
+
+#### Loading States
+| Pattern | Correct | Wrong | Why |
+|---------|---------|-------|-----|
+| Async data | `<Skeleton className="h-[44px] w-full" />` | Spinner or nothing | Prevents layout shift |
+| Submit buttons | `<Loader2 className="animate-spin" /> + original label` | Hide label | User knows action is processing |
+
+#### Performance
+| Pattern | Correct | Wrong | Why |
+|---------|---------|-------|-----|
+| List items | `const Item = memo(function Item() {...})` | Inline components | Prevents re-renders |
+| Mock data | `import { MOCK_X } from "./__fixtures__"` | Inline in component | Separation of concerns |
+
+#### Example: Complete Mobile Page Structure
+```tsx
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, ... } from "@/components/ui/alert-dialog";
+import { useOfflineQueue, useOnlineStatus } from "@/hooks";
+
+function MobilePage() {
+  const isOnline = useOnlineStatus();
+  const { addToQueue, syncQueue, queueLength, isSyncing } = useOfflineQueue<T>("key");
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
+  return (
+    <div className="min-h-dvh bg-muted/30 pb-[env(safe-area-inset-bottom)]">
+      <MobilePageHeader title="..." onBack={...} />
+      <OfflineIndicator isOnline={isOnline} pendingActions={queueLength} onSync={syncQueue} isSyncing={isSyncing} />
+      {/* Content */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>...</AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+```
 
 ### Existing Job Infrastructure
 The following already exists and should NOT be recreated:

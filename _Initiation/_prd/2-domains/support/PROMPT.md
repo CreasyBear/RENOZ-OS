@@ -7,6 +7,15 @@ Before implementing UI components, review:
 
 **IMPORTANT:** Use existing shared components. Do NOT create local formatCurrency functions or duplicate UI patterns.
 
+### Pattern Files
+
+| Pattern | Path | When to Apply |
+|---------|------|---------------|
+| Testing Standards | `_meta/patterns/testing-standards.md` | All stories |
+| Mobile UI Patterns | `_meta/patterns/mobile-ui-patterns.md` | All UI stories - AlertDialog for confirmations, loading skeletons, label associations |
+
+**IMPORTANT**: Pattern compliance is part of acceptance criteria.
+
 ## Objective
 
 Build the Support/Issues domain for Renoz CRM - a comprehensive battery system issue tracking and technical support module. This domain manages support workflow for battery performance, inverter errors, installation problems, and connectivity issues from creation through resolution.
@@ -265,6 +274,55 @@ Stories must be executed in dependency order. Each story creates schema/function
 - Implement public customer portal features
 - Add live chat integration
 - Build AI-powered issue routing
+- Use `window.confirm()` - always use `AlertDialog`
+
+### UI Implementation Patterns (from Inventory Domain)
+
+These patterns are MANDATORY for all UI stories. Apply to both desktop and mobile views.
+
+#### Confirmations & Dialogs
+| Pattern | Correct | Wrong | Why |
+|---------|---------|-------|-----|
+| Destructive actions | `<AlertDialog>` from shadcn/ui | `window.confirm()` | Native dialogs block JS, break SSR, inconsistent UX |
+| Confirmation flow | `handleXClick` → show dialog → `handleConfirmedX` | Direct action | Separates trigger from execution |
+
+```typescript
+// CORRECT: AlertDialog for RMA approval, ticket closure, etc.
+const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
+<Button onClick={() => setShowConfirmDialog(true)}>Close Ticket</Button>
+
+<AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+  <AlertDialogContent>
+    <AlertDialogHeader>
+      <AlertDialogTitle>Close Ticket?</AlertDialogTitle>
+      <AlertDialogDescription>This will mark the ticket as resolved.</AlertDialogDescription>
+    </AlertDialogHeader>
+    <AlertDialogFooter>
+      <AlertDialogCancel>Cancel</AlertDialogCancel>
+      <AlertDialogAction onClick={handleConfirmedClose}>Confirm</AlertDialogAction>
+    </AlertDialogFooter>
+  </AlertDialogContent>
+</AlertDialog>
+```
+
+#### Forms & Accessibility
+| Pattern | Correct | Wrong | Why |
+|---------|---------|-------|-----|
+| Label association | `<Label htmlFor="priority">` + `<Select id="priority">` | Missing id/htmlFor | WCAG 1.3.1 violation |
+| Loading buttons | `<Loader2 className="animate-spin" /> + original label` | Hide label | User knows action is processing |
+
+#### Loading States
+| Pattern | Correct | Wrong | Why |
+|---------|---------|-------|-----|
+| Async data | `<Skeleton className="h-10 w-full" />` | Spinner or nothing | Prevents layout shift |
+| Table rows | `<Skeleton className="h-8 w-full" />` repeated | Empty rows | Consistent loading UX |
+
+#### Performance
+| Pattern | Correct | Wrong | Why |
+|---------|---------|-------|-----|
+| List items | `const TicketRow = memo(function TicketRow() {...})` | Inline components | Prevents re-renders |
+| Mock data | `import { MOCK_TICKETS } from "./__fixtures__"` | Inline in component | Separation of concerns |
 
 ### Battery Business Context
 - Industry: Australian B2B battery manufacturer and installation services

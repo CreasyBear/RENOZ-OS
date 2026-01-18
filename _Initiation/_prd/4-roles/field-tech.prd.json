@@ -662,6 +662,11 @@
       "file": "_Initiation/_meta/patterns/error-recovery.md",
       "applies_to": "offline sync stories",
       "reason": "Offline conflicts must follow error recovery patterns"
+    },
+    {
+      "file": "_Initiation/_meta/patterns/mobile-ui-patterns.md",
+      "applies_to": "ROLE-FIELD-001, ROLE-FIELD-003b, ROLE-FIELD-004, ROLE-FIELD-005, ROLE-FIELD-006, ROLE-FIELD-008, all mobile UI stories",
+      "reason": "CRITICAL for this role: Use min-h-dvh (not h-screen), AlertDialog (not window.confirm), useOfflineQueue hook, iOS safe area insets, label associations, 44px touch targets, loading skeletons. All patterns prevent real device bugs."
     }
   ]
 }

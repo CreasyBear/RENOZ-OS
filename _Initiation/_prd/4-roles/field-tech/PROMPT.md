@@ -20,6 +20,7 @@ Before implementing any story, review these critical resources:
 | 3-Click Rule | `_meta/patterns/ux-3-click-rule.md` | UI stories - verify click counts |
 | Performance | `_meta/patterns/performance-benchmarks.md` | API endpoints - verify response times |
 | Error Recovery | `_meta/patterns/error-recovery.md` | Offline sync stories - conflict resolution |
+| Mobile UI Patterns | `_meta/patterns/mobile-ui-patterns.md` | ALL stories - min-h-dvh, AlertDialog, useOfflineQueue, iOS safe areas |
 
 **IMPORTANT**: Pattern compliance is part of acceptance criteria.
 
@@ -108,6 +109,67 @@ When ALL field technician stories pass:
 - Forget to handle offline scenarios
 - Implement features for other roles
 - Make touch targets smaller than 44x44px
+- Use `window.confirm()` - always use `AlertDialog`
+- Use `min-h-screen` - always use `min-h-dvh`
+- Forget iOS safe area insets on fixed elements
+
+### Mobile UI Implementation Patterns (from Inventory Domain)
+
+These patterns are MANDATORY. Violations cause real device bugs.
+
+#### Layout & Viewport
+| Pattern | Correct | Wrong | Why |
+|---------|---------|-------|-----|
+| Full-height containers | `min-h-dvh` | `min-h-screen` | `h-screen` ignores mobile browser chrome |
+| iOS safe areas | `pb-[env(safe-area-inset-bottom)]` | (none) | Fixed footers get hidden behind home indicator |
+| Page wrapper | `<div className="min-h-dvh bg-muted/30">` | (none) | Consistent mobile page structure |
+
+#### Confirmations & Dialogs
+| Pattern | Correct | Wrong | Why |
+|---------|---------|-------|-----|
+| Destructive actions | `<AlertDialog>` from shadcn/ui | `window.confirm()` | Native dialogs block JS, break SSR, inconsistent UX |
+| Confirmation flow | `handleXClick` → show dialog → `handleConfirmedX` | Direct action | Separates trigger from execution |
+
+#### Offline Sync (CRITICAL for this role)
+```typescript
+// CORRECT: Use abstracted hook for all offline operations
+import { useOfflineQueue, useOnlineStatus } from "@/hooks";
+const { queue, addToQueue, syncQueue, isSyncing, queueLength } = useOfflineQueue<T>("mobile-field-queue");
+const isOnline = useOnlineStatus();
+
+// Show sync status
+<OfflineIndicator isOnline={isOnline} pendingActions={queueLength} onSync={syncQueue} isSyncing={isSyncing} />
+
+// WRONG: Manual useState + localStorage + sync logic in each component
+```
+
+#### Forms & Accessibility
+| Pattern | Correct | Wrong | Why |
+|---------|---------|-------|-----|
+| Label association | `<Label htmlFor="qty">` + `<Input id="qty">` | Missing id/htmlFor | WCAG 1.3.1 violation |
+| Input font size | `text-base` (16px+) | `text-sm` | Prevents iOS auto-zoom on focus |
+| Touch target padding | `min-h-[44px] min-w-[44px]` | Smaller | 44px minimum for accessibility |
+
+#### Loading States
+| Pattern | Correct | Wrong | Why |
+|---------|---------|-------|-----|
+| Async data | `<Skeleton className="h-[44px] w-full" />` | Spinner or nothing | Prevents layout shift |
+| Submit buttons | `<Loader2 className="animate-spin" /> + original label` | Hide label | User knows action is processing |
+
+#### Performance
+| Pattern | Correct | Wrong | Why |
+|---------|---------|-------|-----|
+| List items | `const Item = memo(function Item() {...})` | Inline components | Prevents re-renders |
+| Mock data | `import { MOCK_X } from "./__fixtures__"` | Inline in component | Separation of concerns |
+
+#### Reusable Mobile Components (from inventory)
+Import these from `@/components/mobile/inventory-actions`:
+- `BarcodeScanner` - Touch-optimized barcode input with camera
+- `QuantityInput` - +/- buttons with 44px touch targets
+- `OfflineIndicator` - Sync status banner
+- `MobilePageHeader` - Sticky header with back button
+- `MobileActionButton` - Large action buttons with icons
+- `MobileInventoryCard` - Card with confirm/cancel actions
 
 ## File Structure
 

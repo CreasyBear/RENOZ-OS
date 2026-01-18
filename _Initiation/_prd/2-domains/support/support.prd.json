@@ -859,5 +859,17 @@
     "Live chat integration",
     "AI-powered issue routing",
     "Public knowledge base"
+  ],
+  "pattern_references": [
+    {
+      "file": "_Initiation/_meta/patterns/testing-standards.md",
+      "applies_to": "all stories",
+      "reason": "All stories must follow testing standards"
+    },
+    {
+      "file": "_Initiation/_meta/patterns/mobile-ui-patterns.md",
+      "applies_to": "DOM-SUP-001b, DOM-SUP-001c, DOM-SUP-003c, DOM-SUP-006, DOM-SUP-008, all UI stories",
+      "reason": "Use AlertDialog (not window.confirm) for all confirmations (RMA approval, ticket closure, escalation). Use loading skeletons, label associations, memoized list items. Applies to desktop UI as well."
+    }
   ]
 }

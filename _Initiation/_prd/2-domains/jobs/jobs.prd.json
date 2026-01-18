@@ -1544,6 +1544,11 @@
       "file": "_Initiation/_meta/patterns/ux-3-click-rule.md",
       "applies_to": "DOM-JOBS-001c (UI), DOM-JOBS-003a/b (Timer), DOM-JOBS-002a/b (Tasks/BOM), DOM-JOBS-004a/b (Checklists), all UI stories",
       "reason": "Field Tech role: FAB tap to start timer (1 action), swipe to complete task (1 action), 48px touch targets for checklists"
+    },
+    {
+      "file": "_Initiation/_meta/patterns/mobile-ui-patterns.md",
+      "applies_to": "DOM-JOBS-001c, DOM-JOBS-002c, DOM-JOBS-003c, DOM-JOBS-004c, all mobile UI stories",
+      "reason": "MANDATORY: Use min-h-dvh (not h-screen), AlertDialog (not window.confirm), useOfflineQueue hook, label associations, 44px touch targets, loading skeletons. Prevents real device bugs."
     }
   ]
 }
