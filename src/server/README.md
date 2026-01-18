@@ -5,6 +5,7 @@ This directory contains TanStack Start server functions for database operations.
 ## Table of Contents
 
 - [Overview](#overview)
+- [Directory Structure](#directory-structure)
 - [Function Patterns](#function-patterns)
 - [Usage Examples](#usage-examples)
 - [Adding New Functions](#adding-new-functions)
@@ -18,6 +19,33 @@ Server functions run on the server and are automatically exposed as RPC endpoint
 - Handle errors gracefully
 - Support pagination and filtering
 
+## Directory Structure
+
+Server functions live in TWO locations by domain:
+
+```
+src/
+├── server/
+│   ├── functions/         # Domain operations (pipeline, inventory, customers)
+│   │   ├── pipeline.ts    # Opportunities, quotes, win-loss
+│   │   ├── inventory.ts   # Stock levels, movements
+│   │   ├── forecasting.ts # Demand forecasting
+│   │   └── ...
+│   ├── customers.ts       # Top-level customer CRUD
+│   ├── auth.ts            # Authentication functions
+│   └── middleware/        # Request middleware
+│
+└── lib/server/
+    ├── functions/         # Product & order operations
+    │   ├── products.ts    # Product CRUD
+    │   ├── orders.ts      # Order CRUD
+    │   └── order-*.ts     # Order sub-operations
+    ├── protected.ts       # withAuth helper
+    └── errors.ts          # Error types
+```
+
+**Rule:** New domain functions go in `src/server/functions/`. Product/order extensions go in `src/lib/server/functions/`.
+
 ## Function Patterns
 
 ### Basic Structure
@@ -28,7 +56,7 @@ import { db } from "@/lib/db";
 import { mySchema } from "@/lib/schemas/myschema";
 
 export const myFunction = createServerFn({ method: "GET" })
-  .validator(mySchema)
+  .inputValidator(mySchema)
   .handler(async ({ data }) => {
     // data is typed and validated
     const result = await db.select().from(table);
