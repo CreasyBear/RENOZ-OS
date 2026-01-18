@@ -9,7 +9,6 @@
 
 import { memo, useMemo } from "react";
 import {
-  BarChart,
   Bar,
   XAxis,
   YAxis,
@@ -21,7 +20,6 @@ import {
   ComposedChart,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/formatters";
 import type { ForecastPeriod } from "@/lib/schemas/pipeline";
 

@@ -9,7 +9,7 @@
  * - Count sheet for execution
  * - Variance analysis and reconciliation
  */
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState, useCallback, useEffect } from "react";
 import { Plus, ClipboardList, Play, CheckCircle, ArrowLeft } from "lucide-react";
 import { PageLayout } from "@/components/layout";
@@ -39,7 +39,6 @@ import { VarianceReport } from "@/components/domain/inventory/variance-report";
 import {
   listStockCounts,
   getStockCount,
-  createStockCount,
   startStockCount,
   updateStockCountItem,
   updateStockCount,
@@ -58,7 +57,6 @@ export const Route = createFileRoute("/_authenticated/inventory/counts" as any)(
 // ============================================================================
 
 function StockCountsPage() {
-  const navigate = useNavigate();
 
   // View state
   const [view, setView] = useState<"list" | "detail" | "count">("list");
@@ -83,7 +81,12 @@ function StockCountsPage() {
   const fetchCounts = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await listStockCounts({ data: { page: 1, pageSize: 50 } });
+      const data = await listStockCounts({ data: { page: 1, pageSize: 50 } }) as {
+        counts: any[];
+        total: number;
+        page: number;
+        pageSize: number;
+      };
       if (data?.counts) {
         setCounts(
           data.counts.map((c: any) => ({
@@ -115,7 +118,10 @@ function StockCountsPage() {
   const fetchCountDetail = useCallback(async (countId: string) => {
     try {
       setIsLoadingDetail(true);
-      const data = await getStockCount({ data: { id: countId } });
+      const data = await getStockCount({ data: { id: countId } }) as {
+        count: any;
+        progress: CountProgress;
+      };
       if (data) {
         setSelectedCount({
           id: data.count.id,
@@ -179,7 +185,11 @@ function StockCountsPage() {
   const handleConfirmStart = useCallback(async () => {
     if (!countToStart) return;
     try {
-      const result = await startStockCount({ data: { id: countToStart.id } });
+      const result = await startStockCount({ data: { id: countToStart.id } }) as {
+        count: any;
+        items: any[];
+        progress: CountProgress;
+      };
       toast.success("Stock count started");
       setShowStartDialog(false);
       setCountToStart(null);
@@ -343,7 +353,7 @@ function StockCountsPage() {
 
   // Count/Detail View
   return (
-    <PageLayout variant="standard">
+    <PageLayout variant="container">
       <PageLayout.Header
         title={selectedCount?.countCode ?? "Stock Count"}
         description={

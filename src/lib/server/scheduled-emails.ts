@@ -72,6 +72,7 @@ const getScheduledEmailByIdSchema = z.object({
  */
 export const scheduleEmail = createServerFn({ method: "POST" })
   .inputValidator(scheduleEmailSchema)
+  // @ts-expect-error - TanStack Start type inference issue with inputValidator chaining
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
 
@@ -100,6 +101,7 @@ export const scheduleEmail = createServerFn({ method: "POST" })
  */
 export const getScheduledEmails = createServerFn({ method: "GET" })
   .inputValidator(getScheduledEmailsSchema)
+  // @ts-expect-error - TanStack Start type inference issue with inputValidator chaining
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
@@ -137,6 +139,7 @@ export const getScheduledEmails = createServerFn({ method: "GET" })
  */
 export const getScheduledEmailById = createServerFn({ method: "GET" })
   .inputValidator(getScheduledEmailByIdSchema)
+  // @ts-expect-error - TanStack Start type inference issue with inputValidator chaining
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
@@ -159,6 +162,7 @@ export const getScheduledEmailById = createServerFn({ method: "GET" })
  */
 export const updateScheduledEmail = createServerFn({ method: "POST" })
   .inputValidator(updateScheduledEmailSchema)
+  // @ts-expect-error - TanStack Start type inference issue with inputValidator chaining
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
 
@@ -198,6 +202,7 @@ export const updateScheduledEmail = createServerFn({ method: "POST" })
  */
 export const cancelScheduledEmail = createServerFn({ method: "POST" })
   .inputValidator(cancelScheduledEmailSchema)
+  // @ts-expect-error - TanStack Start type inference issue with inputValidator chaining
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
 

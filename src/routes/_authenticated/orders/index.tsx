@@ -128,7 +128,7 @@ function OrdersPage() {
       <PageLayout.Header
         title="Orders"
         description="Manage customer orders and fulfillment"
-      >
+        actions={
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4 mr-2" />
@@ -143,7 +143,8 @@ function OrdersPage() {
             New Order
           </Button>
         </div>
-      </PageLayout.Header>
+        }
+      />
 
       <PageLayout.Content>
         <div className="space-y-6">
@@ -158,7 +159,7 @@ function OrdersPage() {
             filters={{
               search: filters.search || undefined,
               status: filters.status ?? undefined,
-              paymentStatus: filters.paymentStatus ?? undefined,
+              paymentStatus: (filters.paymentStatus as "pending" | "partial" | "paid" | "refunded" | "overdue" | undefined) ?? undefined,
               dateFrom: filters.dateFrom ?? undefined,
               dateTo: filters.dateTo ?? undefined,
               minTotal: filters.minTotal ?? undefined,

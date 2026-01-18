@@ -155,7 +155,7 @@ export function useDuplicateDetection(
 
           // Filter out dismissed duplicates
           const filteredDuplicates = result.duplicates.filter(
-            (d) => !dismissedIds.includes(d.customerId)
+            (d: DuplicateMatch) => !dismissedIds.includes(d.customerId)
           )
 
           setDuplicates(filteredDuplicates)

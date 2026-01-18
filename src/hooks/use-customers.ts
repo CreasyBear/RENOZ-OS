@@ -10,7 +10,7 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 import {
   getCustomers,
-  getCustomer360,
+  getCustomerById,
   createCustomer,
   updateCustomer,
   deleteCustomer,
@@ -18,9 +18,9 @@ import {
   bulkUpdateCustomers,
 } from '@/server/customers'
 import type {
-  GetCustomersInput,
-  CreateCustomerInput,
-  UpdateCustomerInput,
+  CustomerListQuery,
+  CreateCustomer,
+  UpdateCustomer,
 } from '@/lib/schemas/customers'
 
 // ============================================================================
@@ -30,8 +30,8 @@ import type {
 export const customerKeys = {
   all: ['customers'] as const,
   lists: () => [...customerKeys.all, 'list'] as const,
-  list: (filters: Partial<GetCustomersInput>) => [...customerKeys.lists(), filters] as const,
-  infinite: (filters: Partial<GetCustomersInput>) => [...customerKeys.all, 'infinite', filters] as const,
+  list: (filters: Partial<CustomerListQuery>) => [...customerKeys.lists(), filters] as const,
+  infinite: (filters: Partial<CustomerListQuery>) => [...customerKeys.all, 'infinite', filters] as const,
   details: () => [...customerKeys.all, 'detail'] as const,
   detail: (id: string) => [...customerKeys.details(), id] as const,
   search: (query: string) => [...customerKeys.all, 'search', query] as const,
@@ -41,7 +41,7 @@ export const customerKeys = {
 // LIST HOOKS
 // ============================================================================
 
-export interface UseCustomersOptions extends Partial<GetCustomersInput> {
+export interface UseCustomersOptions extends Partial<CustomerListQuery> {
   enabled?: boolean
 }
 
@@ -50,7 +50,7 @@ export function useCustomers(options: UseCustomersOptions = {}) {
 
   return useQuery({
     queryKey: customerKeys.list(filters),
-    queryFn: () => getCustomers(filters as GetCustomersInput),
+    queryFn: () => getCustomers({ data: filters as CustomerListQuery }),
     enabled,
     staleTime: 30 * 1000, // 30 seconds
   })
@@ -59,19 +59,21 @@ export function useCustomers(options: UseCustomersOptions = {}) {
 /**
  * Infinite scroll customers list
  */
-export function useCustomersInfinite(filters: Partial<GetCustomersInput> = {}) {
+export function useCustomersInfinite(filters: Partial<CustomerListQuery> = {}) {
   return useInfiniteQuery({
     queryKey: customerKeys.infinite(filters),
     queryFn: ({ pageParam }) =>
       getCustomers({
-        ...filters,
-        page: pageParam,
-        limit: filters.limit ?? 50,
-      } as GetCustomersInput),
+        data: {
+          ...filters,
+          page: pageParam,
+          pageSize: filters.pageSize ?? 50,
+        } as CustomerListQuery,
+      }),
     initialPageParam: 1,
     getNextPageParam: (lastPage, allPages) => {
-      const totalFetched = allPages.reduce((sum, p) => sum + p.customers.length, 0)
-      return totalFetched < lastPage.total ? allPages.length + 1 : undefined
+      const totalFetched = allPages.reduce((sum, p) => sum + p.items.length, 0)
+      return totalFetched < lastPage.pagination.totalItems ? allPages.length + 1 : undefined
     },
     staleTime: 30 * 1000,
   })
@@ -89,7 +91,7 @@ export interface UseCustomerOptions {
 export function useCustomer({ id, enabled = true }: UseCustomerOptions) {
   return useQuery({
     queryKey: customerKeys.detail(id),
-    queryFn: () => getCustomer360({ id }),
+    queryFn: () => getCustomerById({ data: { id } }),
     enabled: enabled && !!id,
     staleTime: 60 * 1000, // 1 minute
   })
@@ -110,9 +112,11 @@ export function useCustomerSearch({ query, limit = 10, enabled = true }: UseCust
     queryKey: customerKeys.search(query),
     queryFn: () =>
       getCustomers({
-        search: query,
-        limit,
-        page: 1,
+        data: {
+          search: query,
+          pageSize: limit,
+          page: 1,
+        } as CustomerListQuery,
       }),
     enabled: enabled && query.length >= 2,
     staleTime: 10 * 1000, // 10 seconds
@@ -128,7 +132,7 @@ export function useCreateCustomer() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (input: CreateCustomerInput) => createCustomer(input),
+    mutationFn: (input: CreateCustomer) => createCustomer({ data: input }),
     onSuccess: () => {
       // Invalidate customer lists
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() })
@@ -140,8 +144,8 @@ export function useUpdateCustomer() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: ({ id, ...data }: UpdateCustomerInput & { id: string }) =>
-      updateCustomer({ id, ...data }),
+    mutationFn: ({ id, ...data }: UpdateCustomer & { id: string }) =>
+      updateCustomer({ data: { id, ...data } }),
     onSuccess: (_, variables) => {
       // Invalidate specific customer and lists
       queryClient.invalidateQueries({ queryKey: customerKeys.detail(variables.id) })
@@ -154,7 +158,7 @@ export function useDeleteCustomer() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (id: string) => deleteCustomer({ id }),
+    mutationFn: (id: string) => deleteCustomer({ data: { id } }),
     onSuccess: (_, id) => {
       // Remove from cache and invalidate lists
       queryClient.removeQueries({ queryKey: customerKeys.detail(id) })
@@ -167,10 +171,10 @@ export function useBulkDeleteCustomers() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (ids: string[]) => bulkDeleteCustomers({ ids }),
-    onSuccess: (_, ids) => {
+    mutationFn: (customerIds: string[]) => bulkDeleteCustomers({ data: { customerIds } }),
+    onSuccess: (_, customerIds) => {
       // Remove each from cache
-      ids.forEach((id) => {
+      customerIds.forEach((id) => {
         queryClient.removeQueries({ queryKey: customerKeys.detail(id) })
       })
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() })
@@ -182,11 +186,11 @@ export function useBulkUpdateCustomers() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (input: { ids: string[]; updates: Partial<UpdateCustomerInput> }) =>
-      bulkUpdateCustomers(input),
+    mutationFn: (input: { customerIds: string[]; updates: Partial<UpdateCustomer> }) =>
+      bulkUpdateCustomers({ data: input }),
     onSuccess: (_, variables) => {
       // Invalidate each customer and lists
-      variables.ids.forEach((id) => {
+      variables.customerIds.forEach((id) => {
         queryClient.invalidateQueries({ queryKey: customerKeys.detail(id) })
       })
       queryClient.invalidateQueries({ queryKey: customerKeys.lists() })
@@ -204,7 +208,7 @@ export function usePrefetchCustomer() {
   return (id: string) => {
     queryClient.prefetchQuery({
       queryKey: customerKeys.detail(id),
-      queryFn: () => getCustomer360({ id }),
+      queryFn: () => getCustomerById({ data: { id } }),
       staleTime: 60 * 1000,
     })
   }
@@ -214,4 +218,4 @@ export function usePrefetchCustomer() {
 // TYPES
 // ============================================================================
 
-export type { GetCustomersInput, CreateCustomerInput, UpdateCustomerInput }
+export type { CustomerListQuery, CreateCustomer, UpdateCustomer }

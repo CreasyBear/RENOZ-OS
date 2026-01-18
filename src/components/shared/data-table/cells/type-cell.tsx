@@ -1,4 +1,5 @@
 import { memo } from "react";
+import type { JSX } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +40,6 @@ export const TypeCell = memo(function TypeCell<T extends string = string>({
       {config.label}
     </Badge>
   );
-}) as <T extends string = string>(props: TypeCellProps<T>) => JSX.Element;
+}) as (<T extends string = string>(props: TypeCellProps<T>) => JSX.Element) & { displayName?: string };
 
 TypeCell.displayName = "TypeCell";

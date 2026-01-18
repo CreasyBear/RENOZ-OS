@@ -24,7 +24,7 @@ import {
   getPipelineMetrics,
   updateOpportunityStage,
 } from "@/server/functions/pipeline";
-import type { OpportunityStage } from "@/lib/schemas/pipeline";
+import type { OpportunityStage, Opportunity } from "@/lib/schemas/pipeline";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -56,7 +56,6 @@ function PipelinePage() {
   const {
     data: opportunitiesData,
     isLoading: isLoadingOpportunities,
-    refetch: refetchOpportunities,
   } = useQuery({
     queryKey: ["opportunities", filters],
     queryFn: async () => {
@@ -74,7 +73,11 @@ function PipelinePage() {
           includeWonLost: filters.includeWonLost,
         },
       });
-      return result;
+      return result as {
+        items: Opportunity[];
+        pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
+        metrics: { totalValue: number; weightedValue: number };
+      };
     },
   });
 
@@ -83,7 +86,14 @@ function PipelinePage() {
     queryKey: ["pipeline-metrics"],
     queryFn: async () => {
       const result = await getPipelineMetrics({ data: {} });
-      return result;
+      return result as {
+        totalValue: number;
+        weightedValue: number;
+        opportunityCount: number;
+        byStage: Record<string, { count: number; value: number; weightedValue: number }>;
+        avgDaysInStage: Record<string, number>;
+        conversionRate: number;
+      };
     },
   });
 
@@ -129,7 +139,7 @@ function PipelinePage() {
 
       return { previousData };
     },
-    onError: (err, variables, context) => {
+    onError: (_err, _variables, context) => {
       // Rollback on error
       if (context?.previousData) {
         queryClient.setQueryData(["opportunities", filters], context.previousData);
@@ -166,8 +176,9 @@ function PipelinePage() {
   const handleAddOpportunity = useCallback(
     (stage: OpportunityStage) => {
       navigate({
-        to: "/pipeline/new",
-        search: { stage },
+        to: "/pipeline/$opportunityId",
+        params: { opportunityId: "new" },
+        search: { stage } as any, // Stage is passed as a hint for the form
       });
     },
     [navigate]
@@ -188,44 +199,47 @@ function PipelinePage() {
   const isLoading = isLoadingOpportunities || stageChangeMutation.isPending;
 
   return (
-    <PageLayout
-      title="Pipeline"
-      description="Track and manage your sales opportunities"
-      actions={
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => navigate({ to: "/pipeline/new" })}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            New Opportunity
-          </Button>
+    <PageLayout>
+      <PageLayout.Header
+        title="Pipeline"
+        description="Track and manage your sales opportunities"
+        actions={
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm">
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => navigate({ to: "/pipeline/$opportunityId", params: { opportunityId: "new" } })}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Opportunity
+            </Button>
+          </div>
+        }
+      />
+      <PageLayout.Content>
+        <div className="space-y-6">
+          {/* Metrics */}
+          <PipelineMetrics
+            metrics={metricsData ?? null}
+            isLoading={isLoadingMetrics}
+          />
+
+          {/* Filters */}
+          <PipelineFilters filters={filters} onChange={setFilters} />
+
+          {/* Kanban Board */}
+          <PipelineBoard
+            opportunities={opportunities}
+            onStageChange={handleStageChange}
+            onAddOpportunity={handleAddOpportunity}
+            onEditOpportunity={handleEditOpportunity}
+            isLoading={isLoading}
+          />
         </div>
-      }
-    >
-      <div className="space-y-6">
-        {/* Metrics */}
-        <PipelineMetrics
-          metrics={metricsData ?? null}
-          isLoading={isLoadingMetrics}
-        />
-
-        {/* Filters */}
-        <PipelineFilters filters={filters} onChange={setFilters} />
-
-        {/* Kanban Board */}
-        <PipelineBoard
-          opportunities={opportunities}
-          onStageChange={handleStageChange}
-          onAddOpportunity={handleAddOpportunity}
-          onEditOpportunity={handleEditOpportunity}
-          isLoading={isLoading}
-        />
-      </div>
+      </PageLayout.Content>
     </PageLayout>
   );
 }

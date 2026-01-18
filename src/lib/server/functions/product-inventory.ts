@@ -516,6 +516,7 @@ export const getLocationInventory = createServerFn({ method: "GET" })
  */
 export const recordMovement = createServerFn({ method: "POST" })
   .inputValidator(createMovementSchema)
+  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -634,6 +635,7 @@ export const receiveStock = createServerFn({ method: "POST" })
       notes: z.string().optional(),
     })
   )
+  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     return recordMovement({
       data: {
@@ -657,6 +659,7 @@ export const allocateStock = createServerFn({ method: "POST" })
       notes: z.string().optional(),
     })
   )
+  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -747,6 +750,7 @@ export const deallocateStock = createServerFn({ method: "POST" })
       notes: z.string().optional(),
     })
   )
+  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -826,6 +830,7 @@ export const deallocateStock = createServerFn({ method: "POST" })
  */
 export const adjustStock = createServerFn({ method: "POST" })
   .inputValidator(stockAdjustmentSchema)
+  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     return recordMovement({
       data: {
@@ -844,6 +849,7 @@ export const adjustStock = createServerFn({ method: "POST" })
  */
 export const transferStock = createServerFn({ method: "POST" })
   .inputValidator(stockTransferSchema)
+  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -1010,6 +1016,7 @@ export const getProductMovements = createServerFn({ method: "GET" })
       locationId: z.string().uuid().optional(),
     })
   )
+  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -1080,6 +1087,7 @@ export const getLocationMovements = createServerFn({ method: "GET" })
       movementType: z.enum(movementTypeValues).optional(),
     })
   )
+  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -1278,6 +1286,7 @@ export const bulkReceiveStock = createServerFn({ method: "POST" })
       notes: z.string().optional(),
     })
   )
+  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 

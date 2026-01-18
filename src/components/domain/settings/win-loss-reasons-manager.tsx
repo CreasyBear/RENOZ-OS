@@ -16,8 +16,6 @@ import {
   GripVertical,
   Trophy,
   XCircle,
-  Check,
-  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -173,7 +171,7 @@ export const WinLossReasonsManager = memo(function WinLossReasonsManager({
   const lossReasons = data?.reasons.filter((r) => r.type === "loss") ?? [];
 
   // Handle edit
-  const handleEdit = (reason: (typeof data)["reasons"][0]) => {
+  const handleEdit = (reason: NonNullable<typeof data>["reasons"][0]) => {
     setEditingId(reason.id);
     setForm({
       name: reason.name,

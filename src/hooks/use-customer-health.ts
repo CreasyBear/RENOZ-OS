@@ -10,7 +10,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getCustomerHealthMetrics,
-  calculateHealthScore,
+  createCustomerHealthMetric,
 } from '@/server/customers'
 import { customerKeys } from './use-customers'
 
@@ -76,17 +76,17 @@ export function useCustomerHealthMetrics(customerId: string, enabled = true) {
   return useQuery({
     queryKey: healthKeys.metrics(customerId),
     queryFn: async () => {
-      const result = await getCustomerHealthMetrics({ customerId })
-      if (!result.metrics || result.metrics.length === 0) {
+      const result = await getCustomerHealthMetrics({ data: { customerId } })
+      if (!result || result.length === 0) {
         return null
       }
-      const latest = result.metrics[0]
+      const latest = result[0]
       return {
-        recencyScore: parseFloat(latest.recencyScore ?? '0'),
-        frequencyScore: parseFloat(latest.frequencyScore ?? '0'),
-        monetaryScore: parseFloat(latest.monetaryScore ?? '0'),
-        engagementScore: parseFloat(latest.engagementScore ?? '0'),
-        overallScore: parseFloat(latest.overallScore ?? '0'),
+        recencyScore: latest.recencyScore ?? 0,
+        frequencyScore: latest.frequencyScore ?? 0,
+        monetaryScore: latest.monetaryScore ?? 0,
+        engagementScore: latest.engagementScore ?? 0,
+        overallScore: latest.overallScore ?? 0,
       } as HealthMetrics
     },
     enabled: enabled && !!customerId,
@@ -105,14 +105,21 @@ export function useCustomerHealthHistory(
   return useQuery({
     queryKey: healthKeys.history(customerId, months),
     queryFn: async () => {
-      const result = await getCustomerHealthMetrics({ customerId, months })
-      return (result.metrics ?? []).map((m) => ({
+      const result = await getCustomerHealthMetrics({ data: { customerId } })
+      return (result ?? []).map((m: {
+        metricDate: string;
+        overallScore: number | null;
+        recencyScore: number | null;
+        frequencyScore: number | null;
+        monetaryScore: number | null;
+        engagementScore: number | null;
+      }) => ({
         date: m.metricDate,
-        overallScore: parseFloat(m.overallScore ?? '0'),
-        recencyScore: parseFloat(m.recencyScore ?? '0'),
-        frequencyScore: parseFloat(m.frequencyScore ?? '0'),
-        monetaryScore: parseFloat(m.monetaryScore ?? '0'),
-        engagementScore: parseFloat(m.engagementScore ?? '0'),
+        overallScore: m.overallScore ?? 0,
+        recencyScore: m.recencyScore ?? 0,
+        frequencyScore: m.frequencyScore ?? 0,
+        monetaryScore: m.monetaryScore ?? 0,
+        engagementScore: m.engagementScore ?? 0,
       })) as HealthHistoryPoint[]
     },
     enabled: enabled && !!customerId,
@@ -121,18 +128,26 @@ export function useCustomerHealthHistory(
 }
 
 /**
- * Calculate and update health score for a customer
+ * Create/update health metric for a customer
  */
-export function useCalculateHealthScore() {
+export function useCreateHealthMetric() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (customerId: string) => calculateHealthScore({ customerId }),
-    onSuccess: (data, customerId) => {
+    mutationFn: (data: {
+      customerId: string;
+      metricDate: string;
+      recencyScore?: number;
+      frequencyScore?: number;
+      monetaryScore?: number;
+      engagementScore?: number;
+      overallScore?: number;
+    }) => createCustomerHealthMetric({ data }),
+    onSuccess: (_data, variables) => {
       // Invalidate health metrics and customer detail
-      queryClient.invalidateQueries({ queryKey: healthKeys.metrics(customerId) })
-      queryClient.invalidateQueries({ queryKey: healthKeys.history(customerId) })
-      queryClient.invalidateQueries({ queryKey: customerKeys.detail(customerId) })
+      queryClient.invalidateQueries({ queryKey: healthKeys.metrics(variables.customerId) })
+      queryClient.invalidateQueries({ queryKey: healthKeys.history(variables.customerId) })
+      queryClient.invalidateQueries({ queryKey: customerKeys.detail(variables.customerId) })
     },
   })
 }

@@ -14,9 +14,7 @@ import {
   Trash2,
   Save,
   Calculator,
-  Package,
   History,
-  FileText,
   AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -47,7 +45,6 @@ import {
   AlertTitle,
 } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
 import { toastSuccess, toastError } from "@/hooks/use-toast";
 import { createQuoteVersion } from "@/server/functions/quote-versions";
 import { FormatAmount } from "@/components/shared/format";
@@ -285,7 +282,7 @@ export const QuoteBuilder = memo(function QuoteBuilder({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {lineItems.map((item, index) => (
+              {lineItems.map((item) => (
                 <TableRow key={item.tempId}>
                   <TableCell>
                     <Input

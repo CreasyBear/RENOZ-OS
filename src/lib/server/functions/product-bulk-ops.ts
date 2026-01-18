@@ -7,12 +7,12 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { eq, and, inArray, isNull, sql } from "drizzle-orm";
+import { eq, and, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { products, categories } from "../../../../drizzle/schema";
 import { withAuth } from "../protected";
-import { ValidationError, NotFoundError } from "../errors";
+import { ValidationError } from "../errors";
 
 // ============================================================================
 // CONSTANTS
@@ -47,10 +47,7 @@ interface ImportResult {
   productId?: string;
 }
 
-interface BulkUpdateField {
-  field: string;
-  value: string | number | boolean | null;
-}
+// Removed unused _BulkUpdateField interface
 
 // ============================================================================
 // IMPORT SCHEMA
@@ -218,7 +215,7 @@ export const parseImportFile = createServerFn({ method: "POST" })
           row: i + 2,
           data: normalizedRow as unknown as ImportRow,
           isValid: false,
-          errors: result.error.errors.map((e) => `${e.path.join(".")}: ${e.message}`),
+          errors: result.error.issues.map((e) => `${e.path.join(".")}: ${e.message}`),
         });
       }
     }
@@ -339,9 +336,9 @@ export const importProducts = createServerFn({ method: "POST" })
               categoryId,
               type: row.type,
               status: row.status,
-              basePrice: String(row.basePrice),
-              costPrice: row.costPrice ? String(row.costPrice) : null,
-              weight: row.weight ? String(row.weight) : null,
+              basePrice: row.basePrice,
+              costPrice: row.costPrice ?? null,
+              weight: row.weight ?? null,
               barcode: row.barcode,
               tags: row.tags ?? [],
               updatedBy: ctx.user.id,
@@ -379,9 +376,9 @@ export const importProducts = createServerFn({ method: "POST" })
               categoryId,
               type: row.type ?? "physical",
               status: row.status ?? "active",
-              basePrice: String(row.basePrice),
-              costPrice: row.costPrice ? String(row.costPrice) : null,
-              weight: row.weight ? String(row.weight) : null,
+              basePrice: row.basePrice,
+              costPrice: row.costPrice ?? null,
+              weight: row.weight ?? null,
               barcode: row.barcode,
               tags: row.tags ?? [],
               isSellable: true,
@@ -662,7 +659,6 @@ export const bulkDeleteProducts = createServerFn({ method: "POST" })
       .update(products)
       .set({
         deletedAt: new Date(),
-        deletedBy: ctx.user.id,
         updatedBy: ctx.user.id,
         updatedAt: new Date(),
       })

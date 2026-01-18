@@ -67,9 +67,9 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { FormatAmount } from "@/components/shared/format";
 import { toastSuccess, toastError } from "@/hooks/use-toast";
-import { listCustomers } from "@/server/functions/customers";
-import { listProducts } from "@/server/functions/products";
-import { createQuote } from "@/server/functions/quote-versions";
+import { getCustomers } from "@/server/customers";
+import { listProducts } from "@/lib/server/functions/products";
+import { createQuoteVersion } from "@/server/functions/quote-versions";
 
 // ============================================================================
 // TYPES
@@ -86,7 +86,7 @@ export interface QuickQuoteFormProps {
 interface QuoteLineItem {
   productId: string;
   productName: string;
-  productCode: string;
+  productSku: string;
   unitPrice: number;
   quantity: number;
   discount: number;
@@ -130,16 +130,16 @@ export const QuickQuoteForm = memo(function QuickQuoteForm({
   // Fetch customers
   const customersQuery = useQuery({
     queryKey: ["customers", "quick-quote"],
-    queryFn: () => listCustomers({ data: { limit: 100 } }),
+    queryFn: () => getCustomers({ data: { page: 1, pageSize: 100 } }),
   });
 
   // Fetch products
   const productsQuery = useQuery({
     queryKey: ["products", "quick-quote"],
-    queryFn: () => listProducts({ data: { limit: 100, status: "active" } }),
+    queryFn: () => listProducts({ data: { pageSize: 100, status: "active" } }),
   });
 
-  const customers = customersQuery.data?.customers ?? [];
+  const customers = customersQuery.data?.items ?? [];
   const products = productsQuery.data?.products ?? [];
 
   const selectedCustomer = useMemo(
@@ -176,8 +176,8 @@ export const QuickQuoteForm = memo(function QuickQuoteForm({
         {
           productId: product.id,
           productName: product.name,
-          productCode: product.code,
-          unitPrice: product.unitPrice,
+          productSku: product.sku,
+          unitPrice: product.basePrice,
           quantity: 1,
           discount: 0,
         },
@@ -207,20 +207,28 @@ export const QuickQuoteForm = memo(function QuickQuoteForm({
   // Create quote mutation
   const createMutation = useMutation({
     mutationFn: async () => {
-      const validUntil = addDays(new Date(), validityDays);
+      if (!opportunityId) {
+        throw new Error("Opportunity ID is required");
+      }
 
-      return createQuote({
+      return createQuoteVersion({
         data: {
-          opportunityId: opportunityId ?? undefined,
-          customerId,
-          validUntil,
+          opportunityId,
           notes: notes.trim() || undefined,
-          lineItems: lineItems.map((item) => ({
-            productId: item.productId,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            discount: item.discount,
-          })),
+          items: lineItems.map((item) => {
+            const subtotal = item.quantity * item.unitPrice;
+            const discount = item.discount ? subtotal * (item.discount / 100) : 0;
+            const totalCents = Math.round(subtotal - discount);
+
+            return {
+              productId: item.productId,
+              description: item.productName || "Item",
+              quantity: item.quantity,
+              unitPriceCents: item.unitPrice,
+              discountPercent: item.discount,
+              totalCents,
+            };
+          }),
         },
       });
     },
@@ -230,12 +238,11 @@ export const QuickQuoteForm = memo(function QuickQuoteForm({
       queryClient.invalidateQueries({ queryKey: ["opportunities"] });
 
       if (onSuccess) {
-        onSuccess(result.id);
+        onSuccess(result.quoteVersion.id);
       } else {
-        navigate({
-          to: "/pipeline/quotes/$quoteId",
-          params: { quoteId: result.id },
-        });
+        // TODO: Fix route - /pipeline/quotes/$quoteId may not be configured yet
+        // Using safe fallback until route is implemented
+        navigate({ to: "/pipeline" });
       }
     },
     onError: () => {
@@ -291,7 +298,7 @@ export const QuickQuoteForm = memo(function QuickQuoteForm({
                   disabled={!!initialCustomerId}
                 >
                   {selectedCustomer ? (
-                    <span>{selectedCustomer.displayName}</span>
+                    <span>{selectedCustomer.name}</span>
                   ) : (
                     <span className="text-muted-foreground">
                       Select customer...
@@ -309,7 +316,7 @@ export const QuickQuoteForm = memo(function QuickQuoteForm({
                       {customers.map((customer) => (
                         <CommandItem
                           key={customer.id}
-                          value={customer.displayName}
+                          value={customer.name}
                           onSelect={() => {
                             setCustomerId(customer.id);
                             setCustomerOpen(false);
@@ -324,7 +331,7 @@ export const QuickQuoteForm = memo(function QuickQuoteForm({
                             )}
                           />
                           <div className="flex-1">
-                            <p className="font-medium">{customer.displayName}</p>
+                            <p className="font-medium">{customer.name}</p>
                             {customer.email && (
                               <p className="text-sm text-muted-foreground">
                                 {customer.email}
@@ -365,7 +372,7 @@ export const QuickQuoteForm = memo(function QuickQuoteForm({
                         {products.map((product) => (
                           <CommandItem
                             key={product.id}
-                            value={`${product.code} ${product.name}`}
+                            value={`${product.sku} ${product.name}`}
                             onSelect={() => handleAddProduct(product.id)}
                             disabled={lineItems.some(
                               (item) => item.productId === product.id
@@ -374,12 +381,12 @@ export const QuickQuoteForm = memo(function QuickQuoteForm({
                             <div className="flex-1">
                               <div className="flex items-center gap-2">
                                 <Badge variant="outline" className="text-xs">
-                                  {product.code}
+                                  {product.sku}
                                 </Badge>
                                 <span className="font-medium">{product.name}</span>
                               </div>
                               <p className="text-sm text-muted-foreground">
-                                <FormatAmount amount={product.unitPrice} />
+                                <FormatAmount amount={product.basePrice} />
                               </p>
                             </div>
                             {lineItems.some(
@@ -423,7 +430,7 @@ export const QuickQuoteForm = memo(function QuickQuoteForm({
                         <div>
                           <p className="font-medium">{item.productName}</p>
                           <Badge variant="outline" className="text-xs">
-                            {item.productCode}
+                            {item.productSku}
                           </Badge>
                         </div>
                       </TableCell>

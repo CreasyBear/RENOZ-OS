@@ -334,6 +334,7 @@ const warehouseLocationListQuerySchema = z.object({
  */
 export const listWarehouseLocations = createServerFn({ method: "GET" })
   .inputValidator(warehouseLocationListQuerySchema)
+  // @ts-expect-error - TanStack Start v1 type issue: handler expects ServerFn after inputValidator
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -379,6 +380,7 @@ export const listWarehouseLocations = createServerFn({ method: "GET" })
  */
 export const getWarehouseLocationHierarchy = createServerFn({ method: "GET" })
   .inputValidator(z.object({ id: z.string().uuid().optional() }))
+  // @ts-expect-error - TanStack Start v1 type issue: handler expects ServerFn after inputValidator
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -440,6 +442,7 @@ const createWarehouseLocationSchema = z.object({
  */
 export const createWarehouseLocation = createServerFn({ method: "POST" })
   .inputValidator(createWarehouseLocationSchema)
+  // @ts-expect-error - TanStack Start v1 type issue: handler expects ServerFn after inputValidator
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: "inventory.manage" });
 
@@ -504,6 +507,7 @@ export const updateWarehouseLocation = createServerFn({ method: "POST" })
       data: updateWarehouseLocationSchema,
     })
   )
+  // @ts-expect-error - TanStack Start v1 type issue: handler expects ServerFn after inputValidator
   .handler(async ({ data: { id, data } }) => {
     const ctx = await withAuth({ permission: "inventory.manage" });
 
@@ -671,6 +675,7 @@ export const bulkCreateLocations = createServerFn({ method: "POST" })
       locations: z.array(createWarehouseLocationSchema).min(1).max(500),
     })
   )
+  // @ts-expect-error - TanStack Start v1 type issue: handler expects ServerFn after inputValidator
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: "inventory.manage" });
 

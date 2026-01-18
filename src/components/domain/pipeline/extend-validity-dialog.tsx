@@ -10,9 +10,8 @@
 import { memo, useState, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CalendarPlus, Calendar as CalendarIcon } from "lucide-react";
-import { format, addDays, addWeeks, addMonths } from "date-fns";
+import { format, addDays } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar } from "@/components/ui/calendar";
@@ -45,8 +44,18 @@ import { extendQuoteValidity } from "@/server/functions/quote-versions";
 // TYPES
 // ============================================================================
 
+interface ExtendValidityResult {
+  opportunity: {
+    id: string;
+    quoteExpiresAt: Date | null;
+    [key: string]: unknown;
+  };
+  previousExpiration: Date | null;
+  newExpiration: Date;
+}
+
 export interface ExtendValidityDialogProps {
-  quoteId: string;
+  opportunityId: string;
   quoteNumber: string;
   currentValidUntil: Date | string | null;
   onSuccess?: (newValidUntil: Date) => void;
@@ -70,7 +79,7 @@ const PRESETS: { value: ExtensionPreset; label: string; getDays: () => number }[
 // ============================================================================
 
 export const ExtendValidityDialog = memo(function ExtendValidityDialog({
-  quoteId,
+  opportunityId,
   quoteNumber,
   currentValidUntil,
   onSuccess,
@@ -100,28 +109,30 @@ export const ExtendValidityDialog = memo(function ExtendValidityDialog({
     return addDays(new Date(), 30);
   }, [preset, customDate]);
 
-  const extendMutation = useMutation({
-    mutationFn: async () => {
+  const extendMutation = useMutation<ExtendValidityResult, Error, void>({
+    mutationFn: async (): Promise<ExtendValidityResult> => {
       const newValidUntil = getNewValidUntil();
-      return extendQuoteValidity({
+      const reasonValue = reason.trim();
+      const result = await extendQuoteValidity({
         data: {
-          quoteId,
-          newValidUntil,
-          reason: reason.trim() || undefined,
+          opportunityId,
+          newExpirationDate: newValidUntil,
+          reason: reasonValue || "No reason provided",
         },
       });
+      return result as ExtendValidityResult;
     },
     onSuccess: (result) => {
       toastSuccess(
-        `Quote validity extended to ${format(new Date(result.newValidUntil), "PPP")}`
+        `Quote validity extended to ${format(new Date(result.newExpiration), "PPP")}`
       );
-      queryClient.invalidateQueries({ queryKey: ["quote", quoteId] });
-      queryClient.invalidateQueries({ queryKey: ["quotes"] });
+      queryClient.invalidateQueries({ queryKey: ["opportunity", opportunityId] });
+      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
       queryClient.invalidateQueries({ queryKey: ["expiring-quotes"] });
       queryClient.invalidateQueries({ queryKey: ["expired-quotes"] });
       setOpen(false);
       setReason("");
-      onSuccess?.(new Date(result.newValidUntil));
+      onSuccess?.(new Date(result.newExpiration));
     },
     onError: () => {
       toastError("Failed to extend quote validity");

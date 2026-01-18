@@ -12,7 +12,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { sql, eq, and, desc } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { customers, contacts, customerMergeAudit } from '@/../drizzle/schema'
+import { customerMergeAudit } from '@/../drizzle/schema'
 import { withAuth } from '@/lib/server/protected'
 import { PERMISSIONS } from '@/lib/auth/permissions'
 
@@ -74,8 +74,8 @@ export interface DuplicatePair {
  * This approach scales to 100K+ customers without timeout.
  */
 export const scanForDuplicates = createServerFn({ method: 'POST' })
-  .validator(scanDuplicatesInputSchema)
-  .handler(async ({ data }) => {
+  .inputValidator(scanDuplicatesInputSchema)
+  .handler(async ({ data }: { data: ScanDuplicatesInput }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 
     const { threshold, limit, offset, includeArchived, batchSize } = data
@@ -154,7 +154,7 @@ export const scanForDuplicates = createServerFn({ method: 'POST' })
     `)
 
     // Transform results into DuplicatePair format
-    const pairs: DuplicatePair[] = (duplicatePairs.rows as any[]).map((row) => {
+    const pairs: DuplicatePair[] = (duplicatePairs as any[]).map((row) => {
       const matchReasons: string[] = []
       if (row.name_similarity >= threshold) {
         matchReasons.push(`Name: ${Math.round(row.name_similarity * 100)}% similar`)
@@ -209,14 +209,18 @@ export const scanForDuplicates = createServerFn({ method: 'POST' })
  * Progressive scan - scan from a specific cursor position
  * Used for scanning large datasets in chunks without timeout
  */
+const scanDuplicatesProgressiveInputSchema = z.object({
+  threshold: z.number().min(0).max(1).default(0.4),
+  batchSize: z.number().min(100).max(1000).default(500),
+  cursor: z.string().uuid().optional(), // Last customer ID processed
+  includeArchived: z.boolean().default(false),
+})
+
+type ScanDuplicatesProgressiveInput = z.infer<typeof scanDuplicatesProgressiveInputSchema>
+
 export const scanDuplicatesProgressive = createServerFn({ method: 'POST' })
-  .validator(z.object({
-    threshold: z.number().min(0).max(1).default(0.4),
-    batchSize: z.number().min(100).max(1000).default(500),
-    cursor: z.string().uuid().optional(), // Last customer ID processed
-    includeArchived: z.boolean().default(false),
-  }))
-  .handler(async ({ data }) => {
+  .inputValidator(scanDuplicatesProgressiveInputSchema)
+  .handler(async ({ data }: { data: ScanDuplicatesProgressiveInput }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 
     const { threshold, batchSize, cursor, includeArchived } = data
@@ -247,7 +251,7 @@ export const scanDuplicatesProgressive = createServerFn({ method: 'POST' })
         `
 
     const batchResult = await db.execute(batchQuery)
-    const batch = batchResult.rows as { id: string; name: string; customer_code: string }[]
+    const batch = batchResult as unknown as { id: string; name: string; customer_code: string }[]
 
     if (batch.length === 0) {
       return { pairs: [], nextCursor: null, isComplete: true }
@@ -280,7 +284,7 @@ export const scanDuplicatesProgressive = createServerFn({ method: 'POST' })
         LIMIT 5  -- Max 5 matches per customer
       `)
 
-      for (const match of matches.rows as any[]) {
+      for (const match of matches as any[]) {
         if (match.name_similarity >= threshold) {
           pairs.push({
             id: `pair-${customer.id}-${match.id}`,
@@ -325,13 +329,17 @@ export const scanDuplicatesProgressive = createServerFn({ method: 'POST' })
 /**
  * Mark a duplicate pair as dismissed (not duplicates)
  */
+const dismissDuplicatePairInputSchema = z.object({
+  customer1Id: z.string().uuid(),
+  customer2Id: z.string().uuid(),
+  reason: z.string().optional(),
+})
+
+type DismissDuplicatePairInput = z.infer<typeof dismissDuplicatePairInputSchema>
+
 export const dismissDuplicatePair = createServerFn({ method: 'POST' })
-  .validator(z.object({
-    customer1Id: z.string().uuid(),
-    customer2Id: z.string().uuid(),
-    reason: z.string().optional(),
-  }))
-  .handler(async ({ data }) => {
+  .inputValidator(dismissDuplicatePairInputSchema)
+  .handler(async ({ data }: { data: DismissDuplicatePairInput }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update })
 
     // Record the dismissal in audit log
@@ -341,7 +349,7 @@ export const dismissDuplicatePair = createServerFn({ method: 'POST' })
       mergedCustomerId: data.customer2Id,
       action: 'dismissed',
       reason: data.reason || 'Marked as not duplicates',
-      performedBy: ctx.userId,
+      performedBy: ctx.user.id,
       metadata: {},
     })
 
@@ -351,13 +359,18 @@ export const dismissDuplicatePair = createServerFn({ method: 'POST' })
 /**
  * Get merge audit history
  */
+const getMergeHistoryInputSchema = z.object({
+  limit: z.number().min(1).max(100).default(50),
+  offset: z.number().min(0).default(0),
+  action: z.enum(['merged', 'dismissed', 'undone']).optional(),
+})
+
+type GetMergeHistoryInput = z.infer<typeof getMergeHistoryInputSchema>
+
 export const getMergeHistory = createServerFn({ method: 'GET' })
-  .validator(z.object({
-    limit: z.number().min(1).max(100).default(50),
-    offset: z.number().min(0).default(0),
-    action: z.enum(['merged', 'dismissed', 'undone']).optional(),
-  }))
-  .handler(async ({ data }) => {
+  .inputValidator(getMergeHistoryInputSchema)
+  // @ts-expect-error - GET method with inputValidator has type mismatch in TanStack Start
+  .handler(async ({ data }: { data: GetMergeHistoryInput }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 
     const { limit, offset, action } = data

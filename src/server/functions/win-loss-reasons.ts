@@ -101,8 +101,8 @@ export const getWinLossReason = createServerFn({ method: "GET" })
 export const createWinLossReason = createServerFn({ method: "POST" })
   .inputValidator(createWinLossReasonSchema)
   .handler(async ({ data }) => {
-    // Admin-only permission
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update ?? "settings:update" });
+    // Admin-only permission - use organization.update for settings management
+    const ctx = await withAuth({ permission: PERMISSIONS.organization?.update ?? "organization:update" });
 
     const { name, type, description, isActive, sortOrder } = data;
 
@@ -147,7 +147,7 @@ export const updateWinLossReason = createServerFn({ method: "POST" })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update ?? "settings:update" });
+    const ctx = await withAuth({ permission: PERMISSIONS.organization?.update ?? "organization:update" });
 
     const { id, data: updateData } = data;
 
@@ -196,7 +196,7 @@ export const updateWinLossReason = createServerFn({ method: "POST" })
 export const deleteWinLossReason = createServerFn({ method: "POST" })
   .inputValidator(winLossReasonParamsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update ?? "settings:update" });
+    const ctx = await withAuth({ permission: PERMISSIONS.organization?.update ?? "organization:update" });
 
     const { id } = data;
 
@@ -269,10 +269,10 @@ export const getWinLossAnalysis = createServerFn({ method: "GET" })
     ];
 
     if (dateFrom) {
-      oppConditions.push(gte(opportunities.actualCloseDate, dateFrom));
+      oppConditions.push(gte(opportunities.actualCloseDate, dateFrom.toISOString().split("T")[0]));
     }
     if (dateTo) {
-      oppConditions.push(lte(opportunities.actualCloseDate, dateTo));
+      oppConditions.push(lte(opportunities.actualCloseDate, dateTo.toISOString().split("T")[0]));
     }
 
     // Get win analysis
@@ -427,10 +427,10 @@ export const getCompetitors = createServerFn({ method: "GET" })
     ];
 
     if (dateFrom) {
-      conditions.push(gte(opportunities.actualCloseDate, dateFrom));
+      conditions.push(gte(opportunities.actualCloseDate, dateFrom.toISOString().split("T")[0]));
     }
     if (dateTo) {
-      conditions.push(lte(opportunities.actualCloseDate, dateTo));
+      conditions.push(lte(opportunities.actualCloseDate, dateTo.toISOString().split("T")[0]));
     }
 
     const results = await db

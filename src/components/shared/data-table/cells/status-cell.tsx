@@ -1,4 +1,5 @@
 import { memo } from "react";
+import type { JSX } from "react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -40,6 +41,6 @@ export const StatusCell = memo(function StatusCell<T extends string = string>({
       {config.label}
     </Badge>
   );
-}) as <T extends string = string>(props: StatusCellProps<T>) => JSX.Element;
+}) as (<T extends string = string>(props: StatusCellProps<T>) => JSX.Element) & { displayName?: string };
 
 StatusCell.displayName = "StatusCell";

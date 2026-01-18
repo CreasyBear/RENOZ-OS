@@ -13,10 +13,8 @@ import {
   FileSpreadsheet,
   FileText,
   Check,
-  Settings,
   RefreshCw,
 } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -31,8 +29,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
-
 // ============================================================================
 // TYPES
 // ============================================================================

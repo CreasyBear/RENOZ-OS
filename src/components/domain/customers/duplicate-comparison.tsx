@@ -6,7 +6,6 @@
  */
 import { useState } from 'react'
 import {
-  ArrowRight,
   Check,
   X,
   Crown,
@@ -18,12 +17,11 @@ import {
   DollarSign,
   Heart,
   AlertTriangle,
+  ArrowRight,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { FormatAmount } from '@/components/shared/format'
 

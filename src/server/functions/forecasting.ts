@@ -20,7 +20,6 @@ import { NotFoundError, ValidationError } from "@/lib/server/errors";
 import {
   createForecastSchema,
   forecastListQuerySchema,
-  forecastPeriodSchema,
 } from "@/lib/schemas/inventory";
 
 // ============================================================================
@@ -28,6 +27,9 @@ import {
 // ============================================================================
 
 type ForecastRecord = typeof inventoryForecasts.$inferSelect;
+
+// Period schema (not exported from inventory.ts yet)
+const forecastPeriodSchema = z.enum(["daily", "weekly", "monthly", "quarterly"]);
 
 interface ReorderRecommendation {
   productId: string;
@@ -141,7 +143,7 @@ export const getProductForecast = createServerFn({ method: "GET" })
         and(
           eq(inventoryForecasts.organizationId, ctx.organizationId),
           eq(inventoryForecasts.productId, data.productId),
-          eq(inventoryForecasts.forecastPeriod, data.period),
+          eq(inventoryForecasts.forecastPeriod, data.period as "daily" | "weekly" | "monthly" | "quarterly"),
           gte(inventoryForecasts.forecastDate, new Date().toISOString().split("T")[0])
         )
       )
@@ -589,7 +591,7 @@ export const getForecastAccuracy = createServerFn({ method: "GET" })
 
     const conditions = [
       eq(inventoryForecasts.organizationId, ctx.organizationId),
-      eq(inventoryForecasts.forecastPeriod, data.period),
+      eq(inventoryForecasts.forecastPeriod, data.period as "daily" | "weekly" | "monthly" | "quarterly"),
       lte(inventoryForecasts.forecastDate, new Date().toISOString().split("T")[0]),
       gte(inventoryForecasts.forecastDate, startDate.toISOString().split("T")[0]),
     ];

@@ -14,7 +14,6 @@ import {
   DollarSign,
   TrendingUp,
   Activity,
-  AlertTriangle,
   ArrowUpRight,
   ArrowDownRight,
   BarChart3,

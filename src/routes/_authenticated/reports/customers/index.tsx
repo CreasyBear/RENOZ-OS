@@ -10,7 +10,7 @@
  */
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { BarChart3, Users, DollarSign, Download, FileText, Mail, Loader2 } from 'lucide-react'
+import { BarChart3, Users, DollarSign, Download, FileText, Mail } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import {
@@ -121,7 +121,7 @@ function CustomerReportsPage() {
           ) : (
             <AnalyticsDashboard
               dateRange={dateRange}
-              onDateRangeChange={setDateRange}
+              onDateRangeChange={(range) => setDateRange(range as DateRange)}
               kpis={dashboard.kpis?.kpis}
               healthDistribution={dashboard.health?.distribution}
               customerTrend={dashboard.trends?.customerTrend}

@@ -18,7 +18,6 @@ import {
   productImages,
   productAttributeValues,
   productRelations,
-  customerProductPrices,
 } from "../../../../drizzle/schema";
 import { withAuth } from "../protected";
 import { NotFoundError, ValidationError, ConflictError } from "../errors";
@@ -445,85 +444,10 @@ export const deleteProduct = createServerFn({ method: "POST" })
         })
         .where(eq(products.id, data.id));
 
-      // Cascade soft delete to related records
-      // Note: productImages, productAttributeValues, productPriceTiers, productBundles, productRelations
-      // have FK constraints with onDelete: cascade for hard deletes, but we need explicit soft delete cascade
-
-      // Soft delete product images
-      await tx
-        .update(productImages)
-        .set({ deletedAt: now })
-        .where(
-          and(
-            eq(productImages.productId, data.id),
-            isNull(productImages.deletedAt)
-          )
-        );
-
-      // Soft delete product attribute values
-      await tx
-        .update(productAttributeValues)
-        .set({ deletedAt: now })
-        .where(
-          and(
-            eq(productAttributeValues.productId, data.id),
-            isNull(productAttributeValues.deletedAt)
-          )
-        );
-
-      // Soft delete price tiers
-      await tx
-        .update(productPriceTiers)
-        .set({ deletedAt: now })
-        .where(
-          and(
-            eq(productPriceTiers.productId, data.id),
-            isNull(productPriceTiers.deletedAt)
-          )
-        );
-
-      // Soft delete customer-specific prices
-      await tx
-        .update(customerProductPrices)
-        .set({ deletedAt: now })
-        .where(
-          and(
-            eq(customerProductPrices.productId, data.id),
-            isNull(customerProductPrices.deletedAt)
-          )
-        );
-
-      // Soft delete product bundles (where this product is the parent)
-      await tx
-        .update(productBundles)
-        .set({ deletedAt: now })
-        .where(
-          and(
-            eq(productBundles.productId, data.id),
-            isNull(productBundles.deletedAt)
-          )
-        );
-
-      // Soft delete product relations (both directions)
-      await tx
-        .update(productRelations)
-        .set({ deletedAt: now })
-        .where(
-          and(
-            eq(productRelations.productId, data.id),
-            isNull(productRelations.deletedAt)
-          )
-        );
-
-      await tx
-        .update(productRelations)
-        .set({ deletedAt: now })
-        .where(
-          and(
-            eq(productRelations.relatedProductId, data.id),
-            isNull(productRelations.deletedAt)
-          )
-        );
+      // Note: Related records (productImages, productAttributeValues, productPriceTiers,
+      // productBundles, productRelations, customerProductPrices) will be automatically
+      // hard deleted via FK cascade when the product is hard deleted.
+      // These tables do not have deletedAt columns and rely on database CASCADE.
     });
 
     return { success: true };

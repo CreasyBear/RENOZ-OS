@@ -26,7 +26,6 @@ import {
 } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { cn } from "@/lib/utils";
 import type { OpportunityStage } from "@/lib/schemas/pipeline";
 
 // ============================================================================

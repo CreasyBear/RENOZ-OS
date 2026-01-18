@@ -21,6 +21,8 @@ import {
   orderLineItems,
   customers,
   products,
+  type OrderAddress,
+  type OrderMetadata,
 } from "../../../../drizzle/schema";
 import { withAuth } from "../protected";
 import { NotFoundError, ValidationError, ConflictError } from "../errors";
@@ -599,8 +601,8 @@ export const createOrder = createServerFn({ method: "POST" })
           paymentStatus: data.paymentStatus ?? "pending",
           orderDate: (data.orderDate ?? new Date()).toISOString().slice(0, 10),
           dueDate: data.dueDate?.toISOString().slice(0, 10),
-          billingAddress: data.billingAddress,
-          shippingAddress: data.shippingAddress,
+          billingAddress: data.billingAddress as OrderAddress | undefined,
+          shippingAddress: data.shippingAddress as OrderAddress | undefined,
           subtotal: orderTotals.subtotal,
           discountAmount: orderTotals.discountAmount,
           discountPercent: data.discountPercent ? Number(data.discountPercent) : undefined,
@@ -609,7 +611,7 @@ export const createOrder = createServerFn({ method: "POST" })
           total: orderTotals.total,
           paidAmount: 0,
           balanceDue: orderTotals.total,
-          metadata: data.metadata ?? {},
+          metadata: data.metadata as OrderMetadata | undefined,
           internalNotes: data.internalNotes,
           customerNotes: data.customerNotes,
           createdBy: ctx.user.id,
@@ -730,13 +732,16 @@ export const updateOrder = createServerFn({ method: "POST" })
     }
 
     // Update order
+    const updateData: Record<string, unknown> = { ...data };
+    if (data.billingAddress) updateData.billingAddress = data.billingAddress as OrderAddress;
+    if (data.shippingAddress) updateData.shippingAddress = data.shippingAddress as OrderAddress;
+    if (data.metadata) updateData.metadata = data.metadata as OrderMetadata;
+    updateData.updatedAt = new Date();
+    updateData.updatedBy = ctx.user.id;
+
     const [updated] = await db
       .update(orders)
-      .set({
-        ...data,
-        updatedAt: new Date(),
-        updatedBy: ctx.user.id,
-      })
+      .set(updateData)
       .where(eq(orders.id, id))
       .returning();
 

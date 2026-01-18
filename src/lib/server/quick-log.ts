@@ -39,7 +39,7 @@ const quickLogSchema = z.object({
 export const createQuickLog = createServerFn({ method: "POST" })
   .inputValidator(quickLogSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.activity?.create ?? PERMISSIONS.customer.read });
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
     const { type, notes, duration, customerId, opportunityId } = data;
 

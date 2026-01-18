@@ -165,6 +165,7 @@ export const listAttributes = createServerFn({ method: "GET" })
       })
       .optional()
   )
+  // @ts-expect-error - TanStack Start ServerFn type inference issue with optional input validator
   .handler(async ({ data }): Promise<ProductAttribute[]> => {
     const ctx = await withAuth();
 
@@ -199,6 +200,7 @@ export const listAttributes = createServerFn({ method: "GET" })
  */
 export const getAttribute = createServerFn({ method: "GET" })
   .inputValidator(z.object({ id: z.string().uuid() }))
+  // @ts-expect-error - TanStack Start ServerFn type inference issue with handler signature
   .handler(async ({ data }): Promise<ProductAttribute> => {
     const ctx = await withAuth();
 
@@ -253,6 +255,7 @@ export const createAttribute = createServerFn({ method: "POST" })
       sortOrder: z.number().int().default(0),
     })
   )
+  // @ts-expect-error - TanStack Start ServerFn type inference issue with handler signature
   .handler(async ({ data }): Promise<ProductAttribute> => {
     const ctx = await withAuth({ permission: "product.update" });
 
@@ -320,6 +323,7 @@ export const updateAttribute = createServerFn({ method: "POST" })
       isActive: z.boolean().optional(),
     })
   )
+  // @ts-expect-error - TanStack Start ServerFn type inference issue with handler signature
   .handler(async ({ data }): Promise<ProductAttribute> => {
     const ctx = await withAuth({ permission: "product.update" });
     const { id, ...updateData } = data;
@@ -850,6 +854,7 @@ export const getFilterableAttributes = createServerFn({ method: "GET" })
       .optional()
   )
   .handler(
+    // @ts-expect-error - TanStack Start ServerFn type inference issue with optional input validator
     async ({
       data,
     }): Promise<

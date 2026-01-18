@@ -24,7 +24,6 @@ export interface PriceCellProps {
 export const PriceCell = memo(function PriceCell({
   value,
   centsInput = true,
-  currency = "AUD",
   colorPositive = false,
   colorNegative = true,
   align = "right",

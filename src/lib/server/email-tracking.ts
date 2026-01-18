@@ -10,7 +10,7 @@
 import { db } from "@/lib/db";
 import { emailHistory, type LinkClicks, type LinkClick } from "@/../drizzle/schema";
 import { eq } from "drizzle-orm";
-import { createHash, randomUUID } from "crypto";
+import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import {
   createEmailOpenedActivity,
   createEmailClickedActivity,
@@ -35,6 +35,49 @@ export const TRACKING_PIXEL = Buffer.from(
  */
 export const TRACKING_BASE_URL =
   process.env.TRACKING_BASE_URL || process.env.VITE_APP_URL || "http://localhost:3000";
+
+/**
+ * Secret for HMAC signature generation
+ * MUST be changed in production via environment variable
+ */
+const TRACKING_SECRET = process.env.TRACKING_HMAC_SECRET || 'dev-tracking-secret-change-in-prod';
+
+// ============================================================================
+// HMAC SIGNATURE SECURITY
+// ============================================================================
+
+/**
+ * Generate HMAC signature for tracking URL validation
+ *
+ * @param emailId - The email_history record ID
+ * @param linkId - Optional link ID for click tracking (omit for open tracking)
+ * @returns 16-character hex signature
+ */
+export function generateTrackingSignature(emailId: string, linkId?: string): string {
+  const data = linkId ? `${emailId}:${linkId}` : emailId;
+  return createHmac('sha256', TRACKING_SECRET)
+    .update(data)
+    .digest('hex')
+    .slice(0, 16);
+}
+
+/**
+ * Validate HMAC signature (timing-safe comparison)
+ *
+ * @param emailId - The email_history record ID
+ * @param sig - The signature to validate
+ * @param linkId - Optional link ID for click tracking (omit for open tracking)
+ * @returns True if signature is valid
+ */
+export function validateTrackingSignature(emailId: string, sig: string, linkId?: string): boolean {
+  if (!sig || sig.length !== 16) return false;
+  const expected = generateTrackingSignature(emailId, linkId);
+  try {
+    return timingSafeEqual(Buffer.from(sig), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
 
 // ============================================================================
 // RECORDING FUNCTIONS
@@ -214,7 +257,7 @@ export function generateLinkId(): string {
  * @param emailId - The email_history record ID
  * @param linkId - The unique link identifier
  * @param originalUrl - The original destination URL
- * @returns The tracking URL
+ * @returns The tracking URL with HMAC signature
  */
 export function createTrackingUrl(
   emailId: string,
@@ -222,17 +265,19 @@ export function createTrackingUrl(
   originalUrl: string
 ): string {
   const encodedUrl = encodeURIComponent(originalUrl);
-  return `${TRACKING_BASE_URL}/api/track/click/${emailId}/${linkId}?url=${encodedUrl}`;
+  const sig = generateTrackingSignature(emailId, linkId);
+  return `${TRACKING_BASE_URL}/api/track/click/${emailId}/${linkId}?url=${encodedUrl}&sig=${sig}`;
 }
 
 /**
  * Creates a tracking pixel URL for an email
  *
  * @param emailId - The email_history record ID
- * @returns The tracking pixel URL
+ * @returns The tracking pixel URL with HMAC signature
  */
 export function createTrackingPixelUrl(emailId: string): string {
-  return `${TRACKING_BASE_URL}/api/track/open/${emailId}`;
+  const sig = generateTrackingSignature(emailId);
+  return `${TRACKING_BASE_URL}/api/track/open/${emailId}?sig=${sig}`;
 }
 
 /**

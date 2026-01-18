@@ -59,11 +59,12 @@ interface MergeRecord {
   id: string
   organizationId?: string
   primaryCustomerId: string
-  mergedCustomerId: string
-  action: 'merged' | 'dismissed' | 'undone'
+  mergedCustomerId: string | null
+  action: string
   reason?: string | null
   performedBy: string
   performedAt: string
+  mergedData?: Record<string, unknown> | null
   metadata?: Record<string, unknown> | null
   // Extended fields for display (may come from joins)
   primaryCustomer?: {

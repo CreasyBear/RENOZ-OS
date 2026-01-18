@@ -12,19 +12,16 @@ import {
   Upload,
   FileText,
   Check,
-  X,
   AlertTriangle,
   Download,
   RefreshCw,
   ChevronRight,
   ChevronLeft,
-  Eye,
 } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -460,7 +457,7 @@ function ImportProgressStep({ progress, result, isComplete }: ImportProgressStep
 
 export function BulkImport({ onImport, onCancel, className }: BulkImportProps) {
   const [currentStep, setCurrentStep] = useState(1)
-  const [file, setFile] = useState<File | null>(null)
+  const [_file, setFile] = useState<File | null>(null)
   const [csvColumns, setCsvColumns] = useState<string[]>([])
   const [sampleData, setSampleData] = useState<string[][]>([])
   const [mappings, setMappings] = useState<FieldMapping[]>([])

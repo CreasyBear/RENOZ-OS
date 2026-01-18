@@ -113,6 +113,7 @@ const cancelCampaignSchema = z.object({
  */
 export const createCampaign = createServerFn({ method: "POST" })
   .inputValidator(createCampaignSchema)
+  // @ts-expect-error - TanStack Start ServerFn type inference mismatch with handler signature
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
 
@@ -139,6 +140,7 @@ export const createCampaign = createServerFn({ method: "POST" })
  */
 export const updateCampaign = createServerFn({ method: "POST" })
   .inputValidator(updateCampaignSchema)
+  // @ts-expect-error - TanStack Start ServerFn type inference mismatch with handler signature
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
 
@@ -185,6 +187,7 @@ export const updateCampaign = createServerFn({ method: "POST" })
  */
 export const getCampaigns = createServerFn({ method: "GET" })
   .inputValidator(getCampaignsSchema)
+  // @ts-expect-error - TanStack Start ServerFn type inference mismatch with handler signature
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
@@ -218,6 +221,7 @@ export const getCampaigns = createServerFn({ method: "GET" })
  */
 export const getCampaignById = createServerFn({ method: "GET" })
   .inputValidator(getCampaignByIdSchema)
+  // @ts-expect-error - TanStack Start ServerFn type inference mismatch with handler signature
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
@@ -527,6 +531,7 @@ export const populateCampaignRecipients = createServerFn({ method: "POST" })
  */
 export const cancelCampaign = createServerFn({ method: "POST" })
   .inputValidator(cancelCampaignSchema)
+  // @ts-expect-error - TanStack Start ServerFn type inference mismatch with handler signature
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
 

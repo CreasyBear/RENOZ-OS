@@ -8,13 +8,11 @@
  * - Real-time segment size preview
  */
 import { useState, useCallback } from 'react'
-import { useMutation, useQuery } from '@tanstack/react-query'
 import {
   Plus,
   Trash2,
   GripVertical,
   Users,
-  RefreshCw,
   Save,
   X,
 } from 'lucide-react'

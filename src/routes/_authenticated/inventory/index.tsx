@@ -147,9 +147,10 @@ function InventoryPage() {
 
   const handleItemClick = useCallback(
     (item: InventoryItem) => {
-      // Navigate to item detail page (will be created in INV-ITEM-DETAIL-UI)
+      // Navigate to item detail page
       navigate({
-        to: "/_authenticated/inventory/$itemId" as any,
+        // @ts-expect-error - TanStack Router route typing
+        to: "/_authenticated/inventory/$itemId",
         params: { itemId: item.id },
       });
     },

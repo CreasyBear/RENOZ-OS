@@ -120,7 +120,10 @@ function SegmentsPage() {
 
         <TabsContent value="list" className="mt-6">
           <SegmentManager
-            segments={segments.data?.segments}
+            segments={segments.data?.segments?.map(s => ({
+              ...s,
+              description: s.description ?? '',
+            }))}
             isLoading={segments.isLoading}
             onCreateSegment={handleCreateSegment}
             onEditSegment={handleEditSegment}

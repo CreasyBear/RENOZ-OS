@@ -10,7 +10,7 @@
  */
 
 import { createAPIFileRoute } from "@tanstack/start/api";
-import { recordEmailClick } from "@/lib/server/email-tracking";
+import { recordEmailClick, validateTrackingSignature } from "@/lib/server/email-tracking";
 import { db } from "@/lib/db";
 import { emailHistory } from "@/../drizzle/schema";
 import { eq } from "drizzle-orm";
@@ -19,9 +19,15 @@ export const APIRoute = createAPIFileRoute("/api/track/click/$emailId/$linkId")(
   GET: async ({ params, request }) => {
     const { emailId, linkId } = params;
 
-    // Get the original URL from query params
+    // Get the URL and signature from query params
     const url = new URL(request.url);
     const originalUrl = url.searchParams.get("url");
+    const sig = url.searchParams.get("sig");
+
+    // Validate HMAC signature
+    if (!sig || !validateTrackingSignature(emailId, sig, linkId)) {
+      return new Response("Invalid tracking signature", { status: 403 });
+    }
 
     if (!originalUrl) {
       return new Response("Missing URL parameter", { status: 400 });

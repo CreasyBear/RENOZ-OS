@@ -4,7 +4,7 @@
  * Dialog for editing a single attribute value with type-specific inputs.
  */
 import { useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Save, X, AlertCircle } from "lucide-react";

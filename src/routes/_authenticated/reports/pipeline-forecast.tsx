@@ -11,14 +11,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   TrendingUp,
-  Calendar,
   Users,
   Building2,
   BarChart3,
   ArrowUpRight,
   ArrowDownRight,
-  Minus,
-  Download,
   RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -210,8 +207,8 @@ function PipelineForecastPage() {
       <PageLayout.Header
         title="Pipeline Forecast"
         description="Sales forecasting and analytics dashboard"
-      >
-        <div className="flex items-center gap-4">
+        actions={
+          <div className="flex items-center gap-4">
           {/* Time period selector */}
           <Select value={timePeriod} onValueChange={setTimePeriod}>
             <SelectTrigger className="w-[180px]">
@@ -251,8 +248,9 @@ function PipelineForecastPage() {
           >
             <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
           </Button>
-        </div>
-      </PageLayout.Header>
+          </div>
+        }
+      />
 
       <PageLayout.Content>
         <div className="space-y-6">

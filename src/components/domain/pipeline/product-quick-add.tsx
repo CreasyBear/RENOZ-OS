@@ -25,7 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { FormatAmount } from "@/components/shared/format";
 import { TruncateTooltip } from "@/components/shared/truncate-tooltip";
-import { listProducts } from "@/server/functions/products";
+import { listProducts } from "@/lib/server/functions/products";
 
 // ============================================================================
 // TYPES
@@ -40,9 +40,9 @@ export interface ProductQuickAddProps {
 export interface SelectedProduct {
   id: string;
   name: string;
-  code: string;
-  unitPrice: number;
-  category?: string;
+  sku: string;
+  basePrice: number;
+  categoryId?: string;
 }
 
 // ============================================================================
@@ -60,7 +60,7 @@ export const ProductQuickAdd = memo(function ProductQuickAdd({
   // Fetch products
   const productsQuery = useQuery({
     queryKey: ["products", "quick-add"],
-    queryFn: () => listProducts({ data: { limit: 200, status: "active" } }),
+    queryFn: () => listProducts({ data: { pageSize: 200, status: "active" } }),
   });
 
   const products = productsQuery.data?.products ?? [];
@@ -73,8 +73,8 @@ export const ProductQuickAdd = memo(function ProductQuickAdd({
     return products.filter(
       (p) =>
         p.name.toLowerCase().includes(searchLower) ||
-        p.code.toLowerCase().includes(searchLower) ||
-        p.category?.toLowerCase().includes(searchLower)
+        p.sku.toLowerCase().includes(searchLower) ||
+        p.categoryId?.toLowerCase().includes(searchLower)
     );
   }, [products, search]);
 
@@ -93,9 +93,9 @@ export const ProductQuickAdd = memo(function ProductQuickAdd({
       onAdd({
         id: product.id,
         name: product.name,
-        code: product.code,
-        unitPrice: product.unitPrice,
-        category: product.category ?? undefined,
+        sku: product.sku,
+        basePrice: product.basePrice,
+        categoryId: product.categoryId ?? undefined,
       });
     },
     [onAdd]
@@ -121,19 +121,19 @@ export const ProductQuickAdd = memo(function ProductQuickAdd({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <Badge variant="outline" className="text-xs shrink-0">
-              {product.code}
+              {product.sku}
             </Badge>
             <TruncateTooltip text={product.name} className="font-medium" />
           </div>
           <div className="flex items-center gap-2 mt-1">
             <span className="text-sm text-muted-foreground">
-              <FormatAmount amount={product.unitPrice} />
+              <FormatAmount amount={product.basePrice} />
             </span>
-            {product.category && (
+            {product.categoryId && (
               <>
                 <span className="text-muted-foreground">•</span>
                 <span className="text-xs text-muted-foreground">
-                  {product.category}
+                  {product.categoryId}
                 </span>
               </>
             )}

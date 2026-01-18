@@ -13,11 +13,20 @@ import { createAPIFileRoute } from "@tanstack/start/api";
 import {
   recordEmailOpen,
   TRACKING_PIXEL,
+  validateTrackingSignature,
 } from "@/lib/server/email-tracking";
 
 export const APIRoute = createAPIFileRoute("/api/track/open/$emailId")({
-  GET: async ({ params }) => {
+  GET: async ({ params, request }) => {
     const { emailId } = params;
+
+    // Validate HMAC signature
+    const url = new URL(request.url);
+    const sig = url.searchParams.get("sig");
+
+    if (!sig || !validateTrackingSignature(emailId, sig)) {
+      return new Response("Invalid tracking signature", { status: 403 });
+    }
 
     // Record the open (fire-and-forget, don't block response)
     recordEmailOpen(emailId).catch((err) => {

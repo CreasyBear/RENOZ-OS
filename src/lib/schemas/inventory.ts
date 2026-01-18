@@ -291,7 +291,7 @@ export const inventoryAlertTypeValues = [
   "forecast_deviation",
 ] as const;
 
-export const forecastPeriodValues = [
+export const forecastIntervalValues = [
   "daily",
   "weekly",
   "monthly",
@@ -313,7 +313,7 @@ export const costLayerReferenceTypeValues = [
 export const stockCountStatusSchema = z.enum(stockCountStatusValues);
 export const stockCountTypeSchema = z.enum(stockCountTypeValues);
 export const inventoryAlertTypeSchema = z.enum(inventoryAlertTypeValues);
-export const forecastPeriodSchema = z.enum(forecastPeriodValues);
+export const forecastIntervalSchema = z.enum(forecastIntervalValues);
 export const qualityStatusSchema = z.enum(qualityStatusValues);
 export const costLayerReferenceTypeSchema = z.enum(costLayerReferenceTypeValues);
 
@@ -453,7 +453,7 @@ export type CostLayerFilter = z.infer<typeof costLayerFilterSchema>;
 export const createForecastSchema = z.object({
   productId: z.string().uuid("Product is required"),
   forecastDate: z.coerce.date(),
-  forecastPeriod: forecastPeriodSchema,
+  forecastPeriod: forecastIntervalSchema,
   demandQuantity: z.coerce.number().min(0),
   forecastAccuracy: z.coerce.number().min(0).max(100).optional(),
   confidenceLevel: z.coerce.number().min(0).max(100).optional(),
@@ -483,7 +483,7 @@ export type Forecast = z.infer<typeof forecastSchema>;
 
 export const forecastFilterSchema = filterSchema.extend({
   productId: z.string().uuid().optional(),
-  forecastPeriod: forecastPeriodSchema.optional(),
+  forecastPeriod: forecastIntervalSchema.optional(),
   dateFrom: z.coerce.date().optional(),
   dateTo: z.coerce.date().optional(),
 });

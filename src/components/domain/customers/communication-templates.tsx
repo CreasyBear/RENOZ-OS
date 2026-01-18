@@ -16,9 +16,7 @@ import {
   Copy,
   FileText,
   Mail,
-  Eye,
   Variable,
-  Tag,
   Clock,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'

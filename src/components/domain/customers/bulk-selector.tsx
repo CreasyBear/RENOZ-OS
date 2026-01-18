@@ -17,7 +17,7 @@ import {
   Search,
   Users,
 } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -165,7 +165,7 @@ interface FilterPopoverProps {
   availableTags: string[]
 }
 
-function FilterPopover({ criteria, onApply, onClear, availableTags }: FilterPopoverProps) {
+function FilterPopover({ criteria, onApply, onClear, availableTags: _availableTags }: FilterPopoverProps) {
   const [localCriteria, setLocalCriteria] = useState<SelectionCriteria>(criteria)
   const [open, setOpen] = useState(false)
 

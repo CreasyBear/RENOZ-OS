@@ -9,7 +9,6 @@
  */
 import { useState, useMemo } from 'react'
 import {
-  Users,
   ArrowRight,
   Check,
   AlertTriangle,
@@ -17,7 +16,6 @@ import {
   ChevronDown,
   ChevronUp,
   Merge,
-  History,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'

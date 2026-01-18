@@ -85,7 +85,7 @@ function LocationsPage() {
     try {
       setIsLoading(true);
       const data = await getWarehouseLocationHierarchy({ data: {} });
-      if (data?.hierarchy) {
+      if (data && typeof data === 'object' && 'hierarchy' in data && data.hierarchy) {
         setLocations(data.hierarchy as unknown as WarehouseLocation[]);
       }
     } catch (error) {
@@ -213,6 +213,7 @@ function LocationsPage() {
     (item: LocationContents) => {
       navigate({
         to: "/_authenticated/inventory/$itemId" as any,
+        // @ts-expect-error - TanStack Router params type needs itemId, provided correctly
         params: { itemId: item.id },
       });
     },

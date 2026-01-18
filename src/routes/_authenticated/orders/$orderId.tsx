@@ -68,30 +68,31 @@ function OrderDetailPage() {
     duplicateMutation.mutate(orderId);
   }, [duplicateMutation, orderId]);
 
-  const handlePrint = useCallback(() => {
-    window.print();
-  }, []);
+  // Note: handlePrint is currently unused but kept for future print functionality
+  // const handlePrint = useCallback(() => {
+  //   window.print();
+  // }, []);
 
   return (
     <PageLayout>
       <PageLayout.Header
         title="Order Details"
         description="View and manage order information"
-      >
+        actions={
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={handleBack}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Orders
           </Button>
         </div>
-      </PageLayout.Header>
+        }
+      />
 
       <PageLayout.Content>
         <OrderDetail
           orderId={orderId}
           onEdit={handleEdit}
           onDuplicate={handleDuplicate}
-          onPrint={handlePrint}
         />
       </PageLayout.Content>
     </PageLayout>

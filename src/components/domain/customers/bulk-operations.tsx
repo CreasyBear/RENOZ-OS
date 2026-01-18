@@ -15,11 +15,9 @@ import {
   RefreshCw,
   AlertTriangle,
   Check,
-  X,
   Edit,
   Mail,
   Download,
-  ChevronRight,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -54,8 +52,6 @@ import { cn } from '@/lib/utils'
 // ============================================================================
 // TYPES
 // ============================================================================
-
-type OperationType = 'status' | 'tags' | 'delete' | 'export' | 'email'
 
 interface OperationResult {
   success: number
@@ -332,7 +328,7 @@ function DeleteConfirmation({
 
 export function BulkOperations({
   selectedCount,
-  selectedIds,
+  selectedIds: _selectedIds,
   availableTags,
   onUpdateStatus,
   onAssignTags,

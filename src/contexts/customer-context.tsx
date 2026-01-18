@@ -16,7 +16,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { getCustomer360 } from '@/server/customers'
+import { getCustomerById } from '@/server/customers'
 
 // ============================================================================
 // TYPES
@@ -96,17 +96,17 @@ export function CustomerProvider({ children }: CustomerProviderProps) {
     queryKey: ['customer', 'context', currentCustomerId],
     queryFn: async () => {
       if (!currentCustomerId) return null
-      const result = await getCustomer360({ id: currentCustomerId })
-      if (!result.customer) return null
+      const result = await getCustomerById({ data: { id: currentCustomerId } })
+      if (!result) return null
       return {
-        id: result.customer.id,
-        customerCode: result.customer.customerCode,
-        name: result.customer.name,
-        type: result.customer.type,
-        status: result.customer.status,
-        healthScore: result.customer.healthScore,
-        lifetimeValue: result.customer.lifetimeValue
-          ? parseFloat(result.customer.lifetimeValue)
+        id: result.id,
+        customerCode: result.customerCode,
+        name: result.name,
+        type: result.type,
+        status: result.status,
+        healthScore: result.healthScore,
+        lifetimeValue: result.lifetimeValue
+          ? typeof result.lifetimeValue === 'string' ? parseFloat(result.lifetimeValue) : result.lifetimeValue
           : null,
       } as CustomerSummary
     },
@@ -150,17 +150,17 @@ export function CustomerProvider({ children }: CustomerProviderProps) {
         const result = await queryClient.fetchQuery({
           queryKey: ['customer', 'lookup', customerId],
           queryFn: async () => {
-            const data = await getCustomer360({ id: customerId })
-            if (!data.customer) return null
+            const data = await getCustomerById({ data: { id: customerId } })
+            if (!data) return null
             return {
-              id: data.customer.id,
-              customerCode: data.customer.customerCode,
-              name: data.customer.name,
-              type: data.customer.type,
-              status: data.customer.status,
-              healthScore: data.customer.healthScore,
-              lifetimeValue: data.customer.lifetimeValue
-                ? parseFloat(data.customer.lifetimeValue)
+              id: data.id,
+              customerCode: data.customerCode,
+              name: data.name,
+              type: data.type,
+              status: data.status,
+              healthScore: data.healthScore,
+              lifetimeValue: data.lifetimeValue
+                ? typeof data.lifetimeValue === 'string' ? parseFloat(data.lifetimeValue) : data.lifetimeValue
                 : null,
             } as CustomerSummary
           },

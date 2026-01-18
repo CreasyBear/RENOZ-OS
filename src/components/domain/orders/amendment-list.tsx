@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/formatters";
-import { getOrderAmendments } from "@/lib/server/functions/order-amendments";
+import { listAmendments } from "@/lib/server/functions/order-amendments";
 import type { AmendmentStatus, AmendmentType, AmendmentChanges, FinancialImpact } from "@/lib/schemas/order-amendments";
 
 // ============================================================================
@@ -132,7 +132,10 @@ export const AmendmentList = memo(function AmendmentList({
   // Fetch amendments
   const { data: amendments, isLoading, error } = useQuery<AmendmentListItem[]>({
     queryKey: ["amendments", orderId],
-    queryFn: () => getOrderAmendments({ data: { orderId } }) as Promise<AmendmentListItem[]>,
+    queryFn: async (): Promise<AmendmentListItem[]> => {
+      const result = await listAmendments({ data: { orderId } }) as { amendments: AmendmentListItem[] };
+      return result.amendments;
+    },
   });
 
   if (isLoading) {

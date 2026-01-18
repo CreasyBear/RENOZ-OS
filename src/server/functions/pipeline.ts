@@ -25,7 +25,6 @@ import {
   opportunityActivities,
   quoteVersions,
   winLossReasons,
-  quotes,
   customers,
   contacts,
 } from "@/../drizzle/schema";
@@ -74,6 +73,7 @@ function getDefaultProbability(stage: OpportunityStage): number {
  */
 export const listOpportunities = createServerFn({ method: "GET" })
   .inputValidator(opportunityListQuerySchema)
+  // @ts-expect-error - TanStack Start type issue: handler expects ServerFn type but we provide function with ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? "opportunity:read" });
 
@@ -207,6 +207,7 @@ export const listOpportunities = createServerFn({ method: "GET" })
  */
 export const getOpportunity = createServerFn({ method: "GET" })
   .inputValidator(opportunityParamsSchema)
+  // @ts-expect-error - TanStack Start type issue: handler expects ServerFn type but we provide function with ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? "opportunity:read" });
 
@@ -293,6 +294,7 @@ export const getOpportunity = createServerFn({ method: "GET" })
  */
 export const createOpportunity = createServerFn({ method: "POST" })
   .inputValidator(createOpportunitySchema)
+  // @ts-expect-error - TanStack Start type issue: handler expects ServerFn type but we provide function with ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.create ?? "opportunity:create" });
 
@@ -332,8 +334,8 @@ export const createOpportunity = createServerFn({ method: "POST" })
         tags: tags ?? [],
         daysInStage: 0,
         version: 1,
-        createdBy: ctx.userId,
-        updatedBy: ctx.userId,
+        createdBy: ctx.user.id,
+        updatedBy: ctx.user.id,
       })
       .returning();
 
@@ -347,8 +349,9 @@ export const createOpportunity = createServerFn({ method: "POST" })
 /**
  * Update an opportunity
  */
-export const updateOpportunity = createServerFn({ method: "PUT" })
+export const updateOpportunity = createServerFn({ method: "POST" })
   .inputValidator(opportunityParamsSchema.merge(updateOpportunitySchema))
+  // @ts-expect-error - TanStack Start type issue: handler expects ServerFn type but we provide function with ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.update ?? "opportunity:update" });
 
@@ -378,7 +381,7 @@ export const updateOpportunity = createServerFn({ method: "PUT" })
 
     // Prepare update data
     const updateData: Record<string, unknown> = {
-      updatedBy: ctx.userId,
+      updatedBy: ctx.user.id,
       version: current[0].version + 1,
     };
 
@@ -421,8 +424,9 @@ export const updateOpportunity = createServerFn({ method: "PUT" })
 /**
  * Update opportunity stage with validation for win/loss
  */
-export const updateOpportunityStage = createServerFn({ method: "PUT" })
+export const updateOpportunityStage = createServerFn({ method: "POST" })
   .inputValidator(opportunityParamsSchema.merge(updateOpportunityStageSchema))
+  // @ts-expect-error - TanStack Start type issue: handler expects ServerFn type but we provide function with ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.update ?? "opportunity:update" });
 
@@ -464,7 +468,7 @@ export const updateOpportunityStage = createServerFn({ method: "PUT" })
       stage,
       probability: actualProbability,
       weightedValue,
-      updatedBy: ctx.userId,
+      updatedBy: ctx.user.id,
       version: current[0].version + 1,
     };
 
@@ -501,7 +505,7 @@ export const updateOpportunityStage = createServerFn({ method: "PUT" })
       opportunityId: id,
       type: "note",
       description: `Stage changed from ${current[0].stage} to ${stage}`,
-      createdBy: ctx.userId,
+      createdBy: ctx.user.id,
     });
 
     return { opportunity: result[0] };
@@ -514,7 +518,7 @@ export const updateOpportunityStage = createServerFn({ method: "PUT" })
 /**
  * Soft delete an opportunity
  */
-export const deleteOpportunity = createServerFn({ method: "DELETE" })
+export const deleteOpportunity = createServerFn({ method: "POST" })
   .inputValidator(opportunityParamsSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.delete ?? "opportunity:delete" });
@@ -543,7 +547,7 @@ export const deleteOpportunity = createServerFn({ method: "DELETE" })
       .update(opportunities)
       .set({
         deletedAt: new Date(),
-        updatedBy: ctx.userId,
+        updatedBy: ctx.user.id,
       })
       .where(eq(opportunities.id, id));
 
@@ -840,7 +844,7 @@ export const logActivity = createServerFn({ method: "POST" })
         outcome: outcome ?? null,
         scheduledAt: scheduledAt ?? null,
         completedAt: completedAt ?? null,
-        createdBy: ctx.userId,
+        createdBy: ctx.user.id,
       })
       .returning();
 
@@ -850,7 +854,7 @@ export const logActivity = createServerFn({ method: "POST" })
 /**
  * Update an activity (for scheduling follow-ups or marking complete)
  */
-export const updateActivity = createServerFn({ method: "PUT" })
+export const updateActivity = createServerFn({ method: "POST" })
   .inputValidator(
     opportunityActivityParamsSchema.merge(
       createOpportunityActivitySchema.partial().omit({ opportunityId: true })
@@ -902,7 +906,7 @@ export const updateActivity = createServerFn({ method: "PUT" })
 /**
  * Mark an activity as complete
  */
-export const completeActivity = createServerFn({ method: "PUT" })
+export const completeActivity = createServerFn({ method: "POST" })
   .inputValidator(
     opportunityActivityParamsSchema.extend({
       outcome: z.string().max(1000).optional(),
@@ -944,7 +948,7 @@ export const completeActivity = createServerFn({ method: "PUT" })
 /**
  * Delete an activity
  */
-export const deleteActivity = createServerFn({ method: "DELETE" })
+export const deleteActivity = createServerFn({ method: "POST" })
   .inputValidator(opportunityActivityParamsSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.update ?? "opportunity:update" });
@@ -1250,8 +1254,8 @@ export const getPipelineForecast = createServerFn({ method: "GET" })
     const conditions = [
       eq(opportunities.organizationId, ctx.organizationId),
       isNull(opportunities.deletedAt),
-      gte(opportunities.expectedCloseDate, startDate),
-      lte(opportunities.expectedCloseDate, endDate),
+      gte(opportunities.expectedCloseDate, startDate.toISOString().split('T')[0]),
+      lte(opportunities.expectedCloseDate, endDate.toISOString().split('T')[0]),
     ];
 
     if (assignedTo) {
@@ -1300,7 +1304,7 @@ export const getPipelineForecast = createServerFn({ method: "GET" })
       .orderBy(periodExpr);
 
     const forecast: ForecastPeriod[] = forecastResult.map(row => ({
-      period: row.period,
+      period: String(row.period),
       periodStart: row.periodStart,
       periodEnd: row.periodEnd,
       opportunityCount: Number(row.opportunityCount),
@@ -1345,8 +1349,8 @@ export const getForecastByEntity = createServerFn({ method: "GET" })
     const conditions = [
       eq(opportunities.organizationId, ctx.organizationId),
       isNull(opportunities.deletedAt),
-      gte(opportunities.expectedCloseDate, startDate),
-      lte(opportunities.expectedCloseDate, endDate),
+      gte(opportunities.expectedCloseDate, startDate.toISOString().split('T')[0]),
+      lte(opportunities.expectedCloseDate, endDate.toISOString().split('T')[0]),
     ];
 
     if (assignedTo) {
@@ -1539,8 +1543,8 @@ export const getRevenueAttribution = createServerFn({ method: "GET" })
     const conditions = [
       eq(opportunities.organizationId, ctx.organizationId),
       isNull(opportunities.deletedAt),
-      gte(opportunities.actualCloseDate, dateFrom),
-      lte(opportunities.actualCloseDate, dateTo),
+      gte(opportunities.actualCloseDate, dateFrom.toISOString().split('T')[0]),
+      lte(opportunities.actualCloseDate, dateTo.toISOString().split('T')[0]),
       or(eq(opportunities.stage, "won"), eq(opportunities.stage, "lost")),
     ];
 

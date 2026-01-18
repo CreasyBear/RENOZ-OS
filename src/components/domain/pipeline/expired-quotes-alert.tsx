@@ -41,7 +41,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { FormatAmount } from "@/components/shared/format";
 import { TruncateTooltip } from "@/components/shared/truncate-tooltip";
-import { format, formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 import {
   getExpiringQuotes,
   getExpiredQuotes,
@@ -90,8 +90,8 @@ export const ExpiredQuotesAlert = memo(function ExpiredQuotesAlert({
     enabled: showExpired,
   });
 
-  const expiringQuotes = expiringQuery.data?.quotes ?? [];
-  const expiredQuotes = expiredQuery.data?.quotes ?? [];
+  const expiringQuotes = expiringQuery.data?.expiringQuotes ?? [];
+  const expiredQuotes = expiredQuery.data?.expiredQuotes ?? [];
   const isLoading = expiringQuery.isLoading || expiredQuery.isLoading;
 
   const totalExpired = expiredQuotes.length;
@@ -102,53 +102,58 @@ export const ExpiredQuotesAlert = memo(function ExpiredQuotesAlert({
     return null;
   }
 
-  const renderQuoteItem = (quote: {
-    id: string;
-    quoteNumber: string;
-    opportunityName: string;
-    customerName: string;
-    totalAmount: number;
-    validUntil: string;
-  }, isExpired: boolean) => (
+  type QuoteItem = {
+    opportunityId: string;
+    opportunityTitle: string;
+    customerId: string;
+    quoteExpiresAt: Date | null;
+    value: number;
+    stage: string;
+    daysUntilExpiry?: number;
+    daysSinceExpiry?: number;
+  };
+
+  const renderQuoteItem = (quote: QuoteItem, isExpired: boolean) => (
     <div
-      key={quote.id}
+      key={quote.opportunityId}
       className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-muted/50"
     >
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
+          {/* TODO: Route '/pipeline/quotes/$quoteId' does not exist - using /pipeline for now */}
           <Link
-            to="/pipeline/quotes/$quoteId"
-            params={{ quoteId: quote.id }}
+            to="/pipeline"
             className="font-medium hover:underline"
           >
-            <TruncateTooltip text={quote.quoteNumber} />
+            <TruncateTooltip text={quote.opportunityTitle} />
           </Link>
           <Badge variant="outline" className="text-xs shrink-0">
-            <FormatAmount amount={quote.totalAmount} />
+            <FormatAmount amount={quote.value} />
           </Badge>
         </div>
         <TruncateTooltip
-          text={`${quote.customerName} • ${quote.opportunityName}`}
+          text={`Customer ID: ${quote.customerId} • ${quote.stage}`}
           className="text-sm text-muted-foreground"
         />
         <p className="text-xs text-muted-foreground">
           {isExpired
-            ? `Expired ${formatDistanceToNow(new Date(quote.validUntil), { addSuffix: true })}`
-            : `Expires ${formatDistanceToNow(new Date(quote.validUntil), { addSuffix: true })}`}
+            ? `Expired ${quote.quoteExpiresAt ? formatDistanceToNow(new Date(quote.quoteExpiresAt), { addSuffix: true }) : 'unknown'}`
+            : `Expires ${quote.quoteExpiresAt ? formatDistanceToNow(new Date(quote.quoteExpiresAt), { addSuffix: true }) : 'unknown'}`}
         </p>
       </div>
       <div className="flex items-center gap-2 ml-2">
         <ExtendValidityDialog
-          quoteId={quote.id}
-          quoteNumber={quote.quoteNumber}
-          currentValidUntil={quote.validUntil}
+          opportunityId={quote.opportunityId}
+          quoteNumber={quote.opportunityTitle}
+          currentValidUntil={quote.quoteExpiresAt?.toISOString() ?? new Date().toISOString()}
           trigger={
             <Button variant="ghost" size="sm">
               <RefreshCw className="h-4 w-4" />
             </Button>
           }
         />
-        <Link to="/pipeline/quotes/$quoteId" params={{ quoteId: quote.id }}>
+        {/* TODO: Route '/pipeline/quotes/$quoteId' does not exist - using /pipeline for now */}
+        <Link to="/pipeline">
           <Button variant="ghost" size="sm">
             <ExternalLink className="h-4 w-4" />
           </Button>
@@ -167,9 +172,9 @@ export const ExpiredQuotesAlert = memo(function ExpiredQuotesAlert({
             <AlertDescription>
               {totalExpired} quote{totalExpired !== 1 ? "s have" : " has"} expired
               and can no longer be accepted.{" "}
+              {/* TODO: Route '/pipeline/quotes' does not exist - using /pipeline for now */}
               <Link
-                to="/pipeline/quotes"
-                search={{ status: "expired" }}
+                to="/pipeline"
                 className="underline"
               >
                 View all
@@ -185,9 +190,9 @@ export const ExpiredQuotesAlert = memo(function ExpiredQuotesAlert({
             <AlertDescription>
               {totalExpiring} quote{totalExpiring !== 1 ? "s are" : " is"} expiring
               within the next {warningDays} days.{" "}
+              {/* TODO: Route '/pipeline/quotes' does not exist - using /pipeline for now */}
               <Link
-                to="/pipeline/quotes"
-                search={{ status: "expiring" }}
+                to="/pipeline"
                 className="underline"
               >
                 View all
@@ -246,10 +251,10 @@ export const ExpiredQuotesAlert = memo(function ExpiredQuotesAlert({
                     {expiredQuotes.slice(0, maxItems).map((quote) =>
                       renderQuoteItem(quote, true)
                     )}
+                    {/* TODO: Route '/pipeline/quotes' does not exist - using /pipeline for now */}
                     {totalExpired > maxItems && (
                       <Link
-                        to="/pipeline/quotes"
-                        search={{ status: "expired" }}
+                        to="/pipeline"
                         className="block text-sm text-muted-foreground hover:text-foreground px-3 py-2"
                       >
                         View all {totalExpired} expired quotes →
@@ -287,10 +292,10 @@ export const ExpiredQuotesAlert = memo(function ExpiredQuotesAlert({
                     {expiringQuotes.slice(0, maxItems).map((quote) =>
                       renderQuoteItem(quote, false)
                     )}
+                    {/* TODO: Route '/pipeline/quotes' does not exist - using /pipeline for now */}
                     {totalExpiring > maxItems && (
                       <Link
-                        to="/pipeline/quotes"
-                        search={{ status: "expiring" }}
+                        to="/pipeline"
                         className="block text-sm text-muted-foreground hover:text-foreground px-3 py-2"
                       >
                         View all {totalExpiring} expiring quotes →

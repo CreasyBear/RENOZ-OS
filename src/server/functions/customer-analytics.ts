@@ -11,7 +11,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { sql, eq, and, gte, lte, count, sum, avg } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { customers, customerTags, customerTagAssignments, customerHealthMetrics } from '@/../drizzle/schema'
+import { customers, customerTags, customerTagAssignments } from '@/../drizzle/schema'
 import { withAuth } from '@/lib/server/protected'
 import { PERMISSIONS } from '@/lib/auth/permissions'
 
@@ -36,7 +36,7 @@ export const segmentAnalyticsSchema = z.object({
  * Get key performance indicators for customer dashboard
  */
 export const getCustomerKpis = createServerFn({ method: 'GET' })
-  .validator(dateRangeSchema)
+  .inputValidator(dateRangeSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 
@@ -58,7 +58,7 @@ export const getCustomerKpis = createServerFn({ method: 'GET' })
         and(
           eq(customers.organizationId, ctx.organizationId),
           sql`${customers.deletedAt} IS NULL`,
-          startDate ? gte(customers.createdAt, startDate.toISOString()) : sql`1=1`
+          startDate ? gte(customers.createdAt, startDate) : sql`1=1`
         )
       )
 
@@ -73,8 +73,8 @@ export const getCustomerKpis = createServerFn({ method: 'GET' })
         and(
           eq(customers.organizationId, ctx.organizationId),
           sql`${customers.deletedAt} IS NULL`,
-          previousStartDate ? gte(customers.createdAt, previousStartDate.toISOString()) : sql`1=1`,
-          startDate ? lte(customers.createdAt, startDate.toISOString()) : sql`1=1`
+          previousStartDate ? gte(customers.createdAt, previousStartDate) : sql`1=1`,
+          startDate ? lte(customers.createdAt, startDate) : sql`1=1`
         )
       )
 
@@ -133,7 +133,7 @@ export const getCustomerKpis = createServerFn({ method: 'GET' })
  * Get customer health score distribution
  */
 export const getHealthDistribution = createServerFn({ method: 'GET' })
-  .validator(z.object({}))
+  .inputValidator(z.object({}))
   .handler(async () => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 
@@ -182,7 +182,7 @@ export const getHealthDistribution = createServerFn({ method: 'GET' })
  * Get customer count trends over time
  */
 export const getCustomerTrends = createServerFn({ method: 'GET' })
-  .validator(dateRangeSchema)
+  .inputValidator(dateRangeSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 
@@ -190,7 +190,7 @@ export const getCustomerTrends = createServerFn({ method: 'GET' })
     const intervals = getIntervals(range)
 
     // Get customer counts by period
-    const trends = await db.execute(sql`
+    const trends = await db.execute<{ period: string; customer_count: number; revenue: number }>(sql`
       SELECT
         TO_CHAR(DATE_TRUNC(${intervals.truncate}, ${customers.createdAt}::timestamp), ${intervals.format}) as period,
         COUNT(*) as customer_count,
@@ -203,12 +203,14 @@ export const getCustomerTrends = createServerFn({ method: 'GET' })
       ORDER BY DATE_TRUNC(${intervals.truncate}, ${customers.createdAt}::timestamp) ASC
     `)
 
+    const trendsData = trends as unknown as { period: string; customer_count: number; revenue: number }[]
+
     return {
-      customerTrend: (trends.rows as any[]).map((row) => ({
+      customerTrend: trendsData.map((row) => ({
         period: row.period,
         value: Number(row.customer_count),
       })),
-      revenueTrend: (trends.rows as any[]).map((row) => ({
+      revenueTrend: trendsData.map((row) => ({
         period: row.period,
         value: Number(row.revenue),
       })),
@@ -223,12 +225,18 @@ export const getCustomerTrends = createServerFn({ method: 'GET' })
  * Get segment (tag) performance metrics
  */
 export const getSegmentPerformance = createServerFn({ method: 'GET' })
-  .validator(z.object({}))
+  .inputValidator(z.object({}))
   .handler(async () => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 
     // Get metrics per tag (segment)
-    const segments = await db.execute(sql`
+    const segments = await db.execute<{
+      id: string
+      name: string
+      customer_count: number
+      total_revenue: number
+      avg_health_score: number
+    }>(sql`
       SELECT
         ct.id,
         ct.name,
@@ -244,8 +252,16 @@ export const getSegmentPerformance = createServerFn({ method: 'GET' })
       LIMIT 10
     `)
 
+    const segmentsData = segments as unknown as {
+      id: string
+      name: string
+      customer_count: number
+      total_revenue: number
+      avg_health_score: number
+    }[]
+
     return {
-      segments: (segments.rows as any[]).map((row) => ({
+      segments: segmentsData.map((row) => ({
         id: row.id,
         name: row.name,
         customers: Number(row.customer_count),
@@ -260,7 +276,7 @@ export const getSegmentPerformance = createServerFn({ method: 'GET' })
  * Get analytics for a specific segment/tag
  */
 export const getSegmentAnalytics = createServerFn({ method: 'GET' })
-  .validator(z.object({ tagId: z.string().uuid() }))
+  .inputValidator(z.object({ tagId: z.string().uuid() }))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 
@@ -287,7 +303,16 @@ export const getSegmentAnalytics = createServerFn({ method: 'GET' })
     }
 
     // Get customer metrics for this segment
-    const metrics = await db.execute(sql`
+    const metrics = await db.execute<{
+      customer_count: number
+      total_value: number
+      avg_value: number
+      avg_health: number
+      excellent_count: number
+      good_count: number
+      fair_count: number
+      at_risk_count: number
+    }>(sql`
       SELECT
         COUNT(DISTINCT c.id) as customer_count,
         COALESCE(SUM(c.lifetime_value), 0) as total_value,
@@ -304,7 +329,17 @@ export const getSegmentAnalytics = createServerFn({ method: 'GET' })
         AND c.deleted_at IS NULL
     `)
 
-    const m = metrics.rows[0] as any
+    const metricsData = metrics as unknown as {
+      customer_count: number
+      total_value: number
+      avg_value: number
+      avg_health: number
+      excellent_count: number
+      good_count: number
+      fair_count: number
+      at_risk_count: number
+    }[]
+    const m = metricsData[0]
     const total = Number(m?.customer_count ?? 1)
 
     return {
@@ -332,7 +367,7 @@ export const getSegmentAnalytics = createServerFn({ method: 'GET' })
  * Get customer lifecycle stage distribution
  */
 export const getLifecycleStages = createServerFn({ method: 'GET' })
-  .validator(z.object({}))
+  .inputValidator(z.object({}))
   .handler(async () => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 
@@ -375,12 +410,17 @@ export const getLifecycleStages = createServerFn({ method: 'GET' })
  * Get value tier distribution (Platinum, Gold, Silver, Bronze)
  */
 export const getValueTiers = createServerFn({ method: 'GET' })
-  .validator(z.object({}))
+  .inputValidator(z.object({}))
   .handler(async () => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 
     // Define tier thresholds (configurable in future)
-    const tiers = await db.execute(sql`
+    const tiers = await db.execute<{
+      tier: string
+      customer_count: number
+      total_revenue: number
+      avg_value: number
+    }>(sql`
       SELECT
         CASE
           WHEN ${customers.lifetimeValue} >= 100000 THEN 'Platinum'
@@ -398,7 +438,14 @@ export const getValueTiers = createServerFn({ method: 'GET' })
       ORDER BY avg_value DESC
     `)
 
-    const total = (tiers.rows as any[]).reduce((sum, t) => sum + Number(t.customer_count), 0) || 1
+    const tiersData = tiers as unknown as {
+      tier: string
+      customer_count: number
+      total_revenue: number
+      avg_value: number
+    }[]
+
+    const total = tiersData.reduce((sum, t) => sum + Number(t.customer_count), 0) || 1
 
     const tierColors: Record<string, string> = {
       Platinum: 'bg-purple-500',
@@ -408,7 +455,7 @@ export const getValueTiers = createServerFn({ method: 'GET' })
     }
 
     return {
-      tiers: (tiers.rows as any[]).map((t) => ({
+      tiers: tiersData.map((t) => ({
         name: t.tier,
         customers: Number(t.customer_count),
         percentage: Math.round((Number(t.customer_count) / total) * 100 * 10) / 10,
@@ -423,7 +470,7 @@ export const getValueTiers = createServerFn({ method: 'GET' })
  * Get top customers by lifetime value
  */
 export const getTopCustomers = createServerFn({ method: 'GET' })
-  .validator(z.object({ limit: z.number().min(1).max(50).default(10) }))
+  .inputValidator(z.object({ limit: z.number().min(1).max(50).default(10) }))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 

@@ -12,15 +12,12 @@ import { useState } from 'react'
 import {
   DollarSign,
   TrendingUp,
-  TrendingDown,
-  BarChart3,
   PieChart,
   Users,
   Target,
   Wallet,
   ShoppingCart,
   Calendar,
-  Loader2,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -32,7 +29,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Progress } from '@/components/ui/progress'
 import { TruncateTooltip } from '@/components/shared/truncate-tooltip'
 import { cn } from '@/lib/utils'
 import { FormatAmount } from '@/components/shared/format'

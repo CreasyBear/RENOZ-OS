@@ -139,7 +139,7 @@ async function validateShipmentItems(
 
     if (!lineItem) {
       throw new ValidationError("Line item not found or doesn't belong to order", {
-        orderLineItemId: `Line item ${item.orderLineItemId} not found`,
+        orderLineItemId: [`Line item ${item.orderLineItemId} not found`],
       });
     }
 
@@ -147,7 +147,7 @@ async function validateShipmentItems(
     const available = lineItem.quantity - lineItem.qtyShipped;
     if (item.quantity > available) {
       throw new ValidationError("Insufficient quantity available for shipment", {
-        orderLineItemId: `Only ${available} units available, requested ${item.quantity}`,
+        orderLineItemId: [`Only ${available} units available, requested ${item.quantity}`],
       });
     }
   }
@@ -326,7 +326,7 @@ export const createShipment = createServerFn({ method: "POST" })
         packageCount: data.packageCount,
         estimatedDeliveryAt: data.estimatedDeliveryAt,
         notes: data.notes,
-        createdBy: ctx.userId,
+        createdBy: ctx.user.id,
       })
       .returning();
 
@@ -392,7 +392,7 @@ export const updateShipment = createServerFn({ method: "POST" })
     // Cannot update delivered or returned shipments
     if (existing.status === "delivered" || existing.status === "returned") {
       throw new ValidationError("Cannot update completed shipment", {
-        status: `Shipment is ${existing.status}`,
+        status: [`Shipment is ${existing.status}`],
       });
     }
 
@@ -409,7 +409,7 @@ export const updateShipment = createServerFn({ method: "POST" })
       .set({
         ...updateData,
         trackingUrl,
-        updatedBy: ctx.userId,
+        updatedBy: ctx.user.id,
       })
       .where(eq(orderShipments.id, id))
       .returning();
@@ -444,7 +444,7 @@ export const markShipped = createServerFn({ method: "POST" })
 
     if (existing.status !== "pending") {
       throw new ValidationError("Shipment already shipped", {
-        status: `Current status is ${existing.status}`,
+        status: [`Current status is ${existing.status}`],
       });
     }
 
@@ -539,7 +539,7 @@ export const updateShipmentStatus = createServerFn({ method: "POST" })
 
     if (!validTransitions[existing.status].includes(data.status)) {
       throw new ValidationError("Invalid status transition", {
-        status: `Cannot transition from ${existing.status} to ${data.status}`,
+        status: [`Cannot transition from ${existing.status} to ${data.status}`],
       });
     }
 
@@ -559,7 +559,7 @@ export const updateShipmentStatus = createServerFn({ method: "POST" })
     const updateValues: Partial<typeof orderShipments.$inferInsert> = {
       status: data.status,
       trackingEvents,
-      updatedBy: ctx.userId,
+      updatedBy: ctx.user.id,
     };
 
     // Handle delivery
@@ -621,7 +621,7 @@ export const confirmDelivery = createServerFn({ method: "POST" })
 
     if (!["in_transit", "out_for_delivery"].includes(existing.status)) {
       throw new ValidationError("Shipment cannot be confirmed as delivered", {
-        status: `Current status is ${existing.status}`,
+        status: [`Current status is ${existing.status}`],
       });
     }
 
@@ -721,7 +721,7 @@ export const addTrackingEvent = createServerFn({ method: "POST" })
       .update(orderShipments)
       .set({
         trackingEvents,
-        updatedBy: ctx.userId,
+        updatedBy: ctx.user.id,
       })
       .where(eq(orderShipments.id, data.shipmentId))
       .returning();
@@ -809,7 +809,7 @@ export const deleteShipment = createServerFn({ method: "POST" })
 
     if (existing.status !== "pending") {
       throw new ValidationError("Only pending shipments can be deleted", {
-        status: `Current status is ${existing.status}`,
+        status: [`Current status is ${existing.status}`],
       });
     }
 

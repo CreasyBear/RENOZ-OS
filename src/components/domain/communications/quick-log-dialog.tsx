@@ -317,7 +317,6 @@ export function QuickLogDialog({
                       {...field}
                       ref={(e) => {
                         field.ref(e);
-                        // @ts-expect-error - we need to store ref for focus
                         notesRef.current = e;
                       }}
                     />

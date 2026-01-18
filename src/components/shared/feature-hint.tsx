@@ -42,7 +42,6 @@ import {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
-  TooltipArrow,
 } from "~/components/ui/tooltip"
 import {
   Popover,
@@ -122,7 +121,6 @@ function TooltipHint({
           <Info className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
           <p>{content}</p>
         </div>
-        <TooltipArrow />
       </TooltipContent>
     </Tooltip>
   )

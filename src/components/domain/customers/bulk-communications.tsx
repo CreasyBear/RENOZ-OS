@@ -14,9 +14,6 @@ import {
   Mail,
   Calendar,
   Clock,
-  CheckCircle,
-  AlertCircle,
-  FileText,
   ChevronRight,
   Filter,
   Eye,
@@ -28,13 +25,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Progress } from '@/components/ui/progress'
 import {
@@ -115,7 +105,7 @@ const MOCK_CAMPAIGNS: Campaign[] = [
     audienceType: 'segment',
     audienceCount: 78,
     templateId: '3',
-    scheduleType: 'sent',
+    scheduleType: 'now',
     status: 'sent',
     sent: 78,
     delivered: 75,

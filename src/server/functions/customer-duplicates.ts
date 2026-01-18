@@ -51,7 +51,7 @@ export interface DuplicateMatch {
  * Returns matches above the threshold, sorted by match score.
  */
 export const detectDuplicates = createServerFn({ method: 'POST' })
-  .validator(detectDuplicatesInputSchema)
+  .inputValidator(detectDuplicatesInputSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read })
 
@@ -239,7 +239,7 @@ export const detectDuplicates = createServerFn({ method: 'POST' })
  * Used for quick validation before detailed similarity search
  */
 export const checkEmailExists = createServerFn({ method: 'POST' })
-  .validator(z.object({
+  .inputValidator(z.object({
     email: z.string().email(),
     excludeCustomerId: z.string().uuid().optional(),
   }))

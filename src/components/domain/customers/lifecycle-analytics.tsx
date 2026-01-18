@@ -17,10 +17,8 @@ import {
   UserPlus,
   UserMinus,
   RefreshCw,
-  ArrowRight,
   Calendar,
   Activity,
-  Loader2,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -31,7 +29,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
 
 // ============================================================================

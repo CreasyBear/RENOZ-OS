@@ -177,7 +177,7 @@ function InventoryItemPage() {
   // Loading state
   if (isLoading || !item) {
     return (
-      <PageLayout variant="standard">
+      <PageLayout variant="container">
         <PageLayout.Header
           title="Loading..."
           actions={
@@ -198,7 +198,7 @@ function InventoryItemPage() {
   }
 
   return (
-    <PageLayout variant="standard">
+    <PageLayout variant="container">
       <PageLayout.Header
         title={item.productName}
         description={

@@ -58,7 +58,7 @@ const setDefaultSignatureSchema = z.object({
 export const createEmailSignature = createServerFn({ method: "POST" })
   .inputValidator(createSignatureSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.organization.update });
 
     // If setting as default, clear existing default
     if (data.isDefault) {
@@ -96,7 +96,7 @@ export const createEmailSignature = createServerFn({ method: "POST" })
 export const getEmailSignatures = createServerFn({ method: "GET" })
   .inputValidator(getSignaturesSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings.read });
+    const ctx = await withAuth({ permission: PERMISSIONS.organization.read });
 
     const conditions = [eq(emailSignatures.organizationId, ctx.organizationId)];
 
@@ -128,7 +128,7 @@ export const getEmailSignatures = createServerFn({ method: "GET" })
 export const getEmailSignature = createServerFn({ method: "GET" })
   .inputValidator(getSignatureSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings.read });
+    const ctx = await withAuth({ permission: PERMISSIONS.organization.read });
 
     const [signature] = await db
       .select()
@@ -155,7 +155,7 @@ export const getEmailSignature = createServerFn({ method: "GET" })
 export const updateEmailSignature = createServerFn({ method: "POST" })
   .inputValidator(updateSignatureSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.organization.update });
 
     // Verify ownership
     const [existing] = await db
@@ -211,7 +211,7 @@ export const updateEmailSignature = createServerFn({ method: "POST" })
 export const deleteEmailSignature = createServerFn({ method: "POST" })
   .inputValidator(deleteSignatureSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.organization.update });
 
     // Verify ownership
     const [existing] = await db
@@ -241,7 +241,7 @@ export const deleteEmailSignature = createServerFn({ method: "POST" })
 export const setDefaultSignature = createServerFn({ method: "POST" })
   .inputValidator(setDefaultSignatureSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.organization.update });
 
     // Clear existing default for this user
     await db

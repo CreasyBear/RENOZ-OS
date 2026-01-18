@@ -9,7 +9,6 @@
 
 import { z } from "zod";
 import {
-  currencySchema,
   percentageSchema,
   paginationSchema,
   filterSchema,
