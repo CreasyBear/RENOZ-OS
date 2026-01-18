@@ -9,7 +9,6 @@
  * - Recent activity summary
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
 import {
   Package,
   PackagePlus,
@@ -28,6 +27,7 @@ import {
   MobileActionButton,
   MobileQuickActions,
 } from "@/components/mobile/inventory-actions";
+import { useOnlineStatus } from "@/hooks";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -43,21 +43,7 @@ export const Route = createFileRoute("/_authenticated/mobile/" as any)({
 
 function MobileHomePage() {
   const navigate = useNavigate();
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-
-  // Track online status
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
+  const isOnline = useOnlineStatus();
 
   const quickActions = [
     {
@@ -83,7 +69,7 @@ function MobileHomePage() {
   ];
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-dvh bg-muted/30">
       {/* Header */}
       <div className="bg-primary text-primary-foreground p-4 pb-8">
         <div className="flex items-center justify-between mb-6">
@@ -113,7 +99,7 @@ function MobileHomePage() {
 
         {/* Network warning */}
         {!isOnline && (
-          <div className="bg-red-500/20 rounded-lg p-3 flex items-start gap-3">
+          <div role="alert" className="bg-red-500/20 rounded-lg p-3 flex items-start gap-3">
             <WifiOff className="h-5 w-5 flex-shrink-0 mt-0.5" />
             <div className="text-sm">
               <div className="font-medium">You are offline</div>
@@ -172,15 +158,15 @@ function MobileHomePage() {
             </h2>
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-primary">12</div>
+                <div className="text-2xl font-bold text-primary tabular-nums">12</div>
                 <div className="text-xs text-muted-foreground">Received</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-primary">8</div>
+                <div className="text-2xl font-bold text-primary tabular-nums">8</div>
                 <div className="text-xs text-muted-foreground">Picked</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-primary">24</div>
+                <div className="text-2xl font-bold text-primary tabular-nums">24</div>
                 <div className="text-xs text-muted-foreground">Counted</div>
               </div>
             </div>
@@ -189,7 +175,7 @@ function MobileHomePage() {
       </div>
 
       {/* Bottom navigation placeholder */}
-      <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-2 flex justify-around">
+      <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex justify-around">
         <button
           aria-label="Home"
           aria-current="page"

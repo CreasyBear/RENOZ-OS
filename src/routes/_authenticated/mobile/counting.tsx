@@ -21,16 +21,28 @@ import {
   Eye,
   EyeOff,
   RefreshCw,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
+import { useOnlineStatus, useOfflineQueue } from "@/hooks";
 import {
   BarcodeScanner,
   QuantityInput,
@@ -75,6 +87,7 @@ interface CountSession {
 }
 
 interface PendingCount {
+  id?: string;
   inventoryId: string;
   countedQty: number;
   timestamp: Date;
@@ -200,29 +213,21 @@ function MobileCountingPage() {
   const [isBlindCount, setIsBlindCount] = useState(true);
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [isVerified, setIsVerified] = useState(false);
-  const [pendingCounts, setPendingCounts] = useState<PendingCount[]>([]);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [isSyncing, setIsSyncing] = useState(false);
+  // Persist offline queue to localStorage using useOfflineQueue hook
+  const {
+    addToQueue,
+    syncQueue,
+    isSyncing,
+    queueLength,
+  } = useOfflineQueue<PendingCount>("mobile-counting-queue");
+  const isOnline = useOnlineStatus();
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const currentItem = countSession?.items[currentItemIndex];
   const completedCount = countSession?.items.filter((i) => i.status !== "pending").length ?? 0;
   const progress = countSession ? (completedCount / countSession.items.length) * 100 : 0;
-
-  // Track online status
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
 
   // Load locations function (extracted for reuse)
   const loadLocations = useCallback(async () => {
@@ -333,14 +338,22 @@ function MobileCountingPage() {
     [currentItem]
   );
 
-  // Submit count for current item
-  const handleSubmitCount = useCallback(async () => {
+  // Show confirmation dialog for count submission
+  const handleSubmitCountClick = useCallback(() => {
     if (!countSession || !currentItem || !isVerified) return;
+    setShowConfirmDialog(true);
+  }, [countSession, currentItem, isVerified]);
+
+  // Submit count for current item (after confirmation)
+  const handleConfirmedCount = useCallback(async () => {
+    setShowConfirmDialog(false);
+    if (!countSession || !currentItem || !isVerified) return;
+
+    const variance = countedQuantity - currentItem.expectedQty;
 
     try {
       setIsSubmitting(true);
 
-      const variance = countedQuantity - currentItem.expectedQty;
       const newItems = [...countSession.items];
       newItems[currentItemIndex] = {
         ...currentItem,
@@ -360,14 +373,11 @@ function MobileCountingPage() {
 
       // Add to pending queue if offline
       if (!isOnline) {
-        setPendingCounts((prev) => [
-          ...prev,
-          {
-            inventoryId: currentItem.inventoryId,
-            countedQty: countedQuantity,
-            timestamp: new Date(),
-          },
-        ]);
+        addToQueue({
+          inventoryId: currentItem.inventoryId,
+          countedQty: countedQuantity,
+          timestamp: new Date(),
+        });
       }
 
       if (variance !== 0) {
@@ -405,24 +415,22 @@ function MobileCountingPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [countSession, currentItem, currentItemIndex, countedQuantity, isVerified, isOnline]);
+  }, [countSession, currentItem, currentItemIndex, countedQuantity, isVerified, isOnline, addToQueue]);
 
-  // Sync pending counts
+  // Sync pending counts using useOfflineQueue
   const handleSync = useCallback(async () => {
-    if (pendingCounts.length === 0) return;
-
-    setIsSyncing(true);
-    try {
+    const result = await syncQueue(async (_item) => {
       // In production, this would call the server
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setPendingCounts([]);
-      toast.success(`Synced ${pendingCounts.length} counts`);
-    } catch (error) {
-      toast.error("Sync failed");
-    } finally {
-      setIsSyncing(false);
+      // await submitCount({ data: { inventoryId: _item.inventoryId, countedQty: _item.countedQty } });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+
+    if (result.failed === 0) {
+      toast.success(`Synced ${result.success} counts`);
+    } else {
+      toast.warning(`Synced ${result.success} counts, ${result.failed} failed`);
     }
-  }, [pendingCounts]);
+  }, [syncQueue]);
 
   // Reset and go back to location selection
   const handleNewSession = useCallback(() => {
@@ -435,7 +443,7 @@ function MobileCountingPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-dvh bg-muted/30">
       <MobilePageHeader
         title="Cycle Count"
         subtitle={
@@ -454,7 +462,7 @@ function MobileCountingPage() {
         {/* Offline indicator */}
         <OfflineIndicator
           isOnline={isOnline}
-          pendingActions={pendingCounts.length}
+          pendingActions={queueLength}
           onSync={handleSync}
           isSyncing={isSyncing}
         />
@@ -607,11 +615,12 @@ function MobileCountingPage() {
 
                     {/* Barcode verification */}
                     <div className="space-y-2">
-                      <label className="text-sm font-medium flex items-center gap-2">
+                      <label htmlFor="barcode-scanner-counting" className="text-sm font-medium flex items-center gap-2">
                         <Package className="h-4 w-4" />
                         Scan to Verify
                       </label>
                       <BarcodeScanner
+                        id="barcode-scanner-counting"
                         onScan={handleScan}
                         placeholder="Scan product barcode"
                         autoFocus={true}
@@ -638,10 +647,11 @@ function MobileCountingPage() {
                     {/* Count input */}
                     {isVerified && (
                       <div className="space-y-2">
-                        <label className="text-sm font-medium">
+                        <label htmlFor="count-input" className="text-sm font-medium">
                           Enter Count
                         </label>
                         <QuantityInput
+                          id="count-input"
                           value={countedQuantity}
                           onChange={setCountedQuantity}
                           min={0}
@@ -652,12 +662,15 @@ function MobileCountingPage() {
                     {/* Actions */}
                     <div className="pt-2">
                       <Button
-                        onClick={handleSubmitCount}
+                        onClick={handleSubmitCountClick}
                         disabled={!isVerified || isSubmitting}
                         className="w-full h-14 text-lg"
                       >
                         {isSubmitting ? (
-                          "Submitting..."
+                          <>
+                            <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                            Submit Count
+                          </>
                         ) : (
                           <>
                             <Check className="h-5 w-5 mr-2" />
@@ -689,6 +702,32 @@ function MobileCountingPage() {
           </>
         )}
       </div>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Count</AlertDialogTitle>
+            <AlertDialogDescription>
+              Submit count of {countedQuantity} for {currentItem?.productName}?
+              {currentItem && countedQuantity !== currentItem.expectedQty && (
+                <>
+                  <br />
+                  <span className="font-semibold text-orange-600">
+                    Variance: {countedQuantity - currentItem.expectedQty > 0 ? '+' : ''}{countedQuantity - currentItem.expectedQty}
+                  </span>
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmedCount}>
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

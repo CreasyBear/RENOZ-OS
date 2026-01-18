@@ -102,7 +102,7 @@ export {
   healthKeys,
   useCustomerHealthMetrics,
   useCustomerHealthHistory,
-  useCalculateHealthScore,
+  useCreateHealthMetric,
   getHealthLevel,
   getHealthColor,
   getHealthBgColor,
@@ -228,3 +228,4 @@ export {
 
 // Mobile Hooks
 export { useOnlineStatus } from './use-online-status'
+export { usePersistedState, useOfflineQueue } from './use-persisted-state'

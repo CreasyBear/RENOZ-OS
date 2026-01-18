@@ -11,11 +11,22 @@
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useEffect } from "react";
-import { Package, MapPin, AlertTriangle } from "lucide-react";
+import { Package, MapPin, AlertTriangle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -24,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
+import { useOnlineStatus, useOfflineQueue } from "@/hooks";
 import {
   BarcodeScanner,
   QuantityInput,
@@ -49,6 +61,7 @@ export const Route = createFileRoute("/_authenticated/mobile/receiving" as any)(
 // ============================================================================
 
 interface ReceiveEntry {
+  id?: string;
   product: ScannedItem;
   quantity: number;
   unitCost: number;
@@ -61,6 +74,7 @@ interface ReceiveEntry {
 
 function MobileReceivingPage() {
   const navigate = useNavigate();
+  const isOnline = useOnlineStatus();
 
   // State
   const [scannedItem, setScannedItem] = useState<ScannedItem | null>(null);
@@ -68,24 +82,17 @@ function MobileReceivingPage() {
   const [unitCost, setUnitCost] = useState(0);
   const [locationId, setLocationId] = useState("");
   const [locations, setLocations] = useState<Array<{ id: string; name: string; code: string }>>([]);
-  const [pendingItems, setPendingItems] = useState<ReceiveEntry[]>([]);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isLoadingLocations, setIsLoadingLocations] = useState(true);
+  // Persist offline queue to localStorage using useOfflineQueue hook
+  const {
+    queue: pendingItems,
+    addToQueue,
+    syncQueue,
+    isSyncing,
+    queueLength,
+  } = useOfflineQueue<ReceiveEntry>("mobile-receiving-queue");
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Track online status
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   // Load locations
   useEffect(() => {
@@ -93,6 +100,7 @@ function MobileReceivingPage() {
 
     async function loadLocations() {
       try {
+        setIsLoadingLocations(true);
         const data = (await (listLocations as any)({
           data: { page: 1, pageSize: 100 },
         })) as any;
@@ -114,6 +122,10 @@ function MobileReceivingPage() {
               onClick: () => loadLocations(),
             },
           });
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingLocations(false);
         }
       }
     }
@@ -172,17 +184,17 @@ function MobileReceivingPage() {
       locationId,
     };
 
-    setPendingItems((prev) => [...prev, entry]);
+    addToQueue(entry);
     setScannedItem(null);
     setQuantity(1);
     setUnitCost(0);
     toast.success("Added to queue", {
       description: `${quantity} x ${scannedItem.productName}`,
     });
-  }, [scannedItem, quantity, unitCost, locationId]);
+  }, [scannedItem, quantity, unitCost, locationId, addToQueue]);
 
-  // Submit single item immediately
-  const handleReceiveNow = useCallback(async () => {
+  // Show confirmation dialog for receiving
+  const handleReceiveNowClick = useCallback(() => {
     if (!scannedItem?.productId) {
       toast.error("Please scan a product first");
       return;
@@ -191,6 +203,13 @@ function MobileReceivingPage() {
       toast.error("Please select a location");
       return;
     }
+    setShowConfirmDialog(true);
+  }, [scannedItem, locationId]);
+
+  // Submit single item immediately (after confirmation)
+  const handleConfirmedReceive = useCallback(async () => {
+    setShowConfirmDialog(false);
+    if (!scannedItem?.productId || !locationId) return;
 
     try {
       setIsSubmitting(true);
@@ -217,43 +236,28 @@ function MobileReceivingPage() {
     }
   }, [scannedItem, quantity, unitCost, locationId]);
 
-  // Sync pending items
+  // Sync pending items using useOfflineQueue
   const handleSync = useCallback(async () => {
-    if (pendingItems.length === 0) return;
+    const result = await syncQueue(async (item) => {
+      await receiveInventory({
+        data: {
+          productId: item.product.productId!,
+          locationId: item.locationId,
+          quantity: item.quantity,
+          unitCost: item.unitCost,
+        },
+      });
+    });
 
-    setIsSyncing(true);
-    let successCount = 0;
-    let failedItems: ReceiveEntry[] = [];
-
-    for (const item of pendingItems) {
-      try {
-        await receiveInventory({
-          data: {
-            productId: item.product.productId!,
-            locationId: item.locationId,
-            quantity: item.quantity,
-            unitCost: item.unitCost,
-          },
-        });
-        successCount++;
-      } catch (error) {
-        console.error("Failed to sync item:", error);
-        failedItems.push(item);
-      }
-    }
-
-    setPendingItems(failedItems);
-    setIsSyncing(false);
-
-    if (failedItems.length === 0) {
-      toast.success(`Synced ${successCount} items`);
+    if (result.failed === 0) {
+      toast.success(`Synced ${result.success} items`);
     } else {
-      toast.warning(`Synced ${successCount} items, ${failedItems.length} failed`);
+      toast.warning(`Synced ${result.success} items, ${result.failed} failed`);
     }
-  }, [pendingItems]);
+  }, [syncQueue]);
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-dvh bg-muted/30">
       <MobilePageHeader
         title="Receive Inventory"
         subtitle={scannedItem ? `Receiving: ${scannedItem.productName}` : "Scan a product barcode"}
@@ -264,7 +268,7 @@ function MobileReceivingPage() {
         {/* Offline indicator */}
         <OfflineIndicator
           isOnline={isOnline}
-          pendingActions={pendingItems.length}
+          pendingActions={queueLength}
           onSync={handleSync}
           isSyncing={isSyncing}
         />
@@ -282,7 +286,7 @@ function MobileReceivingPage() {
         )}
 
         {/* Empty state */}
-        {!scannedItem && pendingItems.length === 0 && (
+        {!scannedItem && queueLength === 0 && (
           <Card className="border-dashed">
             <CardContent className="py-8 text-center">
               <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -307,18 +311,26 @@ function MobileReceivingPage() {
                   <MapPin className="h-4 w-4" aria-hidden="true" />
                   Location
                 </Label>
-                <Select value={locationId} onValueChange={setLocationId}>
-                  <SelectTrigger id="location-select" className="min-h-[44px] text-base">
-                    <SelectValue placeholder="Select location..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {locations.map((loc) => (
-                      <SelectItem key={loc.id} value={loc.id}>
-                        {loc.name} ({loc.code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {isLoadingLocations ? (
+                  <Skeleton className="h-[44px] w-full" />
+                ) : locations.length === 0 ? (
+                  <div className="text-center py-4 text-muted-foreground text-sm">
+                    No locations configured. Please set up warehouse locations first.
+                  </div>
+                ) : (
+                  <Select value={locationId} onValueChange={setLocationId}>
+                    <SelectTrigger id="location-select" className="min-h-[44px] text-base">
+                      <SelectValue placeholder="Select location..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {locations.map((loc) => (
+                        <SelectItem key={loc.id} value={loc.id}>
+                          {loc.name} ({loc.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               {/* Quantity */}
@@ -332,8 +344,9 @@ function MobileReceivingPage() {
 
               {/* Unit cost */}
               <div className="space-y-2">
-                <Label>Unit Cost ($)</Label>
+                <Label htmlFor="unit-cost-input">Unit Cost ($)</Label>
                 <Input
+                  id="unit-cost-input"
                   type="number"
                   value={unitCost}
                   onChange={(e) => setUnitCost(Number(e.target.value))}
@@ -373,11 +386,18 @@ function MobileReceivingPage() {
                       Queue
                     </Button>
                     <Button
-                      onClick={handleReceiveNow}
+                      onClick={handleReceiveNowClick}
                       disabled={!locationId || isSubmitting}
                       className="flex-1 h-14 text-lg"
                     >
-                      {isSubmitting ? "Saving..." : "Receive Now"}
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                          Receive Now
+                        </>
+                      ) : (
+                        "Receive Now"
+                      )}
                     </Button>
                   </>
                 )}
@@ -387,14 +407,14 @@ function MobileReceivingPage() {
         )}
 
         {/* Pending items list */}
-        {pendingItems.length > 0 && !scannedItem && (
+        {queueLength > 0 && !scannedItem && (
           <div className="space-y-3">
             <h2 className="font-semibold flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-orange-500" />
-              Pending Items ({pendingItems.length})
+              Pending Items ({queueLength})
             </h2>
-            {pendingItems.map((item, i) => (
-              <Card key={i}>
+            {pendingItems.map((item) => (
+              <Card key={item.id}>
                 <CardContent className="p-3 flex items-center justify-between">
                   <div>
                     <div className="font-medium">{item.product.productName}</div>
@@ -413,6 +433,26 @@ function MobileReceivingPage() {
           </div>
         )}
       </div>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Receive</AlertDialogTitle>
+            <AlertDialogDescription>
+              Receive {quantity} x {scannedItem?.productName} at ${unitCost.toFixed(2)} each?
+              <br />
+              <span className="font-semibold">Total: ${(quantity * unitCost).toFixed(2)}</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmedReceive}>
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

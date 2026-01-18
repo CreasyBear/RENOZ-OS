@@ -147,8 +147,6 @@ export {
 
 export {
   MovementAnalytics,
-  type MovementSummary,
   type MovementByType,
-  type TopMover,
   type MovementTrend,
 } from "./movement-analytics";

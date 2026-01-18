@@ -68,6 +68,7 @@ interface BarcodeScannerProps {
   onScan: (barcode: string) => void;
   placeholder?: string;
   autoFocus?: boolean;
+  id?: string;
 }
 
 interface QuantityInputProps {
@@ -171,6 +172,7 @@ export const BarcodeScanner = memo(function BarcodeScanner({
   onScan,
   placeholder = "Scan barcode or enter manually",
   autoFocus = true,
+  id = "barcode-scanner-input",
 }: BarcodeScannerProps) {
   const [value, setValue] = useState("");
   const [cameraError, setCameraError] = useState(false);
@@ -198,7 +200,7 @@ export const BarcodeScanner = memo(function BarcodeScanner({
     <div className="space-y-3">
       <form onSubmit={handleSubmit} className="flex gap-2">
         <div className="relative flex-1">
-          <label htmlFor="barcode-scanner-input" className="sr-only">
+          <label htmlFor={id} className="sr-only">
             {placeholder}
           </label>
           <Barcode
@@ -206,7 +208,7 @@ export const BarcodeScanner = memo(function BarcodeScanner({
             aria-hidden="true"
           />
           <Input
-            id="barcode-scanner-input"
+            id={id}
             type="text"
             value={value}
             onChange={(e) => setValue(e.target.value)}

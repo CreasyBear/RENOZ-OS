@@ -11,19 +11,31 @@
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useEffect, memo } from "react";
-import { Package, MapPin, Check, AlertTriangle, ChevronRight } from "lucide-react";
+import { Package, MapPin, Check, AlertTriangle, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "@/hooks/use-toast";
+import { useOnlineStatus, useOfflineQueue } from "@/hooks";
 import {
   BarcodeScanner,
   QuantityInput,
   OfflineIndicator,
   MobilePageHeader,
 } from "@/components/mobile/inventory-actions";
+import { MOCK_PICK_LIST } from "./__fixtures__";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -37,7 +49,7 @@ export const Route = createFileRoute("/_authenticated/mobile/picking" as any)({
 // TYPES
 // ============================================================================
 
-interface PickItem {
+export interface PickItem {
   id: string;
   productId: string;
   productName: string;
@@ -50,7 +62,7 @@ interface PickItem {
   status: "pending" | "in_progress" | "completed" | "short";
 }
 
-interface PickList {
+export interface PickList {
   id: string;
   orderId: string;
   orderNumber: string;
@@ -60,7 +72,8 @@ interface PickList {
   createdAt: Date;
 }
 
-interface PendingPick {
+export interface PendingPick {
+  id?: string;
   pickItemId: string;
   quantityPicked: number;
   verifiedBarcode: string;
@@ -135,57 +148,6 @@ const PickItemRow = memo(function PickItemRow({
 });
 
 // ============================================================================
-// MOCK DATA (would be fetched from server in production)
-// ============================================================================
-
-const MOCK_PICK_LIST: PickList = {
-  id: "pick-001",
-  orderId: "order-001",
-  orderNumber: "ORD-2026-0042",
-  customerName: "Johnson Renovation Co",
-  status: "in_progress",
-  createdAt: new Date(),
-  items: [
-    {
-      id: "pi-1",
-      productId: "prod-1",
-      productName: "Premium Vinyl Siding - White",
-      productSku: "VIN-WHT-001",
-      locationId: "loc-a1",
-      locationCode: "A-01-02",
-      locationName: "Aisle A, Rack 1, Shelf 2",
-      quantityRequired: 24,
-      quantityPicked: 0,
-      status: "pending",
-    },
-    {
-      id: "pi-2",
-      productId: "prod-2",
-      productName: "Aluminum J-Channel",
-      productSku: "ALU-JCH-001",
-      locationId: "loc-b3",
-      locationCode: "B-03-01",
-      locationName: "Aisle B, Rack 3, Shelf 1",
-      quantityRequired: 12,
-      quantityPicked: 0,
-      status: "pending",
-    },
-    {
-      id: "pi-3",
-      productId: "prod-3",
-      productName: "Starter Strip - 10ft",
-      productSku: "STR-10F-001",
-      locationId: "loc-a2",
-      locationCode: "A-02-04",
-      locationName: "Aisle A, Rack 2, Shelf 4",
-      quantityRequired: 8,
-      quantityPicked: 0,
-      status: "pending",
-    },
-  ],
-};
-
-// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
@@ -198,28 +160,20 @@ function MobilePickingPage() {
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [quantityToPick, setQuantityToPick] = useState(0);
   const [isVerified, setIsVerified] = useState(false);
-  const [pendingPicks, setPendingPicks] = useState<PendingPick[]>([]);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [isSyncing, setIsSyncing] = useState(false);
+  // Persist offline queue to localStorage using useOfflineQueue hook
+  const {
+    addToQueue,
+    syncQueue,
+    isSyncing,
+    queueLength,
+  } = useOfflineQueue<PendingPick>("mobile-picking-queue");
+  const isOnline = useOnlineStatus();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   const currentItem = pickList.items[currentItemIndex];
   const completedCount = pickList.items.filter((i) => i.status === "completed").length;
   const progress = (completedCount / pickList.items.length) * 100;
-
-  // Track online status
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
 
   // Initialize quantity when item changes
   useEffect(() => {
@@ -252,8 +206,15 @@ function MobilePickingPage() {
     [currentItem]
   );
 
-  // Confirm pick
-  const handleConfirmPick = useCallback(async () => {
+  // Show confirmation dialog for pick
+  const handleConfirmPickClick = useCallback(() => {
+    if (!currentItem || !isVerified) return;
+    setShowConfirmDialog(true);
+  }, [currentItem, isVerified]);
+
+  // Confirm pick (after confirmation)
+  const handleConfirmedPick = useCallback(async () => {
+    setShowConfirmDialog(false);
     if (!currentItem || !isVerified) return;
 
     try {
@@ -276,15 +237,12 @@ function MobilePickingPage() {
 
       // Add to pending queue if offline
       if (!isOnline) {
-        setPendingPicks((prev) => [
-          ...prev,
-          {
-            pickItemId: currentItem.id,
-            quantityPicked: quantityToPick,
-            verifiedBarcode: scannedBarcode!,
-            timestamp: new Date(),
-          },
-        ]);
+        addToQueue({
+          pickItemId: currentItem.id,
+          quantityPicked: quantityToPick,
+          verifiedBarcode: scannedBarcode!,
+          timestamp: new Date(),
+        });
       }
 
       toast.success(`Picked ${quantityToPick} units`, {
@@ -312,7 +270,7 @@ function MobilePickingPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [currentItem, isVerified, quantityToPick, scannedBarcode, pickList, currentItemIndex, isOnline]);
+  }, [currentItem, isVerified, quantityToPick, scannedBarcode, pickList, currentItemIndex, isOnline, addToQueue]);
 
   // Mark as short
   const handleMarkShort = useCallback(() => {
@@ -339,29 +297,27 @@ function MobilePickingPage() {
     }
   }, [currentItem, pickList, currentItemIndex]);
 
-  // Sync pending picks
+  // Sync pending picks using useOfflineQueue
   const handleSync = useCallback(async () => {
-    if (pendingPicks.length === 0) return;
-
-    setIsSyncing(true);
-    try {
+    const result = await syncQueue(async (_item) => {
       // In production, this would call the server
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setPendingPicks([]);
-      toast.success(`Synced ${pendingPicks.length} picks`);
-    } catch (error) {
-      toast.error("Sync failed");
-    } finally {
-      setIsSyncing(false);
+      // await confirmPick({ data: { pickItemId: _item.pickItemId, quantityPicked: _item.quantityPicked } });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+
+    if (result.failed === 0) {
+      toast.success(`Synced ${result.success} picks`);
+    } else {
+      toast.warning(`Synced ${result.success} picks, ${result.failed} failed`);
     }
-  }, [pendingPicks]);
+  }, [syncQueue]);
 
   const allCompleted = pickList.items.every(
     (i) => i.status === "completed" || i.status === "short"
   );
 
   return (
-    <div className="min-h-screen bg-muted/30">
+    <div className="min-h-dvh bg-muted/30">
       <MobilePageHeader
         title="Pick Order"
         subtitle={`${pickList.orderNumber} - ${pickList.customerName}`}
@@ -372,7 +328,7 @@ function MobilePickingPage() {
         {/* Offline indicator */}
         <OfflineIndicator
           isOnline={isOnline}
-          pendingActions={pendingPicks.length}
+          pendingActions={queueLength}
           onSync={handleSync}
           isSyncing={isSyncing}
         />
@@ -442,11 +398,12 @@ function MobilePickingPage() {
 
                 {/* Barcode verification */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center gap-2">
+                  <label htmlFor="barcode-scanner-input" className="text-sm font-medium flex items-center gap-2">
                     <Package className="h-4 w-4" />
                     Scan to Verify
                   </label>
                   <BarcodeScanner
+                    id="barcode-scanner-input"
                     onScan={handleScan}
                     placeholder="Scan product barcode"
                     autoFocus={true}
@@ -471,8 +428,9 @@ function MobilePickingPage() {
                 {/* Quantity to pick */}
                 {isVerified && (
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Quantity to Pick</label>
+                    <label htmlFor="qty-to-pick" className="text-sm font-medium">Quantity to Pick</label>
                     <QuantityInput
+                      id="qty-to-pick"
                       value={quantityToPick}
                       onChange={setQuantityToPick}
                       min={1}
@@ -492,12 +450,15 @@ function MobilePickingPage() {
                     Short
                   </Button>
                   <Button
-                    onClick={handleConfirmPick}
+                    onClick={handleConfirmPickClick}
                     disabled={!isVerified || isSubmitting}
                     className="flex-1 h-14 text-lg"
                   >
                     {isSubmitting ? (
-                      "Confirming..."
+                      <>
+                        <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                        Confirm
+                      </>
                     ) : (
                       <>
                         <Check className="h-5 w-5 mr-2" />
@@ -527,6 +488,24 @@ function MobilePickingPage() {
           </>
         ) : null}
       </div>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Pick</AlertDialogTitle>
+            <AlertDialogDescription>
+              Pick {quantityToPick} x {currentItem?.productName}?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmedPick}>
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
