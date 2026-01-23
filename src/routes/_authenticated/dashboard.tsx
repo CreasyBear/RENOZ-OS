@@ -13,6 +13,7 @@
  * - Loading skeleton during data fetch
  */
 import { createFileRoute } from '@tanstack/react-router'
+import { useCallback } from 'react'
 import {
   TrendingUp,
   Users,
@@ -25,13 +26,25 @@ import {
 import { cn } from '@/lib/utils'
 import { PageLayout } from '@/components/layout'
 import { toast } from '@/hooks/use-toast'
+import { toastSuccess, toastError } from '@/hooks/use-toast'
 import {
   useRealtimeOrders,
   useRealtimePipeline,
   getStatusColor,
   getStatusLabel,
 } from '@/hooks'
+import {
+  useUpcomingCalls,
+  useCompleteCall,
+  useRescheduleCall,
+  useCancelScheduledCall,
+} from '@/hooks/communications'
 import { WelcomeChecklist } from '@/components/domain/dashboard/welcome-checklist'
+import {
+  UpcomingCallsWidget,
+  type ScheduledCall,
+} from '@/components/domain/communications/upcoming-calls-widget'
+import type { CallOutcomeFormData } from '@/components/domain/communications/call-outcome-dialog'
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
   component: Dashboard,
@@ -68,6 +81,67 @@ function Dashboard() {
   const { status: ordersStatus } = useRealtimeOrders({ notifyOnNew: true })
   const { status: pipelineStatus } = useRealtimePipeline({ notifyOnStageChange: true })
 
+  // ============================================================================
+  // UPCOMING CALLS DATA
+  // ============================================================================
+  const { data: upcomingCallsData, isLoading: callsLoading } = useUpcomingCalls({
+    limit: 10,
+  })
+  const completeMutation = useCompleteCall()
+  const rescheduleMutation = useRescheduleCall()
+  const cancelMutation = useCancelScheduledCall()
+
+  // ============================================================================
+  // UPCOMING CALLS HANDLERS
+  // ============================================================================
+  const handleCompleteCall = useCallback(
+    async (callId: string, data: CallOutcomeFormData) => {
+      try {
+        await completeMutation.mutateAsync({
+          data: {
+            id: callId,
+            outcome: data.outcome,
+            notes: data.notes,
+            followUpDate: data.scheduleFollowUp && data.followUpDate ? data.followUpDate : undefined,
+          },
+        })
+        toastSuccess('Call marked as complete')
+      } catch {
+        toastError('Failed to complete call')
+      }
+    },
+    [completeMutation]
+  )
+
+  const handleSnoozeCall = useCallback(
+    async (callId: string, newScheduledAt: Date) => {
+      try {
+        await rescheduleMutation.mutateAsync({
+          data: {
+            id: callId,
+            newScheduledAt,
+          },
+        })
+        toastSuccess('Call rescheduled')
+      } catch {
+        toastError('Failed to reschedule call')
+      }
+    },
+    [rescheduleMutation]
+  )
+
+  const handleCancelCall = useCallback(
+    async (callId: string) => {
+      try {
+        await cancelMutation.mutateAsync({ data: { id: callId } })
+        toastSuccess('Call cancelled')
+      } catch {
+        toastError('Failed to cancel call')
+      }
+    },
+    [cancelMutation]
+  )
+
   // Use the most relevant status (prefer connected, then connecting, then error)
   const combinedStatus = ordersStatus === 'connected' && pipelineStatus === 'connected'
     ? 'connected'
@@ -76,6 +150,19 @@ function Dashboard() {
       : ordersStatus === 'error' || pipelineStatus === 'error'
         ? 'error'
         : 'disconnected'
+
+  // Transform calls data for widget
+  const upcomingCalls: ScheduledCall[] = (upcomingCallsData?.items ?? []).map((call: Record<string, unknown>) => ({
+    id: call.id as string,
+    customerId: call.customerId as string,
+    assigneeId: call.assigneeId as string,
+    scheduledAt: new Date(call.scheduledAt as string),
+    reminderAt: call.reminderAt ? new Date(call.reminderAt as string) : null,
+    purpose: call.purpose as string,
+    notes: call.notes as string | null,
+    status: call.status as string,
+    organizationId: call.organizationId as string,
+  }))
 
   return (
     <PageLayout variant="full-width">
@@ -124,7 +211,19 @@ function Dashboard() {
           />
         </div>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-2">
+        <div className="mt-8 grid gap-6 lg:grid-cols-3">
+          {/* Upcoming Calls Widget */}
+          <UpcomingCallsWidget
+            calls={upcomingCalls}
+            isLoading={callsLoading}
+            onComplete={handleCompleteCall}
+            onSnooze={handleSnoozeCall}
+            onCancel={handleCancelCall}
+            isCompleting={completeMutation.isPending}
+            isSnoozing={rescheduleMutation.isPending}
+            isCancelling={cancelMutation.isPending}
+          />
+
           {/* Recent Orders Widget */}
           <WidgetCard title="Recent Orders">
             <div className="divide-y divide-gray-100">

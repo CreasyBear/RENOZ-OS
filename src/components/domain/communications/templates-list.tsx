@@ -1,16 +1,17 @@
 /**
- * Templates List Component
+ * Templates List Component (Presenter)
  *
  * Main management interface for email templates.
  * Displays templates by category with create/edit/delete actions.
+ * All data fetching and mutations are handled by the container.
  *
  * @see DOM-COMMS-007
+ * @see docs/plans/2026-01-24-refactor-communications-full-container-presenter-plan.md
  */
 
 "use client";
 
 import * as React from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   MoreHorizontal,
   Plus,
@@ -56,12 +57,6 @@ import {
 } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
 
-import {
-  getEmailTemplates,
-  deleteEmailTemplate,
-  cloneEmailTemplate,
-  getTemplateVersionHistory,
-} from "@/lib/server/email-templates";
 import { TemplateEditor } from "./template-editor";
 import type { TemplateCategory } from "../../../../drizzle/schema";
 import { toast } from "sonner";
@@ -70,7 +65,7 @@ import { toast } from "sonner";
 // TYPES
 // ============================================================================
 
-interface Template {
+export interface Template {
   id: string;
   name: string;
   description: string | null;
@@ -83,7 +78,7 @@ interface Template {
   updatedAt: string;
 }
 
-interface TemplateVersion {
+export interface TemplateVersion {
   id: string;
   name: string;
   version: number;
@@ -91,7 +86,44 @@ interface TemplateVersion {
   updatedBy: string | null;
 }
 
-interface TemplatesListProps {
+export interface TemplateFormValues {
+  name: string;
+  description?: string;
+  category: TemplateCategory;
+  subject: string;
+  bodyHtml: string;
+  isActive: boolean;
+  createVersion: boolean;
+}
+
+/**
+ * Props for the TemplatesList presenter component.
+ * All data is passed from the container route.
+ */
+export interface TemplatesListProps {
+  /** @source useEmailTemplates() in communications/templates/index.tsx */
+  templates: Template[];
+  /** @source useEmailTemplates().isLoading in container */
+  isLoading: boolean;
+  selectedCategory: TemplateCategory | "all";
+  onCategoryChange: (category: TemplateCategory | "all") => void;
+  searchQuery: string;
+  onSearchQueryChange: (query: string) => void;
+  /** @source useCreateEmailTemplate() in container */
+  onCreate: (values: TemplateFormValues) => Promise<void>;
+  /** @source useUpdateEmailTemplate() in container */
+  onUpdate: (id: string, values: TemplateFormValues) => Promise<void>;
+  /** @source useDeleteEmailTemplate() in container */
+  onDelete: (id: string) => Promise<void>;
+  /** @source useCloneEmailTemplate() in container */
+  onClone: (id: string, newName: string) => Promise<void>;
+  /** @source useTemplateVersionHistory() in container */
+  versions: TemplateVersion[];
+  versionsLoading: boolean;
+  onFetchVersions: (templateId: string) => void;
+  isDeleting?: boolean;
+  isCloning?: boolean;
+  isSaving?: boolean;
   className?: string;
 }
 
@@ -115,11 +147,25 @@ const CATEGORIES: { value: TemplateCategory | "all"; label: string }[] = [
 // COMPONENT
 // ============================================================================
 
-export function TemplatesList({ className }: TemplatesListProps) {
-  const [selectedCategory, setSelectedCategory] = React.useState<
-    TemplateCategory | "all"
-  >("all");
-  const [searchQuery, setSearchQuery] = React.useState("");
+export function TemplatesList({
+  templates,
+  isLoading,
+  selectedCategory,
+  onCategoryChange,
+  searchQuery,
+  onSearchQueryChange,
+  onCreate,
+  onUpdate,
+  onDelete,
+  onClone,
+  versions,
+  versionsLoading,
+  onFetchVersions,
+  isDeleting = false,
+  isCloning = false,
+  isSaving = false,
+  className,
+}: TemplatesListProps) {
   const [editingTemplate, setEditingTemplate] =
     React.useState<Template | null>(null);
   const [isCreating, setIsCreating] = React.useState(false);
@@ -132,24 +178,7 @@ export function TemplatesList({ className }: TemplatesListProps) {
     null
   );
 
-  const queryClient = useQueryClient();
-
-  // Fetch templates
-  const { data: templatesData, isLoading } = useQuery({
-    queryKey: ["email-templates", selectedCategory],
-    queryFn: () =>
-      getEmailTemplates({
-        data: {
-          category:
-            selectedCategory === "all" ? undefined : selectedCategory,
-          activeOnly: false,
-        },
-      }),
-  });
-
-  const templates = (templatesData as Template[] | undefined) ?? [];
-
-  // Filter by search
+  // Filter by search (client-side filtering for responsiveness)
   const filteredTemplates = React.useMemo(() => {
     if (!searchQuery) return templates;
     const query = searchQuery.toLowerCase();
@@ -161,54 +190,12 @@ export function TemplatesList({ className }: TemplatesListProps) {
     );
   }, [templates, searchQuery]);
 
-  // Fetch version history
-  const { data: versionsData, isLoading: versionsLoading } = useQuery({
-    queryKey: ["template-versions", versionHistory?.id],
-    queryFn: () =>
-      versionHistory
-        ? getTemplateVersionHistory({ data: { templateId: versionHistory.id } })
-        : Promise.resolve([]),
-    enabled: !!versionHistory,
-  });
-
-  const versions = (versionsData as TemplateVersion[] | undefined) ?? [];
-
-  // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return deleteEmailTemplate({ data: { id } });
-    },
-    onSuccess: () => {
-      toast.success("Template deleted");
-      queryClient.invalidateQueries({ queryKey: ["email-templates"] });
-      setDeleteConfirm(null);
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to delete template"
-      );
-    },
-  });
-
-  // Clone mutation
-  const cloneMutation = useMutation({
-    mutationFn: async ({ id, newName }: { id: string; newName: string }) => {
-      return cloneEmailTemplate({ data: { id, newName } });
-    },
-    onSuccess: () => {
-      toast.success("Template cloned");
-      queryClient.invalidateQueries({ queryKey: ["email-templates"] });
-      setCloneDialog(null);
-      setCloneName("");
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to clone template"
-      );
-    },
-  });
-
-  const handleSave = () => {
+  const handleSubmit = async (values: TemplateFormValues) => {
+    if (editingTemplate) {
+      await onUpdate(editingTemplate.id, values);
+    } else {
+      await onCreate(values);
+    }
     setEditingTemplate(null);
     setIsCreating(false);
   };
@@ -218,10 +205,24 @@ export function TemplatesList({ className }: TemplatesListProps) {
     setIsCreating(false);
   };
 
-  const handleClone = () => {
-    if (cloneDialog && cloneName) {
-      cloneMutation.mutate({ id: cloneDialog.id, newName: cloneName });
+  const handleDelete = async () => {
+    if (deleteConfirm) {
+      await onDelete(deleteConfirm.id);
+      setDeleteConfirm(null);
     }
+  };
+
+  const handleClone = async () => {
+    if (cloneDialog && cloneName) {
+      await onClone(cloneDialog.id, cloneName);
+      setCloneDialog(null);
+      setCloneName("");
+    }
+  };
+
+  const handleViewHistory = (template: Template) => {
+    setVersionHistory(template);
+    onFetchVersions(template.id);
   };
 
   // Show editor when creating or editing
@@ -229,11 +230,12 @@ export function TemplatesList({ className }: TemplatesListProps) {
     return (
       <TemplateEditor
         template={editingTemplate ?? undefined}
-        onSave={handleSave}
+        onSubmit={handleSubmit}
         onCancel={handleCancel}
         onViewHistory={
           editingTemplate ? () => setVersionHistory(editingTemplate) : undefined
         }
+        isSubmitting={isSaving}
         className={className}
       />
     );
@@ -260,7 +262,7 @@ export function TemplatesList({ className }: TemplatesListProps) {
         <Tabs
           value={selectedCategory}
           onValueChange={(v) =>
-            setSelectedCategory(v as TemplateCategory | "all")
+            onCategoryChange(v as TemplateCategory | "all")
           }
           className="mb-4"
         >
@@ -275,7 +277,7 @@ export function TemplatesList({ className }: TemplatesListProps) {
             <Input
               placeholder="Search templates..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => onSearchQueryChange(e.target.value)}
               className="max-w-xs"
               aria-label="Search templates"
             />
@@ -322,7 +324,7 @@ export function TemplatesList({ className }: TemplatesListProps) {
                   setCloneDialog(template);
                   setCloneName(`${template.name} (Copy)`);
                 }}
-                onViewHistory={() => setVersionHistory(template)}
+                onViewHistory={() => handleViewHistory(template)}
               />
             ))}
           </div>
@@ -348,12 +350,10 @@ export function TemplatesList({ className }: TemplatesListProps) {
               </Button>
               <Button
                 variant="destructive"
-                onClick={() =>
-                  deleteConfirm && deleteMutation.mutate(deleteConfirm.id)
-                }
-                disabled={deleteMutation.isPending}
+                onClick={handleDelete}
+                disabled={isDeleting}
               >
-                {deleteMutation.isPending ? "Deleting..." : "Delete"}
+                {isDeleting ? "Deleting..." : "Delete"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -383,9 +383,9 @@ export function TemplatesList({ className }: TemplatesListProps) {
               </Button>
               <Button
                 onClick={handleClone}
-                disabled={!cloneName || cloneMutation.isPending}
+                disabled={!cloneName || isCloning}
               >
-                {cloneMutation.isPending ? "Cloning..." : "Clone"}
+                {isCloning ? "Cloning..." : "Clone"}
               </Button>
             </DialogFooter>
           </DialogContent>
