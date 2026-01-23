@@ -126,3 +126,104 @@ export interface DealLostPayload {
   value: number
   reason?: string
 }
+
+// ============================================================================
+// WARRANTY EVENTS
+// ============================================================================
+
+/**
+ * Warranty events triggered from Edge Functions
+ */
+export const warrantyEvents = {
+  registered: 'warranty.registered',
+  expiringSoon: 'warranty.expiring_soon',
+  expired: 'warranty.expired',
+  extended: 'warranty.extended',
+  claimSubmitted: 'warranty.claim_submitted',
+  claimResolved: 'warranty.claim_resolved',
+} as const
+
+/**
+ * Warranty registration event payload
+ */
+export interface WarrantyRegisteredPayload {
+  warrantyId: string
+  warrantyNumber: string
+  organizationId: string
+  customerId: string
+  productId: string
+  productName: string
+  customerName: string
+  customerEmail?: string
+  startDate: string
+  expiryDate: string
+  policyName: string
+}
+
+/**
+ * Warranty expiring soon event payload
+ */
+export interface WarrantyExpiringSoonPayload {
+  warrantyId: string
+  warrantyNumber: string
+  organizationId: string
+  customerId: string
+  customerName: string
+  customerEmail?: string
+  productId: string
+  productName: string
+  expiryDate: string
+  daysUntilExpiry: number
+}
+
+/**
+ * Warranty extended event payload
+ */
+export interface WarrantyExtendedPayload {
+  warrantyId: string
+  warrantyNumber: string
+  organizationId: string
+  customerId: string
+  productId: string
+  oldExpiryDate: string
+  newExpiryDate: string
+  extensionMonths: number
+  reason?: string
+}
+
+/**
+ * Warranty claim submitted event payload
+ */
+export interface WarrantyClaimSubmittedPayload {
+  claimId: string
+  claimNumber: string
+  warrantyId: string
+  warrantyNumber: string
+  organizationId: string
+  customerId: string
+  customerName: string
+  customerEmail?: string
+  productId: string
+  productName: string
+  claimType: string
+  description: string
+  submittedAt: string
+}
+
+/**
+ * Warranty claim resolved event payload
+ */
+export interface WarrantyClaimResolvedPayload {
+  claimId: string
+  claimNumber: string
+  warrantyId: string
+  warrantyNumber: string
+  organizationId: string
+  customerId: string
+  customerName: string
+  customerEmail?: string
+  resolution: string
+  resolutionType: string
+  resolvedAt: string
+  resolutionNotes?: string
+}
