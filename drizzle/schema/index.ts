@@ -1,58 +1,72 @@
 /**
  * Drizzle Schema Barrel Export
  *
- * All table schemas should be exported from here.
+ * All table schemas organized by domain.
  * Domain PRDs will add their schemas as they're implemented.
  *
  * @see drizzle/schema/README.md for conventions
  */
 
 // Foundation patterns and enums
-export * from "./enums";
-export * from "./patterns";
+export * from "./_shared";
 
 // Core entity schemas
 export * from "./customers";
 
 // Products domain (full catalog management)
-export * from "./categories";
 export * from "./products";
-export * from "./product-pricing";
-export * from "./product-bundles";
-export * from "./product-images";
-export * from "./product-attributes";
-export * from "./product-relations";
 
-// Orders
+// Orders domain
 export * from "./orders";
-export * from "./order-shipments";
-export * from "./order-templates";
-export * from "./order-amendments";
+
+// Financial domain
+export * from "./financial";
 
 // Pipeline and inventory
 export * from "./pipeline";
 export * from "./inventory";
-export * from "./warehouse-locations";
 
 // Auth and multi-tenancy
-export * from "./organizations";
+export * from "./settings";
+
+// User management domain
 export * from "./users";
-export * from "./api-tokens";
 
 // Activity audit trail
 export * from "./activities";
 
 // Notifications and communication
-export * from "./notifications";
-export * from "./email-history";
-export * from "./scheduled-emails";
-export * from "./email-campaigns";
-export * from "./scheduled-calls";
-export * from "./email-signatures";
-export * from "./email-templates";
+export * from "./communications";
 
-// Background jobs
+// Integrations
+export * from "./oauth";
+
+// Automation jobs
+export * from "./automation-jobs";
+
+// Jobs domain
 export * from "./jobs";
 
 // File storage
 export * from "./files";
+
+// Support domain (SLA, issues, knowledge base)
+export * from "./support";
+
+// Warranty domain
+export * from "./warranty";
+
+// Suppliers domain (procurement)
+export * from "./suppliers";
+
+// Search domain
+export * from "./search";
+
+// Reports domain (custom reports, favorites)
+export * from "./reports";
+
+// Dashboard domain (targets, scheduled-reports, layouts)
+export * from "./dashboard";
+
+// Portal domain
+export * from "./portal";
