@@ -34,6 +34,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { DateTimePicker } from "./date-time-picker";
 import { TimezoneSelect, getLocalTimezone } from "./timezone-select";
+import { SignatureSelector } from "./signature-selector";
 import {
   scheduleEmail,
   updateScheduledEmail,
@@ -63,6 +64,8 @@ export interface ScheduleEmailDialogProps {
     name?: string;
     customerId?: string;
   };
+  /** Callback when user wants to create a new signature */
+  onCreateSignature?: () => void;
   onSuccess?: () => void;
 }
 
@@ -94,6 +97,7 @@ export function ScheduleEmailDialog({
   onOpenChange,
   initialData,
   defaultRecipient,
+  onCreateSignature,
   onSuccess,
 }: ScheduleEmailDialogProps) {
   const queryClient = useQueryClient();
@@ -119,6 +123,21 @@ export function ScheduleEmailDialog({
   const [timezone, setTimezone] = useState(
     initialData?.timezone ?? getLocalTimezone()
   );
+  const [signatureId, setSignatureId] = useState<string | undefined>(
+    (initialData?.templateData?.signatureId as string) ?? undefined
+  );
+  const [signatureContent, setSignatureContent] = useState<string>(
+    (initialData?.templateData?.signatureContent as string) ?? ""
+  );
+
+  // Handle signature selection
+  const handleSignatureChange = useCallback(
+    (newSignatureId: string | null, content: string) => {
+      setSignatureId(newSignatureId ?? undefined);
+      setSignatureContent(content);
+    },
+    []
+  );
 
   // Reset form when dialog opens/closes or initialData changes
   useEffect(() => {
@@ -130,6 +149,8 @@ export function ScheduleEmailDialog({
       setBodyOverride((initialData?.templateData?.bodyOverride as string) ?? "");
       setScheduledAt(initialData?.scheduledAt ?? addHours(new Date(), 1));
       setTimezone(initialData?.timezone ?? getLocalTimezone());
+      setSignatureId((initialData?.templateData?.signatureId as string) ?? undefined);
+      setSignatureContent((initialData?.templateData?.signatureContent as string) ?? "");
     }
   }, [open, initialData, defaultRecipient]);
 
@@ -138,13 +159,23 @@ export function ScheduleEmailDialog({
     mutationFn: async () => {
       if (!scheduledAt) throw new Error("Please select a date and time");
 
+      // Build templateData with signature info
+      const templateData: Record<string, unknown> = {};
+      if (templateType === "custom" && bodyOverride) {
+        templateData.bodyOverride = bodyOverride;
+      }
+      if (signatureId) {
+        templateData.signatureId = signatureId;
+        templateData.signatureContent = signatureContent;
+      }
+
       const payload = {
         recipientEmail,
         recipientName: recipientName || undefined,
         customerId: defaultRecipient?.customerId,
         subject,
         templateType,
-        templateData: templateType === "custom" ? { bodyOverride } : undefined,
+        templateData: Object.keys(templateData).length > 0 ? templateData : undefined,
         scheduledAt,
         timezone,
       };
@@ -298,6 +329,16 @@ export function ScheduleEmailDialog({
                 />
               </div>
             )}
+
+            {/* Signature Selection */}
+            <div className="grid gap-2">
+              <Label>Email Signature</Label>
+              <SignatureSelector
+                value={signatureId}
+                onChange={handleSignatureChange}
+                onCreateNew={onCreateSignature}
+              />
+            </div>
 
             <Separator />
 

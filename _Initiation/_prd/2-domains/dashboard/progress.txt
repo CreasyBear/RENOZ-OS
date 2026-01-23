@@ -1,17 +1,17 @@
 # Business Intelligence Dashboard System Progress
 # PRD: dashboard.prd.json
 # Started: 2026-01-17
-# Updated: 2026-01-17
+# Updated: 2026-01-24
 
 ## Stories (16 total)
 
-- [ ] DASH-CORE-SCHEMA: Dashboard Core Schema
-- [ ] DASH-CORE-API: Dashboard Core API
-- [ ] DASH-GRID-UI: Dashboard Grid System
-- [ ] DASH-KPI-WIDGET: KPI Widget System
-- [ ] DASH-CHART-WIDGET: Chart Widget System
-- [ ] DASH-DATE-RANGE: Date Range Filtering
-- [ ] DASH-ACTIVITY-FEED: Activity Feed Widget
+- [x] DASH-CORE-SCHEMA: Dashboard Core Schema
+- [x] DASH-CORE-API: Dashboard Core API
+- [x] DASH-GRID-UI: Dashboard Grid System
+- [x] DASH-KPI-WIDGET: KPI Widget System
+- [x] DASH-CHART-WIDGET: Chart Widget System
+- [x] DASH-DATE-RANGE: Date Range Filtering
+- [x] DASH-ACTIVITY-FEED: Activity Feed Widget
 - [ ] DASH-TARGETS-API: Targets Management API
 - [ ] DASH-TARGETS-UI: Targets Management Interface
 - [ ] DASH-COMPARISON-API: Comparison Analysis API
@@ -23,10 +23,10 @@
 - [ ] DASH-AI-INSIGHTS: AI-Powered Insights
 
 ## Current Story
-Not started
+DASH-TARGETS-API: Targets Management API
 
 ## Iteration Count
-Total: 0
+Total: 7
 Current Story: 0
 
 ## Blockers
@@ -34,3 +34,65 @@ None
 
 ## Notes
 - Progress tracking initialized
+- 2026-01-24: DASH-CORE-SCHEMA completed
+  - Created drizzle/schema/dashboard/ with targets.ts, scheduled-reports.ts, dashboard-layouts.ts
+  - Added targetMetricEnum, targetPeriodEnum, reportFrequencyEnum, reportFormatEnum to _shared/enums.ts
+- 2026-01-24: DASH-CORE-API completed
+  - Created Zod schemas: src/lib/schemas/dashboard/
+  - Added dashboard query keys to src/lib/query-keys.ts
+  - Created server functions: src/server/functions/dashboard/
+  - Added PERMISSIONS.dashboard and PERMISSIONS.reports domains
+  - Created TanStack Query hooks: src/hooks/dashboard/
+- 2026-01-24: DASH-GRID-UI completed
+  - Created src/components/domain/dashboard/dnd-provider.tsx (DnD context wrapper)
+  - Created src/components/domain/dashboard/dashboard-grid.tsx (presenter with DashboardGridProps)
+  - Created src/components/domain/dashboard/widget-catalog.tsx (presenter with WidgetCatalogProps)
+  - Route container src/routes/_authenticated/dashboard/index.tsx already existed
+  - Fixed TS errors in main-dashboard.tsx and dashboard.tsx
+  - All follow Container/Presenter pattern with @source JSDoc annotations
+- 2026-01-24: DASH-KPI-WIDGET completed
+  - Created src/components/domain/dashboard/widgets/trend-indicator.tsx (trend with invertColors option)
+  - Created src/components/domain/dashboard/widgets/progress-bar.tsx (color-coded: <70% red, 70-90% amber, >90% green)
+  - Created src/components/domain/dashboard/widgets/kpi-widget.tsx (composing TrendIndicator + ProgressBar)
+  - Created src/components/domain/dashboard/widgets/index.ts (barrel export)
+  - Updated src/components/domain/dashboard/index.ts to export widgets
+  - ARIA accessibility: role="status", aria-valuenow/min/max, aria-describedby
+  - Click-through navigation with keyboard support (Enter/Space)
+  - All follow Container/Presenter pattern with @source JSDoc annotations
+- 2026-01-24: DASH-CHART-WIDGET completed
+  - Created src/components/domain/dashboard/chart-controls.tsx (date range, comparison, export controls)
+  - Created src/components/domain/dashboard/drill-down-modal.tsx (segment drill-down with data table)
+  - Created src/components/domain/dashboard/widgets/chart-widget.tsx (25KB, multi-chart support)
+  - Chart types: line, bar, pie, area, stacked-bar, funnel
+  - Chart renderers: LineChartRenderer, BarChartRenderer, PieChartRenderer, AreaChartRenderer, StackedBarChartRenderer, FunnelChartRenderer
+  - States: ChartWidgetSkeleton, ChartWidgetError, ChartWidgetEmpty
+  - ARIA: role="img", aria-label, ScreenReaderTable for sr-only data access
+  - Comparison support with dashed lines (strokeDasharray="5 5")
+  - Clickable segments with onSegmentClick for drill-down
+  - Uses existing ChartContainer, ChartTooltip from @/components/ui/chart
+  - All follow Container/Presenter pattern with @source JSDoc annotations
+- 2026-01-24: DASH-DATE-RANGE completed
+  - Created src/lib/utils/date-presets.ts with Australian fiscal year support (July 1 - June 30)
+  - Presets: Today, This Week, This Month, This Quarter, YTD, Last 7 Days, Last 30 Days, Last 90 Days, Last Month, Last Year
+  - Utilities: getPresetOptions, validateDateRange, formatDateRange, dateRangeToSearchParams, dateRangeFromSearchParams
+  - Created src/components/domain/dashboard/dashboard-context.tsx (React Context with URL param sync)
+  - DashboardProvider wraps dashboard, useDashboardDateRange hook for widgets
+  - Created src/components/domain/dashboard/date-range-selector.tsx
+  - Side-by-side layout (presets left, dual calendar right) on desktop
+  - Mobile drawer (Sheet component) for compact view
+  - Apply/Reset buttons, validation with errors/warnings
+  - ARIA accessibility: role="radiogroup", aria-checked, aria-haspopup
+  - Updated src/routes/_authenticated/dashboard/index.tsx
+  - Wrapped with DashboardProvider, added DateRangeSelector below header
+  - URL sync: ?dateRange=this-month or ?dateRange=custom&start=2024-12-01&end=2024-12-10
+- 2026-01-24: DASH-ACTIVITY-FEED completed
+  - Created src/components/domain/dashboard/widgets/activity-feed-widget.tsx
+  - Pure presenter component following Container/Presenter pattern
+  - Leverages existing ActivityFeed, ActivityItem components from activity domain
+  - Card-wrapped layout for dashboard consistency
+  - Date grouping with Today/Yesterday/date headers
+  - Supports compact mode for space efficiency
+  - Loading, error, empty states with proper ARIA
+  - Props with @source JSDoc annotations for traceability
+  - Features: scroll area, load more, view all, maxItems truncation
+  - Updated widgets/index.ts with export
