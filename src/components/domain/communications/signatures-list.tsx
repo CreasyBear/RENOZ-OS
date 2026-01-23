@@ -1,16 +1,17 @@
 /**
- * Signatures List Component
+ * Signatures List Component (Presenter)
  *
  * Settings page component for managing email signatures.
  * Lists all signatures with actions to edit, delete, and set default.
+ * All data fetching and mutations are handled by the container.
  *
  * @see DOM-COMMS-006
+ * @see docs/plans/2026-01-24-refactor-communications-full-container-presenter-plan.md
  */
 
 "use client";
 
 import * as React from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   MoreHorizontal,
   Plus,
@@ -46,21 +47,15 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Empty, EmptyHeader, EmptyTitle, EmptyDescription, EmptyMedia } from "@/components/ui/empty";
-import { cn } from "@/lib/utils";
+import { cn, sanitizeHtml } from "@/lib/utils";
 
-import {
-  getEmailSignatures,
-  deleteEmailSignature,
-  setDefaultSignature,
-} from "@/lib/server/email-signatures";
-import { SignatureEditor } from "./signature-editor";
-import { toast } from "sonner";
+import { SignatureEditor, type SignatureFormValues } from "./signature-editor";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-interface Signature {
+export interface Signature {
   id: string;
   name: string;
   content: string;
@@ -70,7 +65,26 @@ interface Signature {
   updatedAt: string;
 }
 
-interface SignaturesListProps {
+/**
+ * Props for the SignaturesList presenter component.
+ * All data is passed from the container route.
+ */
+export interface SignaturesListProps {
+  /** @source useEmailSignatures() in communications/signatures/index.tsx */
+  signatures: Signature[];
+  /** @source useEmailSignatures().isLoading in container */
+  isLoading: boolean;
+  /** @source useCreateEmailSignature() in container */
+  onCreate: (values: SignatureFormValues) => Promise<void>;
+  /** @source useUpdateEmailSignature() in container */
+  onUpdate: (id: string, values: SignatureFormValues) => Promise<void>;
+  /** @source useDeleteEmailSignature() in container */
+  onDelete: (id: string) => Promise<void>;
+  /** @source useSetDefaultSignature() in container */
+  onSetDefault: (id: string) => Promise<void>;
+  isDeleting?: boolean;
+  isSettingDefault?: boolean;
+  isSaving?: boolean;
   className?: string;
 }
 
@@ -78,51 +92,28 @@ interface SignaturesListProps {
 // COMPONENT
 // ============================================================================
 
-export function SignaturesList({ className }: SignaturesListProps) {
+export function SignaturesList({
+  signatures,
+  isLoading,
+  onCreate,
+  onUpdate,
+  onDelete,
+  onSetDefault,
+  isDeleting = false,
+  isSettingDefault = false,
+  isSaving = false,
+  className,
+}: SignaturesListProps) {
   const [editingSignature, setEditingSignature] = React.useState<Signature | null>(null);
   const [isCreating, setIsCreating] = React.useState(false);
   const [deleteConfirm, setDeleteConfirm] = React.useState<Signature | null>(null);
-  const queryClient = useQueryClient();
 
-  const { data: signaturesData, isLoading } = useQuery({
-    queryKey: ["email-signatures"],
-    queryFn: () => getEmailSignatures({ data: { includeCompanyWide: true } }),
-  });
-
-  const signatures = (signaturesData as Signature[] | undefined) ?? [];
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return deleteEmailSignature({ data: { id } });
-    },
-    onSuccess: () => {
-      toast.success("Signature deleted");
-      queryClient.invalidateQueries({ queryKey: ["email-signatures"] });
-      setDeleteConfirm(null);
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to delete signature"
-      );
-    },
-  });
-
-  const setDefaultMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return setDefaultSignature({ data: { id } });
-    },
-    onSuccess: () => {
-      toast.success("Default signature updated");
-      queryClient.invalidateQueries({ queryKey: ["email-signatures"] });
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to set default"
-      );
-    },
-  });
-
-  const handleSave = () => {
+  const handleSubmit = async (values: SignatureFormValues) => {
+    if (editingSignature) {
+      await onUpdate(editingSignature.id, values);
+    } else {
+      await onCreate(values);
+    }
     setEditingSignature(null);
     setIsCreating(false);
   };
@@ -132,13 +123,21 @@ export function SignaturesList({ className }: SignaturesListProps) {
     setIsCreating(false);
   };
 
+  const handleDelete = async () => {
+    if (deleteConfirm) {
+      await onDelete(deleteConfirm.id);
+      setDeleteConfirm(null);
+    }
+  };
+
   // Show editor when creating or editing
   if (isCreating || editingSignature) {
     return (
       <SignatureEditor
         signature={editingSignature ?? undefined}
-        onSave={handleSave}
+        onSubmit={handleSubmit}
         onCancel={handleCancel}
+        isSubmitting={isSaving}
         className={className}
       />
     );
@@ -201,8 +200,8 @@ export function SignaturesList({ className }: SignaturesListProps) {
                       signature={signature}
                       onEdit={() => setEditingSignature(signature)}
                       onDelete={() => setDeleteConfirm(signature)}
-                      onSetDefault={() => setDefaultMutation.mutate(signature.id)}
-                      isSettingDefault={setDefaultMutation.isPending}
+                      onSetDefault={() => onSetDefault(signature.id)}
+                      isSettingDefault={isSettingDefault}
                     />
                   ))}
                 </div>
@@ -249,10 +248,10 @@ export function SignaturesList({ className }: SignaturesListProps) {
               </Button>
               <Button
                 variant="destructive"
-                onClick={() => deleteConfirm && deleteMutation.mutate(deleteConfirm.id)}
-                disabled={deleteMutation.isPending}
+                onClick={handleDelete}
+                disabled={isDeleting}
               >
-                {deleteMutation.isPending ? "Deleting..." : "Delete"}
+                {isDeleting ? "Deleting..." : "Delete"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -309,7 +308,7 @@ function SignatureCard({
           </div>
           <div
             className="prose prose-sm max-w-none text-muted-foreground line-clamp-2"
-            dangerouslySetInnerHTML={{ __html: signature.content }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(signature.content) }}
           />
         </div>
 
