@@ -81,6 +81,13 @@ export const SHORTCUTS: KeyboardShortcut[] = [
 
   // Action shortcuts
   {
+    id: 'quick-log',
+    label: 'Quick Log',
+    keys: ['⌘', 'L'],
+    category: 'Actions',
+    description: 'Log a call, note, or meeting',
+  },
+  {
     id: 'new-customer',
     label: 'Create Customer',
     keys: ['⌘', 'Shift', 'C'],
