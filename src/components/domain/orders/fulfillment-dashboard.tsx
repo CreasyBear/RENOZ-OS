@@ -59,8 +59,7 @@ import { FormatAmount } from "@/components/shared/format";
 import { toastSuccess, toastError } from "@/hooks/use-toast";
 import { listOrders, updateOrderStatus } from "@/lib/server/functions/orders";
 import { listShipments } from "@/lib/server/functions/order-shipments";
-import type { OrderStatus } from "@/lib/schemas/orders";
-import type { ShipmentStatus } from "@/lib/schemas/shipments";
+import type { OrderStatus, ShipmentStatus } from "@/lib/schemas/orders";
 
 // ============================================================================
 // TYPES

@@ -25,7 +25,7 @@ import type {
   ApiTokenListItem,
   CreateApiTokenResponse,
   ApiTokenScope,
-} from "@/lib/schemas/api-tokens";
+} from "@/lib/schemas/auth";
 
 // ============================================================================
 // ROUTE DEFINITION

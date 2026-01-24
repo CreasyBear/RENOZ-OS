@@ -43,7 +43,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { getOrderShipments } from "@/lib/server/functions/order-shipments";
-import type { ShipmentStatus } from "@/lib/schemas/shipments";
+import type { ShipmentStatus } from "@/lib/schemas/orders";
 
 // ============================================================================
 // TYPES
