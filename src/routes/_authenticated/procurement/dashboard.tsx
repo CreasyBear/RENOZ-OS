@@ -8,7 +8,8 @@
  */
 import { createFileRoute } from '@tanstack/react-router';
 import { lazy, Suspense } from 'react';
-import { PageLayout } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
+import { FinancialDashboardSkeleton } from '@/components/skeletons/financial';
 
 // Lazy-loaded component for bundle optimization
 const ProcurementDashboard = lazy(() =>
@@ -23,6 +24,10 @@ const ProcurementDashboard = lazy(() =>
 
 export const Route = createFileRoute('/_authenticated/procurement/dashboard')({
   component: ProcurementDashboardPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/procurement" />
+  ),
+  pendingComponent: () => <FinancialDashboardSkeleton />,
 });
 
 // ============================================================================

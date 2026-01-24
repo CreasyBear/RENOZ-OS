@@ -9,7 +9,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { PageLayout } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
+import { AdminTableSkeleton } from '@/components/skeletons/admin';
 import { ApprovalDashboard, type ApprovalItem, type ApprovalFilters } from '@/components/domain/approvals/approval-dashboard';
 import { queryKeys } from '@/lib/query-keys';
 
@@ -19,6 +20,10 @@ import { queryKeys } from '@/lib/query-keys';
 
 export const Route = createFileRoute('/_authenticated/approvals/')({
   component: ApprovalsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/" />
+  ),
+  pendingComponent: () => <AdminTableSkeleton />,
 });
 
 // ============================================================================

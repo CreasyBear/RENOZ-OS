@@ -6,7 +6,8 @@
 
 import { createFileRoute } from '@tanstack/react-router';
 import { ArrowLeft, Construction } from 'lucide-react';
-import { PageLayout } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
+import { AdminFormSkeleton } from '@/components/skeletons/admin';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -16,6 +17,10 @@ import { Card, CardContent } from '@/components/ui/card';
 
 export const Route = createFileRoute('/_authenticated/purchase-orders/create')({
   component: PurchaseOrderCreatePage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/purchase-orders" />
+  ),
+  pendingComponent: () => <AdminFormSkeleton />,
 });
 
 // ============================================================================

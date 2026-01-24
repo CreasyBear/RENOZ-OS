@@ -8,7 +8,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState, useCallback } from 'react';
 import { Plus } from 'lucide-react';
-import { PageLayout } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
+import { AdminTableSkeleton } from '@/components/skeletons/admin';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/toast';
 import { SupplierDirectory, type SupplierTableData } from '@/components/domain/suppliers';
@@ -22,6 +23,10 @@ import { useConfirmation } from '@/hooks/use-confirmation';
 
 export const Route = createFileRoute('/_authenticated/suppliers/')({
   component: SuppliersPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/suppliers" />
+  ),
+  pendingComponent: () => <AdminTableSkeleton />,
 });
 
 // ============================================================================

@@ -9,7 +9,8 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Loader2, Package } from 'lucide-react';
-import { PageLayout } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
+import { AdminDetailSkeleton } from '@/components/skeletons/admin';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +35,10 @@ import type { ApprovalEvent } from '@/lib/schemas/approvals';
 
 export const Route = createFileRoute('/_authenticated/purchase-orders/$poId')({
   component: PurchaseOrderDetailPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/purchase-orders" />
+  ),
+  pendingComponent: () => <AdminDetailSkeleton />,
 });
 
 // ============================================================================

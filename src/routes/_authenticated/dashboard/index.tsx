@@ -22,6 +22,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState, useCallback, useMemo } from 'react';
 import { z } from 'zod';
+import { RouteErrorFallback } from '@/components/layout';
+import { FinancialDashboardSkeleton } from '@/components/skeletons/financial';
 import { arrayMove } from '@dnd-kit/sortable';
 import type { DragEndEvent } from '@dnd-kit/core';
 import {
@@ -80,6 +82,10 @@ type DashboardSearchParams = z.infer<typeof searchSchema>;
 
 export const Route = createFileRoute('/_authenticated/dashboard/')({
   component: DashboardGridPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/" />
+  ),
+  pendingComponent: () => <FinancialDashboardSkeleton />,
   validateSearch: (search: Record<string, unknown>): DashboardSearchParams => {
     return searchSchema.parse(search);
   },

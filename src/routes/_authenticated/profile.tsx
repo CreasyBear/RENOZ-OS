@@ -5,9 +5,15 @@
  * Placeholder - will be expanded in user management PRD.
  */
 import { createFileRoute } from '@tanstack/react-router'
+import { RouteErrorFallback } from '@/components/layout';
+import { SettingsCardsSkeleton } from '@/components/skeletons/settings';
 
 export const Route = createFileRoute('/_authenticated/profile')({
   component: Profile,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/" />
+  ),
+  pendingComponent: () => <SettingsCardsSkeleton sections={1} />,
 })
 
 function Profile() {

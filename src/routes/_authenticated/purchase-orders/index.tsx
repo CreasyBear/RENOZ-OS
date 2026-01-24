@@ -8,7 +8,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState, useCallback } from 'react';
 import { Plus } from 'lucide-react';
-import { PageLayout } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
+import { AdminTableSkeleton } from '@/components/skeletons/admin';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/toast';
 import { PODirectory } from '@/components/domain/purchase-orders';
@@ -26,6 +27,10 @@ import { useConfirmation } from '@/hooks/use-confirmation';
 
 export const Route = createFileRoute('/_authenticated/purchase-orders/')({
   component: PurchaseOrdersPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/purchase-orders" />
+  ),
+  pendingComponent: () => <AdminTableSkeleton />,
 });
 
 // ============================================================================

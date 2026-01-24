@@ -7,6 +7,8 @@
 
 import { useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
+import { RouteErrorFallback } from '@/components/layout';
+import { SettingsCardsSkeleton } from '@/components/skeletons/settings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -20,6 +22,10 @@ import { useCurrentOrg } from '@/hooks/auth/use-current-org';
 
 export const Route = createFileRoute('/_authenticated/integrations/oauth')({
   component: OAuthIntegrationsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/integrations" />
+  ),
+  pendingComponent: () => <SettingsCardsSkeleton sections={4} />,
 });
 
 function OAuthIntegrationsPage() {
