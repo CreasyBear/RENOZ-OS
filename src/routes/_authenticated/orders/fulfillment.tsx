@@ -8,7 +8,8 @@
 
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback } from "react";
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { OrdersTableSkeleton } from "@/components/skeletons/orders";
 import { FulfillmentDashboard } from "@/components/domain/orders";
 import { ShipOrderDialog, ConfirmDeliveryDialog } from "@/components/domain/orders";
 
@@ -18,6 +19,20 @@ import { ShipOrderDialog, ConfirmDeliveryDialog } from "@/components/domain/orde
 
 export const Route = createFileRoute("/_authenticated/orders/fulfillment")({
   component: FulfillmentPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/orders" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Order Fulfillment"
+        description="Track and manage order fulfillment"
+      />
+      <PageLayout.Content>
+        <OrdersTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

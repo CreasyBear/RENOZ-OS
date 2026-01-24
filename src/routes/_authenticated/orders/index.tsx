@@ -9,7 +9,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Download, RefreshCw } from "lucide-react";
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { OrdersTableSkeleton } from "@/components/skeletons/orders";
 import { Button } from "@/components/ui/button";
 import { toastSuccess, toastError } from "@/hooks/use-toast";
 import {
@@ -17,7 +18,9 @@ import {
   OrderFiltersComponent,
   type OrderFiltersState,
 } from "@/components/domain/orders";
-import { duplicateOrder, deleteOrder } from "@/lib/server/functions/orders";
+import { useDeleteOrder } from "@/hooks/orders";
+import { duplicateOrder } from "@/lib/server/functions/orders";
+import { queryKeys } from "@/lib/query-keys";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -25,6 +28,20 @@ import { duplicateOrder, deleteOrder } from "@/lib/server/functions/orders";
 
 export const Route = createFileRoute("/_authenticated/orders/")({
   component: OrdersPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Orders"
+        description="Manage customer orders and fulfillment"
+      />
+      <PageLayout.Content>
+        <OrdersTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================
@@ -50,14 +67,14 @@ function OrdersPage() {
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<OrderFiltersState>(DEFAULT_FILTERS);
 
-  // Duplicate order mutation
+  // Duplicate order mutation (no hook exists yet, using centralized keys)
   const duplicateMutation = useMutation({
     mutationFn: async (orderId: string) => {
       return duplicateOrder({ data: { id: orderId } });
     },
     onSuccess: (result) => {
       toastSuccess(`Order duplicated as ${result.orderNumber}`);
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
       navigate({
         to: "/orders/$orderId",
         params: { orderId: result.id },
@@ -68,19 +85,8 @@ function OrdersPage() {
     },
   });
 
-  // Delete order mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (orderId: string) => {
-      return deleteOrder({ data: { id: orderId } });
-    },
-    onSuccess: () => {
-      toastSuccess("Order deleted");
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
-    },
-    onError: () => {
-      toastError("Failed to delete order");
-    },
-  });
+  // Delete order using centralized hook
+  const deleteMutation = useDeleteOrder();
 
   // Handlers
   const handleViewOrder = useCallback(
@@ -101,9 +107,13 @@ function OrdersPage() {
   );
 
   const handleDeleteOrder = useCallback(
-    (orderId: string) => {
-      if (confirm("Are you sure you want to delete this order?")) {
-        deleteMutation.mutate(orderId);
+    async (orderId: string) => {
+      if (!confirm("Are you sure you want to delete this order?")) return;
+      try {
+        await deleteMutation.mutateAsync(orderId);
+        toastSuccess("Order deleted");
+      } catch {
+        toastError("Failed to delete order");
       }
     },
     [deleteMutation]
@@ -119,7 +129,7 @@ function OrdersPage() {
   }, []);
 
   const handleRefresh = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["orders"] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
     toastSuccess("Orders refreshed");
   }, [queryClient]);
 

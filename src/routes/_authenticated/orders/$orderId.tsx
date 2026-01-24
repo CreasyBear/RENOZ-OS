@@ -9,11 +9,13 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { OrderDetailSkeleton } from "@/components/skeletons/orders";
 import { Button } from "@/components/ui/button";
 import { toastSuccess, toastError } from "@/hooks/use-toast";
 import { OrderDetail } from "@/components/domain/orders";
 import { duplicateOrder } from "@/lib/server/functions/orders";
+import { queryKeys } from "@/lib/query-keys";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -21,6 +23,17 @@ import { duplicateOrder } from "@/lib/server/functions/orders";
 
 export const Route = createFileRoute("/_authenticated/orders/$orderId")({
   component: OrderDetailPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/orders" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header title="Order Details" />
+      <PageLayout.Content>
+        <OrderDetailSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================
@@ -39,7 +52,7 @@ function OrderDetailPage() {
     },
     onSuccess: (result) => {
       toastSuccess(`Order duplicated as ${result.orderNumber}`);
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
       navigate({
         to: "/orders/$orderId",
         params: { orderId: result.id },

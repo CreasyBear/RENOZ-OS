@@ -7,7 +7,8 @@
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { FormSkeleton } from "@/components/skeletons/shared";
 import { OrderCreationWizard } from "@/components/domain/orders";
 
 // ============================================================================
@@ -16,6 +17,20 @@ import { OrderCreationWizard } from "@/components/domain/orders";
 
 export const Route = createFileRoute("/_authenticated/orders/create")({
   component: OrderCreatePage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/orders" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Create Order"
+        description="Create a new customer order"
+      />
+      <PageLayout.Content>
+        <FormSkeleton sections={3} />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================
