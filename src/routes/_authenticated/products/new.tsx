@@ -6,8 +6,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { Button } from "@/components/ui/button";
+import { FormSkeleton } from "@/components/skeletons/shared/form-skeleton";
 import { ProductForm, type ProductFormValues } from "@/components/domain/products/product-form";
 import { createProduct, getCategoryTree, type CategoryWithChildren } from "@/lib/server/functions/products";
 
@@ -17,6 +18,14 @@ export const Route = createFileRoute("/_authenticated/products/new")({
     return { categoryTree };
   },
   component: NewProductPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/products" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <FormSkeleton sections={4} />
+    </PageLayout>
+  ),
 });
 
 function NewProductPage() {

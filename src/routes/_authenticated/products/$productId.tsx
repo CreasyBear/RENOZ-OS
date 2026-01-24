@@ -27,8 +27,9 @@ import {
   Boxes,
 } from "lucide-react";
 
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { Button } from "@/components/ui/button";
+import { ProductDetailSkeleton } from "@/components/skeletons/products/detail-skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -55,6 +56,14 @@ export const Route = createFileRoute("/_authenticated/products/$productId")({
     return productData;
   },
   component: ProductDetailPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/products" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <ProductDetailSkeleton tabCount={6} />
+    </PageLayout>
+  ),
 });
 
 // Status badge styling

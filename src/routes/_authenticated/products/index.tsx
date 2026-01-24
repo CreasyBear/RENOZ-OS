@@ -16,8 +16,9 @@ import { useState } from "react";
 import { Plus, Download, Upload, Search, X } from "lucide-react";
 import { z } from "zod";
 
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { Button } from "@/components/ui/button";
+import { ProductTableSkeleton } from "@/components/skeletons/products/table-skeleton";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -59,6 +60,17 @@ export const Route = createFileRoute("/_authenticated/products/")({
     return { productsResult, categoryTree };
   },
   component: ProductsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="Products" />
+      <PageLayout.Content>
+        <ProductTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 function ProductsPage() {

@@ -28,3 +28,4 @@ export {
   type SidebarContextValue,
 } from './sidebar-provider'
 export { SidebarRail } from './sidebar-rail'
+export { RouteErrorFallback } from './route-error-fallback'
