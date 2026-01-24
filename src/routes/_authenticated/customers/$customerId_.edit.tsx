@@ -5,7 +5,7 @@
  * Uses the CustomerForm component with pre-populated data.
  */
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
 import { PageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
@@ -13,10 +13,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { CustomerForm } from '@/components/domain/customers/customer-form'
 import { ContactManager, type ManagedContact } from '@/components/domain/customers/contact-manager'
 import { AddressManager, type ManagedAddress } from '@/components/domain/customers/address-manager'
+import { useCustomer, useCustomerTags, useUpdateCustomer } from '@/hooks/customers'
 import {
-  getCustomerById,
-  updateCustomer,
-  getCustomerTags,
   createContact,
   updateContact,
   deleteContact,
@@ -42,24 +40,17 @@ export const Route = createFileRoute('/_authenticated/customers/$customerId_/edi
 function EditCustomerPage() {
   const { customerId } = Route.useParams()
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
 
   // Local state for contacts and addresses
   const [contacts, setContacts] = useState<ManagedContact[]>([])
   const [addresses, setAddresses] = useState<ManagedAddress[]>([])
   const [hasInitialized, setHasInitialized] = useState(false)
 
-  // Fetch customer data
-  const { data: customer, isLoading: isLoadingCustomer, error } = useQuery({
-    queryKey: ['customer', customerId],
-    queryFn: () => getCustomerById({ data: { id: customerId } }),
-  })
+  // Fetch customer data using centralized hook
+  const { data: customer, isLoading: isLoadingCustomer, error } = useCustomer(customerId)
 
-  // Fetch available tags
-  const { data: tagsData } = useQuery({
-    queryKey: ['customer-tags'],
-    queryFn: () => getCustomerTags(),
-  })
+  // Fetch available tags using centralized hook
+  const { data: tagsData } = useCustomerTags()
 
   const availableTags = tagsData?.map((t) => ({
     id: t.id,
@@ -102,12 +93,8 @@ function EditCustomerPage() {
     }
   }, [customer, hasInitialized])
 
-  // Update customer mutation
-  const updateCustomerMutation = useMutation({
-    mutationFn: async (data: Parameters<typeof updateCustomer>[0]['data']) => {
-      return updateCustomer({ data })
-    },
-  })
+  // Update customer using centralized hook (handles cache invalidation)
+  const updateCustomerMutation = useUpdateCustomer()
 
   // Contact mutations
   const createContactMutation = useMutation({
@@ -255,10 +242,7 @@ function EditCustomerPage() {
         }
       }
 
-      // Invalidate queries
-      queryClient.invalidateQueries({ queryKey: ['customers'] })
-      queryClient.invalidateQueries({ queryKey: ['customer', customerId] })
-
+      // Note: useUpdateCustomer hook handles cache invalidation
       toast.success('Customer updated successfully')
       navigate({ to: '/customers/$customerId', params: { customerId } })
     } catch (error) {

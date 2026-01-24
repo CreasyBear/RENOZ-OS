@@ -236,6 +236,48 @@ export interface ExpiringWarrantiesReportFilters {
 }
 
 // ============================================================================
+// DASHBOARD FILTER TYPES
+// ============================================================================
+
+export interface TargetsFilters {
+  status?: 'pending' | 'on_track' | 'behind' | 'ahead' | 'completed'
+  metric?: string
+  period?: string
+  search?: string
+  page?: number
+  pageSize?: number
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+}
+
+export interface TargetProgressFilters {
+  status?: 'pending' | 'on_track' | 'behind' | 'ahead' | 'completed'
+  metric?: string
+  includeCompleted?: boolean
+}
+
+export interface DashboardMetricsFilters {
+  startDate?: string
+  endDate?: string
+  metrics?: string[]
+}
+
+export interface ComparisonFilters {
+  startDate: string
+  endDate: string
+  comparisonType: 'previous_period' | 'previous_year' | 'previous_quarter' | 'previous_month' | 'custom'
+  comparisonStartDate?: string
+  comparisonEndDate?: string
+  metrics?: string[]
+}
+
+export interface EnhancedComparisonFilters extends ComparisonFilters {
+  includeStatistics?: boolean
+  includeTrends?: boolean
+  includeInsights?: boolean
+}
+
+// ============================================================================
 // QUERY KEYS FACTORY
 // ============================================================================
 
@@ -267,6 +309,10 @@ export const queryKeys = {
       [...queryKeys.customers.lists(), filters ?? {}] as const,
     details: () => [...queryKeys.customers.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.customers.details(), id] as const,
+    tags: {
+      all: () => [...queryKeys.customers.all, 'tags'] as const,
+      list: () => [...queryKeys.customers.tags.all(), 'list'] as const,
+    },
   },
 
   // -------------------------------------------------------------------------
@@ -429,6 +475,29 @@ export const queryKeys = {
     recentActivity: () => [...queryKeys.dashboard.all, 'recentActivity'] as const,
     charts: (chartType: string) =>
       [...queryKeys.dashboard.all, 'charts', chartType] as const,
+
+    // Targets nested factory
+    targets: {
+      all: () => [...queryKeys.dashboard.all, 'targets'] as const,
+      lists: () => [...queryKeys.dashboard.targets.all(), 'list'] as const,
+      list: (filters?: TargetsFilters) =>
+        [...queryKeys.dashboard.targets.lists(), filters ?? {}] as const,
+      details: () => [...queryKeys.dashboard.targets.all(), 'detail'] as const,
+      detail: (id: string) => [...queryKeys.dashboard.targets.details(), id] as const,
+      progress: (filters?: TargetProgressFilters) =>
+        [...queryKeys.dashboard.targets.all(), 'progress', filters ?? {}] as const,
+    },
+
+    // Metrics nested factory
+    metrics: {
+      all: () => [...queryKeys.dashboard.all, 'metrics'] as const,
+      summary: (filters?: DashboardMetricsFilters) =>
+        [...queryKeys.dashboard.metrics.all(), 'summary', filters ?? {}] as const,
+      comparison: (filters: ComparisonFilters) =>
+        [...queryKeys.dashboard.metrics.all(), 'comparison', filters] as const,
+      enhanced: (filters: EnhancedComparisonFilters) =>
+        [...queryKeys.dashboard.metrics.all(), 'enhanced', filters] as const,
+    },
   },
 
   // -------------------------------------------------------------------------

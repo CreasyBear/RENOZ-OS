@@ -12,10 +12,10 @@
 - [x] DASH-CHART-WIDGET: Chart Widget System
 - [x] DASH-DATE-RANGE: Date Range Filtering
 - [x] DASH-ACTIVITY-FEED: Activity Feed Widget
-- [ ] DASH-TARGETS-API: Targets Management API
-- [ ] DASH-TARGETS-UI: Targets Management Interface
-- [ ] DASH-COMPARISON-API: Comparison Analysis API
-- [ ] DASH-COMPARISON-UI: Comparison Interface
+- [x] DASH-TARGETS-API: Targets Management API
+- [x] DASH-TARGETS-UI: Targets Management Interface
+- [x] DASH-COMPARISON-API: Comparison Analysis API
+- [x] DASH-COMPARISON-UI: Comparison Interface
 - [ ] DASH-REPORTS-API: Automated Reports API
 - [ ] DASH-REPORTS-UI: Reports Management Interface
 - [ ] DASH-REPORTS-BACKGROUND: Background Report Processing
@@ -23,10 +23,10 @@
 - [ ] DASH-AI-INSIGHTS: AI-Powered Insights
 
 ## Current Story
-DASH-TARGETS-API: Targets Management API
+DASH-REPORTS-API: Automated Reports API
 
 ## Iteration Count
-Total: 7
+Total: 11
 Current Story: 0
 
 ## Blockers
@@ -96,3 +96,81 @@ None
   - Props with @source JSDoc annotations for traceability
   - Features: scroll area, load more, view all, maxItems truncation
   - Updated widgets/index.ts with export
+- 2026-01-24: DASH-TARGETS-API completed
+  - Enhanced src/server/functions/dashboard/targets.ts with real metric calculations:
+    - calculateMetricValue() for revenue, orders_count, customer_count, pipeline_value, average_order_value
+    - determineTargetStatus() for on_track, behind, ahead, completed status
+    - getTargetProgress() now calculates actual values from orders, customers, opportunities tables
+  - Added bulk operations: bulkCreateTargets, bulkUpdateTargets, bulkDeleteTargets
+  - Added TargetsFilters and TargetProgressFilters types to src/lib/query-keys.ts
+  - Added nested queryKeys.dashboard.targets factory pattern for hook compatibility
+  - Updated src/hooks/dashboard/use-dashboard-targets.ts with bulk operation hooks:
+    - useBulkCreateTargets, useBulkUpdateTargets, useBulkDeleteTargets
+  - Schemas already complete: src/lib/schemas/dashboard/targets.ts
+- 2026-01-24: DASH-TARGETS-UI completed
+  - Created src/components/domain/settings/target-form.tsx (presenter form component)
+    - TanStack Form with Zod validator adapter
+    - Fields: name, metric, period, startDate, endDate, targetValue, description
+    - Sheet slide-out for create/edit
+    - Date pickers with Calendar component
+    - @source JSDoc annotations for props
+  - Created src/components/domain/dashboard/target-progress.tsx (presenter widget)
+    - Status colors: on_track (green), ahead (blue), behind (amber), completed (emerald)
+    - Progress bars with percentage display
+    - Days remaining indicator
+    - Sub-components: TargetProgressSkeleton, TargetProgressEmpty, TargetProgressError, TargetItem
+    - Overall summary with achieved/total counts
+  - Created src/routes/_authenticated/settings/targets.tsx (container route)
+    - Full CRUD for KPI targets with filtering
+    - Create/edit via sheet form
+    - Delete with confirmation dialog
+    - Bulk delete with selection
+    - Progress visualization widget embedded
+    - Uses hooks: useTargets, useTargetProgress, useCreateTarget, useUpdateTarget, useDeleteTarget, useBulkDeleteTargets
+  - Updated src/routes/_authenticated/settings.tsx with KPI Targets link
+  - Updated barrel exports: dashboard/index.ts, settings/index.ts
+- 2026-01-24: DASH-COMPARISON-API completed
+  - Created src/lib/schemas/dashboard/comparison.ts with comprehensive types:
+    - ComparisonPeriod types (previous_period, previous_year, previous_quarter, etc.)
+    - TrendAnalysis schema (direction, velocity, slope, strength, forecast)
+    - StatisticalSignificance schema (zScore, pValue, confidenceInterval)
+    - MetricComparison schema for individual metric analysis
+    - ComparisonInsight schema with priority and recommendations
+    - EnhancedComparisonResponse with overall performance scoring
+    - COMPARISON_THRESHOLDS constants and INVERSE_METRICS set
+  - Created src/server/functions/dashboard/comparison.ts with:
+    - getEnhancedComparison server function
+    - calculatePreviousPeriod() for flexible period calculation
+    - fetchPeriodMetrics() aggregating orders, customers, opportunities
+    - calculateTrendAnalysis() for trend direction and forecasting
+    - calculateStatisticalSignificance() with z-score and confidence intervals
+    - generateInsights() automated insight generation based on thresholds
+    - Overall performance scoring (improved/declined/stable counts)
+  - Added query keys for comparison: DashboardMetricsFilters, ComparisonFilters, EnhancedComparisonFilters
+  - Added queryKeys.dashboard.metrics nested factory (summary, comparison, enhanced)
+  - Created useEnhancedComparison hook in use-dashboard-metrics.ts
+  - Updated hooks/dashboard/index.ts exports
+  - Updated server/functions/dashboard/index.ts exports
+  - Updated lib/schemas/dashboard/index.ts exports
+- 2026-01-24: DASH-COMPARISON-UI completed
+  - Created src/components/domain/dashboard/comparison-toggle.tsx
+    - CompactToggle and ExpandedToggle variants for comparison controls
+    - Period selector (previous_period, previous_year, previous_quarter, previous_month)
+    - Custom date range option with date pickers
+    - @source JSDoc annotations for container integration
+  - Created src/components/domain/dashboard/comparison-indicators.tsx
+    - ChangeIndicator: percentage change with color-coded improvement/decline
+    - TrendIndicator: direction arrows with velocity context
+    - SignificanceIndicator: statistical significance badge with confidence level
+    - MetricComparisonIndicator: combined metric display with all indicators
+    - SIZE_CLASSES for sm/md/lg sizing
+    - higherIsBetter option for metrics where lower is better
+  - Created src/components/domain/dashboard/comparison-chart.tsx
+    - ComparisonChart with line/bar chart support
+    - Dashed lines for comparison period overlay
+    - Custom tooltips showing both period values + change
+    - toChartDataPoints utility for data transformation
+    - Loading skeleton and empty states
+    - Export button integration
+  - Updated src/components/domain/dashboard/index.ts with new exports
+  - All components follow Container/Presenter pattern

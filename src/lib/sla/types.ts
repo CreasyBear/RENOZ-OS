@@ -53,6 +53,7 @@ export interface SlaConfiguration {
   organizationId: string;
   domain: SlaDomain;
   name: string;
+  description?: string | null;
 
   // Response time target (e.g., 4 hours, 24 business hours)
   responseTargetValue: number | null;
@@ -85,6 +86,7 @@ export interface SlaConfiguration {
 export interface BusinessHoursConfig {
   id: string;
   organizationId: string;
+  name: string;
   weeklySchedule: WeeklySchedule;
   timezone: string;
   isDefault: boolean;
@@ -154,6 +156,10 @@ export interface SlaTracking {
 
   // Current status
   status: SlaStatus;
+
+  // Elapsed time tracking (seconds, excluding pause time)
+  responseTimeSeconds: number | null;
+  resolutionTimeSeconds: number | null;
 
   // Metadata
   createdAt: Date;

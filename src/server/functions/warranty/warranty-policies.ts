@@ -1,0 +1,806 @@
+/**
+ * Warranty Policy Server Functions
+ *
+ * CRUD operations and policy resolution for warranty policies.
+ * Implements product > category > org default resolution hierarchy.
+ *
+ * @see drizzle/schema/warranty-policies.ts
+ * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-001b
+ */
+
+import { eq, and, asc } from 'drizzle-orm';
+import { db } from '@/lib/db';
+import {
+  warrantyPolicies,
+  products,
+  categories,
+  slaConfigurations,
+  customers,
+  type WarrantyPolicyTerms,
+} from 'drizzle/schema';
+import { withAuth } from '@/lib/server/protected';
+import { tasks } from '@trigger.dev/sdk/v3';
+import { typedGetFn, typedPostFn } from '@/lib/server/typed-server-fn';
+import type { WarrantyRegisteredPayload } from '@/trigger/client';
+import {
+  createWarrantyPolicySchema,
+  updateWarrantyPolicySchema,
+  getWarrantyPoliciesSchema,
+  getWarrantyPolicyByIdSchema,
+  resolveWarrantyPolicySchema,
+  assignWarrantyPolicyToProductSchema,
+  assignDefaultWarrantyPolicyToCategorySchema,
+  seedDefaultPoliciesSchema,
+} from '@/lib/schemas/warranty/policies';
+
+// ============================================================================
+// WARRANTY POLICY CRUD
+// ============================================================================
+
+/**
+ * Create a new warranty policy
+ */
+export const createWarrantyPolicy = typedPostFn(
+  createWarrantyPolicySchema,
+  async ({ data }) => {
+    const ctx = await withAuth();
+
+    const [policy] = await db
+      .insert(warrantyPolicies)
+      .values({
+        organizationId: ctx.organizationId,
+        name: data.name,
+        description: data.description ?? null,
+        type: data.type,
+        durationMonths: data.durationMonths,
+        cycleLimit: data.cycleLimit ?? null,
+        terms: (data.terms ?? {}) as WarrantyPolicyTerms,
+        slaConfigurationId: data.slaConfigurationId ?? null,
+        isDefault: data.isDefault,
+        isActive: data.isActive,
+      })
+      .returning();
+
+    return policy;
+  }
+);
+
+/**
+ * Update an existing warranty policy
+ */
+export const updateWarrantyPolicy = typedPostFn(
+  updateWarrantyPolicySchema.extend({
+    policyId: getWarrantyPolicyByIdSchema.shape.policyId,
+  }),
+  async ({ data }) => {
+    const ctx = await withAuth();
+    const { policyId, ...updates } = data;
+
+    const [policy] = await db
+      .update(warrantyPolicies)
+      .set({
+        ...updates,
+        // Ensure nullability is handled correctly
+        description: updates.description ?? undefined,
+        cycleLimit: updates.cycleLimit ?? undefined,
+        slaConfigurationId: updates.slaConfigurationId ?? undefined,
+        terms: updates.terms ? (updates.terms as WarrantyPolicyTerms) : undefined,
+      })
+      .where(
+        and(
+          eq(warrantyPolicies.id, policyId),
+          eq(warrantyPolicies.organizationId, ctx.organizationId)
+        )
+      )
+      .returning();
+
+    if (!policy) {
+      throw new Error('Warranty policy not found');
+    }
+
+    return policy;
+  }
+);
+
+/**
+ * List warranty policies with optional filters
+ */
+export const listWarrantyPolicies = typedGetFn(
+  getWarrantyPoliciesSchema,
+  async ({ data }) => {
+    const ctx = await withAuth();
+
+    const conditions = [eq(warrantyPolicies.organizationId, ctx.organizationId)];
+
+    if (data.type) {
+      conditions.push(eq(warrantyPolicies.type, data.type));
+    }
+
+    if (typeof data.isActive === 'boolean') {
+      conditions.push(eq(warrantyPolicies.isActive, data.isActive));
+    }
+
+    const policies = await db
+      .select()
+      .from(warrantyPolicies)
+      .where(and(...conditions))
+      .orderBy(
+        asc(warrantyPolicies.type),
+        asc(warrantyPolicies.isDefault),
+        asc(warrantyPolicies.name)
+      );
+
+    return policies;
+  }
+);
+
+/**
+ * Get a single warranty policy by ID
+ */
+export const getWarrantyPolicy = typedGetFn(
+  getWarrantyPolicyByIdSchema,
+  async ({ data }) => {
+    const ctx = await withAuth();
+
+    const [policy] = await db
+      .select()
+      .from(warrantyPolicies)
+      .where(
+        and(
+          eq(warrantyPolicies.id, data.policyId),
+          eq(warrantyPolicies.organizationId, ctx.organizationId)
+        )
+      )
+      .limit(1);
+
+    if (!policy) {
+      throw new Error('Warranty policy not found');
+    }
+
+    return policy;
+  }
+);
+
+/**
+ * Delete a warranty policy (soft delete by setting isActive = false)
+ */
+export const deleteWarrantyPolicy = typedPostFn(
+  getWarrantyPolicyByIdSchema,
+  async ({ data }) => {
+    const ctx = await withAuth();
+
+    const [policy] = await db
+      .update(warrantyPolicies)
+      .set({ isActive: false })
+      .where(
+        and(
+          eq(warrantyPolicies.id, data.policyId),
+          eq(warrantyPolicies.organizationId, ctx.organizationId)
+        )
+      )
+      .returning();
+
+    if (!policy) {
+      throw new Error('Warranty policy not found');
+    }
+
+    return policy;
+  }
+);
+
+// ============================================================================
+// DEFAULT POLICY OPERATIONS
+// ============================================================================
+
+/**
+ * Get the default policy for a specific type
+ */
+export const getDefaultWarrantyPolicy = typedGetFn(
+  getWarrantyPoliciesSchema.pick({ type: true }),
+  async ({ data }) => {
+    const ctx = await withAuth();
+
+    if (!data.type) {
+      throw new Error('Policy type is required');
+    }
+
+    // First try to find the org's default for this type
+    const [policy] = await db
+      .select()
+      .from(warrantyPolicies)
+      .where(
+        and(
+          eq(warrantyPolicies.organizationId, ctx.organizationId),
+          eq(warrantyPolicies.type, data.type),
+          eq(warrantyPolicies.isDefault, true),
+          eq(warrantyPolicies.isActive, true)
+        )
+      )
+      .limit(1);
+
+    if (policy) {
+      return policy;
+    }
+
+    // Fall back to any active policy of this type
+    const [fallback] = await db
+      .select()
+      .from(warrantyPolicies)
+      .where(
+        and(
+          eq(warrantyPolicies.organizationId, ctx.organizationId),
+          eq(warrantyPolicies.type, data.type),
+          eq(warrantyPolicies.isActive, true)
+        )
+      )
+      .orderBy(asc(warrantyPolicies.createdAt))
+      .limit(1);
+
+    return fallback ?? null;
+  }
+);
+
+/**
+ * Set a policy as the default for its type
+ */
+export const setDefaultWarrantyPolicy = typedPostFn(
+  getWarrantyPolicyByIdSchema,
+  async ({ data }) => {
+    const ctx = await withAuth();
+
+    // Get the policy to find its type
+    const [targetPolicy] = await db
+      .select()
+      .from(warrantyPolicies)
+      .where(
+        and(
+          eq(warrantyPolicies.id, data.policyId),
+          eq(warrantyPolicies.organizationId, ctx.organizationId)
+        )
+      )
+      .limit(1);
+
+    if (!targetPolicy) {
+      throw new Error('Warranty policy not found');
+    }
+
+    // Clear existing default for this type
+    await db
+      .update(warrantyPolicies)
+      .set({ isDefault: false })
+      .where(
+        and(
+          eq(warrantyPolicies.organizationId, ctx.organizationId),
+          eq(warrantyPolicies.type, targetPolicy.type),
+          eq(warrantyPolicies.isDefault, true)
+        )
+      );
+
+    // Set the new default
+    const [policy] = await db
+      .update(warrantyPolicies)
+      .set({ isDefault: true })
+      .where(eq(warrantyPolicies.id, data.policyId))
+      .returning();
+
+    return policy;
+  }
+);
+
+// ============================================================================
+// POLICY RESOLUTION
+// ============================================================================
+
+/**
+ * Resolve which warranty policy applies for a product.
+ * Resolution hierarchy: product > category > org default
+ */
+export const resolveWarrantyPolicy = typedGetFn(
+  resolveWarrantyPolicySchema,
+  async ({ data }) => {
+    const ctx = await withAuth();
+
+    // 1. If product specified, check product's direct policy
+    if (data.productId) {
+      const [product] = await db
+        .select({
+          warrantyPolicyId: products.warrantyPolicyId,
+          categoryId: products.categoryId,
+        })
+        .from(products)
+        .where(
+          and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId))
+        )
+        .limit(1);
+
+      if (!product) {
+        throw new Error('Product not found');
+      }
+
+      // If product has a direct policy, use it
+      if (product.warrantyPolicyId) {
+        const [policy] = await db
+          .select()
+          .from(warrantyPolicies)
+          .where(
+            and(
+              eq(warrantyPolicies.id, product.warrantyPolicyId),
+              eq(warrantyPolicies.isActive, true)
+            )
+          )
+          .limit(1);
+
+        if (policy) {
+          return { policy, source: 'product' as const };
+        }
+      }
+
+      // 2. Check product's category default
+      if (product.categoryId) {
+        const [category] = await db
+          .select({
+            defaultWarrantyPolicyId: categories.defaultWarrantyPolicyId,
+          })
+          .from(categories)
+          .where(eq(categories.id, product.categoryId))
+          .limit(1);
+
+        if (category?.defaultWarrantyPolicyId) {
+          const [policy] = await db
+            .select()
+            .from(warrantyPolicies)
+            .where(
+              and(
+                eq(warrantyPolicies.id, category.defaultWarrantyPolicyId),
+                eq(warrantyPolicies.isActive, true)
+              )
+            )
+            .limit(1);
+
+          if (policy) {
+            return { policy, source: 'category' as const };
+          }
+        }
+      }
+    }
+
+    // 3. If category specified directly (not via product)
+    if (data.categoryId && !data.productId) {
+      const [category] = await db
+        .select({
+          defaultWarrantyPolicyId: categories.defaultWarrantyPolicyId,
+        })
+        .from(categories)
+        .where(
+          and(eq(categories.id, data.categoryId), eq(categories.organizationId, ctx.organizationId))
+        )
+        .limit(1);
+
+      if (!category) {
+        throw new Error('Category not found');
+      }
+
+      if (category.defaultWarrantyPolicyId) {
+        const [policy] = await db
+          .select()
+          .from(warrantyPolicies)
+          .where(
+            and(
+              eq(warrantyPolicies.id, category.defaultWarrantyPolicyId),
+              eq(warrantyPolicies.isActive, true)
+            )
+          )
+          .limit(1);
+
+        if (policy) {
+          return { policy, source: 'category' as const };
+        }
+      }
+    }
+
+    // 4. Fall back to org default for the specified type
+    if (data.type) {
+      const [policy] = await db
+        .select()
+        .from(warrantyPolicies)
+        .where(
+          and(
+            eq(warrantyPolicies.organizationId, ctx.organizationId),
+            eq(warrantyPolicies.type, data.type),
+            eq(warrantyPolicies.isDefault, true),
+            eq(warrantyPolicies.isActive, true)
+          )
+        )
+        .limit(1);
+
+      if (policy) {
+        return { policy, source: 'organization_default' as const };
+      }
+
+      // Fall back to any active policy of this type
+      const [fallback] = await db
+        .select()
+        .from(warrantyPolicies)
+        .where(
+          and(
+            eq(warrantyPolicies.organizationId, ctx.organizationId),
+            eq(warrantyPolicies.type, data.type),
+            eq(warrantyPolicies.isActive, true)
+          )
+        )
+        .orderBy(asc(warrantyPolicies.createdAt))
+        .limit(1);
+
+      if (fallback) {
+        return { policy: fallback, source: 'organization_fallback' as const };
+      }
+    }
+
+    return { policy: null, source: null };
+  }
+);
+
+// ============================================================================
+// POLICY ASSIGNMENT
+// ============================================================================
+
+/**
+ * Assign a warranty policy to a product
+ */
+export const assignWarrantyPolicyToProduct = typedPostFn(
+  assignWarrantyPolicyToProductSchema,
+  async ({ data }) => {
+    const ctx = await withAuth();
+
+    // Verify policy belongs to org if not null
+    if (data.policyId) {
+      const [policy] = await db
+        .select()
+        .from(warrantyPolicies)
+        .where(
+          and(
+            eq(warrantyPolicies.id, data.policyId),
+            eq(warrantyPolicies.organizationId, ctx.organizationId)
+          )
+        )
+        .limit(1);
+
+      if (!policy) {
+        throw new Error('Warranty policy not found');
+      }
+    }
+
+    const [product] = await db
+      .update(products)
+      .set({ warrantyPolicyId: data.policyId })
+      .where(and(eq(products.id, data.productId), eq(products.organizationId, ctx.organizationId)))
+      .returning();
+
+    if (!product) {
+      throw new Error('Product not found');
+    }
+
+    return product;
+  }
+);
+
+/**
+ * Set the default warranty policy for a category
+ */
+export const assignDefaultWarrantyPolicyToCategory = typedPostFn(
+  assignDefaultWarrantyPolicyToCategorySchema,
+  async ({ data }) => {
+    const ctx = await withAuth();
+
+    // Verify policy belongs to org if not null
+    if (data.policyId) {
+      const [policy] = await db
+        .select()
+        .from(warrantyPolicies)
+        .where(
+          and(
+            eq(warrantyPolicies.id, data.policyId),
+            eq(warrantyPolicies.organizationId, ctx.organizationId)
+          )
+        )
+        .limit(1);
+
+      if (!policy) {
+        throw new Error('Warranty policy not found');
+      }
+    }
+
+    const [category] = await db
+      .update(categories)
+      .set({ defaultWarrantyPolicyId: data.policyId })
+      .where(
+        and(eq(categories.id, data.categoryId), eq(categories.organizationId, ctx.organizationId))
+      )
+      .returning();
+
+    if (!category) {
+      throw new Error('Category not found');
+    }
+
+    return category;
+  }
+);
+
+// ============================================================================
+// SEED DEFAULT POLICIES
+// ============================================================================
+
+/**
+ * Seed default warranty policies for a new organization.
+ * Creates: Battery (120 months/10k cycles), Inverter (60 months), Installation (24 months)
+ */
+export const seedDefaultWarrantyPolicies = typedPostFn(
+  seedDefaultPoliciesSchema,
+  async ({ data }) => {
+    const ctx = await withAuth();
+
+    // Check if policies already exist
+    const existing = await db
+      .select()
+      .from(warrantyPolicies)
+      .where(eq(warrantyPolicies.organizationId, ctx.organizationId))
+      .limit(1);
+
+    if (existing.length > 0) {
+      throw new Error('Warranty policies already exist for this organization');
+    }
+
+    // Get or create warranty SLA configuration
+    let [warrantySlaConfig] = await db
+      .select()
+      .from(slaConfigurations)
+      .where(
+        and(
+          eq(slaConfigurations.organizationId, ctx.organizationId),
+          eq(slaConfigurations.domain, 'warranty'),
+          eq(slaConfigurations.isDefault, true)
+        )
+      )
+      .limit(1);
+
+    // If no warranty SLA exists, create a default one
+    if (!warrantySlaConfig) {
+      [warrantySlaConfig] = await db
+        .insert(slaConfigurations)
+        .values({
+          organizationId: ctx.organizationId,
+          domain: 'warranty',
+          name: 'Default Warranty SLA',
+          description: 'Default SLA for warranty claims',
+          responseTargetValue: 24,
+          responseTargetUnit: 'business_hours',
+          resolutionTargetValue: 5,
+          resolutionTargetUnit: 'business_days',
+          atRiskThresholdPercent: 75,
+          escalateOnBreach: true,
+          isDefault: true,
+          priorityOrder: 1,
+          isActive: true,
+        })
+        .returning();
+    }
+
+    // Create default policies
+    const policies = await db
+      .insert(warrantyPolicies)
+      .values([
+        {
+          organizationId: ctx.organizationId,
+          name: 'Battery Performance Warranty',
+          description:
+            'Standard 10-year battery performance warranty covering capacity degradation and cycle limits.',
+          type: 'battery_performance',
+          durationMonths: data.batteryDurationMonths,
+          cycleLimit: data.batteryCycleLimit,
+          terms: {
+            coverage: ['Capacity retention below 60%', 'Manufacturing defects', 'Cell failure'],
+            exclusions: ['Physical damage', 'Improper installation', 'Unauthorized modifications'],
+            claimRequirements: [
+              'Proof of purchase',
+              'Installation certificate',
+              'Battery diagnostics report',
+            ],
+            transferable: true,
+          },
+          slaConfigurationId: warrantySlaConfig.id,
+          isDefault: true,
+          isActive: true,
+        },
+        {
+          organizationId: ctx.organizationId,
+          name: 'Inverter Manufacturer Warranty',
+          description: 'Standard 5-year inverter warranty from manufacturer.',
+          type: 'inverter_manufacturer',
+          durationMonths: data.inverterDurationMonths,
+          cycleLimit: null,
+          terms: {
+            coverage: ['Component failure', 'Manufacturing defects', 'Firmware issues'],
+            exclusions: ['Power surge damage', 'Physical damage', 'Environmental damage'],
+            claimRequirements: ['Proof of purchase', 'Installation certificate', 'Error logs'],
+            transferable: true,
+          },
+          slaConfigurationId: warrantySlaConfig.id,
+          isDefault: true,
+          isActive: true,
+        },
+        {
+          organizationId: ctx.organizationId,
+          name: 'Installation Workmanship Warranty',
+          description: '2-year warranty covering installation quality and workmanship.',
+          type: 'installation_workmanship',
+          durationMonths: data.installationDurationMonths,
+          cycleLimit: null,
+          terms: {
+            coverage: ['Wiring defects', 'Mounting issues', 'Connection problems'],
+            exclusions: [
+              'Customer modifications',
+              'Weather damage post-install',
+              'Third-party interference',
+            ],
+            claimRequirements: ['Original installation documentation', 'Photo evidence'],
+            transferable: false,
+          },
+          slaConfigurationId: warrantySlaConfig.id,
+          isDefault: true,
+          isActive: true,
+        },
+      ])
+      .returning();
+
+    return {
+      policies,
+      slaConfiguration: warrantySlaConfig,
+    };
+  }
+);
+
+// ============================================================================
+// GET POLICIES WITH SLA INFO
+// ============================================================================
+
+/**
+ * Get warranty policies with their SLA configuration details
+ */
+export const getWarrantyPoliciesWithSla = typedGetFn(
+  getWarrantyPoliciesSchema,
+  async ({ data }) => {
+    const ctx = await withAuth();
+
+    const conditions = [eq(warrantyPolicies.organizationId, ctx.organizationId)];
+
+    if (data.type) {
+      conditions.push(eq(warrantyPolicies.type, data.type));
+    }
+
+    if (typeof data.isActive === 'boolean') {
+      conditions.push(eq(warrantyPolicies.isActive, data.isActive));
+    }
+
+    const policies = await db
+      .select({
+        policy: warrantyPolicies,
+        slaConfig: slaConfigurations,
+      })
+      .from(warrantyPolicies)
+      .leftJoin(slaConfigurations, eq(warrantyPolicies.slaConfigurationId, slaConfigurations.id))
+      .where(and(...conditions))
+      .orderBy(
+        asc(warrantyPolicies.type),
+        asc(warrantyPolicies.isDefault),
+        asc(warrantyPolicies.name)
+      );
+
+    return policies.map(({ policy, slaConfig }) => ({
+      ...policy,
+      slaConfiguration: slaConfig,
+    }));
+  }
+);
+
+// ============================================================================
+// WARRANTY REGISTRATION NOTIFICATION
+// ============================================================================
+
+/**
+ * Trigger warranty registration notification.
+ *
+ * Called after a warranty is registered (either auto from order delivery or manual).
+ * Sends WarrantyRegisteredPayload to trigger background notification job.
+ *
+ * @see src/trigger/jobs/warranty-notifications.ts
+ * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-002
+ */
+export async function triggerWarrantyRegistrationNotification(params: {
+  warrantyId: string;
+  warrantyNumber: string;
+  organizationId: string;
+  customerId: string;
+  productId: string;
+  productSerial?: string;
+  policyId: string;
+  registrationDate: Date;
+  expiryDate: Date;
+}): Promise<void> {
+  // Fetch customer details
+  const [customer] = await db
+    .select({
+      id: customers.id,
+      email: customers.email,
+      name: customers.name,
+    })
+    .from(customers)
+    .where(eq(customers.id, params.customerId))
+    .limit(1);
+
+  // Skip if no customer email
+  if (!customer?.email) {
+    console.log(
+      `[warranty-notification] Skipping notification for warranty ${params.warrantyNumber} - no customer email`
+    );
+    return;
+  }
+
+  // Fetch product details
+  const [product] = await db
+    .select({
+      id: products.id,
+      name: products.name,
+    })
+    .from(products)
+    .where(eq(products.id, params.productId))
+    .limit(1);
+
+  // Fetch policy details with SLA
+  const [policyWithSla] = await db
+    .select({
+      policy: warrantyPolicies,
+      slaConfig: slaConfigurations,
+    })
+    .from(warrantyPolicies)
+    .leftJoin(slaConfigurations, eq(warrantyPolicies.slaConfigurationId, slaConfigurations.id))
+    .where(eq(warrantyPolicies.id, params.policyId))
+    .limit(1);
+
+  if (!policyWithSla?.policy) {
+    console.log(
+      `[warranty-notification] Skipping notification for warranty ${params.warrantyNumber} - policy not found`
+    );
+    return;
+  }
+
+  const { policy, slaConfig } = policyWithSla;
+
+  // Build event payload
+  const payload: WarrantyRegisteredPayload = {
+    warrantyId: params.warrantyId,
+    warrantyNumber: params.warrantyNumber,
+    organizationId: params.organizationId,
+    customerId: params.customerId,
+    customerEmail: customer.email,
+    customerName: customer.name,
+    productId: params.productId,
+    productName: product?.name || 'Unknown Product',
+    productSerial: params.productSerial,
+    policyType: policy.type,
+    policyName: policy.name,
+    durationMonths: policy.durationMonths,
+    cycleLimit: policy.cycleLimit ?? undefined,
+    registrationDate: params.registrationDate.toISOString(),
+    expiryDate: params.expiryDate.toISOString(),
+    slaResponseHours: slaConfig?.responseTargetValue ?? 24,
+    slaResolutionDays: slaConfig?.resolutionTargetValue ?? 5,
+    // certificateUrl will be added when DOM-WAR-004 is implemented
+  };
+
+  // Trigger warranty notification task
+  await tasks.trigger('send-warranty-registration-email', payload);
+
+  console.log(
+    `[warranty-notification] Triggered notification for warranty ${params.warrantyNumber} to ${customer.email}`
+  );
+}

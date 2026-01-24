@@ -158,6 +158,8 @@ export interface WarrantyRegisteredPayload {
   startDate: string
   expiryDate: string
   policyName: string
+  slaResponseHours?: number
+  slaResolutionDays?: number
 }
 
 /**

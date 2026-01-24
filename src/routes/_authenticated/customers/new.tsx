@@ -4,12 +4,13 @@
  * Multi-step wizard for creating new customers with contacts and addresses.
  */
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
 import { PageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { CustomerWizard } from '@/components/domain/customers/customer-wizard'
-import { createCustomer, createContact, createAddress, getCustomerTags } from '@/server/customers'
+import { useCustomerTags, useCreateCustomer } from '@/hooks/customers'
+import { createContact, createAddress } from '@/server/customers'
 import { toast } from 'sonner'
 
 // ============================================================================
@@ -26,13 +27,9 @@ export const Route = createFileRoute('/_authenticated/customers/new')({
 
 function NewCustomerPage() {
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
 
-  // Fetch available tags for the wizard
-  const { data: tagsData } = useQuery({
-    queryKey: ['customer-tags'],
-    queryFn: () => getCustomerTags(),
-  })
+  // Fetch available tags using centralized hook
+  const { data: tagsData } = useCustomerTags()
 
   const availableTags = tagsData?.map((t) => ({
     id: t.id,
@@ -40,12 +37,8 @@ function NewCustomerPage() {
     color: t.color,
   })) ?? []
 
-  // Create customer mutation
-  const createCustomerMutation = useMutation({
-    mutationFn: async (data: Parameters<typeof createCustomer>[0]['data']) => {
-      return createCustomer({ data })
-    },
-  })
+  // Create customer using centralized hook (handles cache invalidation)
+  const createCustomerMutation = useCreateCustomer()
 
   // Create contact mutation
   const createContactMutation = useMutation({
@@ -152,9 +145,7 @@ function NewCustomerPage() {
         })
       }
 
-      // Invalidate queries
-      queryClient.invalidateQueries({ queryKey: ['customers'] })
-
+      // Note: useCreateCustomer hook handles cache invalidation
       toast.success('Customer created successfully')
       navigate({ to: '/customers/$customerId', params: { customerId: customer.id } })
     } catch (error) {

@@ -1,0 +1,552 @@
+/**
+ * Financial Hooks
+ *
+ * TanStack Query hooks for financial data fetching:
+ * - Dashboard metrics (KPIs, revenue, AR, payments, GST)
+ * - AR Aging reports with customer breakdown
+ * - Payment reminders and templates
+ * - Revenue recognition tracking
+ * - Xero invoice sync status
+ * - Credit notes and payment schedules
+ *
+ * @see src/server/functions/financial/financial-dashboard.ts
+ * @see src/server/functions/financial/ar-aging.ts
+ * @see src/server/functions/financial/payment-reminders.ts
+ * @see src/server/functions/financial/revenue-recognition.ts
+ * @see src/server/functions/financial/xero-invoice-sync.ts
+ * @see src/server/functions/financial/credit-notes.ts
+ * @see src/server/functions/financial/payment-schedules.ts
+ */
+
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
+import { queryKeys } from '@/lib/query-keys';
+
+// Dashboard
+import {
+  getFinancialDashboardMetrics,
+  getRevenueByPeriod,
+  getTopCustomersByRevenue,
+  getOutstandingInvoices,
+} from '@/server/functions/financial/financial-dashboard';
+import type { PeriodType } from '@/lib/schemas';
+
+// AR Aging
+import { getARAgingReport, getARAgingCustomerDetail } from '@/server/functions/financial/ar-aging';
+import type { ARAgingReportQuery } from '@/lib/schemas';
+
+// Payment Reminders
+import {
+  listReminderTemplates,
+  createReminderTemplate,
+  updateReminderTemplate,
+  deleteReminderTemplate,
+  sendReminder,
+  getReminderHistory,
+} from '@/server/functions/financial/payment-reminders';
+import type {
+  CreateReminderTemplateInput,
+  UpdateReminderTemplateInput,
+  SendReminderInput,
+} from '@/lib/schemas';
+
+// Revenue Recognition
+import {
+  listRecognitionsByState,
+  getRecognitionSummary,
+  getDeferredRevenueBalance,
+  retryRecognitionSync,
+} from '@/server/functions/financial/revenue-recognition';
+import type { RecognitionState } from '@/lib/schemas';
+
+// Xero Sync
+import {
+  listInvoicesBySyncStatus,
+  getInvoiceXeroStatus,
+  resyncInvoiceToXero,
+} from '@/server/functions/financial/xero-invoice-sync';
+
+// Credit Notes
+import {
+  listCreditNotes,
+  getCreditNote,
+  createCreditNote,
+  applyCreditNoteToInvoice,
+} from '@/server/functions/financial/credit-notes';
+import type { CreateCreditNoteInput, ApplyCreditNoteInput } from '@/lib/schemas';
+
+// Payment Schedules
+import {
+  getPaymentSchedule,
+  createPaymentPlan,
+  updateInstallment,
+  recordInstallmentPayment,
+} from '@/server/functions/financial/payment-schedules';
+import type { CreatePaymentPlanInput } from '@/lib/schemas';
+
+// ============================================================================
+// QUERY KEYS
+// ============================================================================
+
+// Query keys are now centralized in @/lib/query-keys.ts
+
+// ============================================================================
+// FINANCIAL DASHBOARD HOOKS
+// ============================================================================
+
+export interface UseFinancialDashboardMetricsOptions {
+  includePreviousPeriod?: boolean;
+  enabled?: boolean;
+}
+
+/**
+ * Fetch comprehensive financial dashboard metrics.
+ * Includes revenue MTD/YTD, AR balance, cash received, GST collected.
+ */
+export function useFinancialDashboardMetrics(options: UseFinancialDashboardMetricsOptions = {}) {
+  const { enabled = true, includePreviousPeriod = true } = options;
+  const fn = useServerFn(getFinancialDashboardMetrics);
+
+  return useQuery({
+    queryKey: queryKeys.financial.dashboardMetrics({ includePreviousPeriod }),
+    queryFn: () => fn({ data: { includePreviousPeriod } }),
+    enabled,
+    staleTime: 60 * 1000, // 1 minute
+  });
+}
+
+export interface UseRevenueByPeriodOptions {
+  dateFrom: Date;
+  dateTo: Date;
+  periodType: PeriodType;
+  customerType?: 'residential' | 'commercial';
+  enabled?: boolean;
+}
+
+/**
+ * Fetch revenue breakdown by time period.
+ * Supports daily, weekly, monthly, quarterly, yearly periods.
+ * Includes residential vs commercial breakdown.
+ */
+export function useRevenueByPeriod(options: UseRevenueByPeriodOptions) {
+  const { enabled = true, ...params } = options;
+  const fn = useServerFn(getRevenueByPeriod);
+
+  return useQuery({
+    queryKey: queryKeys.financial.revenueByPeriod(params.periodType, {
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+      customerType: params.customerType,
+    }),
+    queryFn: () => fn({ data: params }),
+    enabled,
+    staleTime: 60 * 1000,
+  });
+}
+
+export interface UseTopCustomersByRevenueOptions {
+  dateFrom?: Date;
+  dateTo?: Date;
+  commercialOnly?: boolean;
+  pageSize?: number;
+  page?: number;
+  enabled?: boolean;
+}
+
+/**
+ * Fetch top customers by revenue.
+ * Highlights commercial accounts ($50K+).
+ */
+export function useTopCustomersByRevenue(options: UseTopCustomersByRevenueOptions = {}) {
+  const { enabled = true, ...params } = options;
+  const fn = useServerFn(getTopCustomersByRevenue);
+
+  return useQuery({
+    queryKey: queryKeys.financial.topCustomers({
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+      commercialOnly: params.commercialOnly,
+      pageSize: params.pageSize,
+    }),
+    queryFn: () => fn({ data: params }),
+    enabled,
+    staleTime: 60 * 1000,
+  });
+}
+
+export interface UseOutstandingInvoicesOptions {
+  overdueOnly?: boolean;
+  customerType?: 'residential' | 'commercial';
+  pageSize?: number;
+  page?: number;
+  enabled?: boolean;
+}
+
+/**
+ * Fetch outstanding invoices with summary statistics.
+ * Optionally filtered by overdue status or customer type.
+ */
+export function useOutstandingInvoices(options: UseOutstandingInvoicesOptions = {}) {
+  const { enabled = true, ...params } = options;
+  const fn = useServerFn(getOutstandingInvoices);
+
+  return useQuery({
+    queryKey: queryKeys.financial.outstandingInvoices({
+      overdueOnly: params.overdueOnly,
+      customerType: params.customerType,
+      pageSize: params.pageSize,
+    }),
+    queryFn: () => fn({ data: params }),
+    enabled,
+    staleTime: 60 * 1000,
+  });
+}
+
+// ============================================================================
+// AR AGING HOOKS
+// ============================================================================
+
+export interface UseARAgingReportOptions extends Partial<ARAgingReportQuery> {
+  enabled?: boolean;
+}
+
+export function useARAgingReport(options: UseARAgingReportOptions = {}) {
+  const { enabled = true, ...filters } = options;
+  const fn = useServerFn(getARAgingReport);
+
+  return useQuery({
+    queryKey: queryKeys.financial.arAgingReport(filters),
+    queryFn: () => fn({ data: filters }),
+    enabled,
+    staleTime: 60 * 1000, // 1 minute
+  });
+}
+
+export function useCustomerAgingDetail(customerId: string, enabled = true) {
+  const fn = useServerFn(getARAgingCustomerDetail);
+
+  return useQuery({
+    queryKey: queryKeys.financial.arAgingCustomer(customerId),
+    queryFn: () => fn({ data: { customerId } }),
+    enabled: enabled && !!customerId,
+    staleTime: 60 * 1000,
+  });
+}
+
+// ============================================================================
+// PAYMENT REMINDER HOOKS
+// ============================================================================
+
+export function useReminderTemplates() {
+  const fn = useServerFn(listReminderTemplates);
+
+  return useQuery({
+    queryKey: queryKeys.financial.reminderTemplates(),
+    queryFn: () => fn({ data: {} }),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+export function useCreateReminderTemplate() {
+  const queryClient = useQueryClient();
+  const fn = useServerFn(createReminderTemplate);
+
+  return useMutation({
+    mutationFn: (data: CreateReminderTemplateInput) => fn({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.reminderTemplates() });
+    },
+  });
+}
+
+export function useUpdateReminderTemplate() {
+  const queryClient = useQueryClient();
+  const fn = useServerFn(updateReminderTemplate);
+
+  return useMutation({
+    mutationFn: (data: UpdateReminderTemplateInput & { id: string }) => fn({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.reminderTemplates() });
+    },
+  });
+}
+
+export function useDeleteReminderTemplate() {
+  const queryClient = useQueryClient();
+  const fn = useServerFn(deleteReminderTemplate);
+
+  return useMutation({
+    mutationFn: (id: string) => fn({ data: { id } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.reminderTemplates() });
+    },
+  });
+}
+
+export function useSendPaymentReminder() {
+  const queryClient = useQueryClient();
+  const fn = useServerFn(sendReminder);
+
+  return useMutation({
+    mutationFn: (data: SendReminderInput) => fn({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.reminders() });
+    },
+  });
+}
+
+export interface UseReminderHistoryOptions {
+  orderId?: string;
+  customerId?: string;
+  enabled?: boolean;
+}
+
+export function useReminderHistory(options: UseReminderHistoryOptions = {}) {
+  const { enabled = true, ...filters } = options;
+  const fn = useServerFn(getReminderHistory);
+
+  return useQuery({
+    queryKey: queryKeys.financial.reminderHistory(filters),
+    queryFn: () => fn({ data: filters }),
+    enabled,
+    staleTime: 30 * 1000,
+  });
+}
+
+// ============================================================================
+// REVENUE RECOGNITION HOOKS
+// ============================================================================
+
+export interface UseRecognitionsOptions {
+  state?: RecognitionState;
+  page?: number;
+  pageSize?: number;
+  enabled?: boolean;
+}
+
+export function useRecognitions(options: UseRecognitionsOptions = {}) {
+  const { enabled = true, ...params } = options;
+  const fn = useServerFn(listRecognitionsByState);
+
+  return useQuery({
+    queryKey: queryKeys.financial.recognitions(params.state),
+    queryFn: () => fn({ data: params }),
+    enabled,
+    staleTime: 30 * 1000,
+  });
+}
+
+export interface UseRecognitionSummaryOptions {
+  dateFrom: Date;
+  dateTo: Date;
+  groupBy?: 'day' | 'week' | 'month' | 'quarter';
+  enabled?: boolean;
+}
+
+export function useRecognitionSummary(options: UseRecognitionSummaryOptions) {
+  const { enabled = true, dateFrom, dateTo, groupBy } = options;
+  const fn = useServerFn(getRecognitionSummary);
+
+  return useQuery({
+    queryKey: queryKeys.financial.recognitionSummary(dateFrom, dateTo),
+    queryFn: () => fn({ data: { dateFrom, dateTo, groupBy } }),
+    enabled,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useDeferredRevenueBalance() {
+  const fn = useServerFn(getDeferredRevenueBalance);
+
+  return useQuery({
+    queryKey: queryKeys.financial.deferredBalance(),
+    queryFn: () => fn({ data: {} }),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useRetryRecognitionSync() {
+  const queryClient = useQueryClient();
+  const fn = useServerFn(retryRecognitionSync);
+
+  return useMutation({
+    mutationFn: (recognitionId: string) => fn({ data: { recognitionId } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.revenue() });
+    },
+  });
+}
+
+// ============================================================================
+// XERO SYNC HOOKS
+// ============================================================================
+
+export interface UseXeroSyncsOptions {
+  status?: 'pending' | 'syncing' | 'synced' | 'error';
+  errorsOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+  enabled?: boolean;
+}
+
+export function useXeroSyncs(options: UseXeroSyncsOptions = {}) {
+  const { enabled = true, ...params } = options;
+  const fn = useServerFn(listInvoicesBySyncStatus);
+
+  return useQuery({
+    queryKey: queryKeys.financial.xeroSyncs(params.status),
+    queryFn: () => fn({ data: params }),
+    enabled,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useXeroInvoiceStatus(orderId: string, enabled = true) {
+  const fn = useServerFn(getInvoiceXeroStatus);
+
+  return useQuery({
+    queryKey: queryKeys.financial.xeroStatus(orderId),
+    queryFn: () => fn({ data: { orderId } }),
+    enabled: enabled && !!orderId,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useResyncXeroInvoice() {
+  const queryClient = useQueryClient();
+  const fn = useServerFn(resyncInvoiceToXero);
+
+  return useMutation({
+    mutationFn: (orderId: string) => fn({ data: { orderId } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.xero() });
+    },
+  });
+}
+
+// ============================================================================
+// CREDIT NOTE HOOKS
+// ============================================================================
+
+export interface UseCreditNotesOptions {
+  customerId?: string;
+  orderId?: string;
+  page?: number;
+  pageSize?: number;
+  enabled?: boolean;
+}
+
+export function useCreditNotes(options: UseCreditNotesOptions = {}) {
+  const { enabled = true, ...params } = options;
+  const fn = useServerFn(listCreditNotes);
+
+  return useQuery({
+    queryKey: queryKeys.financial.creditNotesList({
+      customerId: params.customerId,
+      orderId: params.orderId,
+    }),
+    queryFn: () => fn({ data: params }),
+    enabled,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useCreditNote(id: string, enabled = true) {
+  const fn = useServerFn(getCreditNote);
+
+  return useQuery({
+    queryKey: queryKeys.financial.creditNoteDetail(id),
+    queryFn: () => fn({ data: { id } }),
+    enabled: enabled && !!id,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useCreateCreditNote() {
+  const queryClient = useQueryClient();
+  const fn = useServerFn(createCreditNote);
+
+  return useMutation({
+    mutationFn: (data: CreateCreditNoteInput) => fn({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
+    },
+  });
+}
+
+export function useApplyCreditNote() {
+  const queryClient = useQueryClient();
+  const fn = useServerFn(applyCreditNoteToInvoice);
+
+  return useMutation({
+    mutationFn: (data: ApplyCreditNoteInput) => fn({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
+    },
+  });
+}
+
+// ============================================================================
+// PAYMENT SCHEDULE HOOKS
+// ============================================================================
+
+export function usePaymentSchedule(orderId: string, enabled = true) {
+  const fn = useServerFn(getPaymentSchedule);
+
+  return useQuery({
+    queryKey: queryKeys.financial.paymentScheduleDetail(orderId),
+    queryFn: () => fn({ data: { orderId } }),
+    enabled: enabled && !!orderId,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useCreatePaymentPlan() {
+  const queryClient = useQueryClient();
+  const fn = useServerFn(createPaymentPlan);
+
+  return useMutation({
+    mutationFn: (data: CreatePaymentPlanInput) => fn({ data }),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.financial.paymentScheduleDetail(variables.orderId),
+      });
+    },
+  });
+}
+
+export function useUpdateInstallment() {
+  const queryClient = useQueryClient();
+  const fn = useServerFn(updateInstallment);
+
+  return useMutation({
+    mutationFn: (data: {
+      installmentId: string;
+      dueDate?: string;
+      amount?: number;
+      gstAmount?: number;
+      description?: string;
+      notes?: string | null;
+    }) => fn({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.paymentSchedules() });
+    },
+  });
+}
+
+export function useRecordInstallmentPayment() {
+  const queryClient = useQueryClient();
+  const fn = useServerFn(recordInstallmentPayment);
+
+  return useMutation({
+    mutationFn: (data: {
+      installmentId: string;
+      paidAmount: number;
+      paymentReference?: string;
+      notes?: string;
+    }) => fn({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.paymentSchedules() });
+    },
+  });
+}

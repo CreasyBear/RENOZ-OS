@@ -145,6 +145,22 @@ export const PERMISSIONS = {
     read: 'activity.read',
     export: 'activity.export',
   },
+
+  // Dashboard domain
+  dashboard: {
+    read: 'dashboard.read',
+    update: 'dashboard.update',
+    manageTargets: 'dashboard.manage_targets',
+    manageReports: 'dashboard.manage_reports',
+  },
+
+  // Scheduled Reports domain
+  scheduledReport: {
+    create: 'scheduled_report.create',
+    read: 'scheduled_report.read',
+    update: 'scheduled_report.update',
+    delete: 'scheduled_report.delete',
+  },
 } as const
 
 // ============================================================================
@@ -225,6 +241,16 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     // Activity (audit trail)
     PERMISSIONS.activity.read,
     PERMISSIONS.activity.export,
+    // Dashboard
+    PERMISSIONS.dashboard.read,
+    PERMISSIONS.dashboard.update,
+    PERMISSIONS.dashboard.manageTargets,
+    PERMISSIONS.dashboard.manageReports,
+    // Scheduled Reports
+    PERMISSIONS.scheduledReport.create,
+    PERMISSIONS.scheduledReport.read,
+    PERMISSIONS.scheduledReport.update,
+    PERMISSIONS.scheduledReport.delete,
   ],
 
   // Admin: Almost full access, except billing
@@ -295,6 +321,16 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     // Activity (audit trail)
     PERMISSIONS.activity.read,
     PERMISSIONS.activity.export,
+    // Dashboard
+    PERMISSIONS.dashboard.read,
+    PERMISSIONS.dashboard.update,
+    PERMISSIONS.dashboard.manageTargets,
+    PERMISSIONS.dashboard.manageReports,
+    // Scheduled Reports
+    PERMISSIONS.scheduledReport.create,
+    PERMISSIONS.scheduledReport.read,
+    PERMISSIONS.scheduledReport.update,
+    PERMISSIONS.scheduledReport.delete,
   ],
 
   // Manager: Manage team and operations, no user/org management
@@ -342,6 +378,9 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.report.export,
     // Activity (read only)
     PERMISSIONS.activity.read,
+    // Dashboard (read + targets)
+    PERMISSIONS.dashboard.read,
+    PERMISSIONS.dashboard.manageTargets,
   ],
 
   // Sales: Customer and sales focused
@@ -375,6 +414,8 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.apiToken.create,
     PERMISSIONS.apiToken.read,
     PERMISSIONS.apiToken.revoke,
+    // Dashboard (read only)
+    PERMISSIONS.dashboard.read,
   ],
 
   // Operations: Inventory and fulfillment focused
@@ -397,6 +438,8 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.inventory.receive,
     // Reports (operations only)
     PERMISSIONS.report.viewOperations,
+    // Dashboard (read only)
+    PERMISSIONS.dashboard.read,
   ],
 
   // Support: Customer service focused
@@ -414,6 +457,8 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.product.read,
     // Inventory (read only)
     PERMISSIONS.inventory.read,
+    // Dashboard (read only)
+    PERMISSIONS.dashboard.read,
   ],
 
   // Viewer: Read-only access
@@ -425,6 +470,7 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.inventory.read,
     PERMISSIONS.opportunity.read,
     PERMISSIONS.quote.read,
+    PERMISSIONS.dashboard.read,
   ],
 }
 

@@ -13,7 +13,6 @@
  */
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useCallback } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
 import { PageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
@@ -24,11 +23,11 @@ import {
   type CustomerTableData,
 } from '@/components/domain/customers'
 import {
-  getCustomers,
-  deleteCustomer,
-  bulkDeleteCustomers,
-  getCustomerTags,
-} from '@/server/customers'
+  useCustomers,
+  useCustomerTags,
+  useDeleteCustomer,
+  useBulkDeleteCustomers,
+} from '@/hooks/customers'
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -43,8 +42,6 @@ export const Route = createFileRoute('/_authenticated/customers/')({
 // ============================================================================
 
 function CustomersPage() {
-  const queryClient = useQueryClient()
-
   // Pagination state
   const [page, setPage] = useState(1)
   const [pageSize] = useState(20)
@@ -60,68 +57,29 @@ function CustomersPage() {
     tags: [],
   })
 
-  // Fetch customers
+  // Fetch customers using centralized hook
   const {
     data: customersData,
     isLoading: isLoadingCustomers,
     refetch: refetchCustomers,
-  } = useQuery({
-    queryKey: ['customers', page, pageSize, sortBy, sortOrder, filters],
-    queryFn: async () => {
-      const result = await getCustomers({
-        data: {
-          page,
-          pageSize,
-          sortBy,
-          sortOrder,
-          search: filters.search || undefined,
-          status: filters.status.length > 0 ? (filters.status[0] as 'prospect' | 'active' | 'inactive' | 'suspended' | 'blacklisted') : undefined,
-          type: filters.type.length > 0 ? (filters.type[0] as 'individual' | 'business' | 'government' | 'non_profit') : undefined,
-          healthScoreMin: filters.healthScoreMin,
-          healthScoreMax: filters.healthScoreMax,
-        },
-      })
-      return result
-    },
+  } = useCustomers({
+    page,
+    pageSize,
+    sortBy,
+    sortOrder,
+    search: filters.search || undefined,
+    status: filters.status.length > 0 ? (filters.status[0] as 'prospect' | 'active' | 'inactive' | 'suspended' | 'blacklisted') : undefined,
+    type: filters.type.length > 0 ? (filters.type[0] as 'individual' | 'business' | 'government' | 'non_profit') : undefined,
   })
 
-  // Fetch available tags
-  const { data: tagsData } = useQuery({
-    queryKey: ['customerTags'],
-    queryFn: async () => {
-      const result = await getCustomerTags()
-      return result
-    },
-  })
+  // Fetch available tags using centralized hook
+  const { data: tagsData } = useCustomerTags()
 
-  // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (customer: CustomerTableData) => {
-      await deleteCustomer({ data: { id: customer.id } })
-    },
-    onSuccess: () => {
-      toastSuccess('Customer deleted successfully')
-      queryClient.invalidateQueries({ queryKey: ['customers'] })
-    },
-    onError: () => {
-      toastError('Failed to delete customer')
-    },
-  })
+  // Delete mutation using centralized hook (handles cache invalidation)
+  const deleteMutation = useDeleteCustomer()
 
-  // Bulk delete mutation
-  const bulkDeleteMutation = useMutation({
-    mutationFn: async (customerIds: string[]) => {
-      const result = await bulkDeleteCustomers({ data: { customerIds } })
-      return result
-    },
-    onSuccess: (result) => {
-      toastSuccess(`Deleted ${result.deleted} customers`)
-      queryClient.invalidateQueries({ queryKey: ['customers'] })
-    },
-    onError: () => {
-      toastError('Failed to delete customers')
-    },
-  })
+  // Bulk delete mutation using centralized hook (handles cache invalidation)
+  const bulkDeleteMutation = useBulkDeleteCustomers()
 
   // Handlers
   const handleCreateCustomer = useCallback(() => {
@@ -135,14 +93,22 @@ function CustomersPage() {
 
   const handleDeleteCustomer = useCallback(
     (customer: CustomerTableData) => {
-      deleteMutation.mutate(customer)
+      deleteMutation.mutate(customer.id, {
+        onSuccess: () => toastSuccess('Customer deleted successfully'),
+        onError: () => toastError('Failed to delete customer'),
+      })
     },
     [deleteMutation]
   )
 
   const handleBulkDelete = useCallback(
     async (ids: string[]) => {
-      await bulkDeleteMutation.mutateAsync(ids)
+      try {
+        const result = await bulkDeleteMutation.mutateAsync(ids)
+        toastSuccess(`Deleted ${result.deleted} customers`)
+      } catch {
+        toastError('Failed to delete customers')
+      }
     },
     [bulkDeleteMutation]
   )

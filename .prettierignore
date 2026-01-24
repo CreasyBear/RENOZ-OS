@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.output/
+.vinxi/
+drizzle/
+src/routeTree.gen.ts
+*.min.js
+bun.lockb

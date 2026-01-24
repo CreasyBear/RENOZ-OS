@@ -1,0 +1,412 @@
+/**
+ * FinancialDashboard Component (Presenter)
+ *
+ * Financial KPI dashboard with revenue, AR, payments, and GST metrics.
+ * Includes charts for revenue trends and top customers.
+ *
+ * This is a pure presenter component - all data is passed via props from the container.
+ *
+ * @see src/routes/_authenticated/financial/index.tsx (container)
+ * @see _Initiation/_prd/2-domains/financial/financial.prd.json (DOM-FIN-007b)
+ */
+
+import { memo } from 'react';
+import {
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  DollarSign,
+  CreditCard,
+  Receipt,
+  AlertTriangle,
+  Building2,
+  Calendar,
+} from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
+import { FormatAmount } from '@/components/shared/format';
+import { format } from 'date-fns';
+import type {
+  KPIMetric,
+  PeriodType,
+  FinancialDashboardMetrics,
+  RevenueByPeriodResult,
+  TopCustomersResult,
+  OutstandingInvoicesResult,
+} from '@/lib/schemas';
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+/**
+ * Aggregated dashboard data from parallel queries
+ */
+interface DashboardData {
+  /** @source useQuery(['financial-dashboard-metrics']) */
+  metrics?: FinancialDashboardMetrics;
+  /** @source useQuery(['revenue-by-period', periodType]) */
+  revenueByPeriod?: RevenueByPeriodResult;
+  /** @source useQuery(['top-customers']) */
+  topCustomers?: TopCustomersResult;
+  /** @source useQuery(['outstanding-invoices']) */
+  outstanding?: OutstandingInvoicesResult;
+}
+
+export interface FinancialDashboardProps {
+  /** @source Aggregated from 4 parallel queries in container */
+  dashboardData: DashboardData;
+  /** @source Combined loading: metricsLoading || revenueLoading || customersLoading || outstandingLoading */
+  isLoading: boolean;
+  /** @source Any query error from container */
+  error?: Error;
+  /** @source Local state for period selector, managed by container */
+  periodType: PeriodType;
+  /** @source State setter from container */
+  onPeriodTypeChange: (type: PeriodType) => void;
+  className?: string;
+}
+
+// ============================================================================
+// KPI CARD
+// ============================================================================
+
+interface KPICardProps {
+  title: string;
+  icon: typeof DollarSign;
+  metric: KPIMetric;
+  format?: 'currency' | 'number';
+  className?: string;
+}
+
+function KPICard({ title, icon: Icon, metric, format: fmt = 'currency', className }: KPICardProps) {
+  const TrendIcon =
+    metric.changeDirection === 'up'
+      ? TrendingUp
+      : metric.changeDirection === 'down'
+        ? TrendingDown
+        : Minus;
+
+  const trendColor =
+    metric.changeDirection === 'up'
+      ? 'text-green-600'
+      : metric.changeDirection === 'down'
+        ? 'text-red-600'
+        : 'text-muted-foreground';
+
+  return (
+    <Card className={className}>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-muted-foreground text-sm font-medium">{title}</CardTitle>
+        <Icon className="text-muted-foreground h-4 w-4" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-2xl font-bold">
+          {fmt === 'currency' ? <FormatAmount amount={metric.value} /> : metric.value}
+        </div>
+        {metric.changePercent !== undefined && (
+          <div className={cn('mt-1 flex items-center gap-1 text-xs', trendColor)}>
+            <TrendIcon className="h-3 w-3" />
+            <span>{Math.abs(metric.changePercent).toFixed(1)}% vs last month</span>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================================
+// REVENUE CHART (SIMPLE BAR)
+// ============================================================================
+
+interface RevenueChartProps {
+  periods: Array<{
+    period: string;
+    periodLabel: string;
+    residentialRevenue: number;
+    commercialRevenue: number;
+    totalRevenue: number;
+  }>;
+}
+
+function RevenueChart({ periods }: RevenueChartProps) {
+  const maxRevenue = Math.max(...periods.map((p) => p.totalRevenue));
+
+  return (
+    <div className="space-y-3">
+      {periods.map((period) => {
+        const resPercent = maxRevenue > 0 ? (period.residentialRevenue / maxRevenue) * 100 : 0;
+        const comPercent = maxRevenue > 0 ? (period.commercialRevenue / maxRevenue) * 100 : 0;
+
+        return (
+          <div key={period.period} className="space-y-1">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">{period.periodLabel}</span>
+              <span className="font-medium">
+                <FormatAmount amount={period.totalRevenue} />
+              </span>
+            </div>
+            <div className="bg-muted flex h-4 overflow-hidden rounded-full">
+              <div
+                className="bg-blue-500 transition-all"
+                style={{ width: `${resPercent}%` }}
+                title={`Residential: $${(period.residentialRevenue / 100).toFixed(0)}`}
+              />
+              <div
+                className="bg-green-500 transition-all"
+                style={{ width: `${comPercent}%` }}
+                title={`Commercial: $${(period.commercialRevenue / 100).toFixed(0)}`}
+              />
+            </div>
+          </div>
+        );
+      })}
+      <div className="mt-2 flex gap-4 text-xs">
+        <div className="flex items-center gap-1">
+          <div className="h-3 w-3 rounded-full bg-blue-500" />
+          <span>Residential</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <div className="h-3 w-3 rounded-full bg-green-500" />
+          <span>Commercial</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
+export const FinancialDashboard = memo(function FinancialDashboard({
+  dashboardData,
+  isLoading,
+  error,
+  periodType,
+  onPeriodTypeChange,
+  className,
+}: FinancialDashboardProps) {
+  // Destructure aggregated data
+  const { metrics, revenueByPeriod, topCustomers, outstanding } = dashboardData;
+
+  // Loading state
+  if (isLoading && !metrics) {
+    return (
+      <div className={cn('space-y-4', className)}>
+        <div className="grid grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <Skeleton key={i} className="h-32" />
+          ))}
+        </div>
+        <Skeleton className="h-96" />
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className={cn('space-y-4', className)}>
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+              <span>Failed to load financial dashboard: {error.message}</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!metrics) return null;
+
+  return (
+    <div className={cn('space-y-6', className)}>
+      {/* Header */}
+      <div>
+        <h2 className="text-2xl font-bold">Financial Dashboard</h2>
+        <p className="text-muted-foreground">
+          {format(metrics.periodStart, 'dd MMM')} - {format(metrics.periodEnd, 'dd MMM yyyy')}
+        </p>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid grid-cols-4 gap-4">
+        <KPICard title="Revenue MTD" icon={DollarSign} metric={metrics.revenueMTD} />
+        <KPICard title="AR Balance" icon={Receipt} metric={metrics.arBalance} />
+        <KPICard title="Cash Received MTD" icon={CreditCard} metric={metrics.cashReceivedMTD} />
+        <KPICard title="GST Collected MTD" icon={Receipt} metric={metrics.gstCollectedMTD} />
+      </div>
+
+      {/* Secondary KPIs */}
+      <div className="grid grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              <span className="text-muted-foreground text-sm">Overdue</span>
+            </div>
+            <p className="mt-1 text-2xl font-bold text-red-600">
+              <FormatAmount amount={metrics.overdueAmount.value} />
+            </p>
+            <p className="text-muted-foreground text-xs">{metrics.overdueCount} invoices</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <Receipt className="h-5 w-5 text-blue-500" />
+              <span className="text-muted-foreground text-sm">Outstanding</span>
+            </div>
+            <p className="mt-1 text-2xl font-bold">{metrics.invoiceCount}</p>
+            <p className="text-muted-foreground text-xs">invoices</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-green-500" />
+              <span className="text-muted-foreground text-sm">Avg Days to Payment</span>
+            </div>
+            <p className="mt-1 text-2xl font-bold">{metrics.averageDaysToPayment}</p>
+            <p className="text-muted-foreground text-xs">days</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-purple-500" />
+              <span className="text-muted-foreground text-sm">Revenue YTD</span>
+            </div>
+            <p className="mt-1 text-2xl font-bold">
+              <FormatAmount amount={metrics.revenueYTD.value} />
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts Row */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Revenue Trend */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Revenue Trend</CardTitle>
+            <Select value={periodType} onValueChange={(v) => onPeriodTypeChange(v as PeriodType)}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="daily">Daily</SelectItem>
+                <SelectItem value="weekly">Weekly</SelectItem>
+                <SelectItem value="monthly">Monthly</SelectItem>
+              </SelectContent>
+            </Select>
+          </CardHeader>
+          <CardContent>
+            {isLoading && !revenueByPeriod ? (
+              <Skeleton className="h-48" />
+            ) : (
+              <RevenueChart periods={revenueByPeriod?.periods ?? []} />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Top Customers */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Top Customers (YTD)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading && !topCustomers ? (
+              <Skeleton className="h-48" />
+            ) : (
+              <Table>
+                <TableBody>
+                  {topCustomers?.customers.map((customer) => (
+                    <TableRow key={customer.customerId}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {customer.isCommercial && <Building2 className="h-4 w-4 text-blue-500" />}
+                          <span className="font-medium">{customer.customerName}</span>
+                          {customer.isCommercial && (
+                            <Badge variant="outline" className="text-xs">
+                              $50K+
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <FormatAmount amount={customer.totalRevenue} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Overdue Invoices */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-red-500" />
+            Overdue Invoices
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isLoading && !outstanding ? (
+            <Skeleton className="h-32" />
+          ) : outstanding?.invoices.length === 0 ? (
+            <p className="text-muted-foreground py-4 text-center">No overdue invoices</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Invoice</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Days Overdue</TableHead>
+                  <TableHead className="text-right">Balance Due</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {outstanding?.invoices.map((inv) => (
+                  <TableRow key={inv.orderId}>
+                    <TableCell className="font-mono">{inv.orderNumber}</TableCell>
+                    <TableCell>{inv.customerName}</TableCell>
+                    <TableCell>
+                      <Badge variant="destructive">{inv.daysOverdue} days</Badge>
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      <FormatAmount amount={inv.balanceDue} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+});

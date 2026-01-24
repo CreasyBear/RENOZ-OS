@@ -47,5 +47,29 @@ export type { DashboardContextValue, DashboardProviderProps } from "./dashboard-
 export { DateRangeSelector, ConnectedDateRangeSelector } from "./date-range-selector"
 export type { DateRangeSelectorProps } from "./date-range-selector"
 
+// Target progress
+export { TargetProgressWidget } from "./target-progress"
+export type { TargetProgressProps } from "./target-progress"
+
+// Comparison components
+export { ComparisonToggle } from './comparison-toggle'
+export type { ComparisonToggleProps } from './comparison-toggle'
+
+export {
+  ChangeIndicator,
+  TrendIndicator,
+  SignificanceIndicator,
+  MetricComparisonIndicator,
+} from './comparison-indicators'
+export type {
+  ChangeIndicatorProps,
+  TrendIndicatorProps,
+  SignificanceIndicatorProps,
+  MetricComparisonIndicatorProps,
+} from './comparison-indicators'
+
+export { ComparisonChart, toChartDataPoints } from './comparison-chart'
+export type { ComparisonChartProps, ComparisonDataPoint } from './comparison-chart'
+
 // Widgets
 export * from './widgets'

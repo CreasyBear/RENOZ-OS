@@ -5,7 +5,6 @@
  * Displays metrics, activity timeline, contacts, addresses, and quick actions.
  */
 import { createFileRoute } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Edit, Trash2, MoreHorizontal } from 'lucide-react'
 import { PageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
@@ -18,7 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Customer360View } from '@/components/domain/customers/customer-360-view'
-import { getCustomerById } from '@/server/customers'
+import { useCustomer } from '@/hooks/customers'
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -35,18 +34,12 @@ export const Route = createFileRoute('/_authenticated/customers/$customerId')({
 function CustomerDetailPage() {
   const { customerId } = Route.useParams()
 
-  // Fetch customer with all related data
+  // Fetch customer using centralized hook
   const {
     data: customer,
     isLoading,
     error,
-  } = useQuery({
-    queryKey: ['customer', customerId],
-    queryFn: async () => {
-      const result = await getCustomerById({ data: { id: customerId } })
-      return result
-    },
-  })
+  } = useCustomer(customerId)
 
   // Loading state
   if (isLoading) {
