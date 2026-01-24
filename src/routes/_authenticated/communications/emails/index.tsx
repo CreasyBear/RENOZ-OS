@@ -11,6 +11,8 @@ import { ScheduledEmailsList } from "@/components/domain/communications/schedule
 import { ScheduleEmailDialog } from "@/components/domain/communications/schedule-email-dialog";
 import { toastSuccess, toastError } from "@/hooks/use-toast";
 import { ErrorState } from "@/components/shared";
+import { RouteErrorFallback } from "@/components/layout";
+import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -18,6 +20,10 @@ import { ErrorState } from "@/components/shared";
 
 export const Route = createFileRoute("/_authenticated/communications/emails/")({
   component: ScheduledEmailsContainer,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/communications" />
+  ),
+  pendingComponent: () => <CommunicationsListSkeleton />,
 });
 
 // ============================================================================

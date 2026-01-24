@@ -12,6 +12,8 @@ import { useScheduledCalls, useCompleteCall, useCancelCall, useRescheduleCall } 
 import { ScheduledCallsList } from "@/components/domain/communications/scheduled-calls-list";
 import { toastSuccess, toastError } from "@/hooks/use-toast";
 import { ErrorState } from "@/components/shared";
+import { RouteErrorFallback } from "@/components/layout";
+import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -19,6 +21,10 @@ import { ErrorState } from "@/components/shared";
 
 export const Route = createFileRoute("/_authenticated/communications/calls/")({
   component: ScheduledCallsContainer,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/communications" />
+  ),
+  pendingComponent: () => <CommunicationsListSkeleton />,
 });
 
 // ============================================================================

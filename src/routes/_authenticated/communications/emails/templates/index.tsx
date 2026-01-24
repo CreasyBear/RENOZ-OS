@@ -22,6 +22,8 @@ import {
 } from "@/components/domain/communications/templates-list";
 import { toastSuccess, toastError } from "@/hooks/use-toast";
 import { ErrorState } from "@/components/shared";
+import { RouteErrorFallback } from "@/components/layout";
+import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
 import type { TemplateCategory } from "../../../../../../drizzle/schema";
 
 // ============================================================================
@@ -32,6 +34,10 @@ export const Route = createFileRoute(
   "/_authenticated/communications/emails/templates/"
 )({
   component: TemplatesContainer,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/communications" />
+  ),
+  pendingComponent: () => <CommunicationsListSkeleton />,
 });
 
 // ============================================================================

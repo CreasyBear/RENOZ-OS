@@ -19,6 +19,8 @@ import { SignaturesList } from "@/components/domain/communications/signatures-li
 import { type SignatureFormValues } from "@/components/domain/communications/signature-editor";
 import { toastSuccess, toastError } from "@/hooks/use-toast";
 import { ErrorState } from "@/components/shared";
+import { RouteErrorFallback } from "@/components/layout";
+import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -26,6 +28,14 @@ import { ErrorState } from "@/components/shared";
 
 export const Route = createFileRoute("/_authenticated/communications/signatures/")({
   component: SignaturesContainer,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/communications" />
+  ),
+  pendingComponent: () => (
+    <div className="container py-6 max-w-4xl">
+      <CommunicationsListSkeleton />
+    </div>
+  ),
 });
 
 // ============================================================================

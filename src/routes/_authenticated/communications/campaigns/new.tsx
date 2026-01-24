@@ -14,6 +14,8 @@ import {
   type CampaignFormData,
 } from "@/components/domain/communications/campaign-wizard";
 import { toastSuccess, toastError } from "@/hooks/use-toast";
+import { RouteErrorFallback } from "@/components/layout";
+import { FormSkeleton } from "@/components/skeletons/shared";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -21,6 +23,10 @@ import { toastSuccess, toastError } from "@/hooks/use-toast";
 
 export const Route = createFileRoute("/_authenticated/communications/campaigns/new")({
   component: CreateCampaignContainer,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/communications/campaigns" />
+  ),
+  pendingComponent: () => <FormSkeleton sections={3} />,
 });
 
 // ============================================================================

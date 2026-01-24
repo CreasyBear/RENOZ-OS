@@ -10,6 +10,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { usePreferenceHistory } from "@/hooks/communications";
 import { PreferenceHistory } from "@/components/domain/communications/communication-preferences";
 import { ErrorState } from "@/components/shared";
+import { RouteErrorFallback } from "@/components/layout";
+import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
 import {
   Card,
   CardContent,
@@ -27,6 +29,14 @@ export const Route = createFileRoute(
   "/_authenticated/communications/settings/preferences"
 )({
   component: PreferencesSettingsContainer,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/communications" />
+  ),
+  pendingComponent: () => (
+    <div className="container py-6 max-w-4xl">
+      <CommunicationsListSkeleton />
+    </div>
+  ),
 });
 
 // ============================================================================

@@ -11,6 +11,8 @@ import { useCallback } from "react";
 import { useCampaign, useCampaignRecipients } from "@/hooks/communications";
 import { CampaignDetailPanel } from "@/components/domain/communications/campaign-detail-panel";
 import { ErrorState } from "@/components/shared";
+import { RouteErrorFallback } from "@/components/layout";
+import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -18,6 +20,14 @@ import { ErrorState } from "@/components/shared";
 
 export const Route = createFileRoute("/_authenticated/communications/campaigns/$campaignId")({
   component: CampaignDetailContainer,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/communications/campaigns" />
+  ),
+  pendingComponent: () => (
+    <div className="container py-6 max-w-4xl">
+      <CommunicationsListSkeleton />
+    </div>
+  ),
 });
 
 // ============================================================================

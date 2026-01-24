@@ -7,7 +7,8 @@
  */
 import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
 import { Mail, Phone, FileText, PenTool, Settings } from "lucide-react";
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { CommunicationsLayoutSkeleton } from "@/components/skeletons/communications";
 import { cn } from "@/lib/utils";
 
 // ============================================================================
@@ -16,6 +17,20 @@ import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/communications/")({
   component: CommunicationsLayout,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Communications"
+        description="Manage email campaigns, templates, and scheduled communications"
+      />
+      <PageLayout.Content>
+        <CommunicationsLayoutSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================
