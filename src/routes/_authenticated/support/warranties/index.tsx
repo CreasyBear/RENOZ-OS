@@ -10,7 +10,8 @@ import type { FileRoutesByPath } from '@tanstack/react-router';
 import { z } from 'zod';
 import { useMemo } from 'react';
 import { Search, Shield } from 'lucide-react';
-import { PageLayout } from '@/components/layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { SupportTableSkeleton } from '@/components/skeletons/support';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -39,6 +40,20 @@ export const Route = createFileRoute(
 )({
   validateSearch: searchSchema,
   component: WarrantyListPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/support" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <PageLayout.Header
+        title="Warranties"
+        description="View and manage warranty registrations"
+      />
+      <PageLayout.Content>
+        <SupportTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 const STATUS_OPTIONS = [

@@ -15,7 +15,8 @@ import { createFileRoute, useNavigate, Link } from '@tanstack/react-router';
 import { z } from 'zod';
 import { Package, ExternalLink } from 'lucide-react';
 
-import { PageLayout } from '@/components/layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { SupportTableSkeleton } from '@/components/skeletons/support';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RmaList } from '@/components/domain/support/rma-list';
@@ -51,6 +52,20 @@ const rmasSearchSchema = z.object({
 export const Route = createFileRoute('/_authenticated/support/rmas/')({
   validateSearch: rmasSearchSchema,
   component: RmasListPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/support" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <PageLayout.Header
+        title="Return Authorizations"
+        description="Manage product returns and RMA workflow"
+      />
+      <PageLayout.Content>
+        <SupportTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

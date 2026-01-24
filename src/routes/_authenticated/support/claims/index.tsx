@@ -20,7 +20,8 @@ import {
   X,
 } from 'lucide-react';
 
-import { PageLayout } from '@/components/layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { SupportTableSkeleton } from '@/components/skeletons/support';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -79,6 +80,20 @@ const claimsSearchSchema = z.object({
 export const Route = createFileRoute('/_authenticated/support/claims/')({
   validateSearch: claimsSearchSchema,
   component: ClaimsListPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/support" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <PageLayout.Header
+        title="Warranty Claims"
+        description="Manage warranty claims and track resolutions"
+      />
+      <PageLayout.Content>
+        <SupportTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

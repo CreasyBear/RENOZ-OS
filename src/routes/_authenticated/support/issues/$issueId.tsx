@@ -6,6 +6,8 @@
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-001b, DOM-SUP-008
  */
 import { createFileRoute, Link } from '@tanstack/react-router';
+import { RouteErrorFallback } from '@/components/layout';
+import { SupportDetailSkeleton } from '@/components/skeletons/support';
 import { ChevronLeft, TicketIcon, User, Calendar, Tag, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatDistanceToNow, format } from 'date-fns';
@@ -35,6 +37,20 @@ import { useState } from 'react';
 
 export const Route = createFileRoute('/_authenticated/support/issues/$issueId')({
   component: IssueDetailPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/support/issues" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <PageLayout.Header
+        title="Issue Details"
+        description="Loading issue information..."
+      />
+      <PageLayout.Content>
+        <SupportDetailSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

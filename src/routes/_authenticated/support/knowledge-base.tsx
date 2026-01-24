@@ -9,6 +9,8 @@
 
 import { useMemo, useState } from 'react';
 import { createFileRoute, Link } from '@tanstack/react-router';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { KnowledgeBaseSkeleton } from '@/components/skeletons/support';
 import { BookOpen, Settings } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -43,6 +45,20 @@ import type {
 
 export const Route = createFileRoute('/_authenticated/support/knowledge-base')({
   component: KnowledgeBasePage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/support" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Knowledge Base"
+        description="Articles, guides, and documentation"
+      />
+      <PageLayout.Content>
+        <KnowledgeBaseSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 function KnowledgeBasePage() {

@@ -29,7 +29,8 @@ import {
   CalendarPlus,
 } from 'lucide-react';
 
-import { PageLayout } from '@/components/layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { SupportDetailSkeleton } from '@/components/skeletons/support';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -82,6 +83,20 @@ export const Route = createFileRoute('/_authenticated/support/claims/$claimId')(
     return claim;
   },
   component: ClaimDetailPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/support/claims" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <PageLayout.Header
+        title="Claim Details"
+        description="Loading warranty claim information..."
+      />
+      <PageLayout.Content>
+        <SupportDetailSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

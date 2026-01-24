@@ -26,7 +26,8 @@ import {
   ExternalLink,
 } from 'lucide-react';
 
-import { PageLayout } from '@/components/layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { SupportDetailSkeleton } from '@/components/skeletons/support';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -84,6 +85,20 @@ export const Route = createFileRoute('/_authenticated/support/warranties/$warran
     return warranty;
   },
   component: WarrantyDetailPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/support/warranties" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <PageLayout.Header
+        title="Warranty Details"
+        description="Loading warranty information..."
+      />
+      <PageLayout.Content>
+        <SupportDetailSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // Status badge styling

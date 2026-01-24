@@ -10,7 +10,8 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { ChevronLeft, Package } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { PageLayout } from '@/components/layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { SupportDetailSkeleton } from '@/components/skeletons/support';
 import { Button } from '@/components/ui/button';
 import { RmaDetailCard } from '@/components/domain/support/rma-detail-card';
 import { RmaWorkflowActions } from '@/components/domain/support/rma-workflow-actions';
@@ -29,6 +30,20 @@ import type { RmaResolution } from '@/lib/schemas/support/rma';
 
 export const Route = createFileRoute('/_authenticated/support/rmas/$rmaId')({
   component: RmaDetailPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/support/rmas" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <PageLayout.Header
+        title="RMA Details"
+        description="View and manage return authorization"
+      />
+      <PageLayout.Content>
+        <SupportDetailSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

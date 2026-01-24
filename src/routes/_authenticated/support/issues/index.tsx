@@ -8,6 +8,8 @@
  * @see src/routes/_authenticated/support/issues-board.tsx for Kanban view
  */
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router';
+import { RouteErrorFallback } from '@/components/layout';
+import { SupportTableSkeleton } from '@/components/skeletons/support';
 import { z } from 'zod';
 import { useMemo } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
@@ -70,6 +72,20 @@ const issuesSearchSchema = z.object({
 export const Route = createFileRoute('/_authenticated/support/issues/')({
   validateSearch: issuesSearchSchema,
   component: IssuesListPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/support/issues" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <PageLayout.Header
+        title="Issues"
+        description="Manage support issues and track resolution"
+      />
+      <PageLayout.Content>
+        <SupportTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

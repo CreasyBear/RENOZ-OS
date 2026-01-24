@@ -7,6 +7,8 @@
  */
 import { useState } from 'react';
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router';
+import { RouteErrorFallback } from '@/components/layout';
+import { SupportFormSkeleton } from '@/components/skeletons/support';
 import { ChevronLeft, TicketIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -32,6 +34,20 @@ import type { IssueType, IssuePriority } from '@/lib/schemas/support/issues';
 
 export const Route = createFileRoute('/_authenticated/support/issues/new')({
   component: NewIssuePage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/support/issues" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <PageLayout.Header
+        title="New Issue"
+        description="Create a new support issue"
+      />
+      <PageLayout.Content>
+        <SupportFormSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

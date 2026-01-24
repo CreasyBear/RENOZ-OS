@@ -8,6 +8,8 @@
 
 import * as React from 'react';
 import { createFileRoute } from '@tanstack/react-router';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { SupportDashboardSkeleton } from '@/components/skeletons/support';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -38,6 +40,20 @@ import { cn } from '@/lib/utils';
 
 export const Route = createFileRoute('/_authenticated/support/dashboard')({
   component: SupportDashboardPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/support" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Support Dashboard"
+        description="Monitor support performance and team metrics"
+      />
+      <PageLayout.Content>
+        <SupportDashboardSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

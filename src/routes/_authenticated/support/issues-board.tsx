@@ -9,6 +9,8 @@
 
 import { useState, useMemo, useCallback } from 'react';
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { SupportKanbanSkeleton } from '@/components/skeletons/support';
 import { Plus, LayoutGrid, List, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -38,6 +40,20 @@ import type { IssueKanbanItem } from '@/components/domain/support/issue-kanban-c
 
 export const Route = createFileRoute('/_authenticated/support/issues-board')({
   component: IssuesBoardPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/support" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Issues Board"
+        description="Manage issues with drag-and-drop"
+      />
+      <PageLayout.Content>
+        <SupportKanbanSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================
