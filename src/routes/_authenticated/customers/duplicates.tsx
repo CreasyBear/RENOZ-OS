@@ -9,6 +9,8 @@
 
 import { useState } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { PageLayout, RouteErrorFallback } from '@/components/layout'
+import { InventoryTabsSkeleton } from '@/components/skeletons/inventory'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Users, History, AlertTriangle } from 'lucide-react'
@@ -17,6 +19,17 @@ import { useDuplicateScan, useMergeHistory, useDismissDuplicate } from '@/hooks'
 
 export const Route = createFileRoute('/_authenticated/customers/duplicates')({
   component: CustomerDuplicatesPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/customers" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <PageLayout.Header title="Duplicate Detection" />
+      <PageLayout.Content>
+        <InventoryTabsSkeleton tabCount={2} />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 })
 
 function CustomerDuplicatesPage() {

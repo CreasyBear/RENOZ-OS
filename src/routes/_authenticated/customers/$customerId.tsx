@@ -6,7 +6,8 @@
  */
 import { createFileRoute } from '@tanstack/react-router'
 import { ArrowLeft, Edit, Trash2, MoreHorizontal } from 'lucide-react'
-import { PageLayout } from '@/components/layout'
+import { PageLayout, RouteErrorFallback } from '@/components/layout'
+import { CustomerDetailSkeleton } from '@/components/skeletons/customers'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -25,6 +26,14 @@ import { useCustomer } from '@/hooks/customers'
 
 export const Route = createFileRoute('/_authenticated/customers/$customerId')({
   component: CustomerDetailPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/customers" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="full-width">
+      <CustomerDetailSkeleton />
+    </PageLayout>
+  ),
 })
 
 // ============================================================================

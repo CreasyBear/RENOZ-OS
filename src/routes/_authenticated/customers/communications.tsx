@@ -9,6 +9,8 @@
 import { useState } from 'react'
 import { createFileRoute, Link, useSearch } from '@tanstack/react-router'
 import { ArrowLeft, MessageSquare } from 'lucide-react'
+import { PageLayout, RouteErrorFallback } from '@/components/layout'
+import { InventoryTabsSkeleton } from '@/components/skeletons/inventory'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CommunicationTimeline } from '@/components/domain/customers/communication-timeline'
@@ -21,6 +23,17 @@ export const Route = createFileRoute('/_authenticated/customers/communications')
     customerId: (search.customerId as string) || undefined,
     tab: (search.tab as string) || 'timeline',
   }),
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/customers" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <PageLayout.Header title="Communications" />
+      <PageLayout.Content>
+        <InventoryTabsSkeleton tabCount={3} />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 })
 
 function CommunicationsPage() {

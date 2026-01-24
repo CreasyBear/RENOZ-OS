@@ -14,7 +14,8 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useCallback } from 'react'
 import { Plus } from 'lucide-react'
-import { PageLayout } from '@/components/layout'
+import { PageLayout, RouteErrorFallback } from '@/components/layout'
+import { CustomerTableSkeleton } from '@/components/skeletons/customers'
 import { Button } from '@/components/ui/button'
 import { toastSuccess, toastError } from '@/hooks/use-toast'
 import {
@@ -35,6 +36,17 @@ import {
 
 export const Route = createFileRoute('/_authenticated/customers/')({
   component: CustomersPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="Customers" />
+      <PageLayout.Content>
+        <CustomerTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 })
 
 // ============================================================================

@@ -11,6 +11,8 @@
 import { useState } from 'react'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, AlertTriangle } from 'lucide-react'
+import { PageLayout, RouteErrorFallback } from '@/components/layout'
+import { InventoryTabsSkeleton } from '@/components/skeletons/inventory'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -28,6 +30,17 @@ import { useSegments, useSegmentDetail } from '@/hooks'
 
 export const Route = createFileRoute('/_authenticated/customers/segments/')({
   component: SegmentsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/customers" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <PageLayout.Header title="Customer Segments" />
+      <PageLayout.Content>
+        <InventoryTabsSkeleton tabCount={2} />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 })
 
 function SegmentsPage() {

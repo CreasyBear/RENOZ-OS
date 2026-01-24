@@ -6,7 +6,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
-import { PageLayout } from '@/components/layout'
+import { PageLayout, RouteErrorFallback } from '@/components/layout'
+import { FormSkeleton } from '@/components/skeletons/shared/form-skeleton'
 import { Button } from '@/components/ui/button'
 import { CustomerWizard } from '@/components/domain/customers/customer-wizard'
 import { useCustomerTags, useCreateCustomer } from '@/hooks/customers'
@@ -19,6 +20,17 @@ import { toast } from 'sonner'
 
 export const Route = createFileRoute('/_authenticated/customers/new')({
   component: NewCustomerPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/customers" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <PageLayout.Header title="New Customer" />
+      <PageLayout.Content>
+        <FormSkeleton sections={3} />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 })
 
 // ============================================================================

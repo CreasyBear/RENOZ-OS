@@ -7,7 +7,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
-import { PageLayout } from '@/components/layout'
+import { PageLayout, RouteErrorFallback } from '@/components/layout'
+import { FormSkeleton } from '@/components/skeletons/shared/form-skeleton'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CustomerForm } from '@/components/domain/customers/customer-form'
@@ -31,6 +32,17 @@ import { useState, useEffect } from 'react'
 
 export const Route = createFileRoute('/_authenticated/customers/$customerId_/edit')({
   component: EditCustomerPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/customers" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <PageLayout.Header title="Edit Customer" />
+      <PageLayout.Content>
+        <FormSkeleton sections={3} />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 })
 
 // ============================================================================
