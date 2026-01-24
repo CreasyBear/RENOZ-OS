@@ -11,6 +11,8 @@
 
 import { useMemo, useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
+import { RouteErrorFallback } from '@/components/layout';
+import { SettingsPageSkeleton } from '@/components/skeletons/settings';
 import { PageLayout } from '@/components/layout/page-layout';
 import { IssueTemplateList } from '@/components/domain/support/issue-template-list';
 import { IssueTemplateFormDialog } from '@/components/domain/support/issue-template-form-dialog';
@@ -29,6 +31,10 @@ import type {
 
 export const Route = createFileRoute('/_authenticated/settings/issue-templates')({
   component: IssueTemplatesSettingsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/settings" />
+  ),
+  pendingComponent: () => <SettingsPageSkeleton />,
 });
 
 function IssueTemplatesSettingsPage() {

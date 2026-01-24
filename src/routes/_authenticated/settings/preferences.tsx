@@ -18,6 +18,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useServerFn } from '@tanstack/react-start';
+import { RouteErrorFallback } from '@/components/layout';
+import { SettingsCardsSkeleton } from '@/components/skeletons/settings';
 import { getPreferences, setPreference } from '@/server/functions/users/user-preferences';
 import { PREFERENCE_CATEGORIES, type PreferenceCategory } from 'drizzle/schema';
 
@@ -50,6 +52,10 @@ import {
 // Route definition
 export const Route = createFileRoute('/_authenticated/settings/preferences' as any)({
   component: PreferencesSettings,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/settings" />
+  ),
+  pendingComponent: () => <SettingsCardsSkeleton sections={3} showSidebar />,
   loader: async () => {
     const result = await getPreferences({ data: {} });
     return { preferences: result.grouped };

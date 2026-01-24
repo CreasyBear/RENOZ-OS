@@ -15,6 +15,8 @@
 import { createFileRoute, useLoaderData } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
 import { useServerFn } from '@tanstack/react-start';
+import { RouteErrorFallback } from '@/components/layout';
+import { SettingsCardsSkeleton } from '@/components/skeletons/settings';
 import { format, formatDistanceToNow } from 'date-fns';
 import {
   listMySessions,
@@ -58,6 +60,10 @@ import { useConfirmation } from '@/hooks/use-confirmation';
 // Route definition
 export const Route = createFileRoute('/_authenticated/settings/security' as any)({
   component: SecuritySettings,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/settings" />
+  ),
+  pendingComponent: () => <SettingsCardsSkeleton sections={4} />,
   loader: async () => {
     const [sessions, activity] = await Promise.all([
       listMySessions({ data: {} }),

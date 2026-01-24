@@ -11,6 +11,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { RouteErrorFallback } from '@/components/layout';
+import { SettingsTableSkeleton } from '@/components/skeletons/settings';
 import { useServerFn } from "@tanstack/react-start";
 import {
   createApiToken,
@@ -34,6 +36,10 @@ import type {
 
 export const Route = createFileRoute("/_authenticated/settings/api-tokens")({
   component: ApiTokensPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/settings" />
+  ),
+  pendingComponent: () => <SettingsTableSkeleton />,
 });
 
 // ============================================================================

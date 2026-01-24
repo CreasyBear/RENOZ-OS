@@ -9,6 +9,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useServerFn } from '@tanstack/react-start';
+import { RouteErrorFallback } from '@/components/layout';
+import { SettingsTabsSkeleton } from '@/components/skeletons/settings';
 import {
   createDelegation,
   listMyDelegations,
@@ -110,6 +112,14 @@ const delegationSearchSchema = z.object({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const Route = createFileRoute('/_authenticated/settings/delegations' as any)({
   validateSearch: delegationSearchSchema,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/settings" />
+  ),
+  pendingComponent: () => (
+    <div className="p-6">
+      <SettingsTabsSkeleton />
+    </div>
+  ),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   loaderDeps: ({ search }: any) => search,
   loader: async () => {

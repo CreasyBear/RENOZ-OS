@@ -7,6 +7,8 @@
 import { useState, useCallback } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { Plus, FolderTree, RefreshCw } from "lucide-react";
+import { RouteErrorFallback } from '@/components/layout';
+import { SettingsTreeSkeleton } from '@/components/skeletons/settings';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageLayout } from "@/components/layout/page-layout";
@@ -23,6 +25,10 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/settings/categories")({
   component: CategoriesSettingsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/settings" />
+  ),
+  pendingComponent: () => <SettingsTreeSkeleton />,
   loader: async () => {
     const result = await getCategoryTree();
     return { categories: result as CategoryNode[] };

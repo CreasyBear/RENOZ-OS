@@ -17,6 +17,8 @@
 import { useState, useCallback } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { Plus, Trash2, Target, Filter, Calendar, Loader2 } from 'lucide-react';
+import { RouteErrorFallback } from '@/components/layout';
+import { SettingsPageSkeleton } from '@/components/skeletons/settings';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -76,6 +78,10 @@ import type {
 
 export const Route = createFileRoute('/_authenticated/settings/targets')({
   component: TargetsSettingsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/settings" />
+  ),
+  pendingComponent: () => <SettingsPageSkeleton />,
 });
 
 // ============================================================================

@@ -11,6 +11,8 @@
 
 import { useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
+import { RouteErrorFallback } from '@/components/layout';
+import { SettingsPageSkeleton } from '@/components/skeletons/settings';
 import { PageLayout } from '@/components/layout/page-layout';
 import { WarrantyPolicyList } from '@/components/domain/warranty/warranty-policy-list';
 import { WarrantyPolicyFormDialog } from '@/components/domain/warranty/warranty-policy-form-dialog';
@@ -28,6 +30,10 @@ import type { WarrantyPolicyTypeValue } from '@/lib/schemas/warranty/policies';
 
 export const Route = createFileRoute('/_authenticated/settings/warranty-policies')({
   component: WarrantyPoliciesSettingsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/settings" />
+  ),
+  pendingComponent: () => <SettingsPageSkeleton />,
 });
 
 function WarrantyPoliciesSettingsPage() {

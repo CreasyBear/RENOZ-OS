@@ -31,6 +31,8 @@ import {
   RefreshCw,
   Mail,
 } from 'lucide-react';
+import { RouteErrorFallback } from '@/components/layout';
+import { SettingsPageSkeleton } from '@/components/skeletons/settings';
 import { toast } from 'sonner';
 import { formatDistanceToNow, format } from 'date-fns';
 // cn imported but kept for potential future use
@@ -100,6 +102,10 @@ import type { ScheduledReport } from '@/../drizzle/schema/dashboard/scheduled-re
 
 export const Route = createFileRoute('/_authenticated/settings/scheduled-reports')({
   component: ScheduledReportsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/settings" />
+  ),
+  pendingComponent: () => <SettingsPageSkeleton />,
 });
 
 // ============================================================================

@@ -10,6 +10,8 @@
 import { useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { Plus, BookOpen, FolderTree } from 'lucide-react';
+import { RouteErrorFallback } from '@/components/layout';
+import { SettingsTreeSkeleton } from '@/components/skeletons/settings';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/shared/loading-state';
@@ -31,6 +33,10 @@ import type { KbCategoryResponse } from '@/lib/schemas/support/knowledge-base';
 
 export const Route = createFileRoute('/_authenticated/settings/knowledge-base')({
   component: KnowledgeBaseSettingsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/settings" />
+  ),
+  pendingComponent: () => <SettingsTreeSkeleton />,
 });
 
 function KnowledgeBaseSettingsPage() {

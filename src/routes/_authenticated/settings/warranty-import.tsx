@@ -10,6 +10,8 @@
 
 import { useState, useCallback } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { RouteErrorFallback } from '@/components/layout';
+import { SettingsPageSkeleton } from '@/components/skeletons/settings';
 import { PageLayout } from '@/components/layout/page-layout';
 import { BulkWarrantyImportDialog } from '@/components/domain/warranty/bulk-warranty-import-dialog';
 import { Button } from '@/components/ui/button';
@@ -29,6 +31,10 @@ import { usePreviewWarrantyImport, useBulkRegisterWarranties } from '@/hooks';
 
 export const Route = createFileRoute('/_authenticated/settings/warranty-import')({
   component: WarrantyImportSettingsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/settings" />
+  ),
+  pendingComponent: () => <SettingsPageSkeleton />,
 });
 
 // ============================================================================

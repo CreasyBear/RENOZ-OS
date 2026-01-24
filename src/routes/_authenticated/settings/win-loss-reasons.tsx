@@ -10,6 +10,8 @@
 import { useCallback } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { RouteErrorFallback } from '@/components/layout';
+import { SettingsPageSkeleton } from '@/components/skeletons/settings';
 import { PageLayout } from '@/components/layout/page-layout';
 import { WinLossReasonsManager } from '@/components/domain/settings';
 import type { ReasonForm } from '@/components/domain/settings/win-loss-reasons-manager';
@@ -29,6 +31,10 @@ import { useConfirmation } from '@/hooks/use-confirmation';
 
 export const Route = createFileRoute('/_authenticated/settings/win-loss-reasons')({
   component: WinLossReasonsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/settings" />
+  ),
+  pendingComponent: () => <SettingsPageSkeleton />,
 });
 
 // ============================================================================
