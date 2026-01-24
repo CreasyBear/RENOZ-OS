@@ -8,9 +8,10 @@
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Plus, Download } from "lucide-react";
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { PipelineKanbanSkeleton } from "@/components/skeletons/pipeline";
 import { Button } from "@/components/ui/button";
 import { toastSuccess, toastError } from "@/hooks/use-toast";
 import {
@@ -19,11 +20,9 @@ import {
   PipelineFilters,
   type PipelineFiltersState,
 } from "@/components/domain/pipeline";
-import {
-  listOpportunities,
-  getPipelineMetrics,
-  updateOpportunityStage,
-} from "@/server/functions/pipeline";
+import { usePipelineMetrics, useUpdateOpportunityStage } from "@/hooks/pipeline";
+import { listOpportunities } from "@/server/functions/pipeline";
+import { queryKeys } from "@/lib/query-keys";
 import type { OpportunityStage, Opportunity } from "@/lib/schemas/pipeline";
 
 // ============================================================================
@@ -32,6 +31,20 @@ import type { OpportunityStage, Opportunity } from "@/lib/schemas/pipeline";
 
 export const Route = createFileRoute("/_authenticated/pipeline/")({
   component: PipelinePage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Pipeline"
+        description="Track and manage your sales opportunities"
+      />
+      <PageLayout.Content>
+        <PipelineKanbanSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================
@@ -40,7 +53,6 @@ export const Route = createFileRoute("/_authenticated/pipeline/")({
 
 function PipelinePage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
   // Filter state
   const [filters, setFilters] = useState<PipelineFiltersState>({
@@ -53,11 +65,13 @@ function PipelinePage() {
   });
 
   // Fetch opportunities
+  // Note: Using inline query because useOpportunities hook doesn't support all filter options
+  // (stages array, minValue, maxValue, includeWonLost). Hook enhancement needed for full migration.
   const {
     data: opportunitiesData,
     isLoading: isLoadingOpportunities,
   } = useQuery({
-    queryKey: ["opportunities", filters],
+    queryKey: queryKeys.opportunities.list(filters),
     queryFn: async () => {
       const result = await listOpportunities({
         data: {
@@ -81,80 +95,11 @@ function PipelinePage() {
     },
   });
 
-  // Fetch metrics
-  const { data: metricsData, isLoading: isLoadingMetrics } = useQuery({
-    queryKey: ["pipeline-metrics"],
-    queryFn: async () => {
-      const result = await getPipelineMetrics({ data: {} });
-      return result as {
-        totalValue: number;
-        weightedValue: number;
-        opportunityCount: number;
-        byStage: Record<string, { count: number; value: number; weightedValue: number }>;
-        avgDaysInStage: Record<string, number>;
-        conversionRate: number;
-      };
-    },
-  });
+  // Fetch metrics using centralized hook
+  const { data: metricsData, isLoading: isLoadingMetrics } = usePipelineMetrics();
 
-  // Stage change mutation
-  const stageChangeMutation = useMutation({
-    mutationFn: async ({
-      opportunityId,
-      stage,
-      reason,
-    }: {
-      opportunityId: string;
-      stage: OpportunityStage;
-      reason?: { winLossReasonId?: string; lostNotes?: string; competitorName?: string };
-    }) => {
-      return updateOpportunityStage({
-        data: {
-          id: opportunityId,
-          stage,
-          ...reason,
-        },
-      });
-    },
-    onMutate: async ({ opportunityId, stage }) => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ["opportunities"] });
-
-      // Snapshot previous value
-      const previousData = queryClient.getQueryData(["opportunities", filters]);
-
-      // Optimistically update
-      queryClient.setQueryData(
-        ["opportunities", filters],
-        (old: typeof opportunitiesData) => {
-          if (!old) return old;
-          return {
-            ...old,
-            items: old.items.map((opp) =>
-              opp.id === opportunityId ? { ...opp, stage } : opp
-            ),
-          };
-        }
-      );
-
-      return { previousData };
-    },
-    onError: (_err, _variables, context) => {
-      // Rollback on error
-      if (context?.previousData) {
-        queryClient.setQueryData(["opportunities", filters], context.previousData);
-      }
-      toastError("Failed to update opportunity stage. Please try again.");
-    },
-    onSuccess: () => {
-      toastSuccess("Opportunity stage updated successfully.");
-    },
-    onSettled: () => {
-      // Refetch to ensure consistency
-      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
-      queryClient.invalidateQueries({ queryKey: ["pipeline-metrics"] });
-    },
-  });
+  // Stage change using centralized hook (handles optimistic updates and cache invalidation)
+  const stageChangeMutation = useUpdateOpportunityStage();
 
   // Handle stage change from board
   const handleStageChange = useCallback(
@@ -163,11 +108,16 @@ function PipelinePage() {
       newStage: OpportunityStage,
       reason?: { winLossReasonId?: string; lostNotes?: string; competitorName?: string }
     ) => {
-      await stageChangeMutation.mutateAsync({
-        opportunityId,
-        stage: newStage,
-        reason,
-      });
+      try {
+        await stageChangeMutation.mutateAsync({
+          opportunityId,
+          stage: newStage,
+          reason,
+        });
+        toastSuccess("Opportunity stage updated successfully.");
+      } catch {
+        toastError("Failed to update opportunity stage. Please try again.");
+      }
     },
     [stageChangeMutation]
   );

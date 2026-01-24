@@ -8,10 +8,10 @@
  * @see _Initiation/_prd/2-domains/pipeline/pipeline.prd.json (PIPE-DETAIL-UI)
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Edit, MoreHorizontal, Send, Trophy, XCircle, ArrowRight } from "lucide-react";
 import { useState } from "react";
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { PipelineDetailSkeleton } from "@/components/skeletons/pipeline";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -27,11 +27,11 @@ import { OpportunityDetail } from "@/components/domain/pipeline/opportunity-deta
 import { OpportunityForm } from "@/components/domain/pipeline/opportunity-form";
 import { WonLostDialog } from "@/components/domain/pipeline";
 import {
-  getOpportunity,
-  updateOpportunity,
-  updateOpportunityStage,
-  deleteOpportunity,
-} from "@/server/functions/pipeline";
+  useOpportunity,
+  useUpdateOpportunity,
+  useDeleteOpportunity,
+  useUpdateOpportunityStage,
+} from "@/hooks/pipeline";
 import { FormatAmount } from "@/components/shared/format";
 import type { OpportunityStage, UpdateOpportunity, Opportunity } from "@/lib/schemas/pipeline";
 
@@ -54,6 +54,17 @@ interface GetOpportunityResponse {
 
 export const Route = createFileRoute("/_authenticated/pipeline/$opportunityId")({
   component: OpportunityDetailPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/pipeline" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header title="Opportunity" />
+      <PageLayout.Content>
+        <PipelineDetailSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================
@@ -84,7 +95,6 @@ const stageLabels: Record<OpportunityStage, string> = {
 
 function OpportunityDetailPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { opportunityId } = Route.useParams();
 
   // UI State
@@ -94,87 +104,59 @@ function OpportunityDetailPage() {
     stage: "won" | "lost" | null;
   }>({ open: false, stage: null });
 
-  // Fetch opportunity with all related data
+  // Fetch opportunity using centralized hook
   const {
     data,
     isLoading,
     error,
     refetch,
-  } = useQuery<GetOpportunityResponse>({
-    queryKey: ["opportunity", opportunityId],
-    queryFn: async () => {
-      const result = await getOpportunity({ data: { id: opportunityId } });
-      return result as GetOpportunityResponse;
-    },
-  });
+  } = useOpportunity({ id: opportunityId }) as {
+    data: GetOpportunityResponse | undefined;
+    isLoading: boolean;
+    error: Error | null;
+    refetch: () => void;
+  };
 
-  // Update opportunity mutation
-  const updateMutation = useMutation({
-    mutationFn: async (updates: UpdateOpportunity) => {
-      return updateOpportunity({
-        data: { id: opportunityId, ...updates },
-      });
-    },
-    onSuccess: () => {
-      toastSuccess("Opportunity updated successfully.");
-      setIsEditing(false);
-      queryClient.invalidateQueries({ queryKey: ["opportunity", opportunityId] });
-      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
-    },
-    onError: () => {
-      toastError("Failed to update opportunity. Please try again.");
-    },
-  });
-
-  // Stage change mutation
-  const stageChangeMutation = useMutation({
-    mutationFn: async ({
-      stage,
-      reason,
-    }: {
-      stage: OpportunityStage;
-      reason?: { winLossReasonId?: string; lostNotes?: string; competitorName?: string };
-    }) => {
-      return updateOpportunityStage({
-        data: {
-          id: opportunityId,
-          stage,
-          ...reason,
-        },
-      });
-    },
-    onSuccess: () => {
-      toastSuccess("Stage updated successfully.");
-      setWonLostDialog({ open: false, stage: null });
-      queryClient.invalidateQueries({ queryKey: ["opportunity", opportunityId] });
-      queryClient.invalidateQueries({ queryKey: ["opportunities"] });
-      queryClient.invalidateQueries({ queryKey: ["pipeline-metrics"] });
-    },
-    onError: () => {
-      toastError("Failed to update stage. Please try again.");
-    },
-  });
-
-  // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      return deleteOpportunity({ data: { id: opportunityId } });
-    },
-    onSuccess: () => {
-      toastSuccess("Opportunity deleted.");
-      navigate({ to: "/pipeline" });
-    },
-    onError: () => {
-      toastError("Failed to delete opportunity. Please try again.");
-    },
-  });
+  // Mutations using centralized hooks (handle cache invalidation automatically)
+  const updateMutation = useUpdateOpportunity();
+  const stageChangeMutation = useUpdateOpportunityStage();
+  const deleteMutation = useDeleteOpportunity();
 
   // Handle stage change from Won/Lost dialog
   const handleWonLostConfirm = async (
     stage: "won" | "lost",
     reason?: { winLossReasonId?: string; lostNotes?: string; competitorName?: string }
   ) => {
-    await stageChangeMutation.mutateAsync({ stage, reason });
+    try {
+      await stageChangeMutation.mutateAsync({ opportunityId, stage, reason });
+      toastSuccess("Stage updated successfully.");
+      setWonLostDialog({ open: false, stage: null });
+    } catch {
+      toastError("Failed to update stage. Please try again.");
+    }
+  };
+
+  // Handle update from form
+  const handleUpdate = async (updates: UpdateOpportunity) => {
+    try {
+      await updateMutation.mutateAsync({ id: opportunityId, ...updates });
+      toastSuccess("Opportunity updated successfully.");
+      setIsEditing(false);
+    } catch {
+      toastError("Failed to update opportunity. Please try again.");
+    }
+  };
+
+  // Handle delete
+  const handleDelete = async () => {
+    if (!confirm("Are you sure you want to delete this opportunity?")) return;
+    try {
+      await deleteMutation.mutateAsync(opportunityId);
+      toastSuccess("Opportunity deleted.");
+      navigate({ to: "/pipeline" });
+    } catch {
+      toastError("Failed to delete opportunity. Please try again.");
+    }
   };
 
   // Loading state
@@ -307,11 +289,7 @@ function OpportunityDetailPage() {
                   )}
                   <DropdownMenuItem
                     className="text-destructive"
-                    onClick={() => {
-                      if (confirm("Are you sure you want to delete this opportunity?")) {
-                        deleteMutation.mutate();
-                      }
-                    }}
+                    onClick={handleDelete}
                   >
                     Delete Opportunity
                   </DropdownMenuItem>
@@ -326,7 +304,7 @@ function OpportunityDetailPage() {
               opportunity={opportunity}
               customer={customer}
               contact={contact}
-              onSave={(updates) => updateMutation.mutate(updates as UpdateOpportunity)}
+              onSave={handleUpdate}
               onCancel={() => setIsEditing(false)}
               isLoading={updateMutation.isPending}
             />
