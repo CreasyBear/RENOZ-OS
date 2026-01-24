@@ -115,7 +115,7 @@ find src/hooks -type d -exec sh -c 'test ! -f "$1/index.ts" && echo "$1"' _ {} \
 - [x] Add cross-link from hook-architecture.md rules file
 
 ### Validation
-- [ ] At least one domain migrated as proof of pattern (suggest: Orders)
+- [x] At least one domain migrated as proof of pattern (Products - component barrel export)
 - [x] Detection commands produce actionable output
 
 ## Success Metrics
