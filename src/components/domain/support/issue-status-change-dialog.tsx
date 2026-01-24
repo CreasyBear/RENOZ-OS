@@ -22,12 +22,11 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import type { IssueStatus } from '@/lib/schemas/support';
 
 // ============================================================================
 // TYPES
 // ============================================================================
-
-export type IssueStatus = 'open' | 'in_progress' | 'on_hold' | 'resolved' | 'closed';
 
 interface StatusConfig {
   label: string;

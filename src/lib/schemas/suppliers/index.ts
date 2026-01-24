@@ -38,10 +38,10 @@ export type SupplierType = z.infer<typeof supplierTypeSchema>;
 export type PaymentTerms = z.infer<typeof paymentTermsSchema>;
 
 // ============================================================================
-// ADDRESS SCHEMA
+// SUPPLIER ADDRESS SCHEMA (domain-specific, simpler than shared Address)
 // ============================================================================
 
-export const addressSchema = z.object({
+export const supplierAddressSchema = z.object({
   street1: z.string(),
   street2: z.string().optional(),
   city: z.string(),
@@ -50,7 +50,7 @@ export const addressSchema = z.object({
   country: z.string(),
 });
 
-export type Address = z.infer<typeof addressSchema>;
+export type SupplierAddress = z.infer<typeof supplierAddressSchema>;
 
 // ============================================================================
 // SUPPLIER CRUD SCHEMAS

@@ -30,12 +30,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { IssueKanbanCard, IssueKanbanCardOverlay, type IssueKanbanItem } from './issue-kanban-card';
+import type { IssueStatus } from '@/lib/schemas/support';
 
 // ============================================================================
 // TYPES
 // ============================================================================
-
-export type IssueStatus = 'open' | 'in_progress' | 'on_hold' | 'resolved' | 'closed';
 
 interface KanbanColumn {
   id: IssueStatus;

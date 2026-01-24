@@ -16,17 +16,17 @@
 - [x] DASH-TARGETS-UI: Targets Management Interface
 - [x] DASH-COMPARISON-API: Comparison Analysis API
 - [x] DASH-COMPARISON-UI: Comparison Interface
-- [ ] DASH-REPORTS-API: Automated Reports API
-- [ ] DASH-REPORTS-UI: Reports Management Interface
+- [x] DASH-REPORTS-API: Automated Reports API
+- [x] DASH-REPORTS-UI: Reports Management Interface
 - [ ] DASH-REPORTS-BACKGROUND: Background Report Processing
 - [ ] DASH-MOBILE-UI: Mobile Dashboard Interface
 - [ ] DASH-AI-INSIGHTS: AI-Powered Insights
 
 ## Current Story
-DASH-REPORTS-API: Automated Reports API
+DASH-REPORTS-BACKGROUND: Background Report Processing
 
 ## Iteration Count
-Total: 11
+Total: 13
 Current Story: 0
 
 ## Blockers
@@ -174,3 +174,45 @@ None
     - Export button integration
   - Updated src/components/domain/dashboard/index.ts with new exports
   - All components follow Container/Presenter pattern
+- 2026-01-24: DASH-REPORTS-API completed
+  - Fixed permission references in src/server/functions/dashboard/scheduled-reports.ts
+    - Changed PERMISSIONS.reports.* to PERMISSIONS.scheduledReport.*
+    - createScheduledReport uses PERMISSIONS.scheduledReport.create
+    - Update operations use PERMISSIONS.scheduledReport.update
+    - Delete operations use PERMISSIONS.scheduledReport.delete
+  - Added generateReport server function for on-demand report generation
+    - Validates date range (max 1 year)
+    - Returns placeholder URL with expiry (pending Trigger.dev integration)
+    - Uses PERMISSIONS.dashboard.manageReports
+  - Added ScheduledReportsFilters interface to src/lib/query-keys.ts
+  - Added queryKeys.dashboard.scheduledReports nested factory
+    - all(), lists(), list(filters), details(), detail(id), status(id)
+  - Added useGenerateReport hook to src/hooks/dashboard/use-scheduled-reports.ts
+  - Updated hooks/dashboard/index.ts with useGenerateReport export
+  - All server functions already exist with full CRUD:
+    - listScheduledReports, getScheduledReport, getScheduledReportStatus
+    - createScheduledReport, updateScheduledReport, deleteScheduledReport
+    - executeScheduledReport (triggers job, updates timestamps)
+    - bulkUpdateScheduledReports, bulkDeleteScheduledReports
+    - generateReport (on-demand generation)
+- 2026-01-24: DASH-REPORTS-UI completed
+  - Created src/components/domain/settings/scheduled-report-form.tsx (presenter form component)
+    - TanStack Form with Sheet slide-out
+    - Fields: name, description, frequency, format, isActive toggle
+    - Recipients section: email input with add/remove badges
+    - Metrics configuration: multi-select checkboxes, includeCharts, includeTrends, comparisonPeriod
+    - Accordion for collapsible metrics section
+    - @source JSDoc annotations for props
+  - Created src/routes/_authenticated/settings/scheduled-reports.tsx (container route)
+    - Full CRUD for scheduled reports with filtering
+    - Quick stats: total, active, paused, due today
+    - Table with: name, frequency, format, recipients count, status, next/last run
+    - Status badges: Active (green), Paused, Error (with tooltip), Pending
+    - Execute (run now), Pause/Activate toggle, Edit, Delete actions
+    - Bulk operations: activate, pause, delete selected
+    - Delete confirmation dialogs
+    - Uses hooks: useScheduledReports, useCreateScheduledReport, useUpdateScheduledReport, useDeleteScheduledReport, useExecuteScheduledReport, useBulkDeleteScheduledReports, useBulkUpdateScheduledReports
+  - Updated src/routes/_authenticated/settings.tsx with links to:
+    - /settings/targets (KPI Targets)
+    - /settings/scheduled-reports (Scheduled Reports)
+  - Updated src/components/domain/settings/index.ts with ScheduledReportForm export

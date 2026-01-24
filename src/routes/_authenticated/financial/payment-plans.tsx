@@ -23,6 +23,7 @@ import {
   recordInstallmentPayment,
 } from '@/server/functions/financial/payment-schedules';
 import type { PaymentPlanType } from '@/lib/schemas';
+import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================================
 // SEARCH PARAMS SCHEMA
@@ -84,7 +85,7 @@ function PaymentPlansPage() {
     isLoading,
     error,
   } = useQuery<PaymentSchedule | null>({
-    queryKey: ['payment-schedule', orderId],
+    queryKey: queryKeys.financial.paymentScheduleDetail(orderId!),
     queryFn: async () => {
       const result = await getScheduleFn({ data: { orderId: orderId! } });
       return result as PaymentSchedule | null;
@@ -103,7 +104,7 @@ function PaymentPlansPage() {
         },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payment-schedule', orderId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.paymentScheduleDetail(orderId!) });
       setCreateDialogOpen(false);
     },
   });
@@ -119,7 +120,7 @@ function PaymentPlansPage() {
         },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['payment-schedule', orderId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.paymentScheduleDetail(orderId!) });
       setRecordPaymentOpen(false);
       setSelectedInstallment(null);
     },

@@ -25,6 +25,7 @@ import {
   retryRecognitionSync,
 } from '@/server/functions/financial/revenue-recognition';
 import { startOfYear } from 'date-fns';
+import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================================
 // ROUTE
@@ -66,7 +67,7 @@ function RevenueRecognitionPage() {
   const [retryingId, setRetryingId] = useState<string | null>(null);
 
   const { data: listData, isLoading: listLoading } = useQuery({
-    queryKey: ['recognitions-by-state', stateFilter],
+    queryKey: queryKeys.financial.recognitions(stateFilter === 'all' ? undefined : stateFilter),
     queryFn: () =>
       listFn({
         data: {
@@ -78,7 +79,7 @@ function RevenueRecognitionPage() {
   });
 
   const { data: summaryData, isLoading: summaryLoading } = useQuery({
-    queryKey: ['recognition-summary'],
+    queryKey: queryKeys.financial.recognitionSummary(),
     queryFn: () =>
       summaryFn({
         data: {
@@ -90,7 +91,7 @@ function RevenueRecognitionPage() {
   });
 
   const { data: balanceData, isLoading: balanceLoading } = useQuery({
-    queryKey: ['deferred-balance'],
+    queryKey: queryKeys.financial.deferredBalance(),
     queryFn: () => balanceFn({ data: {} }),
   });
 
@@ -101,7 +102,7 @@ function RevenueRecognitionPage() {
     },
     onSettled: () => {
       setRetryingId(null);
-      queryClient.invalidateQueries({ queryKey: ['recognitions-by-state'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.recognitions() });
     },
   });
 

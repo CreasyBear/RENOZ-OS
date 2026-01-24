@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-// Validation schema
-export const categorySchema = z.object({
+// Category form validation schema
+export const categoryFormSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100, 'Name is too long'),
   description: z.string().max(500, 'Description is too long').optional(),
   parentId: z.string().uuid().nullable().optional(),
@@ -12,4 +12,4 @@ export const categorySchema = z.object({
   seoDescription: z.string().max(160, 'SEO description should be under 160 characters').optional(),
 });
 
-export type CategoryFormData = z.infer<typeof categorySchema>;
+export type CategoryFormData = z.infer<typeof categoryFormSchema>;

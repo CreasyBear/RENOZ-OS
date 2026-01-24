@@ -11,3 +11,6 @@ export {
 
 export { TargetForm } from './target-form';
 export type { TargetFormProps } from './target-form';
+
+export { ScheduledReportForm } from './scheduled-report-form';
+export type { ScheduledReportFormProps } from './scheduled-report-form';

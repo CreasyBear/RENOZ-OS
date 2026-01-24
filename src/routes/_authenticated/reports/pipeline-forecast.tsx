@@ -50,6 +50,7 @@ import {
   getRevenueAttribution,
 } from "@/server/functions/pipeline";
 import type { ForecastGroupBy } from "@/lib/schemas/pipeline";
+import { queryKeys } from "@/lib/query-keys";
 
 // ============================================================================
 // ROUTE
@@ -129,7 +130,7 @@ function PipelineForecastPage() {
 
   // Fetch forecast data
   const forecastQuery = useQuery({
-    queryKey: ["pipeline-forecast", startDate.toISOString(), endDate.toISOString(), groupBy],
+    queryKey: queryKeys.reports.pipelineForecast(startDate.toISOString(), endDate.toISOString(), groupBy),
     queryFn: async () => {
       const result = await getPipelineForecast({
         data: {
@@ -145,7 +146,7 @@ function PipelineForecastPage() {
 
   // Fetch velocity metrics
   const velocityQuery = useQuery({
-    queryKey: ["pipeline-velocity", startDate.toISOString(), endDate.toISOString()],
+    queryKey: queryKeys.reports.pipelineVelocity(startDate.toISOString(), endDate.toISOString()),
     queryFn: async () => {
       const result = await getPipelineVelocity({
         data: {
@@ -159,7 +160,7 @@ function PipelineForecastPage() {
 
   // Fetch revenue attribution
   const attributionQuery = useQuery({
-    queryKey: ["revenue-attribution", startDate.toISOString(), endDate.toISOString()],
+    queryKey: queryKeys.reports.revenueAttribution(startDate.toISOString(), endDate.toISOString()),
     queryFn: async () => {
       const result = await getRevenueAttribution({
         data: {

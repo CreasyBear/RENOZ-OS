@@ -11,6 +11,7 @@ import { useCallback, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PageLayout } from '@/components/layout';
 import { ApprovalDashboard, type ApprovalItem, type ApprovalFilters } from '@/components/domain/approvals/approval-dashboard';
+import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -39,7 +40,7 @@ function ApprovalsPage() {
 
   // Mock data - will be replaced with real API calls
   const { data: approvalItems = [], isLoading, error } = useQuery({
-    queryKey: ['approval-items', activeTab, filters],
+    queryKey: queryKeys.approvals.items(activeTab, filters),
     queryFn: async () => {
       // Mock approval items
       return [
@@ -82,19 +83,19 @@ function ApprovalsPage() {
   // ============================================================================
 
   const handleRefresh = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ['approval-items'] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
   }, [queryClient]);
 
   const handleDecision = useCallback((decision: string, comments: string) => {
     // Handle decision
     console.log('Decision:', decision, 'Comments:', comments);
-    queryClient.invalidateQueries({ queryKey: ['approval-items'] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
   }, [queryClient]);
 
   const handleBulkDecision = useCallback((decision: string, comments: string) => {
     // Handle bulk decision
     console.log('Bulk decision:', decision, 'Comments:', comments);
-    queryClient.invalidateQueries({ queryKey: ['approval-items'] });
+    queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
   }, [queryClient]);
 
   // ============================================================================

@@ -277,6 +277,17 @@ export interface EnhancedComparisonFilters extends ComparisonFilters {
   includeInsights?: boolean
 }
 
+export interface ScheduledReportsFilters {
+  search?: string
+  isActive?: boolean
+  frequency?: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly'
+  format?: 'pdf' | 'csv' | 'xlsx' | 'html'
+  page?: number
+  pageSize?: number
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+}
+
 // ============================================================================
 // QUERY KEYS FACTORY
 // ============================================================================
@@ -498,6 +509,17 @@ export const queryKeys = {
       enhanced: (filters: EnhancedComparisonFilters) =>
         [...queryKeys.dashboard.metrics.all(), 'enhanced', filters] as const,
     },
+
+    // Scheduled Reports nested factory
+    scheduledReports: {
+      all: () => [...queryKeys.dashboard.all, 'scheduledReports'] as const,
+      lists: () => [...queryKeys.dashboard.scheduledReports.all(), 'list'] as const,
+      list: (filters?: ScheduledReportsFilters) =>
+        [...queryKeys.dashboard.scheduledReports.lists(), filters ?? {}] as const,
+      details: () => [...queryKeys.dashboard.scheduledReports.all(), 'detail'] as const,
+      detail: (id: string) => [...queryKeys.dashboard.scheduledReports.details(), id] as const,
+      status: (id: string) => [...queryKeys.dashboard.scheduledReports.all(), 'status', id] as const,
+    },
   },
 
   // -------------------------------------------------------------------------
@@ -710,6 +732,343 @@ export const queryKeys = {
     list: (filters?: ExpiringWarrantiesReportFilters) =>
       [...queryKeys.expiringWarrantiesReport.lists(), filters ?? {}] as const,
     filterOptions: ['expiringWarrantiesReport', 'filterOptions'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // COMMUNICATIONS
+  // -------------------------------------------------------------------------
+  communications: {
+    all: ['communications'] as const,
+
+    // Campaigns
+    campaigns: () => [...queryKeys.communications.all, 'campaigns'] as const,
+    campaignsList: (filters?: Record<string, unknown>) =>
+      [...queryKeys.communications.campaigns(), 'list', filters ?? {}] as const,
+    campaignDetail: (id: string) =>
+      [...queryKeys.communications.campaigns(), 'detail', id] as const,
+    campaignRecipients: (campaignId: string, filters?: Record<string, unknown>) =>
+      [...queryKeys.communications.campaigns(), 'recipients', campaignId, filters ?? {}] as const,
+    campaignPreview: (criteria: unknown) =>
+      [...queryKeys.communications.campaigns(), 'preview', criteria] as const,
+
+    // Templates
+    templates: () => [...queryKeys.communications.all, 'templates'] as const,
+    templatesList: (filters?: Record<string, unknown>) =>
+      [...queryKeys.communications.templates(), 'list', filters ?? {}] as const,
+    templateDetail: (id: string) =>
+      [...queryKeys.communications.templates(), 'detail', id] as const,
+    templateVersions: (templateId: string) =>
+      [...queryKeys.communications.templates(), 'versions', templateId] as const,
+
+    // Signatures
+    signatures: () => [...queryKeys.communications.all, 'signatures'] as const,
+    signaturesList: (filters?: Record<string, unknown>) =>
+      [...queryKeys.communications.signatures(), 'list', filters ?? {}] as const,
+    signatureDetail: (id: string) =>
+      [...queryKeys.communications.signatures(), 'detail', id] as const,
+
+    // Scheduled Emails
+    scheduledEmails: () => [...queryKeys.communications.all, 'scheduledEmails'] as const,
+    scheduledEmailsList: (filters?: Record<string, unknown>) =>
+      [...queryKeys.communications.scheduledEmails(), 'list', filters ?? {}] as const,
+    scheduledEmailDetail: (id: string) =>
+      [...queryKeys.communications.scheduledEmails(), 'detail', id] as const,
+
+    // Scheduled Calls
+    scheduledCalls: () => [...queryKeys.communications.all, 'scheduledCalls'] as const,
+    scheduledCallsList: (filters?: Record<string, unknown>) =>
+      [...queryKeys.communications.scheduledCalls(), 'list', filters ?? {}] as const,
+    scheduledCallDetail: (id: string) =>
+      [...queryKeys.communications.scheduledCalls(), 'detail', id] as const,
+    upcomingCalls: (filters?: Record<string, unknown>) =>
+      [...queryKeys.communications.scheduledCalls(), 'upcoming', filters ?? {}] as const,
+
+    // Contact Preferences
+    contactPreference: (contactId: string) =>
+      [...queryKeys.communications.all, 'contactPreference', contactId] as const,
+    preferenceHistory: (contactId: string, filters?: Record<string, unknown>) =>
+      [...queryKeys.communications.all, 'preferenceHistory', contactId, filters ?? {}] as const,
+
+    // Customer Communications
+    customerCommunications: (customerId: string) =>
+      [...queryKeys.communications.all, 'customer', customerId] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // SUPPLIERS
+  // -------------------------------------------------------------------------
+  suppliers: {
+    all: ['suppliers'] as const,
+    lists: () => [...queryKeys.suppliers.all, 'list'] as const,
+    list: (filters?: Record<string, unknown>) =>
+      [...queryKeys.suppliers.lists(), filters ?? {}] as const,
+    details: () => [...queryKeys.suppliers.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.suppliers.details(), id] as const,
+    priceHistory: (supplierId: string, productId?: string) =>
+      [...queryKeys.suppliers.all, 'priceHistory', supplierId, productId ?? ''] as const,
+
+    // Purchase Orders
+    purchaseOrders: () => [...queryKeys.suppliers.all, 'purchaseOrders'] as const,
+    purchaseOrdersList: (filters?: Record<string, unknown>) =>
+      [...queryKeys.suppliers.purchaseOrders(), 'list', filters ?? {}] as const,
+    purchaseOrderDetail: (id: string) =>
+      [...queryKeys.suppliers.purchaseOrders(), 'detail', id] as const,
+    purchaseOrderItems: (poId: string) =>
+      [...queryKeys.suppliers.purchaseOrders(), 'items', poId] as const,
+    pendingApprovals: () =>
+      [...queryKeys.suppliers.purchaseOrders(), 'pendingApprovals'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // FINANCIAL
+  // -------------------------------------------------------------------------
+  financial: {
+    all: ['financial'] as const,
+
+    // AR Aging
+    arAgingReport: (filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.all, 'arAging', 'report', filters ?? {}] as const,
+    arAgingCustomer: (customerId: string) =>
+      [...queryKeys.financial.all, 'arAging', 'customer', customerId] as const,
+
+    // Credit Notes
+    creditNotes: () => [...queryKeys.financial.all, 'creditNotes'] as const,
+    creditNotesList: (filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.creditNotes(), 'list', filters ?? {}] as const,
+    creditNoteDetail: (id: string) =>
+      [...queryKeys.financial.creditNotes(), 'detail', id] as const,
+
+    // Payment Schedules
+    paymentSchedules: () => [...queryKeys.financial.all, 'paymentSchedules'] as const,
+    paymentScheduleDetail: (orderId: string) =>
+      [...queryKeys.financial.paymentSchedules(), 'detail', orderId] as const,
+
+    // Revenue
+    revenue: () => [...queryKeys.financial.all, 'revenue'] as const,
+    revenueByPeriod: (periodType: string, filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.revenue(), 'byPeriod', periodType, filters ?? {}] as const,
+
+    // Dashboard Metrics
+    dashboardMetrics: (filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.all, 'dashboard', filters ?? {}] as const,
+
+    // Reminders
+    reminders: () => [...queryKeys.financial.all, 'reminders'] as const,
+    reminderHistory: (filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.reminders(), 'history', filters ?? {}] as const,
+    reminderTemplates: () => [...queryKeys.financial.reminders(), 'templates'] as const,
+
+    // Xero Integration
+    xero: () => [...queryKeys.financial.all, 'xero'] as const,
+    xeroStatus: (orderId: string) =>
+      [...queryKeys.financial.xero(), 'status', orderId] as const,
+    xeroSyncs: (status?: string) =>
+      [...queryKeys.financial.xero(), 'syncs', status ?? ''] as const,
+
+    // Statements
+    statements: (customerId?: string) =>
+      [...queryKeys.financial.all, 'statements', customerId ?? ''] as const,
+
+    // Other
+    deferredBalance: () => [...queryKeys.financial.all, 'deferredBalance'] as const,
+    outstandingInvoices: (filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.all, 'outstandingInvoices', filters ?? {}] as const,
+    recognitions: (state?: string) =>
+      [...queryKeys.financial.all, 'recognitions', state ?? ''] as const,
+    recognitionSummary: (dateFrom?: string, dateTo?: string) =>
+      [...queryKeys.financial.all, 'recognitionSummary', dateFrom ?? '', dateTo ?? ''] as const,
+    topCustomers: (filters?: Record<string, unknown>) =>
+      [...queryKeys.financial.all, 'topCustomers', filters ?? {}] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // ACTIVITIES
+  // -------------------------------------------------------------------------
+  activities: {
+    all: ['activities'] as const,
+    feeds: () => [...queryKeys.activities.all, 'feeds'] as const,
+    feed: (filters?: Record<string, unknown>) =>
+      [...queryKeys.activities.feeds(), filters ?? {}] as const,
+    detail: (id: string) => [...queryKeys.activities.all, 'detail', id] as const,
+    byCustomer: (customerId: string) =>
+      [...queryKeys.activities.all, 'customer', customerId] as const,
+    byOpportunity: (opportunityId: string) =>
+      [...queryKeys.activities.all, 'opportunity', opportunityId] as const,
+    entity: (entityType: string, entityId: string) =>
+      [...queryKeys.activities.all, 'entity', entityType, entityId] as const,
+    user: (userId: string) => [...queryKeys.activities.all, 'user', userId] as const,
+    stats: (query?: Record<string, unknown>) =>
+      [...queryKeys.activities.all, 'stats', query ?? {}] as const,
+    leaderboard: (filters?: Record<string, unknown>) =>
+      [...queryKeys.activities.all, 'leaderboard', filters ?? {}] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // JOB CALENDAR / TASKS / TIME / MATERIALS / ASSIGNMENTS
+  // -------------------------------------------------------------------------
+  jobCalendar: {
+    all: ['jobCalendar'] as const,
+    events: (filters?: Record<string, unknown>) =>
+      [...queryKeys.jobCalendar.all, 'events', filters ?? {}] as const,
+    eventDetail: (id: string) =>
+      [...queryKeys.jobCalendar.all, 'event', id] as const,
+    availability: (userId: string, dateRange?: Record<string, unknown>) =>
+      [...queryKeys.jobCalendar.all, 'availability', userId, dateRange ?? {}] as const,
+    connected: () => [...queryKeys.jobCalendar.all, 'connected'] as const,
+    oauthStatus: () => [...queryKeys.jobCalendar.all, 'oauthStatus'] as const,
+  },
+
+  jobTasks: {
+    all: ['jobTasks'] as const,
+    lists: () => [...queryKeys.jobTasks.all, 'list'] as const,
+    list: (jobId: string, filters?: Record<string, unknown>) =>
+      [...queryKeys.jobTasks.lists(), jobId, filters ?? {}] as const,
+    detail: (taskId: string) => [...queryKeys.jobTasks.all, 'detail', taskId] as const,
+    kanban: (jobId: string) => [...queryKeys.jobTasks.all, 'kanban', jobId] as const,
+  },
+
+  jobTime: {
+    all: ['jobTime'] as const,
+    entries: (jobId: string, filters?: Record<string, unknown>) =>
+      [...queryKeys.jobTime.all, 'entries', jobId, filters ?? {}] as const,
+    entryDetail: (entryId: string) =>
+      [...queryKeys.jobTime.all, 'entry', entryId] as const,
+    summary: (jobId: string) =>
+      [...queryKeys.jobTime.all, 'summary', jobId] as const,
+    userEntries: (userId: string, filters?: Record<string, unknown>) =>
+      [...queryKeys.jobTime.all, 'user', userId, filters ?? {}] as const,
+  },
+
+  jobMaterials: {
+    all: ['jobMaterials'] as const,
+    lists: () => [...queryKeys.jobMaterials.all, 'list'] as const,
+    list: (jobId: string, filters?: Record<string, unknown>) =>
+      [...queryKeys.jobMaterials.lists(), jobId, filters ?? {}] as const,
+    detail: (materialId: string) =>
+      [...queryKeys.jobMaterials.all, 'detail', materialId] as const,
+    summary: (jobId: string) =>
+      [...queryKeys.jobMaterials.all, 'summary', jobId] as const,
+  },
+
+  jobAssignments: {
+    all: ['jobAssignments'] as const,
+    lists: () => [...queryKeys.jobAssignments.all, 'list'] as const,
+    list: (filters?: Record<string, unknown>) =>
+      [...queryKeys.jobAssignments.lists(), filters ?? {}] as const,
+    detail: (assignmentId: string) =>
+      [...queryKeys.jobAssignments.all, 'detail', assignmentId] as const,
+    byJob: (jobId: string) =>
+      [...queryKeys.jobAssignments.all, 'byJob', jobId] as const,
+    byUser: (userId: string) =>
+      [...queryKeys.jobAssignments.all, 'byUser', userId] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // CHECKLISTS
+  // -------------------------------------------------------------------------
+  checklists: {
+    all: ['checklists'] as const,
+    templates: () => [...queryKeys.checklists.all, 'templates'] as const,
+    templateList: (includeInactive?: boolean) =>
+      [...queryKeys.checklists.templates(), 'list', includeInactive ?? false] as const,
+    templateDetail: (templateId: string) =>
+      [...queryKeys.checklists.templates(), 'detail', templateId] as const,
+    jobChecklist: (jobId: string) =>
+      [...queryKeys.checklists.all, 'job', jobId] as const,
+    item: (itemId: string) => [...queryKeys.checklists.all, 'item', itemId] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // LOCATIONS
+  // -------------------------------------------------------------------------
+  locations: {
+    all: ['locations'] as const,
+    lists: () => [...queryKeys.locations.all, 'list'] as const,
+    list: (filters?: Record<string, unknown>) =>
+      [...queryKeys.locations.lists(), filters ?? {}] as const,
+    detail: (id: string) => [...queryKeys.locations.all, 'detail', id] as const,
+    tree: () => [...queryKeys.locations.all, 'tree'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // SETTINGS
+  // -------------------------------------------------------------------------
+  settings: {
+    all: ['settings'] as const,
+    system: () => [...queryKeys.settings.all, 'system'] as const,
+    businessHours: () => [...queryKeys.settings.all, 'businessHours'] as const,
+    holidays: () => [...queryKeys.settings.all, 'holidays'] as const,
+    customFields: (entityType?: string) =>
+      [...queryKeys.settings.all, 'customFields', entityType ?? ''] as const,
+    dataExports: () => [...queryKeys.settings.all, 'dataExports'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // LAYOUTS (Dashboard layouts)
+  // -------------------------------------------------------------------------
+  layouts: {
+    all: ['layouts'] as const,
+    lists: () => [...queryKeys.layouts.all, 'list'] as const,
+    list: (filters?: Record<string, unknown>) =>
+      [...queryKeys.layouts.lists(), filters ?? {}] as const,
+    detail: (id: string) => [...queryKeys.layouts.all, 'detail', id] as const,
+    default: () => [...queryKeys.layouts.all, 'default'] as const,
+    roleDefaults: () => [...queryKeys.layouts.all, 'roleDefaults'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // CUSTOMER ANALYTICS
+  // -------------------------------------------------------------------------
+  customerAnalytics: {
+    all: ['customerAnalytics'] as const,
+    kpis: (filters?: Record<string, unknown>) =>
+      [...queryKeys.customerAnalytics.all, 'kpis', filters ?? {}] as const,
+    trends: (filters?: Record<string, unknown>) =>
+      [...queryKeys.customerAnalytics.all, 'trends', filters ?? {}] as const,
+    segments: () => [...queryKeys.customerAnalytics.all, 'segments'] as const,
+    segmentAnalytics: (tagId: string, filters?: Record<string, unknown>) =>
+      [...queryKeys.customerAnalytics.all, 'segmentAnalytics', tagId, filters ?? {}] as const,
+    healthDistribution: () =>
+      [...queryKeys.customerAnalytics.all, 'healthDistribution'] as const,
+    lifecycleStages: () =>
+      [...queryKeys.customerAnalytics.all, 'lifecycleStages'] as const,
+    topCustomers: (filters?: Record<string, unknown>) =>
+      [...queryKeys.customerAnalytics.all, 'topCustomers', filters ?? {}] as const,
+    valueTiers: () => [...queryKeys.customerAnalytics.all, 'valueTiers'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // REPORTS
+  // -------------------------------------------------------------------------
+  reports: {
+    all: ['reports'] as const,
+
+    // Pipeline Forecast Reports
+    pipelineForecast: (startDate: string, endDate: string, groupBy: string) =>
+      [...queryKeys.reports.all, 'pipelineForecast', startDate, endDate, groupBy] as const,
+    pipelineVelocity: (startDate: string, endDate: string) =>
+      [...queryKeys.reports.all, 'pipelineVelocity', startDate, endDate] as const,
+    revenueAttribution: (startDate: string, endDate: string) =>
+      [...queryKeys.reports.all, 'revenueAttribution', startDate, endDate] as const,
+
+    // Win/Loss Analysis
+    winLossAnalysis: (dateFrom: string, dateTo: string) =>
+      [...queryKeys.reports.all, 'winLossAnalysis', dateFrom, dateTo] as const,
+    competitors: (dateFrom: string, dateTo: string) =>
+      [...queryKeys.reports.all, 'competitors', dateFrom, dateTo] as const,
+
+    // Procurement Reports
+    procurementAnalytics: (dateRange?: Record<string, unknown>) =>
+      [...queryKeys.reports.all, 'procurementAnalytics', dateRange ?? {}] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // APPROVALS
+  // -------------------------------------------------------------------------
+  approvals: {
+    all: ['approvals'] as const,
+    items: (status?: string, filters?: Record<string, unknown>) =>
+      [...queryKeys.approvals.all, 'items', status ?? '', filters ?? {}] as const,
   },
 } as const
 

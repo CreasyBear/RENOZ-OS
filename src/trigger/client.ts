@@ -128,6 +128,48 @@ export interface DealLostPayload {
 }
 
 // ============================================================================
+// REPORT EVENTS
+// ============================================================================
+
+/**
+ * Report events triggered from server functions
+ */
+export const reportEvents = {
+  generate: 'report.generate',
+  generated: 'report.generated',
+  failed: 'report.failed',
+} as const;
+
+/**
+ * Report generation event payload
+ */
+export interface GenerateReportPayload {
+  reportId: string;
+  organizationId: string;
+  isManualTrigger?: boolean;
+}
+
+/**
+ * Report generated event payload
+ */
+export interface ReportGeneratedPayload {
+  reportId: string;
+  organizationId: string;
+  reportUrl: string;
+  format: string;
+  recipientCount: number;
+}
+
+/**
+ * Report failed event payload
+ */
+export interface ReportFailedPayload {
+  reportId: string;
+  organizationId: string;
+  error: string;
+}
+
+// ============================================================================
 // WARRANTY EVENTS
 // ============================================================================
 

@@ -14,6 +14,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { WinLossAnalysis, getDateRange } from '@/components/domain/reports/win-loss-analysis';
 import { getWinLossAnalysis, getCompetitors } from '@/server/functions/pipeline/win-loss-reasons';
+import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -55,7 +56,7 @@ function WinLossAnalysisPage() {
 
   // Fetch analysis data
   const analysisQuery = useQuery({
-    queryKey: ['win-loss-analysis', dateFrom.toISOString(), dateTo.toISOString()],
+    queryKey: queryKeys.reports.winLossAnalysis(dateFrom.toISOString(), dateTo.toISOString()),
     queryFn: async () => {
       const result = await getWinLossAnalysis({
         data: { dateFrom, dateTo },
@@ -66,7 +67,7 @@ function WinLossAnalysisPage() {
 
   // Fetch competitors
   const competitorsQuery = useQuery({
-    queryKey: ['competitors', dateFrom.toISOString(), dateTo.toISOString()],
+    queryKey: queryKeys.reports.competitors(dateFrom.toISOString(), dateTo.toISOString()),
     queryFn: async () => {
       const result = await getCompetitors({
         data: { dateFrom, dateTo },

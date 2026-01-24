@@ -15,10 +15,10 @@ export const approvalStatusEnum = z.enum(['pending', 'approved', 'rejected', 'es
 export type ApprovalStatus = z.infer<typeof approvalStatusEnum>;
 
 // ============================================================================
-// REJECTION REASONS
+// APPROVAL REJECTION REASONS (for PO approval workflow)
 // ============================================================================
 
-export const rejectionReasons = [
+export const approvalRejectionReasons = [
   'price_too_high',
   'incorrect_items',
   'wrong_supplier',
@@ -26,10 +26,10 @@ export const rejectionReasons = [
   'other',
 ] as const;
 
-export const rejectionReasonEnum = z.enum(rejectionReasons);
-export type RejectionReason = z.infer<typeof rejectionReasonEnum>;
+export const approvalRejectionReasonEnum = z.enum(approvalRejectionReasons);
+export type ApprovalRejectionReason = z.infer<typeof approvalRejectionReasonEnum>;
 
-export const rejectionReasonLabels: Record<RejectionReason, string> = {
+export const approvalRejectionReasonLabels: Record<ApprovalRejectionReason, string> = {
   price_too_high: 'Price too high',
   incorrect_items: 'Incorrect items',
   wrong_supplier: 'Wrong supplier',
@@ -55,7 +55,7 @@ export type ApproveOrderInput = z.infer<typeof approveOrderSchema>;
 
 export const rejectOrderSchema = z.object({
   id: z.string().uuid(),
-  reason: rejectionReasonEnum,
+  reason: approvalRejectionReasonEnum,
   comments: z.string().min(1, 'Please provide rejection details'),
 });
 export type RejectOrderInput = z.infer<typeof rejectOrderSchema>;

@@ -10,6 +10,7 @@
 
 import { z } from 'zod';
 import { idParamSchema, paginationSchema } from '../_shared/patterns';
+import { userRoleSchema, userRoleValues } from '../auth/auth';
 
 // ============================================================================
 // DASHBOARD WIDGET TYPES
@@ -207,9 +208,7 @@ export type DeleteDashboardLayoutInput = z.infer<typeof deleteDashboardLayoutSch
 // DASHBOARD LAYOUT OUTPUT
 // ============================================================================
 
-// Role enum values from Drizzle schema
-export const userRoleValues = ['owner', 'admin', 'manager', 'sales', 'operations', 'support', 'viewer'] as const;
-export const userRoleSchema = z.enum(userRoleValues);
+// userRoleSchema imported from ../auth/auth
 
 export const dashboardLayoutSchema = z.object({
   id: z.string().uuid(),

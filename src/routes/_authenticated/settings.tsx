@@ -35,6 +35,42 @@ function Settings() {
           </Link>
         </PermissionGuard>
 
+        {/* KPI Targets */}
+        <PermissionGuard permission="dashboard.view">
+          <Link
+            to="/settings/targets"
+            className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🎯</span>
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">KPI Targets</h3>
+                <p className="text-sm text-gray-600">
+                  Set and track performance targets for your organization
+                </p>
+              </div>
+            </div>
+          </Link>
+        </PermissionGuard>
+
+        {/* Scheduled Reports */}
+        <PermissionGuard permission="scheduledReport.read">
+          <Link
+            to="/settings/scheduled-reports"
+            className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">📊</span>
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">Scheduled Reports</h3>
+                <p className="text-sm text-gray-600">
+                  Configure automated reports sent on a schedule
+                </p>
+              </div>
+            </div>
+          </Link>
+        </PermissionGuard>
+
         {/* Placeholder for future settings sections */}
         <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
           <div className="flex items-center gap-3">

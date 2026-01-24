@@ -17,12 +17,12 @@ export type TimePeriod = (typeof timePeriods)[number];
 
 export const TimePeriodSchema = z.enum(timePeriods);
 
-export const DateRangeSchema = z.object({
+export const AnalyticsDateRangeSchema = z.object({
   from: z.string(),
   to: z.string(),
 });
 
-export type DateRange = z.infer<typeof DateRangeSchema>;
+export type AnalyticsDateRange = z.infer<typeof AnalyticsDateRangeSchema>;
 
 // ============================================================================
 // SPEND ANALYSIS
@@ -135,24 +135,24 @@ export const reportTypes = [
   'order_analytics',
   'cost_savings',
 ] as const;
-export type ReportType = (typeof reportTypes)[number];
+export type AnalyticsReportType = (typeof reportTypes)[number];
 
 export const exportFormats = ['pdf', 'excel', 'csv'] as const;
-export type ExportFormat = (typeof exportFormats)[number];
+export type AnalyticsExportFormat = (typeof exportFormats)[number];
 
-export interface ReportConfig {
-  type: ReportType;
-  dateRange: DateRange;
+export interface AnalyticsReportConfig {
+  type: AnalyticsReportType;
+  dateRange: AnalyticsDateRange;
   supplierIds?: string[];
   categories?: string[];
   includeCharts: boolean;
   includeDetails: boolean;
 }
 
-export interface ScheduledReport {
+export interface AnalyticsScheduledReport {
   id: string;
   name: string;
-  config: ReportConfig;
+  config: AnalyticsReportConfig;
   schedule: 'daily' | 'weekly' | 'monthly';
   recipients: string[];
   lastRun?: string;
@@ -166,7 +166,7 @@ export interface ScheduledReport {
 
 export const AnalyticsFiltersSchema = z.object({
   period: TimePeriodSchema.optional(),
-  dateRange: DateRangeSchema.optional(),
+  dateRange: AnalyticsDateRangeSchema.optional(),
   supplierIds: z.array(z.string()).optional(),
   categories: z.array(z.string()).optional(),
 });

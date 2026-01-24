@@ -26,7 +26,9 @@ import {
   executeScheduledReportSchema,
   bulkUpdateScheduledReportsSchema,
   bulkDeleteScheduledReportsSchema,
+  generateReportSchema,
   type ScheduledReportStatus,
+  type GenerateReportResponse,
 } from '@/lib/schemas/dashboard/scheduled-reports';
 
 // ============================================================================
@@ -39,7 +41,7 @@ import {
 export const listScheduledReports = createServerFn({ method: 'GET' })
   .inputValidator(listScheduledReportsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.reports.read });
+    const ctx = await withAuth({ permission: PERMISSIONS.scheduledReport.read });
 
     const {
       page = 1,
@@ -109,7 +111,7 @@ export const listScheduledReports = createServerFn({ method: 'GET' })
 export const getScheduledReport = createServerFn({ method: 'GET' })
   .inputValidator(getScheduledReportSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.reports.read });
+    const ctx = await withAuth({ permission: PERMISSIONS.scheduledReport.read });
 
     const [report] = await db
       .select()
@@ -135,7 +137,7 @@ export const getScheduledReport = createServerFn({ method: 'GET' })
 export const getScheduledReportStatus = createServerFn({ method: 'GET' })
   .inputValidator(getScheduledReportSchema)
   .handler(async ({ data }): Promise<ScheduledReportStatus> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.reports.read });
+    const ctx = await withAuth({ permission: PERMISSIONS.scheduledReport.read });
 
     const [report] = await db
       .select({
@@ -172,7 +174,7 @@ export const getScheduledReportStatus = createServerFn({ method: 'GET' })
 export const createScheduledReport = createServerFn({ method: 'POST' })
   .inputValidator(createScheduledReportSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.reports.write });
+    const ctx = await withAuth({ permission: PERMISSIONS.scheduledReport.create });
 
     // Calculate next run time and cron expression based on frequency
     const nextRunAt = calculateNextRun(data.frequency);
@@ -205,7 +207,7 @@ export const createScheduledReport = createServerFn({ method: 'POST' })
 export const updateScheduledReport = createServerFn({ method: 'POST' })
   .inputValidator(updateScheduledReportSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.reports.write });
+    const ctx = await withAuth({ permission: PERMISSIONS.scheduledReport.update });
 
     const { id, ...updates } = data;
 
@@ -251,7 +253,7 @@ export const updateScheduledReport = createServerFn({ method: 'POST' })
 export const deleteScheduledReport = createServerFn({ method: 'POST' })
   .inputValidator(deleteScheduledReportSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.reports.delete });
+    const ctx = await withAuth({ permission: PERMISSIONS.scheduledReport.delete });
 
     const [report] = await db
       .delete(scheduledReports)
@@ -276,7 +278,7 @@ export const deleteScheduledReport = createServerFn({ method: 'POST' })
 export const executeScheduledReport = createServerFn({ method: 'POST' })
   .inputValidator(executeScheduledReportSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.reports.write });
+    const ctx = await withAuth({ permission: PERMISSIONS.scheduledReport.update });
 
     const [report] = await db
       .select()
@@ -320,7 +322,7 @@ export const executeScheduledReport = createServerFn({ method: 'POST' })
 export const bulkUpdateScheduledReports = createServerFn({ method: 'POST' })
   .inputValidator(bulkUpdateScheduledReportsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.reports.write });
+    const ctx = await withAuth({ permission: PERMISSIONS.scheduledReport.update });
 
     const updateValues: Record<string, unknown> = {
       updatedBy: ctx.user.id,
@@ -356,7 +358,7 @@ export const bulkUpdateScheduledReports = createServerFn({ method: 'POST' })
 export const bulkDeleteScheduledReports = createServerFn({ method: 'POST' })
   .inputValidator(bulkDeleteScheduledReportsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.reports.delete });
+    const ctx = await withAuth({ permission: PERMISSIONS.scheduledReport.delete });
 
     const result = await db
       .delete(scheduledReports)
@@ -369,6 +371,61 @@ export const bulkDeleteScheduledReports = createServerFn({ method: 'POST' })
       .returning({ id: scheduledReports.id });
 
     return { deleted: result.length };
+  });
+
+// ============================================================================
+// ON-DEMAND REPORT GENERATION
+// ============================================================================
+
+/**
+ * Generate an on-demand report with specified metrics and date range.
+ * Returns a URL to the generated report file.
+ *
+ * Note: Actual PDF/HTML generation will be handled by background jobs.
+ * This function creates a placeholder response for the API contract.
+ */
+export const generateReport = createServerFn({ method: 'POST' })
+  .inputValidator(generateReportSchema)
+  .handler(async ({ data }): Promise<GenerateReportResponse> => {
+    const ctx = await withAuth({ permission: PERMISSIONS.dashboard.manageReports });
+
+    // Validate date range
+    const startDate = new Date(data.dateFrom);
+    const endDate = new Date(data.dateTo);
+
+    if (endDate < startDate) {
+      throw new Error('End date must be after start date');
+    }
+
+    // Calculate max allowed range (1 year)
+    const maxRangeMs = 365 * 24 * 60 * 60 * 1000;
+    if (endDate.getTime() - startDate.getTime() > maxRangeMs) {
+      throw new Error('Date range cannot exceed 1 year');
+    }
+
+    // TODO: Trigger actual report generation via Trigger.dev background job
+    // The job would:
+    // 1. Fetch all requested metrics for the date range
+    // 2. Generate charts if includeCharts is true
+    // 3. Calculate trends if includeTrends is true
+    // 4. Render to PDF/HTML/CSV/XLSX based on format
+    // 5. Upload to storage (S3/R2)
+    // 6. Return signed URL
+
+    // For now, return a placeholder response
+    // In production, this would return a job ID that the client polls
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24); // 24-hour expiry
+
+    // Generate a unique report ID for tracking
+    const reportId = crypto.randomUUID();
+
+    return {
+      // Placeholder URL - in production this would be a signed S3/R2 URL
+      reportUrl: `/api/reports/${reportId}/download?org=${ctx.organizationId}`,
+      expiresAt,
+      format: data.format,
+    };
   });
 
 // ============================================================================

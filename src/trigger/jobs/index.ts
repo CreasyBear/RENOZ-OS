@@ -41,7 +41,13 @@ export {
 } from './process-scheduled-calls'
 
 // Xero Integration
-export { syncXeroInvoiceJob, syncXeroContactJob } from './sync-xero'
+export { syncXeroInvoiceJob, syncXeroContactJob } from './sync-xero';
+
+// Scheduled Reports
+export {
+  processScheduledReportsJob,
+  generateReportJob,
+} from './process-scheduled-reports';
 
 // File Cleanup Jobs
 export {
@@ -73,7 +79,11 @@ import { syncXeroInvoiceJob, syncXeroContactJob } from './sync-xero'
 import {
   cleanupPendingUploadsJob,
   cleanupSoftDeletedFilesJob,
-} from './cleanup-files'
+} from './cleanup-files';
+import {
+  processScheduledReportsJob,
+  generateReportJob,
+} from './process-scheduled-reports';
 
 /**
  * All registered jobs for Trigger.dev
@@ -93,4 +103,6 @@ export const jobs = [
   syncXeroContactJob,
   cleanupPendingUploadsJob,
   cleanupSoftDeletedFilesJob,
+  processScheduledReportsJob,
+  generateReportJob,
 ]

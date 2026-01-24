@@ -28,6 +28,7 @@ import {
   applyCreditNoteToInvoice,
   voidCreditNote,
 } from '@/server/functions/financial/credit-notes';
+import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================================
 // ROUTE
@@ -71,7 +72,7 @@ function CreditNotesPage() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['credit-notes', undefined],
+    queryKey: queryKeys.financial.creditNotesList(),
     queryFn: () => listFn({ data: { page: 1, pageSize: 50 } }),
   });
 
@@ -84,7 +85,7 @@ function CreditNotesPage() {
       reason: string;
     }) => createFn({ data: input }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['credit-notes'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
     },
   });
 
@@ -92,7 +93,7 @@ function CreditNotesPage() {
   const issueMutation = useMutation({
     mutationFn: (id: string) => issueFn({ data: { id } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['credit-notes'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
     },
   });
 
@@ -101,7 +102,7 @@ function CreditNotesPage() {
     mutationFn: ({ creditNoteId, orderId }: { creditNoteId: string; orderId: string }) =>
       applyFn({ data: { creditNoteId, orderId } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['credit-notes'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
     },
   });
 
@@ -109,7 +110,7 @@ function CreditNotesPage() {
   const voidMutation = useMutation({
     mutationFn: (id: string) => voidFn({ data: { id, voidReason: 'Voided by user' } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['credit-notes'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
     },
   });
 

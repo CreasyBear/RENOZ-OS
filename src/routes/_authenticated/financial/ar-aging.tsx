@@ -17,6 +17,7 @@ import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { ARAgingReport } from '@/components/domain/financial/ar-aging-report';
 import { getARAgingReport } from '@/server/functions/financial/ar-aging';
+import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================================
 // ROUTE
@@ -51,7 +52,7 @@ function ARAgingReportPage() {
 
   // Fetch AR aging data
   const { data, isLoading, error } = useQuery({
-    queryKey: ['ar-aging', commercialOnly],
+    queryKey: queryKeys.financial.arAgingReport({ commercialOnly }),
     queryFn: () => getFn({ data: { commercialOnly } }),
   });
 

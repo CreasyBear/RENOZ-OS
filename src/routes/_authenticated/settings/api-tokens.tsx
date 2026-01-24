@@ -21,6 +21,7 @@ import {
   PermissionGuard,
   useHasPermission,
 } from "@/components/shared/permission-guard";
+import { queryKeys } from "@/lib/query-keys";
 import type {
   ApiTokenListItem,
   CreateApiTokenResponse,
@@ -73,7 +74,7 @@ function ApiTokensContent() {
   // Fetch tokens
   const listTokensFn = useServerFn(listApiTokens);
   const { data: tokens, isLoading } = useQuery({
-    queryKey: ["api-tokens"],
+    queryKey: queryKeys.apiTokens.list(),
     queryFn: () => listTokensFn(),
   });
 
@@ -84,7 +85,7 @@ function ApiTokensContent() {
     onSuccess: (data) => {
       setNewlyCreatedToken(data);
       setShowCreateDialog(false);
-      queryClient.invalidateQueries({ queryKey: ["api-tokens"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.apiTokens.list() });
     },
   });
 
@@ -94,7 +95,7 @@ function ApiTokensContent() {
     mutationFn: revokeTokenFn,
     onSuccess: () => {
       setTokenToRevoke(null);
-      queryClient.invalidateQueries({ queryKey: ["api-tokens"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.apiTokens.list() });
     },
   });
 

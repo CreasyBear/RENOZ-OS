@@ -24,6 +24,7 @@ import {
   executeScheduledReport,
   bulkUpdateScheduledReports,
   bulkDeleteScheduledReports,
+  generateReport,
 } from '@/server/functions/dashboard';
 import type {
   ListScheduledReportsInput,
@@ -31,6 +32,7 @@ import type {
   UpdateScheduledReportInput,
   BulkUpdateScheduledReportsInput,
   BulkDeleteScheduledReportsInput,
+  GenerateReportInput,
 } from '@/lib/schemas/dashboard/scheduled-reports';
 
 // ============================================================================
@@ -223,6 +225,22 @@ export function useBulkDeleteScheduledReports() {
 }
 
 // ============================================================================
+// ON-DEMAND REPORT GENERATION
+// ============================================================================
+
+/**
+ * Generate an on-demand report.
+ * Returns URL to generated report file.
+ */
+export function useGenerateReport() {
+  const generateFn = useServerFn(generateReport);
+
+  return useMutation({
+    mutationFn: (input: GenerateReportInput) => generateFn({ data: input }),
+  });
+}
+
+// ============================================================================
 // TYPES EXPORT
 // ============================================================================
 
@@ -232,4 +250,5 @@ export type {
   UpdateScheduledReportInput,
   BulkUpdateScheduledReportsInput,
   BulkDeleteScheduledReportsInput,
+  GenerateReportInput,
 };

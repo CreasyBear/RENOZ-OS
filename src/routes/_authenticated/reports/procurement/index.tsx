@@ -15,6 +15,7 @@ import { ReportDashboardSkeleton } from '@/components/skeletons/reports';
 import { ProcurementReports, type ProcurementAnalytics } from '@/components/domain/reports/procurement-reports';
 import { type DateRange } from '@/components/ui/date-picker-with-range';
 import { toast } from '@/lib/toast';
+import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -50,7 +51,7 @@ function ProcurementReportsPage() {
 
   // Mock analytics data - will be replaced with real API
   const { data: analytics, isLoading, error } = useQuery({
-    queryKey: ['procurement-analytics', dateRange],
+    queryKey: queryKeys.reports.procurementAnalytics(dateRange),
     queryFn: async (): Promise<ProcurementAnalytics> => {
       // Mock comprehensive analytics data
       return {

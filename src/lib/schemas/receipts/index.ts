@@ -33,9 +33,9 @@ export const itemConditions = ['new', 'refurbished', 'used', 'damaged'] as const
 export type ItemCondition = (typeof itemConditions)[number];
 
 /**
- * Rejection reason enum
+ * Receipt rejection reason enum (for goods receiving)
  */
-export const rejectionReasons = [
+export const receiptRejectionReasons = [
   'damaged',
   'wrong_item',
   'quality_issue',
@@ -43,7 +43,7 @@ export const rejectionReasons = [
   'other',
 ] as const;
 
-export type RejectionReason = (typeof rejectionReasons)[number];
+export type ReceiptRejectionReason = (typeof receiptRejectionReasons)[number];
 
 // ============================================================================
 // STATUS LABELS
@@ -63,7 +63,7 @@ export const conditionLabels: Record<ItemCondition, string> = {
   damaged: 'Damaged',
 };
 
-export const rejectionReasonLabels: Record<RejectionReason, string> = {
+export const receiptRejectionReasonLabels: Record<ReceiptRejectionReason, string> = {
   damaged: 'Damaged in Transit',
   wrong_item: 'Wrong Item Received',
   quality_issue: 'Quality Does Not Meet Standards',
@@ -97,7 +97,7 @@ export const receiptItemSchema = z.object({
 
   // Quality
   condition: z.enum(itemConditions).optional(),
-  rejectionReason: z.enum(rejectionReasons).optional(),
+  rejectionReason: z.enum(receiptRejectionReasons).optional(),
   qualityNotes: z.string().optional(),
 
   // Storage
@@ -165,7 +165,7 @@ export const createReceiptItemSchema = z.object({
   quantityAccepted: z.number().min(0),
   quantityRejected: z.number().min(0),
   condition: z.enum(itemConditions).optional(),
-  rejectionReason: z.enum(rejectionReasons).optional(),
+  rejectionReason: z.enum(receiptRejectionReasons).optional(),
   qualityNotes: z.string().optional(),
   warehouseLocation: z.string().optional(),
   binNumber: z.string().optional(),
@@ -202,7 +202,7 @@ export const completeInspectionSchema = z.object({
       quantityAccepted: z.number().min(0),
       quantityRejected: z.number().min(0),
       condition: z.enum(itemConditions).optional(),
-      rejectionReason: z.enum(rejectionReasons).optional(),
+      rejectionReason: z.enum(receiptRejectionReasons).optional(),
       qualityNotes: z.string().optional(),
     })
   ),

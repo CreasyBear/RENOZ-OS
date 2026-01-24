@@ -61,6 +61,8 @@ export {
   useExecuteScheduledReport,
   useBulkUpdateScheduledReports,
   useBulkDeleteScheduledReports,
+  useGenerateReport,
   type UseScheduledReportsOptions,
   type UseScheduledReportOptions,
+  type GenerateReportInput,
 } from './use-scheduled-reports';

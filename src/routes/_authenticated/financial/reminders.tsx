@@ -26,6 +26,7 @@ import type {
   CreateReminderTemplateInput,
   UpdateReminderTemplateInput,
 } from '@/lib/schemas';
+import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================================
 // ROUTE
@@ -69,7 +70,7 @@ function PaymentRemindersPage() {
     isLoading: templatesLoading,
     error: templatesError,
   } = useQuery({
-    queryKey: ['reminder-templates'],
+    queryKey: queryKeys.financial.reminderTemplates(),
     queryFn: () => listTemplatesFn({ data: {} }),
   });
 
@@ -78,7 +79,7 @@ function PaymentRemindersPage() {
     isLoading: historyLoading,
     error: historyError,
   } = useQuery({
-    queryKey: ['reminder-history'],
+    queryKey: queryKeys.financial.reminderHistory(),
     queryFn: () => getHistoryFn({ data: { page: 1, pageSize: 50 } }),
   });
 
@@ -86,21 +87,21 @@ function PaymentRemindersPage() {
   const createMutation = useMutation({
     mutationFn: (data: CreateReminderTemplateInput) => createTemplateFn({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reminder-templates'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.reminderTemplates() });
     },
   });
 
   const updateMutation = useMutation({
     mutationFn: (data: UpdateReminderTemplateInput) => updateTemplateFn({ data }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reminder-templates'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.reminderTemplates() });
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteTemplateFn({ data: { id } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['reminder-templates'] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.reminderTemplates() });
     },
   });
 

@@ -24,10 +24,10 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { formatCurrency } from '@/lib/formatters';
 import {
-  rejectionReasons,
-  rejectionReasonLabels,
+  approvalApprovalRejectionReasons,
+  approvalApprovalRejectionReasonLabels,
   type ApprovalActionBarOrder,
-  type RejectionReason,
+  type ApprovalApprovalRejectionReason,
 } from '@/lib/schemas/approvals';
 
 // ============================================================================
@@ -56,7 +56,7 @@ export function ApprovalConfirmDialog({
   isProcessing = false,
 }: ApprovalConfirmDialogProps) {
   const [comment, setComment] = useState('');
-  const [reason, setReason] = useState<RejectionReason | ''>('');
+  const [reason, setReason] = useState<ApprovalRejectionReason | ''>('');
   const [error, setError] = useState<string | null>(null);
 
   const isApprove = action === 'approve';
@@ -141,14 +141,14 @@ export function ApprovalConfirmDialog({
                 <Label>Reason for Rejection *</Label>
                 <RadioGroup
                   value={reason}
-                  onValueChange={(value) => setReason(value as RejectionReason)}
+                  onValueChange={(value) => setReason(value as ApprovalRejectionReason)}
                   disabled={isProcessing}
                 >
-                  {rejectionReasons.map((r) => (
+                  {approvalRejectionReasons.map((r) => (
                     <div key={r} className="flex items-center space-x-2">
                       <RadioGroupItem value={r} id={`reason-${r}`} />
                       <Label htmlFor={`reason-${r}`} className="font-normal">
-                        {rejectionReasonLabels[r]}
+                        {approvalRejectionReasonLabels[r]}
                       </Label>
                     </div>
                   ))}

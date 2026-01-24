@@ -28,6 +28,7 @@ import {
   markStatementSent,
 } from '@/server/functions/financial/statements';
 import type { StatementHistoryRecord } from '@/lib/schemas';
+import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================================
 // ROUTE
@@ -85,7 +86,7 @@ function CustomerStatementsPage() {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['statements', customerId],
+    queryKey: queryKeys.financial.statements(customerId),
     queryFn: () => listFn({ data: { customerId, page: 1, pageSize: 10 } }),
     enabled: customerId !== 'placeholder-customer-id', // Don't fetch with placeholder
   });
@@ -110,7 +111,7 @@ function CustomerStatementsPage() {
         },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['statements', customerId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.statements(customerId) });
     },
   });
 
@@ -121,7 +122,7 @@ function CustomerStatementsPage() {
     mutationFn: (statementId: string) =>
       markSentFn({ data: { statementId, sentToEmail: '' } }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['statements', customerId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.statements(customerId) });
     },
   });
 

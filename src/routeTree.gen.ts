@@ -9,25 +9,65 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UpdatePasswordRouteImport } from './routes/update-password'
+import { Route as SignUpSuccessRouteImport } from './routes/sign-up-success'
+import { Route as SignUpRouteImport } from './routes/sign-up'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as LogoutRouteImport } from './routes/logout'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as AcceptInvitationRouteImport } from './routes/accept-invitation'
+import { Route as ProtectedRouteImport } from './routes/_protected'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PortalIndexRouteImport } from './routes/portal/index'
+import { Route as PortalConfirmRouteImport } from './routes/portal/confirm'
+import { Route as FeedbackTokenRouteImport } from './routes/feedback.$token'
+import { Route as AuthErrorRouteImport } from './routes/auth/error'
+import { Route as AuthConfirmRouteImport } from './routes/auth/confirm'
+import { Route as ProtectedProtectedRouteImport } from './routes/_protected/protected'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedSuppliersIndexRouteImport } from './routes/_authenticated/suppliers/index'
+import { Route as AuthenticatedPurchaseOrdersIndexRouteImport } from './routes/_authenticated/purchase-orders/index'
 import { Route as AuthenticatedProductsIndexRouteImport } from './routes/_authenticated/products/index'
 import { Route as AuthenticatedPipelineIndexRouteImport } from './routes/_authenticated/pipeline/index'
 import { Route as AuthenticatedOrdersIndexRouteImport } from './routes/_authenticated/orders/index'
 import { Route as AuthenticatedMobileIndexRouteImport } from './routes/_authenticated/mobile/index'
 import { Route as AuthenticatedInventoryIndexRouteImport } from './routes/_authenticated/inventory/index'
+import { Route as AuthenticatedFinancialIndexRouteImport } from './routes/_authenticated/financial/index'
+import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedCustomersIndexRouteImport } from './routes/_authenticated/customers/index'
+import { Route as AuthenticatedCommunicationsIndexRouteImport } from './routes/_authenticated/communications/index'
+import { Route as AuthenticatedApprovalsIndexRouteImport } from './routes/_authenticated/approvals/index'
 import { Route as AuthenticatedActivitiesIndexRouteImport } from './routes/_authenticated/activities/index'
+import { Route as AuthenticatedSupportKnowledgeBaseRouteImport } from './routes/_authenticated/support/knowledge-base'
+import { Route as AuthenticatedSupportIssuesBoardRouteImport } from './routes/_authenticated/support/issues-board'
+import { Route as AuthenticatedSupportDashboardRouteImport } from './routes/_authenticated/support/dashboard'
+import { Route as AuthenticatedSettingsWinLossReasonsRouteImport } from './routes/_authenticated/settings/win-loss-reasons'
+import { Route as AuthenticatedSettingsWarrantyPoliciesRouteImport } from './routes/_authenticated/settings/warranty-policies'
+import { Route as AuthenticatedSettingsWarrantyImportRouteImport } from './routes/_authenticated/settings/warranty-import'
+import { Route as AuthenticatedSettingsTargetsRouteImport } from './routes/_authenticated/settings/targets'
+import { Route as AuthenticatedSettingsSecurityRouteImport } from './routes/_authenticated/settings/security'
+import { Route as AuthenticatedSettingsScheduledReportsRouteImport } from './routes/_authenticated/settings/scheduled-reports'
+import { Route as AuthenticatedSettingsPreferencesRouteImport } from './routes/_authenticated/settings/preferences'
+import { Route as AuthenticatedSettingsKnowledgeBaseRouteImport } from './routes/_authenticated/settings/knowledge-base'
+import { Route as AuthenticatedSettingsJobTemplatesRouteImport } from './routes/_authenticated/settings/job-templates'
+import { Route as AuthenticatedSettingsIssueTemplatesRouteImport } from './routes/_authenticated/settings/issue-templates'
+import { Route as AuthenticatedSettingsDelegationsRouteImport } from './routes/_authenticated/settings/delegations'
 import { Route as AuthenticatedSettingsCategoriesRouteImport } from './routes/_authenticated/settings/categories'
 import { Route as AuthenticatedSettingsApiTokensRouteImport } from './routes/_authenticated/settings/api-tokens'
+import { Route as AuthenticatedReportsWinLossRouteImport } from './routes/_authenticated/reports/win-loss'
+import { Route as AuthenticatedReportsWarrantiesRouteImport } from './routes/_authenticated/reports/warranties'
 import { Route as AuthenticatedReportsPipelineForecastRouteImport } from './routes/_authenticated/reports/pipeline-forecast'
+import { Route as AuthenticatedReportsJobCostingRouteImport } from './routes/_authenticated/reports/job-costing'
+import { Route as AuthenticatedReportsExpiringWarrantiesRouteImport } from './routes/_authenticated/reports/expiring-warranties'
+import { Route as AuthenticatedPurchaseOrdersCreateRouteImport } from './routes/_authenticated/purchase-orders/create'
+import { Route as AuthenticatedPurchaseOrdersPoIdRouteImport } from './routes/_authenticated/purchase-orders/$poId'
 import { Route as AuthenticatedProductsNewRouteImport } from './routes/_authenticated/products/new'
 import { Route as AuthenticatedProductsProductIdRouteImport } from './routes/_authenticated/products/$productId'
+import { Route as AuthenticatedProcurementDashboardRouteImport } from './routes/_authenticated/procurement/dashboard'
 import { Route as AuthenticatedPipelineOpportunityIdRouteImport } from './routes/_authenticated/pipeline/$opportunityId'
 import { Route as AuthenticatedOrdersFulfillmentRouteImport } from './routes/_authenticated/orders/fulfillment'
 import { Route as AuthenticatedOrdersCreateRouteImport } from './routes/_authenticated/orders/create'
@@ -35,6 +75,9 @@ import { Route as AuthenticatedOrdersOrderIdRouteImport } from './routes/_authen
 import { Route as AuthenticatedMobileReceivingRouteImport } from './routes/_authenticated/mobile/receiving'
 import { Route as AuthenticatedMobilePickingRouteImport } from './routes/_authenticated/mobile/picking'
 import { Route as AuthenticatedMobileCountingRouteImport } from './routes/_authenticated/mobile/counting'
+import { Route as AuthenticatedJobsTimelineRouteImport } from './routes/_authenticated/jobs/timeline'
+import { Route as AuthenticatedJobsKanbanRouteImport } from './routes/_authenticated/jobs/kanban'
+import { Route as AuthenticatedJobsCalendarRouteImport } from './routes/_authenticated/jobs/calendar'
 import { Route as AuthenticatedInventoryReceivingRouteImport } from './routes/_authenticated/inventory/receiving'
 import { Route as AuthenticatedInventoryLocationsRouteImport } from './routes/_authenticated/inventory/locations'
 import { Route as AuthenticatedInventoryForecastingRouteImport } from './routes/_authenticated/inventory/forecasting'
@@ -43,16 +86,71 @@ import { Route as AuthenticatedInventoryCountsRouteImport } from './routes/_auth
 import { Route as AuthenticatedInventoryAnalyticsRouteImport } from './routes/_authenticated/inventory/analytics'
 import { Route as AuthenticatedInventoryAlertsRouteImport } from './routes/_authenticated/inventory/alerts'
 import { Route as AuthenticatedInventoryItemIdRouteImport } from './routes/_authenticated/inventory/$itemId'
+import { Route as AuthenticatedIntegrationsOauthRouteImport } from './routes/_authenticated/integrations/oauth'
+import { Route as AuthenticatedFinancialXeroSyncRouteImport } from './routes/_authenticated/financial/xero-sync'
+import { Route as AuthenticatedFinancialStatementsRouteImport } from './routes/_authenticated/financial/statements'
+import { Route as AuthenticatedFinancialRevenueRouteImport } from './routes/_authenticated/financial/revenue'
+import { Route as AuthenticatedFinancialRemindersRouteImport } from './routes/_authenticated/financial/reminders'
+import { Route as AuthenticatedFinancialPaymentPlansRouteImport } from './routes/_authenticated/financial/payment-plans'
+import { Route as AuthenticatedFinancialCreditNotesRouteImport } from './routes/_authenticated/financial/credit-notes'
+import { Route as AuthenticatedFinancialArAgingRouteImport } from './routes/_authenticated/financial/ar-aging'
 import { Route as AuthenticatedCustomersNewRouteImport } from './routes/_authenticated/customers/new'
 import { Route as AuthenticatedCustomersDuplicatesRouteImport } from './routes/_authenticated/customers/duplicates'
 import { Route as AuthenticatedCustomersCommunicationsRouteImport } from './routes/_authenticated/customers/communications'
 import { Route as AuthenticatedCustomersCustomerIdRouteImport } from './routes/_authenticated/customers/$customerId'
+import { Route as AuthenticatedSupportWarrantiesIndexRouteImport } from './routes/_authenticated/support/warranties/index'
+import { Route as AuthenticatedSupportRmasIndexRouteImport } from './routes/_authenticated/support/rmas/index'
+import { Route as AuthenticatedSupportIssuesIndexRouteImport } from './routes/_authenticated/support/issues/index'
+import { Route as AuthenticatedSupportClaimsIndexRouteImport } from './routes/_authenticated/support/claims/index'
+import { Route as AuthenticatedReportsProcurementIndexRouteImport } from './routes/_authenticated/reports/procurement/index'
 import { Route as AuthenticatedReportsCustomersIndexRouteImport } from './routes/_authenticated/reports/customers/index'
 import { Route as AuthenticatedCustomersSegmentsIndexRouteImport } from './routes/_authenticated/customers/segments/index'
+import { Route as AuthenticatedCommunicationsSignaturesIndexRouteImport } from './routes/_authenticated/communications/signatures/index'
+import { Route as AuthenticatedCommunicationsEmailsIndexRouteImport } from './routes/_authenticated/communications/emails/index'
+import { Route as AuthenticatedCommunicationsCampaignsIndexRouteImport } from './routes/_authenticated/communications/campaigns/index'
+import { Route as AuthenticatedCommunicationsCallsIndexRouteImport } from './routes/_authenticated/communications/calls/index'
+import { Route as AuthenticatedAdminUsersIndexRouteImport } from './routes/_authenticated/admin/users/index'
+import { Route as AuthenticatedAdminInvitationsIndexRouteImport } from './routes/_authenticated/admin/invitations/index'
+import { Route as AuthenticatedAdminGroupsIndexRouteImport } from './routes/_authenticated/admin/groups/index'
+import { Route as AuthenticatedAdminAuditIndexRouteImport } from './routes/_authenticated/admin/audit/index'
 import { Route as AuthenticatedAdminActivitiesIndexRouteImport } from './routes/_authenticated/admin/activities/index'
+import { Route as AuthenticatedSupportWarrantiesWarrantyIdRouteImport } from './routes/_authenticated/support/warranties/$warrantyId'
+import { Route as AuthenticatedSupportRmasRmaIdRouteImport } from './routes/_authenticated/support/rmas/$rmaId'
+import { Route as AuthenticatedSupportIssuesNewRouteImport } from './routes/_authenticated/support/issues/new'
+import { Route as AuthenticatedSupportIssuesIssueIdRouteImport } from './routes/_authenticated/support/issues/$issueId'
+import { Route as AuthenticatedSupportClaimsClaimIdRouteImport } from './routes/_authenticated/support/claims/$claimId'
 import { Route as AuthenticatedProductsProductIdEditRouteImport } from './routes/_authenticated/products/$productId/edit'
+import { Route as AuthenticatedJobsAssignmentsAssignmentIdRouteImport } from './routes/_authenticated/jobs/assignments/$assignmentId'
 import { Route as AuthenticatedCustomersCustomerIdEditRouteImport } from './routes/_authenticated/customers/$customerId_.edit'
+import { Route as AuthenticatedCommunicationsSettingsPreferencesRouteImport } from './routes/_authenticated/communications/settings/preferences'
+import { Route as AuthenticatedCommunicationsCampaignsNewRouteImport } from './routes/_authenticated/communications/campaigns/new'
+import { Route as AuthenticatedCommunicationsCampaignsCampaignIdRouteImport } from './routes/_authenticated/communications/campaigns/$campaignId'
+import { Route as AuthenticatedAdminUsersInviteRouteImport } from './routes/_authenticated/admin/users/invite'
+import { Route as AuthenticatedAdminUsersImportRouteImport } from './routes/_authenticated/admin/users/import'
+import { Route as AuthenticatedAdminUsersUserIdRouteImport } from './routes/_authenticated/admin/users/$userId'
+import { Route as AuthenticatedAdminGroupsGroupIdRouteImport } from './routes/_authenticated/admin/groups/$groupId'
+import { Route as AuthenticatedCommunicationsEmailsTemplatesIndexRouteImport } from './routes/_authenticated/communications/emails/templates/index'
 
+const UpdatePasswordRoute = UpdatePasswordRouteImport.update({
+  id: '/update-password',
+  path: '/update-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignUpSuccessRoute = SignUpSuccessRouteImport.update({
+  id: '/sign-up-success',
+  path: '/sign-up-success',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignUpRoute = SignUpRouteImport.update({
+  id: '/sign-up',
+  path: '/sign-up',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LogoutRoute = LogoutRouteImport.update({
   id: '/logout',
   path: '/logout',
@@ -63,6 +161,20 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AcceptInvitationRoute = AcceptInvitationRouteImport.update({
+  id: '/accept-invitation',
+  path: '/accept-invitation',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProtectedRoute = ProtectedRouteImport.update({
+  id: '/_protected',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
@@ -71,6 +183,36 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const PortalIndexRoute = PortalIndexRouteImport.update({
+  id: '/portal/',
+  path: '/portal/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PortalConfirmRoute = PortalConfirmRouteImport.update({
+  id: '/portal/confirm',
+  path: '/portal/confirm',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FeedbackTokenRoute = FeedbackTokenRouteImport.update({
+  id: '/feedback/$token',
+  path: '/feedback/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthErrorRoute = AuthErrorRouteImport.update({
+  id: '/auth/error',
+  path: '/auth/error',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthConfirmRoute = AuthConfirmRouteImport.update({
+  id: '/auth/confirm',
+  path: '/auth/confirm',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProtectedProtectedRoute = ProtectedProtectedRouteImport.update({
+  id: '/protected',
+  path: '/protected',
+  getParentRoute: () => ProtectedRoute,
 } as any)
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
@@ -87,6 +229,18 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedSuppliersIndexRoute =
+  AuthenticatedSuppliersIndexRouteImport.update({
+    id: '/suppliers/',
+    path: '/suppliers/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedPurchaseOrdersIndexRoute =
+  AuthenticatedPurchaseOrdersIndexRouteImport.update({
+    id: '/purchase-orders/',
+    path: '/purchase-orders/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedProductsIndexRoute =
   AuthenticatedProductsIndexRouteImport.update({
     id: '/products/',
@@ -117,10 +271,34 @@ const AuthenticatedInventoryIndexRoute =
     path: '/inventory/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedFinancialIndexRoute =
+  AuthenticatedFinancialIndexRouteImport.update({
+    id: '/financial/',
+    path: '/financial/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedDashboardIndexRoute =
+  AuthenticatedDashboardIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedDashboardRoute,
+  } as any)
 const AuthenticatedCustomersIndexRoute =
   AuthenticatedCustomersIndexRouteImport.update({
     id: '/customers/',
     path: '/customers/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedCommunicationsIndexRoute =
+  AuthenticatedCommunicationsIndexRouteImport.update({
+    id: '/communications/',
+    path: '/communications/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedApprovalsIndexRoute =
+  AuthenticatedApprovalsIndexRouteImport.update({
+    id: '/approvals/',
+    path: '/approvals/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedActivitiesIndexRoute =
@@ -128,6 +306,90 @@ const AuthenticatedActivitiesIndexRoute =
     id: '/activities/',
     path: '/activities/',
     getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSupportKnowledgeBaseRoute =
+  AuthenticatedSupportKnowledgeBaseRouteImport.update({
+    id: '/support/knowledge-base',
+    path: '/support/knowledge-base',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSupportIssuesBoardRoute =
+  AuthenticatedSupportIssuesBoardRouteImport.update({
+    id: '/support/issues-board',
+    path: '/support/issues-board',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSupportDashboardRoute =
+  AuthenticatedSupportDashboardRouteImport.update({
+    id: '/support/dashboard',
+    path: '/support/dashboard',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSettingsWinLossReasonsRoute =
+  AuthenticatedSettingsWinLossReasonsRouteImport.update({
+    id: '/win-loss-reasons',
+    path: '/win-loss-reasons',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsWarrantyPoliciesRoute =
+  AuthenticatedSettingsWarrantyPoliciesRouteImport.update({
+    id: '/warranty-policies',
+    path: '/warranty-policies',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsWarrantyImportRoute =
+  AuthenticatedSettingsWarrantyImportRouteImport.update({
+    id: '/warranty-import',
+    path: '/warranty-import',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsTargetsRoute =
+  AuthenticatedSettingsTargetsRouteImport.update({
+    id: '/targets',
+    path: '/targets',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsSecurityRoute =
+  AuthenticatedSettingsSecurityRouteImport.update({
+    id: '/security',
+    path: '/security',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsScheduledReportsRoute =
+  AuthenticatedSettingsScheduledReportsRouteImport.update({
+    id: '/scheduled-reports',
+    path: '/scheduled-reports',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsPreferencesRoute =
+  AuthenticatedSettingsPreferencesRouteImport.update({
+    id: '/preferences',
+    path: '/preferences',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsKnowledgeBaseRoute =
+  AuthenticatedSettingsKnowledgeBaseRouteImport.update({
+    id: '/knowledge-base',
+    path: '/knowledge-base',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsJobTemplatesRoute =
+  AuthenticatedSettingsJobTemplatesRouteImport.update({
+    id: '/job-templates',
+    path: '/job-templates',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsIssueTemplatesRoute =
+  AuthenticatedSettingsIssueTemplatesRouteImport.update({
+    id: '/issue-templates',
+    path: '/issue-templates',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsDelegationsRoute =
+  AuthenticatedSettingsDelegationsRouteImport.update({
+    id: '/delegations',
+    path: '/delegations',
+    getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
 const AuthenticatedSettingsCategoriesRoute =
   AuthenticatedSettingsCategoriesRouteImport.update({
@@ -141,10 +403,46 @@ const AuthenticatedSettingsApiTokensRoute =
     path: '/api-tokens',
     getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
+const AuthenticatedReportsWinLossRoute =
+  AuthenticatedReportsWinLossRouteImport.update({
+    id: '/reports/win-loss',
+    path: '/reports/win-loss',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedReportsWarrantiesRoute =
+  AuthenticatedReportsWarrantiesRouteImport.update({
+    id: '/reports/warranties',
+    path: '/reports/warranties',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedReportsPipelineForecastRoute =
   AuthenticatedReportsPipelineForecastRouteImport.update({
     id: '/reports/pipeline-forecast',
     path: '/reports/pipeline-forecast',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedReportsJobCostingRoute =
+  AuthenticatedReportsJobCostingRouteImport.update({
+    id: '/reports/job-costing',
+    path: '/reports/job-costing',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedReportsExpiringWarrantiesRoute =
+  AuthenticatedReportsExpiringWarrantiesRouteImport.update({
+    id: '/reports/expiring-warranties',
+    path: '/reports/expiring-warranties',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedPurchaseOrdersCreateRoute =
+  AuthenticatedPurchaseOrdersCreateRouteImport.update({
+    id: '/purchase-orders/create',
+    path: '/purchase-orders/create',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedPurchaseOrdersPoIdRoute =
+  AuthenticatedPurchaseOrdersPoIdRouteImport.update({
+    id: '/purchase-orders/$poId',
+    path: '/purchase-orders/$poId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedProductsNewRoute =
@@ -157,6 +455,12 @@ const AuthenticatedProductsProductIdRoute =
   AuthenticatedProductsProductIdRouteImport.update({
     id: '/products/$productId',
     path: '/products/$productId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedProcurementDashboardRoute =
+  AuthenticatedProcurementDashboardRouteImport.update({
+    id: '/procurement/dashboard',
+    path: '/procurement/dashboard',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedPipelineOpportunityIdRoute =
@@ -199,6 +503,23 @@ const AuthenticatedMobileCountingRoute =
   AuthenticatedMobileCountingRouteImport.update({
     id: '/mobile/counting',
     path: '/mobile/counting',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedJobsTimelineRoute =
+  AuthenticatedJobsTimelineRouteImport.update({
+    id: '/jobs/timeline',
+    path: '/jobs/timeline',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedJobsKanbanRoute = AuthenticatedJobsKanbanRouteImport.update({
+  id: '/jobs/kanban',
+  path: '/jobs/kanban',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedJobsCalendarRoute =
+  AuthenticatedJobsCalendarRouteImport.update({
+    id: '/jobs/calendar',
+    path: '/jobs/calendar',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedInventoryReceivingRoute =
@@ -249,6 +570,54 @@ const AuthenticatedInventoryItemIdRoute =
     path: '/inventory/$itemId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedIntegrationsOauthRoute =
+  AuthenticatedIntegrationsOauthRouteImport.update({
+    id: '/integrations/oauth',
+    path: '/integrations/oauth',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedFinancialXeroSyncRoute =
+  AuthenticatedFinancialXeroSyncRouteImport.update({
+    id: '/financial/xero-sync',
+    path: '/financial/xero-sync',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedFinancialStatementsRoute =
+  AuthenticatedFinancialStatementsRouteImport.update({
+    id: '/financial/statements',
+    path: '/financial/statements',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedFinancialRevenueRoute =
+  AuthenticatedFinancialRevenueRouteImport.update({
+    id: '/financial/revenue',
+    path: '/financial/revenue',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedFinancialRemindersRoute =
+  AuthenticatedFinancialRemindersRouteImport.update({
+    id: '/financial/reminders',
+    path: '/financial/reminders',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedFinancialPaymentPlansRoute =
+  AuthenticatedFinancialPaymentPlansRouteImport.update({
+    id: '/financial/payment-plans',
+    path: '/financial/payment-plans',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedFinancialCreditNotesRoute =
+  AuthenticatedFinancialCreditNotesRouteImport.update({
+    id: '/financial/credit-notes',
+    path: '/financial/credit-notes',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedFinancialArAgingRoute =
+  AuthenticatedFinancialArAgingRouteImport.update({
+    id: '/financial/ar-aging',
+    path: '/financial/ar-aging',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedCustomersNewRoute =
   AuthenticatedCustomersNewRouteImport.update({
     id: '/customers/new',
@@ -273,6 +642,36 @@ const AuthenticatedCustomersCustomerIdRoute =
     path: '/customers/$customerId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedSupportWarrantiesIndexRoute =
+  AuthenticatedSupportWarrantiesIndexRouteImport.update({
+    id: '/support/warranties/',
+    path: '/support/warranties/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSupportRmasIndexRoute =
+  AuthenticatedSupportRmasIndexRouteImport.update({
+    id: '/support/rmas/',
+    path: '/support/rmas/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSupportIssuesIndexRoute =
+  AuthenticatedSupportIssuesIndexRouteImport.update({
+    id: '/support/issues/',
+    path: '/support/issues/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSupportClaimsIndexRoute =
+  AuthenticatedSupportClaimsIndexRouteImport.update({
+    id: '/support/claims/',
+    path: '/support/claims/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedReportsProcurementIndexRoute =
+  AuthenticatedReportsProcurementIndexRouteImport.update({
+    id: '/reports/procurement/',
+    path: '/reports/procurement/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedReportsCustomersIndexRoute =
   AuthenticatedReportsCustomersIndexRouteImport.update({
     id: '/reports/customers/',
@@ -285,10 +684,88 @@ const AuthenticatedCustomersSegmentsIndexRoute =
     path: '/customers/segments/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedCommunicationsSignaturesIndexRoute =
+  AuthenticatedCommunicationsSignaturesIndexRouteImport.update({
+    id: '/communications/signatures/',
+    path: '/communications/signatures/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedCommunicationsEmailsIndexRoute =
+  AuthenticatedCommunicationsEmailsIndexRouteImport.update({
+    id: '/communications/emails/',
+    path: '/communications/emails/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedCommunicationsCampaignsIndexRoute =
+  AuthenticatedCommunicationsCampaignsIndexRouteImport.update({
+    id: '/communications/campaigns/',
+    path: '/communications/campaigns/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedCommunicationsCallsIndexRoute =
+  AuthenticatedCommunicationsCallsIndexRouteImport.update({
+    id: '/communications/calls/',
+    path: '/communications/calls/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAdminUsersIndexRoute =
+  AuthenticatedAdminUsersIndexRouteImport.update({
+    id: '/admin/users/',
+    path: '/admin/users/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAdminInvitationsIndexRoute =
+  AuthenticatedAdminInvitationsIndexRouteImport.update({
+    id: '/admin/invitations/',
+    path: '/admin/invitations/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAdminGroupsIndexRoute =
+  AuthenticatedAdminGroupsIndexRouteImport.update({
+    id: '/admin/groups/',
+    path: '/admin/groups/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAdminAuditIndexRoute =
+  AuthenticatedAdminAuditIndexRouteImport.update({
+    id: '/admin/audit/',
+    path: '/admin/audit/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedAdminActivitiesIndexRoute =
   AuthenticatedAdminActivitiesIndexRouteImport.update({
     id: '/admin/activities/',
     path: '/admin/activities/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSupportWarrantiesWarrantyIdRoute =
+  AuthenticatedSupportWarrantiesWarrantyIdRouteImport.update({
+    id: '/support/warranties/$warrantyId',
+    path: '/support/warranties/$warrantyId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSupportRmasRmaIdRoute =
+  AuthenticatedSupportRmasRmaIdRouteImport.update({
+    id: '/support/rmas/$rmaId',
+    path: '/support/rmas/$rmaId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSupportIssuesNewRoute =
+  AuthenticatedSupportIssuesNewRouteImport.update({
+    id: '/support/issues/new',
+    path: '/support/issues/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSupportIssuesIssueIdRoute =
+  AuthenticatedSupportIssuesIssueIdRouteImport.update({
+    id: '/support/issues/$issueId',
+    path: '/support/issues/$issueId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSupportClaimsClaimIdRoute =
+  AuthenticatedSupportClaimsClaimIdRouteImport.update({
+    id: '/support/claims/$claimId',
+    path: '/support/claims/$claimId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedProductsProductIdEditRoute =
@@ -297,24 +774,98 @@ const AuthenticatedProductsProductIdEditRoute =
     path: '/edit',
     getParentRoute: () => AuthenticatedProductsProductIdRoute,
   } as any)
+const AuthenticatedJobsAssignmentsAssignmentIdRoute =
+  AuthenticatedJobsAssignmentsAssignmentIdRouteImport.update({
+    id: '/jobs/assignments/$assignmentId',
+    path: '/jobs/assignments/$assignmentId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedCustomersCustomerIdEditRoute =
   AuthenticatedCustomersCustomerIdEditRouteImport.update({
     id: '/customers/$customerId_/edit',
     path: '/customers/$customerId/edit',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedCommunicationsSettingsPreferencesRoute =
+  AuthenticatedCommunicationsSettingsPreferencesRouteImport.update({
+    id: '/communications/settings/preferences',
+    path: '/communications/settings/preferences',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedCommunicationsCampaignsNewRoute =
+  AuthenticatedCommunicationsCampaignsNewRouteImport.update({
+    id: '/communications/campaigns/new',
+    path: '/communications/campaigns/new',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedCommunicationsCampaignsCampaignIdRoute =
+  AuthenticatedCommunicationsCampaignsCampaignIdRouteImport.update({
+    id: '/communications/campaigns/$campaignId',
+    path: '/communications/campaigns/$campaignId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAdminUsersInviteRoute =
+  AuthenticatedAdminUsersInviteRouteImport.update({
+    id: '/admin/users/invite',
+    path: '/admin/users/invite',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAdminUsersImportRoute =
+  AuthenticatedAdminUsersImportRouteImport.update({
+    id: '/admin/users/import',
+    path: '/admin/users/import',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAdminUsersUserIdRoute =
+  AuthenticatedAdminUsersUserIdRouteImport.update({
+    id: '/admin/users/$userId',
+    path: '/admin/users/$userId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedAdminGroupsGroupIdRoute =
+  AuthenticatedAdminGroupsGroupIdRouteImport.update({
+    id: '/admin/groups/$groupId',
+    path: '/admin/groups/$groupId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedCommunicationsEmailsTemplatesIndexRoute =
+  AuthenticatedCommunicationsEmailsTemplatesIndexRouteImport.update({
+    id: '/communications/emails/templates/',
+    path: '/communications/emails/templates/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/accept-invitation': typeof AcceptInvitationRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
-  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/sign-up': typeof SignUpRoute
+  '/sign-up-success': typeof SignUpSuccessRoute
+  '/update-password': typeof UpdatePasswordRoute
+  '/dashboard': typeof AuthenticatedDashboardRouteWithChildren
   '/profile': typeof AuthenticatedProfileRoute
   '/settings': typeof AuthenticatedSettingsRouteWithChildren
+  '/protected': typeof ProtectedProtectedRoute
+  '/auth/confirm': typeof AuthConfirmRoute
+  '/auth/error': typeof AuthErrorRoute
+  '/feedback/$token': typeof FeedbackTokenRoute
+  '/portal/confirm': typeof PortalConfirmRoute
+  '/portal/': typeof PortalIndexRoute
   '/customers/$customerId': typeof AuthenticatedCustomersCustomerIdRoute
   '/customers/communications': typeof AuthenticatedCustomersCommunicationsRoute
   '/customers/duplicates': typeof AuthenticatedCustomersDuplicatesRoute
   '/customers/new': typeof AuthenticatedCustomersNewRoute
+  '/financial/ar-aging': typeof AuthenticatedFinancialArAgingRoute
+  '/financial/credit-notes': typeof AuthenticatedFinancialCreditNotesRoute
+  '/financial/payment-plans': typeof AuthenticatedFinancialPaymentPlansRoute
+  '/financial/reminders': typeof AuthenticatedFinancialRemindersRoute
+  '/financial/revenue': typeof AuthenticatedFinancialRevenueRoute
+  '/financial/statements': typeof AuthenticatedFinancialStatementsRoute
+  '/financial/xero-sync': typeof AuthenticatedFinancialXeroSyncRoute
+  '/integrations/oauth': typeof AuthenticatedIntegrationsOauthRoute
   '/inventory/$itemId': typeof AuthenticatedInventoryItemIdRoute
   '/inventory/alerts': typeof AuthenticatedInventoryAlertsRoute
   '/inventory/analytics': typeof AuthenticatedInventoryAnalyticsRoute
@@ -323,6 +874,9 @@ export interface FileRoutesByFullPath {
   '/inventory/forecasting': typeof AuthenticatedInventoryForecastingRoute
   '/inventory/locations': typeof AuthenticatedInventoryLocationsRoute
   '/inventory/receiving': typeof AuthenticatedInventoryReceivingRoute
+  '/jobs/calendar': typeof AuthenticatedJobsCalendarRoute
+  '/jobs/kanban': typeof AuthenticatedJobsKanbanRoute
+  '/jobs/timeline': typeof AuthenticatedJobsTimelineRoute
   '/mobile/counting': typeof AuthenticatedMobileCountingRoute
   '/mobile/picking': typeof AuthenticatedMobilePickingRoute
   '/mobile/receiving': typeof AuthenticatedMobileReceivingRoute
@@ -330,35 +884,108 @@ export interface FileRoutesByFullPath {
   '/orders/create': typeof AuthenticatedOrdersCreateRoute
   '/orders/fulfillment': typeof AuthenticatedOrdersFulfillmentRoute
   '/pipeline/$opportunityId': typeof AuthenticatedPipelineOpportunityIdRoute
+  '/procurement/dashboard': typeof AuthenticatedProcurementDashboardRoute
   '/products/$productId': typeof AuthenticatedProductsProductIdRouteWithChildren
   '/products/new': typeof AuthenticatedProductsNewRoute
+  '/purchase-orders/$poId': typeof AuthenticatedPurchaseOrdersPoIdRoute
+  '/purchase-orders/create': typeof AuthenticatedPurchaseOrdersCreateRoute
+  '/reports/expiring-warranties': typeof AuthenticatedReportsExpiringWarrantiesRoute
+  '/reports/job-costing': typeof AuthenticatedReportsJobCostingRoute
   '/reports/pipeline-forecast': typeof AuthenticatedReportsPipelineForecastRoute
+  '/reports/warranties': typeof AuthenticatedReportsWarrantiesRoute
+  '/reports/win-loss': typeof AuthenticatedReportsWinLossRoute
   '/settings/api-tokens': typeof AuthenticatedSettingsApiTokensRoute
   '/settings/categories': typeof AuthenticatedSettingsCategoriesRoute
+  '/settings/delegations': typeof AuthenticatedSettingsDelegationsRoute
+  '/settings/issue-templates': typeof AuthenticatedSettingsIssueTemplatesRoute
+  '/settings/job-templates': typeof AuthenticatedSettingsJobTemplatesRoute
+  '/settings/knowledge-base': typeof AuthenticatedSettingsKnowledgeBaseRoute
+  '/settings/preferences': typeof AuthenticatedSettingsPreferencesRoute
+  '/settings/scheduled-reports': typeof AuthenticatedSettingsScheduledReportsRoute
+  '/settings/security': typeof AuthenticatedSettingsSecurityRoute
+  '/settings/targets': typeof AuthenticatedSettingsTargetsRoute
+  '/settings/warranty-import': typeof AuthenticatedSettingsWarrantyImportRoute
+  '/settings/warranty-policies': typeof AuthenticatedSettingsWarrantyPoliciesRoute
+  '/settings/win-loss-reasons': typeof AuthenticatedSettingsWinLossReasonsRoute
+  '/support/dashboard': typeof AuthenticatedSupportDashboardRoute
+  '/support/issues-board': typeof AuthenticatedSupportIssuesBoardRoute
+  '/support/knowledge-base': typeof AuthenticatedSupportKnowledgeBaseRoute
   '/activities/': typeof AuthenticatedActivitiesIndexRoute
+  '/approvals/': typeof AuthenticatedApprovalsIndexRoute
+  '/communications/': typeof AuthenticatedCommunicationsIndexRoute
   '/customers/': typeof AuthenticatedCustomersIndexRoute
+  '/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/financial/': typeof AuthenticatedFinancialIndexRoute
   '/inventory/': typeof AuthenticatedInventoryIndexRoute
   '/mobile/': typeof AuthenticatedMobileIndexRoute
   '/orders/': typeof AuthenticatedOrdersIndexRoute
   '/pipeline/': typeof AuthenticatedPipelineIndexRoute
   '/products/': typeof AuthenticatedProductsIndexRoute
+  '/purchase-orders/': typeof AuthenticatedPurchaseOrdersIndexRoute
+  '/suppliers/': typeof AuthenticatedSuppliersIndexRoute
+  '/admin/groups/$groupId': typeof AuthenticatedAdminGroupsGroupIdRoute
+  '/admin/users/$userId': typeof AuthenticatedAdminUsersUserIdRoute
+  '/admin/users/import': typeof AuthenticatedAdminUsersImportRoute
+  '/admin/users/invite': typeof AuthenticatedAdminUsersInviteRoute
+  '/communications/campaigns/$campaignId': typeof AuthenticatedCommunicationsCampaignsCampaignIdRoute
+  '/communications/campaigns/new': typeof AuthenticatedCommunicationsCampaignsNewRoute
+  '/communications/settings/preferences': typeof AuthenticatedCommunicationsSettingsPreferencesRoute
   '/customers/$customerId/edit': typeof AuthenticatedCustomersCustomerIdEditRoute
+  '/jobs/assignments/$assignmentId': typeof AuthenticatedJobsAssignmentsAssignmentIdRoute
   '/products/$productId/edit': typeof AuthenticatedProductsProductIdEditRoute
+  '/support/claims/$claimId': typeof AuthenticatedSupportClaimsClaimIdRoute
+  '/support/issues/$issueId': typeof AuthenticatedSupportIssuesIssueIdRoute
+  '/support/issues/new': typeof AuthenticatedSupportIssuesNewRoute
+  '/support/rmas/$rmaId': typeof AuthenticatedSupportRmasRmaIdRoute
+  '/support/warranties/$warrantyId': typeof AuthenticatedSupportWarrantiesWarrantyIdRoute
   '/admin/activities/': typeof AuthenticatedAdminActivitiesIndexRoute
+  '/admin/audit/': typeof AuthenticatedAdminAuditIndexRoute
+  '/admin/groups/': typeof AuthenticatedAdminGroupsIndexRoute
+  '/admin/invitations/': typeof AuthenticatedAdminInvitationsIndexRoute
+  '/admin/users/': typeof AuthenticatedAdminUsersIndexRoute
+  '/communications/calls/': typeof AuthenticatedCommunicationsCallsIndexRoute
+  '/communications/campaigns/': typeof AuthenticatedCommunicationsCampaignsIndexRoute
+  '/communications/emails/': typeof AuthenticatedCommunicationsEmailsIndexRoute
+  '/communications/signatures/': typeof AuthenticatedCommunicationsSignaturesIndexRoute
   '/customers/segments/': typeof AuthenticatedCustomersSegmentsIndexRoute
   '/reports/customers/': typeof AuthenticatedReportsCustomersIndexRoute
+  '/reports/procurement/': typeof AuthenticatedReportsProcurementIndexRoute
+  '/support/claims/': typeof AuthenticatedSupportClaimsIndexRoute
+  '/support/issues/': typeof AuthenticatedSupportIssuesIndexRoute
+  '/support/rmas/': typeof AuthenticatedSupportRmasIndexRoute
+  '/support/warranties/': typeof AuthenticatedSupportWarrantiesIndexRoute
+  '/communications/emails/templates/': typeof AuthenticatedCommunicationsEmailsTemplatesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/accept-invitation': typeof AcceptInvitationRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
-  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/sign-up': typeof SignUpRoute
+  '/sign-up-success': typeof SignUpSuccessRoute
+  '/update-password': typeof UpdatePasswordRoute
   '/profile': typeof AuthenticatedProfileRoute
   '/settings': typeof AuthenticatedSettingsRouteWithChildren
+  '/protected': typeof ProtectedProtectedRoute
+  '/auth/confirm': typeof AuthConfirmRoute
+  '/auth/error': typeof AuthErrorRoute
+  '/feedback/$token': typeof FeedbackTokenRoute
+  '/portal/confirm': typeof PortalConfirmRoute
+  '/portal': typeof PortalIndexRoute
   '/customers/$customerId': typeof AuthenticatedCustomersCustomerIdRoute
   '/customers/communications': typeof AuthenticatedCustomersCommunicationsRoute
   '/customers/duplicates': typeof AuthenticatedCustomersDuplicatesRoute
   '/customers/new': typeof AuthenticatedCustomersNewRoute
+  '/financial/ar-aging': typeof AuthenticatedFinancialArAgingRoute
+  '/financial/credit-notes': typeof AuthenticatedFinancialCreditNotesRoute
+  '/financial/payment-plans': typeof AuthenticatedFinancialPaymentPlansRoute
+  '/financial/reminders': typeof AuthenticatedFinancialRemindersRoute
+  '/financial/revenue': typeof AuthenticatedFinancialRevenueRoute
+  '/financial/statements': typeof AuthenticatedFinancialStatementsRoute
+  '/financial/xero-sync': typeof AuthenticatedFinancialXeroSyncRoute
+  '/integrations/oauth': typeof AuthenticatedIntegrationsOauthRoute
   '/inventory/$itemId': typeof AuthenticatedInventoryItemIdRoute
   '/inventory/alerts': typeof AuthenticatedInventoryAlertsRoute
   '/inventory/analytics': typeof AuthenticatedInventoryAnalyticsRoute
@@ -367,6 +994,9 @@ export interface FileRoutesByTo {
   '/inventory/forecasting': typeof AuthenticatedInventoryForecastingRoute
   '/inventory/locations': typeof AuthenticatedInventoryLocationsRoute
   '/inventory/receiving': typeof AuthenticatedInventoryReceivingRoute
+  '/jobs/calendar': typeof AuthenticatedJobsCalendarRoute
+  '/jobs/kanban': typeof AuthenticatedJobsKanbanRoute
+  '/jobs/timeline': typeof AuthenticatedJobsTimelineRoute
   '/mobile/counting': typeof AuthenticatedMobileCountingRoute
   '/mobile/picking': typeof AuthenticatedMobilePickingRoute
   '/mobile/receiving': typeof AuthenticatedMobileReceivingRoute
@@ -374,37 +1004,112 @@ export interface FileRoutesByTo {
   '/orders/create': typeof AuthenticatedOrdersCreateRoute
   '/orders/fulfillment': typeof AuthenticatedOrdersFulfillmentRoute
   '/pipeline/$opportunityId': typeof AuthenticatedPipelineOpportunityIdRoute
+  '/procurement/dashboard': typeof AuthenticatedProcurementDashboardRoute
   '/products/$productId': typeof AuthenticatedProductsProductIdRouteWithChildren
   '/products/new': typeof AuthenticatedProductsNewRoute
+  '/purchase-orders/$poId': typeof AuthenticatedPurchaseOrdersPoIdRoute
+  '/purchase-orders/create': typeof AuthenticatedPurchaseOrdersCreateRoute
+  '/reports/expiring-warranties': typeof AuthenticatedReportsExpiringWarrantiesRoute
+  '/reports/job-costing': typeof AuthenticatedReportsJobCostingRoute
   '/reports/pipeline-forecast': typeof AuthenticatedReportsPipelineForecastRoute
+  '/reports/warranties': typeof AuthenticatedReportsWarrantiesRoute
+  '/reports/win-loss': typeof AuthenticatedReportsWinLossRoute
   '/settings/api-tokens': typeof AuthenticatedSettingsApiTokensRoute
   '/settings/categories': typeof AuthenticatedSettingsCategoriesRoute
+  '/settings/delegations': typeof AuthenticatedSettingsDelegationsRoute
+  '/settings/issue-templates': typeof AuthenticatedSettingsIssueTemplatesRoute
+  '/settings/job-templates': typeof AuthenticatedSettingsJobTemplatesRoute
+  '/settings/knowledge-base': typeof AuthenticatedSettingsKnowledgeBaseRoute
+  '/settings/preferences': typeof AuthenticatedSettingsPreferencesRoute
+  '/settings/scheduled-reports': typeof AuthenticatedSettingsScheduledReportsRoute
+  '/settings/security': typeof AuthenticatedSettingsSecurityRoute
+  '/settings/targets': typeof AuthenticatedSettingsTargetsRoute
+  '/settings/warranty-import': typeof AuthenticatedSettingsWarrantyImportRoute
+  '/settings/warranty-policies': typeof AuthenticatedSettingsWarrantyPoliciesRoute
+  '/settings/win-loss-reasons': typeof AuthenticatedSettingsWinLossReasonsRoute
+  '/support/dashboard': typeof AuthenticatedSupportDashboardRoute
+  '/support/issues-board': typeof AuthenticatedSupportIssuesBoardRoute
+  '/support/knowledge-base': typeof AuthenticatedSupportKnowledgeBaseRoute
   '/activities': typeof AuthenticatedActivitiesIndexRoute
+  '/approvals': typeof AuthenticatedApprovalsIndexRoute
+  '/communications': typeof AuthenticatedCommunicationsIndexRoute
   '/customers': typeof AuthenticatedCustomersIndexRoute
+  '/dashboard': typeof AuthenticatedDashboardIndexRoute
+  '/financial': typeof AuthenticatedFinancialIndexRoute
   '/inventory': typeof AuthenticatedInventoryIndexRoute
   '/mobile': typeof AuthenticatedMobileIndexRoute
   '/orders': typeof AuthenticatedOrdersIndexRoute
   '/pipeline': typeof AuthenticatedPipelineIndexRoute
   '/products': typeof AuthenticatedProductsIndexRoute
+  '/purchase-orders': typeof AuthenticatedPurchaseOrdersIndexRoute
+  '/suppliers': typeof AuthenticatedSuppliersIndexRoute
+  '/admin/groups/$groupId': typeof AuthenticatedAdminGroupsGroupIdRoute
+  '/admin/users/$userId': typeof AuthenticatedAdminUsersUserIdRoute
+  '/admin/users/import': typeof AuthenticatedAdminUsersImportRoute
+  '/admin/users/invite': typeof AuthenticatedAdminUsersInviteRoute
+  '/communications/campaigns/$campaignId': typeof AuthenticatedCommunicationsCampaignsCampaignIdRoute
+  '/communications/campaigns/new': typeof AuthenticatedCommunicationsCampaignsNewRoute
+  '/communications/settings/preferences': typeof AuthenticatedCommunicationsSettingsPreferencesRoute
   '/customers/$customerId/edit': typeof AuthenticatedCustomersCustomerIdEditRoute
+  '/jobs/assignments/$assignmentId': typeof AuthenticatedJobsAssignmentsAssignmentIdRoute
   '/products/$productId/edit': typeof AuthenticatedProductsProductIdEditRoute
+  '/support/claims/$claimId': typeof AuthenticatedSupportClaimsClaimIdRoute
+  '/support/issues/$issueId': typeof AuthenticatedSupportIssuesIssueIdRoute
+  '/support/issues/new': typeof AuthenticatedSupportIssuesNewRoute
+  '/support/rmas/$rmaId': typeof AuthenticatedSupportRmasRmaIdRoute
+  '/support/warranties/$warrantyId': typeof AuthenticatedSupportWarrantiesWarrantyIdRoute
   '/admin/activities': typeof AuthenticatedAdminActivitiesIndexRoute
+  '/admin/audit': typeof AuthenticatedAdminAuditIndexRoute
+  '/admin/groups': typeof AuthenticatedAdminGroupsIndexRoute
+  '/admin/invitations': typeof AuthenticatedAdminInvitationsIndexRoute
+  '/admin/users': typeof AuthenticatedAdminUsersIndexRoute
+  '/communications/calls': typeof AuthenticatedCommunicationsCallsIndexRoute
+  '/communications/campaigns': typeof AuthenticatedCommunicationsCampaignsIndexRoute
+  '/communications/emails': typeof AuthenticatedCommunicationsEmailsIndexRoute
+  '/communications/signatures': typeof AuthenticatedCommunicationsSignaturesIndexRoute
   '/customers/segments': typeof AuthenticatedCustomersSegmentsIndexRoute
   '/reports/customers': typeof AuthenticatedReportsCustomersIndexRoute
+  '/reports/procurement': typeof AuthenticatedReportsProcurementIndexRoute
+  '/support/claims': typeof AuthenticatedSupportClaimsIndexRoute
+  '/support/issues': typeof AuthenticatedSupportIssuesIndexRoute
+  '/support/rmas': typeof AuthenticatedSupportRmasIndexRoute
+  '/support/warranties': typeof AuthenticatedSupportWarrantiesIndexRoute
+  '/communications/emails/templates': typeof AuthenticatedCommunicationsEmailsTemplatesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/_protected': typeof ProtectedRouteWithChildren
+  '/accept-invitation': typeof AcceptInvitationRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/logout': typeof LogoutRoute
-  '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/reset-password': typeof ResetPasswordRoute
+  '/sign-up': typeof SignUpRoute
+  '/sign-up-success': typeof SignUpSuccessRoute
+  '/update-password': typeof UpdatePasswordRoute
+  '/_authenticated/dashboard': typeof AuthenticatedDashboardRouteWithChildren
   '/_authenticated/profile': typeof AuthenticatedProfileRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRouteWithChildren
+  '/_protected/protected': typeof ProtectedProtectedRoute
+  '/auth/confirm': typeof AuthConfirmRoute
+  '/auth/error': typeof AuthErrorRoute
+  '/feedback/$token': typeof FeedbackTokenRoute
+  '/portal/confirm': typeof PortalConfirmRoute
+  '/portal/': typeof PortalIndexRoute
   '/_authenticated/customers/$customerId': typeof AuthenticatedCustomersCustomerIdRoute
   '/_authenticated/customers/communications': typeof AuthenticatedCustomersCommunicationsRoute
   '/_authenticated/customers/duplicates': typeof AuthenticatedCustomersDuplicatesRoute
   '/_authenticated/customers/new': typeof AuthenticatedCustomersNewRoute
+  '/_authenticated/financial/ar-aging': typeof AuthenticatedFinancialArAgingRoute
+  '/_authenticated/financial/credit-notes': typeof AuthenticatedFinancialCreditNotesRoute
+  '/_authenticated/financial/payment-plans': typeof AuthenticatedFinancialPaymentPlansRoute
+  '/_authenticated/financial/reminders': typeof AuthenticatedFinancialRemindersRoute
+  '/_authenticated/financial/revenue': typeof AuthenticatedFinancialRevenueRoute
+  '/_authenticated/financial/statements': typeof AuthenticatedFinancialStatementsRoute
+  '/_authenticated/financial/xero-sync': typeof AuthenticatedFinancialXeroSyncRoute
+  '/_authenticated/integrations/oauth': typeof AuthenticatedIntegrationsOauthRoute
   '/_authenticated/inventory/$itemId': typeof AuthenticatedInventoryItemIdRoute
   '/_authenticated/inventory/alerts': typeof AuthenticatedInventoryAlertsRoute
   '/_authenticated/inventory/analytics': typeof AuthenticatedInventoryAnalyticsRoute
@@ -413,6 +1118,9 @@ export interface FileRoutesById {
   '/_authenticated/inventory/forecasting': typeof AuthenticatedInventoryForecastingRoute
   '/_authenticated/inventory/locations': typeof AuthenticatedInventoryLocationsRoute
   '/_authenticated/inventory/receiving': typeof AuthenticatedInventoryReceivingRoute
+  '/_authenticated/jobs/calendar': typeof AuthenticatedJobsCalendarRoute
+  '/_authenticated/jobs/kanban': typeof AuthenticatedJobsKanbanRoute
+  '/_authenticated/jobs/timeline': typeof AuthenticatedJobsTimelineRoute
   '/_authenticated/mobile/counting': typeof AuthenticatedMobileCountingRoute
   '/_authenticated/mobile/picking': typeof AuthenticatedMobilePickingRoute
   '/_authenticated/mobile/receiving': typeof AuthenticatedMobileReceivingRoute
@@ -420,37 +1128,111 @@ export interface FileRoutesById {
   '/_authenticated/orders/create': typeof AuthenticatedOrdersCreateRoute
   '/_authenticated/orders/fulfillment': typeof AuthenticatedOrdersFulfillmentRoute
   '/_authenticated/pipeline/$opportunityId': typeof AuthenticatedPipelineOpportunityIdRoute
+  '/_authenticated/procurement/dashboard': typeof AuthenticatedProcurementDashboardRoute
   '/_authenticated/products/$productId': typeof AuthenticatedProductsProductIdRouteWithChildren
   '/_authenticated/products/new': typeof AuthenticatedProductsNewRoute
+  '/_authenticated/purchase-orders/$poId': typeof AuthenticatedPurchaseOrdersPoIdRoute
+  '/_authenticated/purchase-orders/create': typeof AuthenticatedPurchaseOrdersCreateRoute
+  '/_authenticated/reports/expiring-warranties': typeof AuthenticatedReportsExpiringWarrantiesRoute
+  '/_authenticated/reports/job-costing': typeof AuthenticatedReportsJobCostingRoute
   '/_authenticated/reports/pipeline-forecast': typeof AuthenticatedReportsPipelineForecastRoute
+  '/_authenticated/reports/warranties': typeof AuthenticatedReportsWarrantiesRoute
+  '/_authenticated/reports/win-loss': typeof AuthenticatedReportsWinLossRoute
   '/_authenticated/settings/api-tokens': typeof AuthenticatedSettingsApiTokensRoute
   '/_authenticated/settings/categories': typeof AuthenticatedSettingsCategoriesRoute
+  '/_authenticated/settings/delegations': typeof AuthenticatedSettingsDelegationsRoute
+  '/_authenticated/settings/issue-templates': typeof AuthenticatedSettingsIssueTemplatesRoute
+  '/_authenticated/settings/job-templates': typeof AuthenticatedSettingsJobTemplatesRoute
+  '/_authenticated/settings/knowledge-base': typeof AuthenticatedSettingsKnowledgeBaseRoute
+  '/_authenticated/settings/preferences': typeof AuthenticatedSettingsPreferencesRoute
+  '/_authenticated/settings/scheduled-reports': typeof AuthenticatedSettingsScheduledReportsRoute
+  '/_authenticated/settings/security': typeof AuthenticatedSettingsSecurityRoute
+  '/_authenticated/settings/targets': typeof AuthenticatedSettingsTargetsRoute
+  '/_authenticated/settings/warranty-import': typeof AuthenticatedSettingsWarrantyImportRoute
+  '/_authenticated/settings/warranty-policies': typeof AuthenticatedSettingsWarrantyPoliciesRoute
+  '/_authenticated/settings/win-loss-reasons': typeof AuthenticatedSettingsWinLossReasonsRoute
+  '/_authenticated/support/dashboard': typeof AuthenticatedSupportDashboardRoute
+  '/_authenticated/support/issues-board': typeof AuthenticatedSupportIssuesBoardRoute
+  '/_authenticated/support/knowledge-base': typeof AuthenticatedSupportKnowledgeBaseRoute
   '/_authenticated/activities/': typeof AuthenticatedActivitiesIndexRoute
+  '/_authenticated/approvals/': typeof AuthenticatedApprovalsIndexRoute
+  '/_authenticated/communications/': typeof AuthenticatedCommunicationsIndexRoute
   '/_authenticated/customers/': typeof AuthenticatedCustomersIndexRoute
+  '/_authenticated/dashboard/': typeof AuthenticatedDashboardIndexRoute
+  '/_authenticated/financial/': typeof AuthenticatedFinancialIndexRoute
   '/_authenticated/inventory/': typeof AuthenticatedInventoryIndexRoute
   '/_authenticated/mobile/': typeof AuthenticatedMobileIndexRoute
   '/_authenticated/orders/': typeof AuthenticatedOrdersIndexRoute
   '/_authenticated/pipeline/': typeof AuthenticatedPipelineIndexRoute
   '/_authenticated/products/': typeof AuthenticatedProductsIndexRoute
+  '/_authenticated/purchase-orders/': typeof AuthenticatedPurchaseOrdersIndexRoute
+  '/_authenticated/suppliers/': typeof AuthenticatedSuppliersIndexRoute
+  '/_authenticated/admin/groups/$groupId': typeof AuthenticatedAdminGroupsGroupIdRoute
+  '/_authenticated/admin/users/$userId': typeof AuthenticatedAdminUsersUserIdRoute
+  '/_authenticated/admin/users/import': typeof AuthenticatedAdminUsersImportRoute
+  '/_authenticated/admin/users/invite': typeof AuthenticatedAdminUsersInviteRoute
+  '/_authenticated/communications/campaigns/$campaignId': typeof AuthenticatedCommunicationsCampaignsCampaignIdRoute
+  '/_authenticated/communications/campaigns/new': typeof AuthenticatedCommunicationsCampaignsNewRoute
+  '/_authenticated/communications/settings/preferences': typeof AuthenticatedCommunicationsSettingsPreferencesRoute
   '/_authenticated/customers/$customerId_/edit': typeof AuthenticatedCustomersCustomerIdEditRoute
+  '/_authenticated/jobs/assignments/$assignmentId': typeof AuthenticatedJobsAssignmentsAssignmentIdRoute
   '/_authenticated/products/$productId/edit': typeof AuthenticatedProductsProductIdEditRoute
+  '/_authenticated/support/claims/$claimId': typeof AuthenticatedSupportClaimsClaimIdRoute
+  '/_authenticated/support/issues/$issueId': typeof AuthenticatedSupportIssuesIssueIdRoute
+  '/_authenticated/support/issues/new': typeof AuthenticatedSupportIssuesNewRoute
+  '/_authenticated/support/rmas/$rmaId': typeof AuthenticatedSupportRmasRmaIdRoute
+  '/_authenticated/support/warranties/$warrantyId': typeof AuthenticatedSupportWarrantiesWarrantyIdRoute
   '/_authenticated/admin/activities/': typeof AuthenticatedAdminActivitiesIndexRoute
+  '/_authenticated/admin/audit/': typeof AuthenticatedAdminAuditIndexRoute
+  '/_authenticated/admin/groups/': typeof AuthenticatedAdminGroupsIndexRoute
+  '/_authenticated/admin/invitations/': typeof AuthenticatedAdminInvitationsIndexRoute
+  '/_authenticated/admin/users/': typeof AuthenticatedAdminUsersIndexRoute
+  '/_authenticated/communications/calls/': typeof AuthenticatedCommunicationsCallsIndexRoute
+  '/_authenticated/communications/campaigns/': typeof AuthenticatedCommunicationsCampaignsIndexRoute
+  '/_authenticated/communications/emails/': typeof AuthenticatedCommunicationsEmailsIndexRoute
+  '/_authenticated/communications/signatures/': typeof AuthenticatedCommunicationsSignaturesIndexRoute
   '/_authenticated/customers/segments/': typeof AuthenticatedCustomersSegmentsIndexRoute
   '/_authenticated/reports/customers/': typeof AuthenticatedReportsCustomersIndexRoute
+  '/_authenticated/reports/procurement/': typeof AuthenticatedReportsProcurementIndexRoute
+  '/_authenticated/support/claims/': typeof AuthenticatedSupportClaimsIndexRoute
+  '/_authenticated/support/issues/': typeof AuthenticatedSupportIssuesIndexRoute
+  '/_authenticated/support/rmas/': typeof AuthenticatedSupportRmasIndexRoute
+  '/_authenticated/support/warranties/': typeof AuthenticatedSupportWarrantiesIndexRoute
+  '/_authenticated/communications/emails/templates/': typeof AuthenticatedCommunicationsEmailsTemplatesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/accept-invitation'
+    | '/forgot-password'
     | '/login'
     | '/logout'
+    | '/reset-password'
+    | '/sign-up'
+    | '/sign-up-success'
+    | '/update-password'
     | '/dashboard'
     | '/profile'
     | '/settings'
+    | '/protected'
+    | '/auth/confirm'
+    | '/auth/error'
+    | '/feedback/$token'
+    | '/portal/confirm'
+    | '/portal/'
     | '/customers/$customerId'
     | '/customers/communications'
     | '/customers/duplicates'
     | '/customers/new'
+    | '/financial/ar-aging'
+    | '/financial/credit-notes'
+    | '/financial/payment-plans'
+    | '/financial/reminders'
+    | '/financial/revenue'
+    | '/financial/statements'
+    | '/financial/xero-sync'
+    | '/integrations/oauth'
     | '/inventory/$itemId'
     | '/inventory/alerts'
     | '/inventory/analytics'
@@ -459,6 +1241,9 @@ export interface FileRouteTypes {
     | '/inventory/forecasting'
     | '/inventory/locations'
     | '/inventory/receiving'
+    | '/jobs/calendar'
+    | '/jobs/kanban'
+    | '/jobs/timeline'
     | '/mobile/counting'
     | '/mobile/picking'
     | '/mobile/receiving'
@@ -466,35 +1251,108 @@ export interface FileRouteTypes {
     | '/orders/create'
     | '/orders/fulfillment'
     | '/pipeline/$opportunityId'
+    | '/procurement/dashboard'
     | '/products/$productId'
     | '/products/new'
+    | '/purchase-orders/$poId'
+    | '/purchase-orders/create'
+    | '/reports/expiring-warranties'
+    | '/reports/job-costing'
     | '/reports/pipeline-forecast'
+    | '/reports/warranties'
+    | '/reports/win-loss'
     | '/settings/api-tokens'
     | '/settings/categories'
+    | '/settings/delegations'
+    | '/settings/issue-templates'
+    | '/settings/job-templates'
+    | '/settings/knowledge-base'
+    | '/settings/preferences'
+    | '/settings/scheduled-reports'
+    | '/settings/security'
+    | '/settings/targets'
+    | '/settings/warranty-import'
+    | '/settings/warranty-policies'
+    | '/settings/win-loss-reasons'
+    | '/support/dashboard'
+    | '/support/issues-board'
+    | '/support/knowledge-base'
     | '/activities/'
+    | '/approvals/'
+    | '/communications/'
     | '/customers/'
+    | '/dashboard/'
+    | '/financial/'
     | '/inventory/'
     | '/mobile/'
     | '/orders/'
     | '/pipeline/'
     | '/products/'
+    | '/purchase-orders/'
+    | '/suppliers/'
+    | '/admin/groups/$groupId'
+    | '/admin/users/$userId'
+    | '/admin/users/import'
+    | '/admin/users/invite'
+    | '/communications/campaigns/$campaignId'
+    | '/communications/campaigns/new'
+    | '/communications/settings/preferences'
     | '/customers/$customerId/edit'
+    | '/jobs/assignments/$assignmentId'
     | '/products/$productId/edit'
+    | '/support/claims/$claimId'
+    | '/support/issues/$issueId'
+    | '/support/issues/new'
+    | '/support/rmas/$rmaId'
+    | '/support/warranties/$warrantyId'
     | '/admin/activities/'
+    | '/admin/audit/'
+    | '/admin/groups/'
+    | '/admin/invitations/'
+    | '/admin/users/'
+    | '/communications/calls/'
+    | '/communications/campaigns/'
+    | '/communications/emails/'
+    | '/communications/signatures/'
     | '/customers/segments/'
     | '/reports/customers/'
+    | '/reports/procurement/'
+    | '/support/claims/'
+    | '/support/issues/'
+    | '/support/rmas/'
+    | '/support/warranties/'
+    | '/communications/emails/templates/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/accept-invitation'
+    | '/forgot-password'
     | '/login'
     | '/logout'
-    | '/dashboard'
+    | '/reset-password'
+    | '/sign-up'
+    | '/sign-up-success'
+    | '/update-password'
     | '/profile'
     | '/settings'
+    | '/protected'
+    | '/auth/confirm'
+    | '/auth/error'
+    | '/feedback/$token'
+    | '/portal/confirm'
+    | '/portal'
     | '/customers/$customerId'
     | '/customers/communications'
     | '/customers/duplicates'
     | '/customers/new'
+    | '/financial/ar-aging'
+    | '/financial/credit-notes'
+    | '/financial/payment-plans'
+    | '/financial/reminders'
+    | '/financial/revenue'
+    | '/financial/statements'
+    | '/financial/xero-sync'
+    | '/integrations/oauth'
     | '/inventory/$itemId'
     | '/inventory/alerts'
     | '/inventory/analytics'
@@ -503,6 +1361,9 @@ export interface FileRouteTypes {
     | '/inventory/forecasting'
     | '/inventory/locations'
     | '/inventory/receiving'
+    | '/jobs/calendar'
+    | '/jobs/kanban'
+    | '/jobs/timeline'
     | '/mobile/counting'
     | '/mobile/picking'
     | '/mobile/receiving'
@@ -510,36 +1371,111 @@ export interface FileRouteTypes {
     | '/orders/create'
     | '/orders/fulfillment'
     | '/pipeline/$opportunityId'
+    | '/procurement/dashboard'
     | '/products/$productId'
     | '/products/new'
+    | '/purchase-orders/$poId'
+    | '/purchase-orders/create'
+    | '/reports/expiring-warranties'
+    | '/reports/job-costing'
     | '/reports/pipeline-forecast'
+    | '/reports/warranties'
+    | '/reports/win-loss'
     | '/settings/api-tokens'
     | '/settings/categories'
+    | '/settings/delegations'
+    | '/settings/issue-templates'
+    | '/settings/job-templates'
+    | '/settings/knowledge-base'
+    | '/settings/preferences'
+    | '/settings/scheduled-reports'
+    | '/settings/security'
+    | '/settings/targets'
+    | '/settings/warranty-import'
+    | '/settings/warranty-policies'
+    | '/settings/win-loss-reasons'
+    | '/support/dashboard'
+    | '/support/issues-board'
+    | '/support/knowledge-base'
     | '/activities'
+    | '/approvals'
+    | '/communications'
     | '/customers'
+    | '/dashboard'
+    | '/financial'
     | '/inventory'
     | '/mobile'
     | '/orders'
     | '/pipeline'
     | '/products'
+    | '/purchase-orders'
+    | '/suppliers'
+    | '/admin/groups/$groupId'
+    | '/admin/users/$userId'
+    | '/admin/users/import'
+    | '/admin/users/invite'
+    | '/communications/campaigns/$campaignId'
+    | '/communications/campaigns/new'
+    | '/communications/settings/preferences'
     | '/customers/$customerId/edit'
+    | '/jobs/assignments/$assignmentId'
     | '/products/$productId/edit'
+    | '/support/claims/$claimId'
+    | '/support/issues/$issueId'
+    | '/support/issues/new'
+    | '/support/rmas/$rmaId'
+    | '/support/warranties/$warrantyId'
     | '/admin/activities'
+    | '/admin/audit'
+    | '/admin/groups'
+    | '/admin/invitations'
+    | '/admin/users'
+    | '/communications/calls'
+    | '/communications/campaigns'
+    | '/communications/emails'
+    | '/communications/signatures'
     | '/customers/segments'
     | '/reports/customers'
+    | '/reports/procurement'
+    | '/support/claims'
+    | '/support/issues'
+    | '/support/rmas'
+    | '/support/warranties'
+    | '/communications/emails/templates'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/_protected'
+    | '/accept-invitation'
+    | '/forgot-password'
     | '/login'
     | '/logout'
+    | '/reset-password'
+    | '/sign-up'
+    | '/sign-up-success'
+    | '/update-password'
     | '/_authenticated/dashboard'
     | '/_authenticated/profile'
     | '/_authenticated/settings'
+    | '/_protected/protected'
+    | '/auth/confirm'
+    | '/auth/error'
+    | '/feedback/$token'
+    | '/portal/confirm'
+    | '/portal/'
     | '/_authenticated/customers/$customerId'
     | '/_authenticated/customers/communications'
     | '/_authenticated/customers/duplicates'
     | '/_authenticated/customers/new'
+    | '/_authenticated/financial/ar-aging'
+    | '/_authenticated/financial/credit-notes'
+    | '/_authenticated/financial/payment-plans'
+    | '/_authenticated/financial/reminders'
+    | '/_authenticated/financial/revenue'
+    | '/_authenticated/financial/statements'
+    | '/_authenticated/financial/xero-sync'
+    | '/_authenticated/integrations/oauth'
     | '/_authenticated/inventory/$itemId'
     | '/_authenticated/inventory/alerts'
     | '/_authenticated/inventory/analytics'
@@ -548,6 +1484,9 @@ export interface FileRouteTypes {
     | '/_authenticated/inventory/forecasting'
     | '/_authenticated/inventory/locations'
     | '/_authenticated/inventory/receiving'
+    | '/_authenticated/jobs/calendar'
+    | '/_authenticated/jobs/kanban'
+    | '/_authenticated/jobs/timeline'
     | '/_authenticated/mobile/counting'
     | '/_authenticated/mobile/picking'
     | '/_authenticated/mobile/receiving'
@@ -555,34 +1494,128 @@ export interface FileRouteTypes {
     | '/_authenticated/orders/create'
     | '/_authenticated/orders/fulfillment'
     | '/_authenticated/pipeline/$opportunityId'
+    | '/_authenticated/procurement/dashboard'
     | '/_authenticated/products/$productId'
     | '/_authenticated/products/new'
+    | '/_authenticated/purchase-orders/$poId'
+    | '/_authenticated/purchase-orders/create'
+    | '/_authenticated/reports/expiring-warranties'
+    | '/_authenticated/reports/job-costing'
     | '/_authenticated/reports/pipeline-forecast'
+    | '/_authenticated/reports/warranties'
+    | '/_authenticated/reports/win-loss'
     | '/_authenticated/settings/api-tokens'
     | '/_authenticated/settings/categories'
+    | '/_authenticated/settings/delegations'
+    | '/_authenticated/settings/issue-templates'
+    | '/_authenticated/settings/job-templates'
+    | '/_authenticated/settings/knowledge-base'
+    | '/_authenticated/settings/preferences'
+    | '/_authenticated/settings/scheduled-reports'
+    | '/_authenticated/settings/security'
+    | '/_authenticated/settings/targets'
+    | '/_authenticated/settings/warranty-import'
+    | '/_authenticated/settings/warranty-policies'
+    | '/_authenticated/settings/win-loss-reasons'
+    | '/_authenticated/support/dashboard'
+    | '/_authenticated/support/issues-board'
+    | '/_authenticated/support/knowledge-base'
     | '/_authenticated/activities/'
+    | '/_authenticated/approvals/'
+    | '/_authenticated/communications/'
     | '/_authenticated/customers/'
+    | '/_authenticated/dashboard/'
+    | '/_authenticated/financial/'
     | '/_authenticated/inventory/'
     | '/_authenticated/mobile/'
     | '/_authenticated/orders/'
     | '/_authenticated/pipeline/'
     | '/_authenticated/products/'
+    | '/_authenticated/purchase-orders/'
+    | '/_authenticated/suppliers/'
+    | '/_authenticated/admin/groups/$groupId'
+    | '/_authenticated/admin/users/$userId'
+    | '/_authenticated/admin/users/import'
+    | '/_authenticated/admin/users/invite'
+    | '/_authenticated/communications/campaigns/$campaignId'
+    | '/_authenticated/communications/campaigns/new'
+    | '/_authenticated/communications/settings/preferences'
     | '/_authenticated/customers/$customerId_/edit'
+    | '/_authenticated/jobs/assignments/$assignmentId'
     | '/_authenticated/products/$productId/edit'
+    | '/_authenticated/support/claims/$claimId'
+    | '/_authenticated/support/issues/$issueId'
+    | '/_authenticated/support/issues/new'
+    | '/_authenticated/support/rmas/$rmaId'
+    | '/_authenticated/support/warranties/$warrantyId'
     | '/_authenticated/admin/activities/'
+    | '/_authenticated/admin/audit/'
+    | '/_authenticated/admin/groups/'
+    | '/_authenticated/admin/invitations/'
+    | '/_authenticated/admin/users/'
+    | '/_authenticated/communications/calls/'
+    | '/_authenticated/communications/campaigns/'
+    | '/_authenticated/communications/emails/'
+    | '/_authenticated/communications/signatures/'
     | '/_authenticated/customers/segments/'
     | '/_authenticated/reports/customers/'
+    | '/_authenticated/reports/procurement/'
+    | '/_authenticated/support/claims/'
+    | '/_authenticated/support/issues/'
+    | '/_authenticated/support/rmas/'
+    | '/_authenticated/support/warranties/'
+    | '/_authenticated/communications/emails/templates/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  ProtectedRoute: typeof ProtectedRouteWithChildren
+  AcceptInvitationRoute: typeof AcceptInvitationRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   LogoutRoute: typeof LogoutRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
+  SignUpRoute: typeof SignUpRoute
+  SignUpSuccessRoute: typeof SignUpSuccessRoute
+  UpdatePasswordRoute: typeof UpdatePasswordRoute
+  AuthConfirmRoute: typeof AuthConfirmRoute
+  AuthErrorRoute: typeof AuthErrorRoute
+  FeedbackTokenRoute: typeof FeedbackTokenRoute
+  PortalConfirmRoute: typeof PortalConfirmRoute
+  PortalIndexRoute: typeof PortalIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/update-password': {
+      id: '/update-password'
+      path: '/update-password'
+      fullPath: '/update-password'
+      preLoaderRoute: typeof UpdatePasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-up-success': {
+      id: '/sign-up-success'
+      path: '/sign-up-success'
+      fullPath: '/sign-up-success'
+      preLoaderRoute: typeof SignUpSuccessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-up': {
+      id: '/sign-up'
+      path: '/sign-up'
+      fullPath: '/sign-up'
+      preLoaderRoute: typeof SignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/logout': {
       id: '/logout'
       path: '/logout'
@@ -595,6 +1628,27 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/accept-invitation': {
+      id: '/accept-invitation'
+      path: '/accept-invitation'
+      fullPath: '/accept-invitation'
+      preLoaderRoute: typeof AcceptInvitationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_protected': {
+      id: '/_protected'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof ProtectedRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -610,6 +1664,48 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/portal/': {
+      id: '/portal/'
+      path: '/portal'
+      fullPath: '/portal/'
+      preLoaderRoute: typeof PortalIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/portal/confirm': {
+      id: '/portal/confirm'
+      path: '/portal/confirm'
+      fullPath: '/portal/confirm'
+      preLoaderRoute: typeof PortalConfirmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/feedback/$token': {
+      id: '/feedback/$token'
+      path: '/feedback/$token'
+      fullPath: '/feedback/$token'
+      preLoaderRoute: typeof FeedbackTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/error': {
+      id: '/auth/error'
+      path: '/auth/error'
+      fullPath: '/auth/error'
+      preLoaderRoute: typeof AuthErrorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/confirm': {
+      id: '/auth/confirm'
+      path: '/auth/confirm'
+      fullPath: '/auth/confirm'
+      preLoaderRoute: typeof AuthConfirmRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_protected/protected': {
+      id: '/_protected/protected'
+      path: '/protected'
+      fullPath: '/protected'
+      preLoaderRoute: typeof ProtectedProtectedRouteImport
+      parentRoute: typeof ProtectedRoute
     }
     '/_authenticated/settings': {
       id: '/_authenticated/settings'
@@ -630,6 +1726,20 @@ declare module '@tanstack/react-router' {
       path: '/dashboard'
       fullPath: '/dashboard'
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/suppliers/': {
+      id: '/_authenticated/suppliers/'
+      path: '/suppliers'
+      fullPath: '/suppliers/'
+      preLoaderRoute: typeof AuthenticatedSuppliersIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/purchase-orders/': {
+      id: '/_authenticated/purchase-orders/'
+      path: '/purchase-orders'
+      fullPath: '/purchase-orders/'
+      preLoaderRoute: typeof AuthenticatedPurchaseOrdersIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/products/': {
@@ -667,11 +1777,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedInventoryIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/financial/': {
+      id: '/_authenticated/financial/'
+      path: '/financial'
+      fullPath: '/financial/'
+      preLoaderRoute: typeof AuthenticatedFinancialIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/dashboard/': {
+      id: '/_authenticated/dashboard/'
+      path: '/'
+      fullPath: '/dashboard/'
+      preLoaderRoute: typeof AuthenticatedDashboardIndexRouteImport
+      parentRoute: typeof AuthenticatedDashboardRoute
+    }
     '/_authenticated/customers/': {
       id: '/_authenticated/customers/'
       path: '/customers'
       fullPath: '/customers/'
       preLoaderRoute: typeof AuthenticatedCustomersIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/communications/': {
+      id: '/_authenticated/communications/'
+      path: '/communications'
+      fullPath: '/communications/'
+      preLoaderRoute: typeof AuthenticatedCommunicationsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/approvals/': {
+      id: '/_authenticated/approvals/'
+      path: '/approvals'
+      fullPath: '/approvals/'
+      preLoaderRoute: typeof AuthenticatedApprovalsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/activities/': {
@@ -680,6 +1818,104 @@ declare module '@tanstack/react-router' {
       fullPath: '/activities/'
       preLoaderRoute: typeof AuthenticatedActivitiesIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/support/knowledge-base': {
+      id: '/_authenticated/support/knowledge-base'
+      path: '/support/knowledge-base'
+      fullPath: '/support/knowledge-base'
+      preLoaderRoute: typeof AuthenticatedSupportKnowledgeBaseRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/support/issues-board': {
+      id: '/_authenticated/support/issues-board'
+      path: '/support/issues-board'
+      fullPath: '/support/issues-board'
+      preLoaderRoute: typeof AuthenticatedSupportIssuesBoardRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/support/dashboard': {
+      id: '/_authenticated/support/dashboard'
+      path: '/support/dashboard'
+      fullPath: '/support/dashboard'
+      preLoaderRoute: typeof AuthenticatedSupportDashboardRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/settings/win-loss-reasons': {
+      id: '/_authenticated/settings/win-loss-reasons'
+      path: '/win-loss-reasons'
+      fullPath: '/settings/win-loss-reasons'
+      preLoaderRoute: typeof AuthenticatedSettingsWinLossReasonsRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/warranty-policies': {
+      id: '/_authenticated/settings/warranty-policies'
+      path: '/warranty-policies'
+      fullPath: '/settings/warranty-policies'
+      preLoaderRoute: typeof AuthenticatedSettingsWarrantyPoliciesRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/warranty-import': {
+      id: '/_authenticated/settings/warranty-import'
+      path: '/warranty-import'
+      fullPath: '/settings/warranty-import'
+      preLoaderRoute: typeof AuthenticatedSettingsWarrantyImportRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/targets': {
+      id: '/_authenticated/settings/targets'
+      path: '/targets'
+      fullPath: '/settings/targets'
+      preLoaderRoute: typeof AuthenticatedSettingsTargetsRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/security': {
+      id: '/_authenticated/settings/security'
+      path: '/security'
+      fullPath: '/settings/security'
+      preLoaderRoute: typeof AuthenticatedSettingsSecurityRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/scheduled-reports': {
+      id: '/_authenticated/settings/scheduled-reports'
+      path: '/scheduled-reports'
+      fullPath: '/settings/scheduled-reports'
+      preLoaderRoute: typeof AuthenticatedSettingsScheduledReportsRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/preferences': {
+      id: '/_authenticated/settings/preferences'
+      path: '/preferences'
+      fullPath: '/settings/preferences'
+      preLoaderRoute: typeof AuthenticatedSettingsPreferencesRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/knowledge-base': {
+      id: '/_authenticated/settings/knowledge-base'
+      path: '/knowledge-base'
+      fullPath: '/settings/knowledge-base'
+      preLoaderRoute: typeof AuthenticatedSettingsKnowledgeBaseRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/job-templates': {
+      id: '/_authenticated/settings/job-templates'
+      path: '/job-templates'
+      fullPath: '/settings/job-templates'
+      preLoaderRoute: typeof AuthenticatedSettingsJobTemplatesRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/issue-templates': {
+      id: '/_authenticated/settings/issue-templates'
+      path: '/issue-templates'
+      fullPath: '/settings/issue-templates'
+      preLoaderRoute: typeof AuthenticatedSettingsIssueTemplatesRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/delegations': {
+      id: '/_authenticated/settings/delegations'
+      path: '/delegations'
+      fullPath: '/settings/delegations'
+      preLoaderRoute: typeof AuthenticatedSettingsDelegationsRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
     }
     '/_authenticated/settings/categories': {
       id: '/_authenticated/settings/categories'
@@ -695,11 +1931,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsApiTokensRouteImport
       parentRoute: typeof AuthenticatedSettingsRoute
     }
+    '/_authenticated/reports/win-loss': {
+      id: '/_authenticated/reports/win-loss'
+      path: '/reports/win-loss'
+      fullPath: '/reports/win-loss'
+      preLoaderRoute: typeof AuthenticatedReportsWinLossRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/reports/warranties': {
+      id: '/_authenticated/reports/warranties'
+      path: '/reports/warranties'
+      fullPath: '/reports/warranties'
+      preLoaderRoute: typeof AuthenticatedReportsWarrantiesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/reports/pipeline-forecast': {
       id: '/_authenticated/reports/pipeline-forecast'
       path: '/reports/pipeline-forecast'
       fullPath: '/reports/pipeline-forecast'
       preLoaderRoute: typeof AuthenticatedReportsPipelineForecastRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/reports/job-costing': {
+      id: '/_authenticated/reports/job-costing'
+      path: '/reports/job-costing'
+      fullPath: '/reports/job-costing'
+      preLoaderRoute: typeof AuthenticatedReportsJobCostingRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/reports/expiring-warranties': {
+      id: '/_authenticated/reports/expiring-warranties'
+      path: '/reports/expiring-warranties'
+      fullPath: '/reports/expiring-warranties'
+      preLoaderRoute: typeof AuthenticatedReportsExpiringWarrantiesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/purchase-orders/create': {
+      id: '/_authenticated/purchase-orders/create'
+      path: '/purchase-orders/create'
+      fullPath: '/purchase-orders/create'
+      preLoaderRoute: typeof AuthenticatedPurchaseOrdersCreateRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/purchase-orders/$poId': {
+      id: '/_authenticated/purchase-orders/$poId'
+      path: '/purchase-orders/$poId'
+      fullPath: '/purchase-orders/$poId'
+      preLoaderRoute: typeof AuthenticatedPurchaseOrdersPoIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/products/new': {
@@ -714,6 +1992,13 @@ declare module '@tanstack/react-router' {
       path: '/products/$productId'
       fullPath: '/products/$productId'
       preLoaderRoute: typeof AuthenticatedProductsProductIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/procurement/dashboard': {
+      id: '/_authenticated/procurement/dashboard'
+      path: '/procurement/dashboard'
+      fullPath: '/procurement/dashboard'
+      preLoaderRoute: typeof AuthenticatedProcurementDashboardRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/pipeline/$opportunityId': {
@@ -763,6 +2048,27 @@ declare module '@tanstack/react-router' {
       path: '/mobile/counting'
       fullPath: '/mobile/counting'
       preLoaderRoute: typeof AuthenticatedMobileCountingRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/jobs/timeline': {
+      id: '/_authenticated/jobs/timeline'
+      path: '/jobs/timeline'
+      fullPath: '/jobs/timeline'
+      preLoaderRoute: typeof AuthenticatedJobsTimelineRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/jobs/kanban': {
+      id: '/_authenticated/jobs/kanban'
+      path: '/jobs/kanban'
+      fullPath: '/jobs/kanban'
+      preLoaderRoute: typeof AuthenticatedJobsKanbanRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/jobs/calendar': {
+      id: '/_authenticated/jobs/calendar'
+      path: '/jobs/calendar'
+      fullPath: '/jobs/calendar'
+      preLoaderRoute: typeof AuthenticatedJobsCalendarRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/inventory/receiving': {
@@ -821,6 +2127,62 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedInventoryItemIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/integrations/oauth': {
+      id: '/_authenticated/integrations/oauth'
+      path: '/integrations/oauth'
+      fullPath: '/integrations/oauth'
+      preLoaderRoute: typeof AuthenticatedIntegrationsOauthRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/financial/xero-sync': {
+      id: '/_authenticated/financial/xero-sync'
+      path: '/financial/xero-sync'
+      fullPath: '/financial/xero-sync'
+      preLoaderRoute: typeof AuthenticatedFinancialXeroSyncRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/financial/statements': {
+      id: '/_authenticated/financial/statements'
+      path: '/financial/statements'
+      fullPath: '/financial/statements'
+      preLoaderRoute: typeof AuthenticatedFinancialStatementsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/financial/revenue': {
+      id: '/_authenticated/financial/revenue'
+      path: '/financial/revenue'
+      fullPath: '/financial/revenue'
+      preLoaderRoute: typeof AuthenticatedFinancialRevenueRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/financial/reminders': {
+      id: '/_authenticated/financial/reminders'
+      path: '/financial/reminders'
+      fullPath: '/financial/reminders'
+      preLoaderRoute: typeof AuthenticatedFinancialRemindersRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/financial/payment-plans': {
+      id: '/_authenticated/financial/payment-plans'
+      path: '/financial/payment-plans'
+      fullPath: '/financial/payment-plans'
+      preLoaderRoute: typeof AuthenticatedFinancialPaymentPlansRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/financial/credit-notes': {
+      id: '/_authenticated/financial/credit-notes'
+      path: '/financial/credit-notes'
+      fullPath: '/financial/credit-notes'
+      preLoaderRoute: typeof AuthenticatedFinancialCreditNotesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/financial/ar-aging': {
+      id: '/_authenticated/financial/ar-aging'
+      path: '/financial/ar-aging'
+      fullPath: '/financial/ar-aging'
+      preLoaderRoute: typeof AuthenticatedFinancialArAgingRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/customers/new': {
       id: '/_authenticated/customers/new'
       path: '/customers/new'
@@ -849,6 +2211,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCustomersCustomerIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/support/warranties/': {
+      id: '/_authenticated/support/warranties/'
+      path: '/support/warranties'
+      fullPath: '/support/warranties/'
+      preLoaderRoute: typeof AuthenticatedSupportWarrantiesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/support/rmas/': {
+      id: '/_authenticated/support/rmas/'
+      path: '/support/rmas'
+      fullPath: '/support/rmas/'
+      preLoaderRoute: typeof AuthenticatedSupportRmasIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/support/issues/': {
+      id: '/_authenticated/support/issues/'
+      path: '/support/issues'
+      fullPath: '/support/issues/'
+      preLoaderRoute: typeof AuthenticatedSupportIssuesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/support/claims/': {
+      id: '/_authenticated/support/claims/'
+      path: '/support/claims'
+      fullPath: '/support/claims/'
+      preLoaderRoute: typeof AuthenticatedSupportClaimsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/reports/procurement/': {
+      id: '/_authenticated/reports/procurement/'
+      path: '/reports/procurement'
+      fullPath: '/reports/procurement/'
+      preLoaderRoute: typeof AuthenticatedReportsProcurementIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/reports/customers/': {
       id: '/_authenticated/reports/customers/'
       path: '/reports/customers'
@@ -863,11 +2260,102 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCustomersSegmentsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/communications/signatures/': {
+      id: '/_authenticated/communications/signatures/'
+      path: '/communications/signatures'
+      fullPath: '/communications/signatures/'
+      preLoaderRoute: typeof AuthenticatedCommunicationsSignaturesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/communications/emails/': {
+      id: '/_authenticated/communications/emails/'
+      path: '/communications/emails'
+      fullPath: '/communications/emails/'
+      preLoaderRoute: typeof AuthenticatedCommunicationsEmailsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/communications/campaigns/': {
+      id: '/_authenticated/communications/campaigns/'
+      path: '/communications/campaigns'
+      fullPath: '/communications/campaigns/'
+      preLoaderRoute: typeof AuthenticatedCommunicationsCampaignsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/communications/calls/': {
+      id: '/_authenticated/communications/calls/'
+      path: '/communications/calls'
+      fullPath: '/communications/calls/'
+      preLoaderRoute: typeof AuthenticatedCommunicationsCallsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/admin/users/': {
+      id: '/_authenticated/admin/users/'
+      path: '/admin/users'
+      fullPath: '/admin/users/'
+      preLoaderRoute: typeof AuthenticatedAdminUsersIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/admin/invitations/': {
+      id: '/_authenticated/admin/invitations/'
+      path: '/admin/invitations'
+      fullPath: '/admin/invitations/'
+      preLoaderRoute: typeof AuthenticatedAdminInvitationsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/admin/groups/': {
+      id: '/_authenticated/admin/groups/'
+      path: '/admin/groups'
+      fullPath: '/admin/groups/'
+      preLoaderRoute: typeof AuthenticatedAdminGroupsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/admin/audit/': {
+      id: '/_authenticated/admin/audit/'
+      path: '/admin/audit'
+      fullPath: '/admin/audit/'
+      preLoaderRoute: typeof AuthenticatedAdminAuditIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/admin/activities/': {
       id: '/_authenticated/admin/activities/'
       path: '/admin/activities'
       fullPath: '/admin/activities/'
       preLoaderRoute: typeof AuthenticatedAdminActivitiesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/support/warranties/$warrantyId': {
+      id: '/_authenticated/support/warranties/$warrantyId'
+      path: '/support/warranties/$warrantyId'
+      fullPath: '/support/warranties/$warrantyId'
+      preLoaderRoute: typeof AuthenticatedSupportWarrantiesWarrantyIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/support/rmas/$rmaId': {
+      id: '/_authenticated/support/rmas/$rmaId'
+      path: '/support/rmas/$rmaId'
+      fullPath: '/support/rmas/$rmaId'
+      preLoaderRoute: typeof AuthenticatedSupportRmasRmaIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/support/issues/new': {
+      id: '/_authenticated/support/issues/new'
+      path: '/support/issues/new'
+      fullPath: '/support/issues/new'
+      preLoaderRoute: typeof AuthenticatedSupportIssuesNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/support/issues/$issueId': {
+      id: '/_authenticated/support/issues/$issueId'
+      path: '/support/issues/$issueId'
+      fullPath: '/support/issues/$issueId'
+      preLoaderRoute: typeof AuthenticatedSupportIssuesIssueIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/support/claims/$claimId': {
+      id: '/_authenticated/support/claims/$claimId'
+      path: '/support/claims/$claimId'
+      fullPath: '/support/claims/$claimId'
+      preLoaderRoute: typeof AuthenticatedSupportClaimsClaimIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/products/$productId/edit': {
@@ -877,6 +2365,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProductsProductIdEditRouteImport
       parentRoute: typeof AuthenticatedProductsProductIdRoute
     }
+    '/_authenticated/jobs/assignments/$assignmentId': {
+      id: '/_authenticated/jobs/assignments/$assignmentId'
+      path: '/jobs/assignments/$assignmentId'
+      fullPath: '/jobs/assignments/$assignmentId'
+      preLoaderRoute: typeof AuthenticatedJobsAssignmentsAssignmentIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/customers/$customerId_/edit': {
       id: '/_authenticated/customers/$customerId_/edit'
       path: '/customers/$customerId/edit'
@@ -884,17 +2379,116 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedCustomersCustomerIdEditRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/communications/settings/preferences': {
+      id: '/_authenticated/communications/settings/preferences'
+      path: '/communications/settings/preferences'
+      fullPath: '/communications/settings/preferences'
+      preLoaderRoute: typeof AuthenticatedCommunicationsSettingsPreferencesRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/communications/campaigns/new': {
+      id: '/_authenticated/communications/campaigns/new'
+      path: '/communications/campaigns/new'
+      fullPath: '/communications/campaigns/new'
+      preLoaderRoute: typeof AuthenticatedCommunicationsCampaignsNewRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/communications/campaigns/$campaignId': {
+      id: '/_authenticated/communications/campaigns/$campaignId'
+      path: '/communications/campaigns/$campaignId'
+      fullPath: '/communications/campaigns/$campaignId'
+      preLoaderRoute: typeof AuthenticatedCommunicationsCampaignsCampaignIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/admin/users/invite': {
+      id: '/_authenticated/admin/users/invite'
+      path: '/admin/users/invite'
+      fullPath: '/admin/users/invite'
+      preLoaderRoute: typeof AuthenticatedAdminUsersInviteRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/admin/users/import': {
+      id: '/_authenticated/admin/users/import'
+      path: '/admin/users/import'
+      fullPath: '/admin/users/import'
+      preLoaderRoute: typeof AuthenticatedAdminUsersImportRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/admin/users/$userId': {
+      id: '/_authenticated/admin/users/$userId'
+      path: '/admin/users/$userId'
+      fullPath: '/admin/users/$userId'
+      preLoaderRoute: typeof AuthenticatedAdminUsersUserIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/admin/groups/$groupId': {
+      id: '/_authenticated/admin/groups/$groupId'
+      path: '/admin/groups/$groupId'
+      fullPath: '/admin/groups/$groupId'
+      preLoaderRoute: typeof AuthenticatedAdminGroupsGroupIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/communications/emails/templates/': {
+      id: '/_authenticated/communications/emails/templates/'
+      path: '/communications/emails/templates'
+      fullPath: '/communications/emails/templates/'
+      preLoaderRoute: typeof AuthenticatedCommunicationsEmailsTemplatesIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
+
+interface AuthenticatedDashboardRouteChildren {
+  AuthenticatedDashboardIndexRoute: typeof AuthenticatedDashboardIndexRoute
+}
+
+const AuthenticatedDashboardRouteChildren: AuthenticatedDashboardRouteChildren =
+  {
+    AuthenticatedDashboardIndexRoute: AuthenticatedDashboardIndexRoute,
+  }
+
+const AuthenticatedDashboardRouteWithChildren =
+  AuthenticatedDashboardRoute._addFileChildren(
+    AuthenticatedDashboardRouteChildren,
+  )
 
 interface AuthenticatedSettingsRouteChildren {
   AuthenticatedSettingsApiTokensRoute: typeof AuthenticatedSettingsApiTokensRoute
   AuthenticatedSettingsCategoriesRoute: typeof AuthenticatedSettingsCategoriesRoute
+  AuthenticatedSettingsDelegationsRoute: typeof AuthenticatedSettingsDelegationsRoute
+  AuthenticatedSettingsIssueTemplatesRoute: typeof AuthenticatedSettingsIssueTemplatesRoute
+  AuthenticatedSettingsJobTemplatesRoute: typeof AuthenticatedSettingsJobTemplatesRoute
+  AuthenticatedSettingsKnowledgeBaseRoute: typeof AuthenticatedSettingsKnowledgeBaseRoute
+  AuthenticatedSettingsPreferencesRoute: typeof AuthenticatedSettingsPreferencesRoute
+  AuthenticatedSettingsScheduledReportsRoute: typeof AuthenticatedSettingsScheduledReportsRoute
+  AuthenticatedSettingsSecurityRoute: typeof AuthenticatedSettingsSecurityRoute
+  AuthenticatedSettingsTargetsRoute: typeof AuthenticatedSettingsTargetsRoute
+  AuthenticatedSettingsWarrantyImportRoute: typeof AuthenticatedSettingsWarrantyImportRoute
+  AuthenticatedSettingsWarrantyPoliciesRoute: typeof AuthenticatedSettingsWarrantyPoliciesRoute
+  AuthenticatedSettingsWinLossReasonsRoute: typeof AuthenticatedSettingsWinLossReasonsRoute
 }
 
 const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
   AuthenticatedSettingsApiTokensRoute: AuthenticatedSettingsApiTokensRoute,
   AuthenticatedSettingsCategoriesRoute: AuthenticatedSettingsCategoriesRoute,
+  AuthenticatedSettingsDelegationsRoute: AuthenticatedSettingsDelegationsRoute,
+  AuthenticatedSettingsIssueTemplatesRoute:
+    AuthenticatedSettingsIssueTemplatesRoute,
+  AuthenticatedSettingsJobTemplatesRoute:
+    AuthenticatedSettingsJobTemplatesRoute,
+  AuthenticatedSettingsKnowledgeBaseRoute:
+    AuthenticatedSettingsKnowledgeBaseRoute,
+  AuthenticatedSettingsPreferencesRoute: AuthenticatedSettingsPreferencesRoute,
+  AuthenticatedSettingsScheduledReportsRoute:
+    AuthenticatedSettingsScheduledReportsRoute,
+  AuthenticatedSettingsSecurityRoute: AuthenticatedSettingsSecurityRoute,
+  AuthenticatedSettingsTargetsRoute: AuthenticatedSettingsTargetsRoute,
+  AuthenticatedSettingsWarrantyImportRoute:
+    AuthenticatedSettingsWarrantyImportRoute,
+  AuthenticatedSettingsWarrantyPoliciesRoute:
+    AuthenticatedSettingsWarrantyPoliciesRoute,
+  AuthenticatedSettingsWinLossReasonsRoute:
+    AuthenticatedSettingsWinLossReasonsRoute,
 }
 
 const AuthenticatedSettingsRouteWithChildren =
@@ -918,13 +2512,21 @@ const AuthenticatedProductsProductIdRouteWithChildren =
   )
 
 interface AuthenticatedRouteChildren {
-  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRouteWithChildren
   AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRouteWithChildren
   AuthenticatedCustomersCustomerIdRoute: typeof AuthenticatedCustomersCustomerIdRoute
   AuthenticatedCustomersCommunicationsRoute: typeof AuthenticatedCustomersCommunicationsRoute
   AuthenticatedCustomersDuplicatesRoute: typeof AuthenticatedCustomersDuplicatesRoute
   AuthenticatedCustomersNewRoute: typeof AuthenticatedCustomersNewRoute
+  AuthenticatedFinancialArAgingRoute: typeof AuthenticatedFinancialArAgingRoute
+  AuthenticatedFinancialCreditNotesRoute: typeof AuthenticatedFinancialCreditNotesRoute
+  AuthenticatedFinancialPaymentPlansRoute: typeof AuthenticatedFinancialPaymentPlansRoute
+  AuthenticatedFinancialRemindersRoute: typeof AuthenticatedFinancialRemindersRoute
+  AuthenticatedFinancialRevenueRoute: typeof AuthenticatedFinancialRevenueRoute
+  AuthenticatedFinancialStatementsRoute: typeof AuthenticatedFinancialStatementsRoute
+  AuthenticatedFinancialXeroSyncRoute: typeof AuthenticatedFinancialXeroSyncRoute
+  AuthenticatedIntegrationsOauthRoute: typeof AuthenticatedIntegrationsOauthRoute
   AuthenticatedInventoryItemIdRoute: typeof AuthenticatedInventoryItemIdRoute
   AuthenticatedInventoryAlertsRoute: typeof AuthenticatedInventoryAlertsRoute
   AuthenticatedInventoryAnalyticsRoute: typeof AuthenticatedInventoryAnalyticsRoute
@@ -933,6 +2535,9 @@ interface AuthenticatedRouteChildren {
   AuthenticatedInventoryForecastingRoute: typeof AuthenticatedInventoryForecastingRoute
   AuthenticatedInventoryLocationsRoute: typeof AuthenticatedInventoryLocationsRoute
   AuthenticatedInventoryReceivingRoute: typeof AuthenticatedInventoryReceivingRoute
+  AuthenticatedJobsCalendarRoute: typeof AuthenticatedJobsCalendarRoute
+  AuthenticatedJobsKanbanRoute: typeof AuthenticatedJobsKanbanRoute
+  AuthenticatedJobsTimelineRoute: typeof AuthenticatedJobsTimelineRoute
   AuthenticatedMobileCountingRoute: typeof AuthenticatedMobileCountingRoute
   AuthenticatedMobilePickingRoute: typeof AuthenticatedMobilePickingRoute
   AuthenticatedMobileReceivingRoute: typeof AuthenticatedMobileReceivingRoute
@@ -940,24 +2545,66 @@ interface AuthenticatedRouteChildren {
   AuthenticatedOrdersCreateRoute: typeof AuthenticatedOrdersCreateRoute
   AuthenticatedOrdersFulfillmentRoute: typeof AuthenticatedOrdersFulfillmentRoute
   AuthenticatedPipelineOpportunityIdRoute: typeof AuthenticatedPipelineOpportunityIdRoute
+  AuthenticatedProcurementDashboardRoute: typeof AuthenticatedProcurementDashboardRoute
   AuthenticatedProductsProductIdRoute: typeof AuthenticatedProductsProductIdRouteWithChildren
   AuthenticatedProductsNewRoute: typeof AuthenticatedProductsNewRoute
+  AuthenticatedPurchaseOrdersPoIdRoute: typeof AuthenticatedPurchaseOrdersPoIdRoute
+  AuthenticatedPurchaseOrdersCreateRoute: typeof AuthenticatedPurchaseOrdersCreateRoute
+  AuthenticatedReportsExpiringWarrantiesRoute: typeof AuthenticatedReportsExpiringWarrantiesRoute
+  AuthenticatedReportsJobCostingRoute: typeof AuthenticatedReportsJobCostingRoute
   AuthenticatedReportsPipelineForecastRoute: typeof AuthenticatedReportsPipelineForecastRoute
+  AuthenticatedReportsWarrantiesRoute: typeof AuthenticatedReportsWarrantiesRoute
+  AuthenticatedReportsWinLossRoute: typeof AuthenticatedReportsWinLossRoute
+  AuthenticatedSupportDashboardRoute: typeof AuthenticatedSupportDashboardRoute
+  AuthenticatedSupportIssuesBoardRoute: typeof AuthenticatedSupportIssuesBoardRoute
+  AuthenticatedSupportKnowledgeBaseRoute: typeof AuthenticatedSupportKnowledgeBaseRoute
   AuthenticatedActivitiesIndexRoute: typeof AuthenticatedActivitiesIndexRoute
+  AuthenticatedApprovalsIndexRoute: typeof AuthenticatedApprovalsIndexRoute
+  AuthenticatedCommunicationsIndexRoute: typeof AuthenticatedCommunicationsIndexRoute
   AuthenticatedCustomersIndexRoute: typeof AuthenticatedCustomersIndexRoute
+  AuthenticatedFinancialIndexRoute: typeof AuthenticatedFinancialIndexRoute
   AuthenticatedInventoryIndexRoute: typeof AuthenticatedInventoryIndexRoute
   AuthenticatedMobileIndexRoute: typeof AuthenticatedMobileIndexRoute
   AuthenticatedOrdersIndexRoute: typeof AuthenticatedOrdersIndexRoute
   AuthenticatedPipelineIndexRoute: typeof AuthenticatedPipelineIndexRoute
   AuthenticatedProductsIndexRoute: typeof AuthenticatedProductsIndexRoute
+  AuthenticatedPurchaseOrdersIndexRoute: typeof AuthenticatedPurchaseOrdersIndexRoute
+  AuthenticatedSuppliersIndexRoute: typeof AuthenticatedSuppliersIndexRoute
+  AuthenticatedAdminGroupsGroupIdRoute: typeof AuthenticatedAdminGroupsGroupIdRoute
+  AuthenticatedAdminUsersUserIdRoute: typeof AuthenticatedAdminUsersUserIdRoute
+  AuthenticatedAdminUsersImportRoute: typeof AuthenticatedAdminUsersImportRoute
+  AuthenticatedAdminUsersInviteRoute: typeof AuthenticatedAdminUsersInviteRoute
+  AuthenticatedCommunicationsCampaignsCampaignIdRoute: typeof AuthenticatedCommunicationsCampaignsCampaignIdRoute
+  AuthenticatedCommunicationsCampaignsNewRoute: typeof AuthenticatedCommunicationsCampaignsNewRoute
+  AuthenticatedCommunicationsSettingsPreferencesRoute: typeof AuthenticatedCommunicationsSettingsPreferencesRoute
   AuthenticatedCustomersCustomerIdEditRoute: typeof AuthenticatedCustomersCustomerIdEditRoute
+  AuthenticatedJobsAssignmentsAssignmentIdRoute: typeof AuthenticatedJobsAssignmentsAssignmentIdRoute
+  AuthenticatedSupportClaimsClaimIdRoute: typeof AuthenticatedSupportClaimsClaimIdRoute
+  AuthenticatedSupportIssuesIssueIdRoute: typeof AuthenticatedSupportIssuesIssueIdRoute
+  AuthenticatedSupportIssuesNewRoute: typeof AuthenticatedSupportIssuesNewRoute
+  AuthenticatedSupportRmasRmaIdRoute: typeof AuthenticatedSupportRmasRmaIdRoute
+  AuthenticatedSupportWarrantiesWarrantyIdRoute: typeof AuthenticatedSupportWarrantiesWarrantyIdRoute
   AuthenticatedAdminActivitiesIndexRoute: typeof AuthenticatedAdminActivitiesIndexRoute
+  AuthenticatedAdminAuditIndexRoute: typeof AuthenticatedAdminAuditIndexRoute
+  AuthenticatedAdminGroupsIndexRoute: typeof AuthenticatedAdminGroupsIndexRoute
+  AuthenticatedAdminInvitationsIndexRoute: typeof AuthenticatedAdminInvitationsIndexRoute
+  AuthenticatedAdminUsersIndexRoute: typeof AuthenticatedAdminUsersIndexRoute
+  AuthenticatedCommunicationsCallsIndexRoute: typeof AuthenticatedCommunicationsCallsIndexRoute
+  AuthenticatedCommunicationsCampaignsIndexRoute: typeof AuthenticatedCommunicationsCampaignsIndexRoute
+  AuthenticatedCommunicationsEmailsIndexRoute: typeof AuthenticatedCommunicationsEmailsIndexRoute
+  AuthenticatedCommunicationsSignaturesIndexRoute: typeof AuthenticatedCommunicationsSignaturesIndexRoute
   AuthenticatedCustomersSegmentsIndexRoute: typeof AuthenticatedCustomersSegmentsIndexRoute
   AuthenticatedReportsCustomersIndexRoute: typeof AuthenticatedReportsCustomersIndexRoute
+  AuthenticatedReportsProcurementIndexRoute: typeof AuthenticatedReportsProcurementIndexRoute
+  AuthenticatedSupportClaimsIndexRoute: typeof AuthenticatedSupportClaimsIndexRoute
+  AuthenticatedSupportIssuesIndexRoute: typeof AuthenticatedSupportIssuesIndexRoute
+  AuthenticatedSupportRmasIndexRoute: typeof AuthenticatedSupportRmasIndexRoute
+  AuthenticatedSupportWarrantiesIndexRoute: typeof AuthenticatedSupportWarrantiesIndexRoute
+  AuthenticatedCommunicationsEmailsTemplatesIndexRoute: typeof AuthenticatedCommunicationsEmailsTemplatesIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
-  AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedDashboardRoute: AuthenticatedDashboardRouteWithChildren,
   AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRouteWithChildren,
   AuthenticatedCustomersCustomerIdRoute: AuthenticatedCustomersCustomerIdRoute,
@@ -965,6 +2612,16 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedCustomersCommunicationsRoute,
   AuthenticatedCustomersDuplicatesRoute: AuthenticatedCustomersDuplicatesRoute,
   AuthenticatedCustomersNewRoute: AuthenticatedCustomersNewRoute,
+  AuthenticatedFinancialArAgingRoute: AuthenticatedFinancialArAgingRoute,
+  AuthenticatedFinancialCreditNotesRoute:
+    AuthenticatedFinancialCreditNotesRoute,
+  AuthenticatedFinancialPaymentPlansRoute:
+    AuthenticatedFinancialPaymentPlansRoute,
+  AuthenticatedFinancialRemindersRoute: AuthenticatedFinancialRemindersRoute,
+  AuthenticatedFinancialRevenueRoute: AuthenticatedFinancialRevenueRoute,
+  AuthenticatedFinancialStatementsRoute: AuthenticatedFinancialStatementsRoute,
+  AuthenticatedFinancialXeroSyncRoute: AuthenticatedFinancialXeroSyncRoute,
+  AuthenticatedIntegrationsOauthRoute: AuthenticatedIntegrationsOauthRoute,
   AuthenticatedInventoryItemIdRoute: AuthenticatedInventoryItemIdRoute,
   AuthenticatedInventoryAlertsRoute: AuthenticatedInventoryAlertsRoute,
   AuthenticatedInventoryAnalyticsRoute: AuthenticatedInventoryAnalyticsRoute,
@@ -974,6 +2631,9 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedInventoryForecastingRoute,
   AuthenticatedInventoryLocationsRoute: AuthenticatedInventoryLocationsRoute,
   AuthenticatedInventoryReceivingRoute: AuthenticatedInventoryReceivingRoute,
+  AuthenticatedJobsCalendarRoute: AuthenticatedJobsCalendarRoute,
+  AuthenticatedJobsKanbanRoute: AuthenticatedJobsKanbanRoute,
+  AuthenticatedJobsTimelineRoute: AuthenticatedJobsTimelineRoute,
   AuthenticatedMobileCountingRoute: AuthenticatedMobileCountingRoute,
   AuthenticatedMobilePickingRoute: AuthenticatedMobilePickingRoute,
   AuthenticatedMobileReceivingRoute: AuthenticatedMobileReceivingRoute,
@@ -982,37 +2642,122 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedOrdersFulfillmentRoute: AuthenticatedOrdersFulfillmentRoute,
   AuthenticatedPipelineOpportunityIdRoute:
     AuthenticatedPipelineOpportunityIdRoute,
+  AuthenticatedProcurementDashboardRoute:
+    AuthenticatedProcurementDashboardRoute,
   AuthenticatedProductsProductIdRoute:
     AuthenticatedProductsProductIdRouteWithChildren,
   AuthenticatedProductsNewRoute: AuthenticatedProductsNewRoute,
+  AuthenticatedPurchaseOrdersPoIdRoute: AuthenticatedPurchaseOrdersPoIdRoute,
+  AuthenticatedPurchaseOrdersCreateRoute:
+    AuthenticatedPurchaseOrdersCreateRoute,
+  AuthenticatedReportsExpiringWarrantiesRoute:
+    AuthenticatedReportsExpiringWarrantiesRoute,
+  AuthenticatedReportsJobCostingRoute: AuthenticatedReportsJobCostingRoute,
   AuthenticatedReportsPipelineForecastRoute:
     AuthenticatedReportsPipelineForecastRoute,
+  AuthenticatedReportsWarrantiesRoute: AuthenticatedReportsWarrantiesRoute,
+  AuthenticatedReportsWinLossRoute: AuthenticatedReportsWinLossRoute,
+  AuthenticatedSupportDashboardRoute: AuthenticatedSupportDashboardRoute,
+  AuthenticatedSupportIssuesBoardRoute: AuthenticatedSupportIssuesBoardRoute,
+  AuthenticatedSupportKnowledgeBaseRoute:
+    AuthenticatedSupportKnowledgeBaseRoute,
   AuthenticatedActivitiesIndexRoute: AuthenticatedActivitiesIndexRoute,
+  AuthenticatedApprovalsIndexRoute: AuthenticatedApprovalsIndexRoute,
+  AuthenticatedCommunicationsIndexRoute: AuthenticatedCommunicationsIndexRoute,
   AuthenticatedCustomersIndexRoute: AuthenticatedCustomersIndexRoute,
+  AuthenticatedFinancialIndexRoute: AuthenticatedFinancialIndexRoute,
   AuthenticatedInventoryIndexRoute: AuthenticatedInventoryIndexRoute,
   AuthenticatedMobileIndexRoute: AuthenticatedMobileIndexRoute,
   AuthenticatedOrdersIndexRoute: AuthenticatedOrdersIndexRoute,
   AuthenticatedPipelineIndexRoute: AuthenticatedPipelineIndexRoute,
   AuthenticatedProductsIndexRoute: AuthenticatedProductsIndexRoute,
+  AuthenticatedPurchaseOrdersIndexRoute: AuthenticatedPurchaseOrdersIndexRoute,
+  AuthenticatedSuppliersIndexRoute: AuthenticatedSuppliersIndexRoute,
+  AuthenticatedAdminGroupsGroupIdRoute: AuthenticatedAdminGroupsGroupIdRoute,
+  AuthenticatedAdminUsersUserIdRoute: AuthenticatedAdminUsersUserIdRoute,
+  AuthenticatedAdminUsersImportRoute: AuthenticatedAdminUsersImportRoute,
+  AuthenticatedAdminUsersInviteRoute: AuthenticatedAdminUsersInviteRoute,
+  AuthenticatedCommunicationsCampaignsCampaignIdRoute:
+    AuthenticatedCommunicationsCampaignsCampaignIdRoute,
+  AuthenticatedCommunicationsCampaignsNewRoute:
+    AuthenticatedCommunicationsCampaignsNewRoute,
+  AuthenticatedCommunicationsSettingsPreferencesRoute:
+    AuthenticatedCommunicationsSettingsPreferencesRoute,
   AuthenticatedCustomersCustomerIdEditRoute:
     AuthenticatedCustomersCustomerIdEditRoute,
+  AuthenticatedJobsAssignmentsAssignmentIdRoute:
+    AuthenticatedJobsAssignmentsAssignmentIdRoute,
+  AuthenticatedSupportClaimsClaimIdRoute:
+    AuthenticatedSupportClaimsClaimIdRoute,
+  AuthenticatedSupportIssuesIssueIdRoute:
+    AuthenticatedSupportIssuesIssueIdRoute,
+  AuthenticatedSupportIssuesNewRoute: AuthenticatedSupportIssuesNewRoute,
+  AuthenticatedSupportRmasRmaIdRoute: AuthenticatedSupportRmasRmaIdRoute,
+  AuthenticatedSupportWarrantiesWarrantyIdRoute:
+    AuthenticatedSupportWarrantiesWarrantyIdRoute,
   AuthenticatedAdminActivitiesIndexRoute:
     AuthenticatedAdminActivitiesIndexRoute,
+  AuthenticatedAdminAuditIndexRoute: AuthenticatedAdminAuditIndexRoute,
+  AuthenticatedAdminGroupsIndexRoute: AuthenticatedAdminGroupsIndexRoute,
+  AuthenticatedAdminInvitationsIndexRoute:
+    AuthenticatedAdminInvitationsIndexRoute,
+  AuthenticatedAdminUsersIndexRoute: AuthenticatedAdminUsersIndexRoute,
+  AuthenticatedCommunicationsCallsIndexRoute:
+    AuthenticatedCommunicationsCallsIndexRoute,
+  AuthenticatedCommunicationsCampaignsIndexRoute:
+    AuthenticatedCommunicationsCampaignsIndexRoute,
+  AuthenticatedCommunicationsEmailsIndexRoute:
+    AuthenticatedCommunicationsEmailsIndexRoute,
+  AuthenticatedCommunicationsSignaturesIndexRoute:
+    AuthenticatedCommunicationsSignaturesIndexRoute,
   AuthenticatedCustomersSegmentsIndexRoute:
     AuthenticatedCustomersSegmentsIndexRoute,
   AuthenticatedReportsCustomersIndexRoute:
     AuthenticatedReportsCustomersIndexRoute,
+  AuthenticatedReportsProcurementIndexRoute:
+    AuthenticatedReportsProcurementIndexRoute,
+  AuthenticatedSupportClaimsIndexRoute: AuthenticatedSupportClaimsIndexRoute,
+  AuthenticatedSupportIssuesIndexRoute: AuthenticatedSupportIssuesIndexRoute,
+  AuthenticatedSupportRmasIndexRoute: AuthenticatedSupportRmasIndexRoute,
+  AuthenticatedSupportWarrantiesIndexRoute:
+    AuthenticatedSupportWarrantiesIndexRoute,
+  AuthenticatedCommunicationsEmailsTemplatesIndexRoute:
+    AuthenticatedCommunicationsEmailsTemplatesIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
   AuthenticatedRouteChildren,
 )
 
+interface ProtectedRouteChildren {
+  ProtectedProtectedRoute: typeof ProtectedProtectedRoute
+}
+
+const ProtectedRouteChildren: ProtectedRouteChildren = {
+  ProtectedProtectedRoute: ProtectedProtectedRoute,
+}
+
+const ProtectedRouteWithChildren = ProtectedRoute._addFileChildren(
+  ProtectedRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  ProtectedRoute: ProtectedRouteWithChildren,
+  AcceptInvitationRoute: AcceptInvitationRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   LogoutRoute: LogoutRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
+  SignUpRoute: SignUpRoute,
+  SignUpSuccessRoute: SignUpSuccessRoute,
+  UpdatePasswordRoute: UpdatePasswordRoute,
+  AuthConfirmRoute: AuthConfirmRoute,
+  AuthErrorRoute: AuthErrorRoute,
+  FeedbackTokenRoute: FeedbackTokenRoute,
+  PortalConfirmRoute: PortalConfirmRoute,
+  PortalIndexRoute: PortalIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
