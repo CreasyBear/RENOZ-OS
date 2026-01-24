@@ -12,7 +12,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useCallback, useEffect } from "react";
 import { Plus, ClipboardList, Play, CheckCircle, ArrowLeft } from "lucide-react";
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { InventoryTableSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
@@ -50,6 +51,17 @@ import {
 
 export const Route = createFileRoute("/_authenticated/inventory/counts" as any)({
   component: StockCountsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/inventory" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="Stock Counts" />
+      <PageLayout.Content>
+        <InventoryTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

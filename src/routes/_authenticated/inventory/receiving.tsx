@@ -11,7 +11,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useCallback, useEffect } from "react";
 import { History, Plus } from "lucide-react";
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { FormSkeleton } from "@/components/skeletons/shared/form-skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
 import { ReceivingForm } from "@/components/domain/inventory/receiving-form";
@@ -29,6 +30,17 @@ import { listProducts } from "@/lib/server/functions/products";
 
 export const Route = createFileRoute("/_authenticated/inventory/receiving" as any)({
   component: ReceivingPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/inventory" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <PageLayout.Header title="Receive Inventory" />
+      <PageLayout.Content>
+        <FormSkeleton sections={2} />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

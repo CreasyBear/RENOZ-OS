@@ -11,7 +11,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useCallback, useEffect } from "react";
 import { TrendingUp, Package, RefreshCw, AlertTriangle } from "lucide-react";
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { InventoryTabsSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -38,6 +39,17 @@ import {
 
 export const Route = createFileRoute("/_authenticated/inventory/forecasting" as any)({
   component: ForecastingPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/inventory" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="Demand Forecasting" />
+      <PageLayout.Content>
+        <InventoryTabsSkeleton tabCount={2} showMetrics />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

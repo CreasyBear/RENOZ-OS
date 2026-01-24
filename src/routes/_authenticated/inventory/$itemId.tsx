@@ -14,7 +14,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useEffect } from "react";
 import { ArrowLeft, Edit, Trash2, ArrowLeftRight, Package } from "lucide-react";
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { InventoryDetailSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -41,6 +42,14 @@ import { getInventoryItem } from "@/server/functions/inventory";
 
 export const Route = createFileRoute("/_authenticated/inventory/$itemId" as any)({
   component: InventoryItemPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/inventory" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <InventoryDetailSkeleton />
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

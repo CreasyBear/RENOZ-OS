@@ -11,7 +11,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useCallback, useEffect } from "react";
 import { Plus, Bell, Settings, History } from "lucide-react";
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { InventoryTabsSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks/use-toast";
@@ -46,6 +47,17 @@ import { listProducts } from "@/lib/server/functions/products";
 
 export const Route = createFileRoute("/_authenticated/inventory/alerts" as any)({
   component: AlertsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/inventory" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="Inventory Alerts" />
+      <PageLayout.Content>
+        <InventoryTabsSkeleton tabCount={3} />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

@@ -12,7 +12,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useEffect } from "react";
 import { Plus, Upload, Download, RefreshCw } from "lucide-react";
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { TreeDetailSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -48,6 +49,17 @@ import {
 
 export const Route = createFileRoute("/_authenticated/inventory/locations" as any)({
   component: LocationsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/inventory" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="Warehouse Locations" />
+      <PageLayout.Content>
+        <TreeDetailSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

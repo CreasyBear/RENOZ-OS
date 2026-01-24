@@ -13,7 +13,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useEffect } from "react";
 import { Plus } from "lucide-react";
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { InventoryTableSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -32,6 +33,17 @@ import { listLocations } from "@/server/functions/locations";
 
 export const Route = createFileRoute("/_authenticated/inventory/" as any)({
   component: InventoryPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="Inventory" />
+      <PageLayout.Content>
+        <InventoryTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

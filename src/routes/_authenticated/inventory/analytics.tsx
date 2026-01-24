@@ -11,7 +11,8 @@
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useCallback, useEffect } from "react";
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { InventoryTabsSkeleton } from "@/components/skeletons/inventory";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   DollarSign,
@@ -58,6 +59,17 @@ import { listMovements } from "@/server/functions/inventory";
 
 export const Route = createFileRoute("/_authenticated/inventory/analytics" as any)({
   component: AnalyticsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/inventory" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="Inventory Analytics" />
+      <PageLayout.Content>
+        <InventoryTabsSkeleton tabCount={4} />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

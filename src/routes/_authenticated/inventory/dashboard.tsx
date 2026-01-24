@@ -22,7 +22,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { Package, RefreshCw } from "lucide-react";
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { InventoryDashboardSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -44,6 +45,17 @@ import { getLocationUtilization } from "@/server/functions/locations";
 
 export const Route = createFileRoute("/_authenticated/inventory/dashboard")({
   component: InventoryDashboard,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/inventory" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="Inventory Dashboard" />
+      <PageLayout.Content>
+        <InventoryDashboardSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================
