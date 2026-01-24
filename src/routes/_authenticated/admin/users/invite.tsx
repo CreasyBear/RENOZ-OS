@@ -11,8 +11,19 @@ import { useState } from 'react';
 import { useServerFn } from '@tanstack/react-start';
 import { sendInvitation } from '@/server/functions/users/invitations';
 
+import { RouteErrorFallback } from '@/components/layout';
+import { AdminFormSkeleton } from '@/components/skeletons/admin';
+
 export const Route = createFileRoute('/_authenticated/admin/users/invite')({
   component: InviteUserPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/admin/users" />
+  ),
+  pendingComponent: () => (
+    <div className="p-6">
+      <AdminFormSkeleton />
+    </div>
+  ),
 });
 
 const ROLE_OPTIONS = [

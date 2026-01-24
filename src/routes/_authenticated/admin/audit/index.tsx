@@ -67,6 +67,9 @@ import {
   Loader2,
 } from 'lucide-react';
 
+import { RouteErrorFallback } from '@/components/layout';
+import { AdminTableSkeleton } from '@/components/skeletons/admin';
+
 // Route definition
 export const Route = createFileRoute('/_authenticated/admin/audit' as any)({
   component: AuditLogViewer,
@@ -82,6 +85,14 @@ export const Route = createFileRoute('/_authenticated/admin/audit' as any)({
     ]);
     return { logs, stats };
   },
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/admin" />
+  ),
+  pendingComponent: () => (
+    <div className="p-6">
+      <AdminTableSkeleton />
+    </div>
+  ),
 });
 
 // Types

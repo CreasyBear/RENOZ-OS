@@ -68,6 +68,9 @@ const userSearchSchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('asc'),
 });
 
+import { RouteErrorFallback } from '@/components/layout';
+import { AdminTableSkeleton } from '@/components/skeletons/admin';
+
 export const Route = createFileRoute('/_authenticated/admin/users/')({
   validateSearch: userSearchSchema,
   loaderDeps: ({ search }) => search,
@@ -76,6 +79,14 @@ export const Route = createFileRoute('/_authenticated/admin/users/')({
     return { users: usersData, stats };
   },
   component: UsersAdminPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/admin" />
+  ),
+  pendingComponent: () => (
+    <div className="p-6">
+      <AdminTableSkeleton />
+    </div>
+  ),
 });
 
 const ROLE_COLORS: Record<string, string> = {

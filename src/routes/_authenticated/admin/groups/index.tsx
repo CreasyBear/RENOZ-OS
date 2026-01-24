@@ -87,6 +87,9 @@ const groupSearchSchema = z.object({
   includeInactive: z.coerce.boolean().default(false),
 });
 
+import { RouteErrorFallback } from '@/components/layout';
+import { AdminCardGridSkeleton } from '@/components/skeletons/admin';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const Route = createFileRoute('/_authenticated/admin/groups/' as any)({
   validateSearch: groupSearchSchema,
@@ -96,6 +99,14 @@ export const Route = createFileRoute('/_authenticated/admin/groups/' as any)({
     return { groups: groupsData };
   },
   component: GroupsAdminPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/admin" />
+  ),
+  pendingComponent: () => (
+    <div className="p-6">
+      <AdminCardGridSkeleton />
+    </div>
+  ),
 });
 
 // Default group colors

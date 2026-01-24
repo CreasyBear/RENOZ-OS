@@ -7,9 +7,10 @@
  * @see ACTIVITY-DASHBOARD-UI acceptance criteria
  */
 import { createFileRoute } from "@tanstack/react-router";
-import { PageLayout } from "@/components/layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { ActivityDashboard } from "@/components/activity";
 import { requireAdmin } from "@/lib/auth/route-guards";
+import { AdminTableSkeleton } from "@/components/skeletons/admin";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -18,6 +19,20 @@ import { requireAdmin } from "@/lib/auth/route-guards";
 export const Route = createFileRoute("/_authenticated/admin/activities/")({
   beforeLoad: requireAdmin,
   component: ActivityAnalyticsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/admin" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="container">
+      <PageLayout.Header
+        title="Activity Analytics"
+        description="Track and analyze organization activity"
+      />
+      <PageLayout.Content>
+        <AdminTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

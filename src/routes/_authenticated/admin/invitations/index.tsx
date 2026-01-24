@@ -107,6 +107,9 @@ const invitationSearchSchema = z.object({
   status: z.enum(['pending', 'accepted', 'expired', 'cancelled', 'all']).default('all'),
 });
 
+import { RouteErrorFallback } from '@/components/layout';
+import { AdminTableSkeleton } from '@/components/skeletons/admin';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const Route = createFileRoute('/_authenticated/admin/invitations/' as any)({
   validateSearch: invitationSearchSchema,
@@ -124,6 +127,14 @@ export const Route = createFileRoute('/_authenticated/admin/invitations/' as any
     return { invitations };
   },
   component: InvitationsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/admin" />
+  ),
+  pendingComponent: () => (
+    <div className="p-6">
+      <AdminTableSkeleton />
+    </div>
+  ),
 });
 
 const ROLE_OPTIONS = [

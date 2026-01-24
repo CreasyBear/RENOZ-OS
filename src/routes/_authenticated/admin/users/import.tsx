@@ -49,9 +49,20 @@ import {
   Download,
 } from 'lucide-react';
 
+import { RouteErrorFallback } from '@/components/layout';
+import { AdminFormSkeleton } from '@/components/skeletons/admin';
+
 // Route definition
 export const Route = createFileRoute('/_authenticated/admin/users/import' as any)({
   component: BulkUserImport,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/admin/users" />
+  ),
+  pendingComponent: () => (
+    <div className="p-6">
+      <AdminFormSkeleton />
+    </div>
+  ),
 });
 
 // Types

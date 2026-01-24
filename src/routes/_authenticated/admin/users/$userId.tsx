@@ -62,6 +62,9 @@ interface ActivityResult {
   };
 }
 
+import { RouteErrorFallback } from '@/components/layout';
+import { AdminDetailSkeleton } from '@/components/skeletons/admin';
+
 export const Route = createFileRoute('/_authenticated/admin/users/$userId')({
   loader: (async ({ params }: { params: { userId: string } }) => {
     const [user, activity] = await Promise.all([
@@ -71,6 +74,14 @@ export const Route = createFileRoute('/_authenticated/admin/users/$userId')({
     return { user, activity };
   }) as never,
   component: UserDetailPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/admin/users" />
+  ),
+  pendingComponent: () => (
+    <div className="p-6">
+      <AdminDetailSkeleton />
+    </div>
+  ),
 });
 
 const ROLE_OPTIONS = [

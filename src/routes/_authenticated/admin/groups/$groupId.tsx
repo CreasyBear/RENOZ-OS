@@ -136,6 +136,9 @@ const groupDetailSchema = z.object({
   tab: z.enum(['members', 'settings', 'activity']).default('members'),
 });
 
+import { RouteErrorFallback } from '@/components/layout';
+import { AdminDetailSkeleton } from '@/components/skeletons/admin';
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const Route = createFileRoute('/_authenticated/admin/groups/$groupId' as any)({
   validateSearch: groupDetailSchema,
@@ -151,6 +154,14 @@ export const Route = createFileRoute('/_authenticated/admin/groups/$groupId' as 
     return { group, members, availableUsers: usersData.items, groupId: params.groupId };
   },
   component: GroupDetailPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/admin/groups" />
+  ),
+  pendingComponent: () => (
+    <div className="p-6">
+      <AdminDetailSkeleton />
+    </div>
+  ),
 });
 
 // Group colors
