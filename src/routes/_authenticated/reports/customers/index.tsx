@@ -10,6 +10,8 @@
  */
 import { useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
+import { PageLayout, RouteErrorFallback } from '@/components/layout'
+import { ReportDashboardSkeleton } from '@/components/skeletons/reports'
 import { BarChart3, Users, DollarSign, Download, FileText, Mail } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -33,6 +35,20 @@ import {
 
 export const Route = createFileRoute('/_authenticated/reports/customers/')({
   component: CustomerReportsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/reports" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Customer Reports"
+        description="Comprehensive analytics and insights for customer management"
+      />
+      <PageLayout.Content>
+        <ReportDashboardSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 })
 
 type DateRange = '7d' | '30d' | '90d' | '365d' | 'all'

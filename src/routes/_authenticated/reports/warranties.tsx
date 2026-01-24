@@ -14,7 +14,8 @@ import { z } from 'zod';
 import { Download, Filter, X, RefreshCw, FileDown, Calendar } from 'lucide-react';
 import { format, subDays } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { PageLayout } from '@/components/layout/page-layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { ReportDashboardSkeleton } from '@/components/skeletons/reports';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -86,6 +87,20 @@ type SearchParams = z.infer<typeof searchSchema>;
 export const Route = createFileRoute('/_authenticated/reports/warranties')({
   component: WarrantyAnalyticsPage,
   validateSearch: searchSchema,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/reports" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="Warranty Analytics"
+        description="Monitor warranty performance, claims, and costs"
+      />
+      <PageLayout.Content>
+        <ReportDashboardSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

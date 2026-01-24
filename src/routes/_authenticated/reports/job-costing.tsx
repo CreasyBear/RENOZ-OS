@@ -33,7 +33,8 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Label } from '@/components/ui/label';
-import { PageLayout } from '@/components/layout/page-layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { ReportDashboardSkeleton } from '@/components/skeletons/reports';
 import { DataTable } from '@/components/shared/data-table/data-table';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ErrorState } from '@/components/shared/error-state';
@@ -48,6 +49,20 @@ import type { JobProfitabilityResult } from '@/lib/schemas';
 
 export const Route = createFileRoute('/_authenticated/reports/job-costing')({
   component: JobCostingReportPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/reports" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Job Costing Report"
+        description="Analyze job profitability and cost breakdown"
+      />
+      <PageLayout.Content>
+        <ReportDashboardSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

@@ -10,7 +10,8 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { subDays, subMonths, format } from 'date-fns';
-import { PageLayout } from '@/components/layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { ReportDashboardSkeleton } from '@/components/skeletons/reports';
 import { ProcurementReports, type ProcurementAnalytics } from '@/components/domain/reports/procurement-reports';
 import { type DateRange } from '@/components/ui/date-picker-with-range';
 import { toast } from '@/lib/toast';
@@ -21,6 +22,20 @@ import { toast } from '@/lib/toast';
 
 export const Route = createFileRoute('/_authenticated/reports/procurement/')({
   component: ProcurementReportsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/reports" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Procurement Reports"
+        description="Advanced procurement analytics and automated reporting"
+      />
+      <PageLayout.Content>
+        <ReportDashboardSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

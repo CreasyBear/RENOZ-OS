@@ -8,6 +8,8 @@
  */
 
 import { createFileRoute } from '@tanstack/react-router';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { ReportDashboardSkeleton } from '@/components/skeletons/reports';
 import { useState, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { WinLossAnalysis, getDateRange } from '@/components/domain/reports/win-loss-analysis';
@@ -19,6 +21,20 @@ import { getWinLossAnalysis, getCompetitors } from '@/server/functions/pipeline/
 
 export const Route = createFileRoute('/_authenticated/reports/win-loss')({
   component: WinLossAnalysisPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/reports" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Win/Loss Analysis"
+        description="Analyze win/loss patterns in pipeline opportunities"
+      />
+      <PageLayout.Content>
+        <ReportDashboardSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

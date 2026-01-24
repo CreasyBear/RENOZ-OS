@@ -38,7 +38,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { PageLayout } from "@/components/layout/page-layout";
+import { PageLayout, RouteErrorFallback } from "@/components/layout";
+import { ReportDashboardSkeleton } from "@/components/skeletons/reports";
 import { ForecastChart } from "@/components/domain/reports/forecast-chart";
 import { ForecastTable } from "@/components/domain/reports/forecast-table";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,20 @@ import type { ForecastGroupBy } from "@/lib/schemas/pipeline";
 
 export const Route = createFileRoute("/_authenticated/reports/pipeline-forecast")({
   component: PipelineForecastPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/reports" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Pipeline Forecast"
+        description="Sales forecasting and analytics dashboard"
+      />
+      <PageLayout.Content>
+        <ReportDashboardSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

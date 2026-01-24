@@ -22,7 +22,8 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { PageLayout } from '@/components/layout/page-layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { ReportDashboardSkeleton } from '@/components/skeletons/reports';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -69,6 +70,20 @@ type SearchParams = z.infer<typeof searchSchema>;
 export const Route = createFileRoute('/_authenticated/reports/expiring-warranties')({
   component: ExpiringWarrantiesReportPage,
   validateSearch: searchSchema,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/reports" />
+  ),
+  pendingComponent: () => (
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="Expiring Warranties"
+        description="Monitor warranties approaching expiration for renewal opportunities"
+      />
+      <PageLayout.Content>
+        <ReportDashboardSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================
