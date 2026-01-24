@@ -21,7 +21,8 @@ import { subMonths, startOfYear } from 'date-fns';
 import { Clock, TrendingUp, RefreshCw, Bell, ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PageLayout } from '@/components/layout/page-layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { FinancialDashboardSkeleton } from '@/components/skeletons/financial';
 import { FinancialDashboard } from '@/components/domain/financial/financial-dashboard';
 import {
   useFinancialDashboardMetrics,
@@ -37,6 +38,20 @@ import type { PeriodType } from '@/lib/schemas';
 
 export const Route = createFileRoute('/_authenticated/financial/')({
   component: FinancialDashboardPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Financial"
+        description="Accounts receivable, revenue recognition, and payment management"
+      />
+      <PageLayout.Content>
+        <FinancialDashboardSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

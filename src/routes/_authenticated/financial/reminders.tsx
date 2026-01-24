@@ -12,7 +12,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { PageLayout } from '@/components/layout/page-layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { PaymentReminders } from '@/components/domain/financial/payment-reminders';
 import {
   listReminderTemplates,
@@ -32,6 +33,20 @@ import type {
 
 export const Route = createFileRoute('/_authenticated/financial/reminders')({
   component: PaymentRemindersPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/financial" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Payment Reminders"
+        description="Manage reminder templates and view sending history"
+      />
+      <PageLayout.Content>
+        <FinancialTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

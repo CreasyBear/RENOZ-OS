@@ -13,7 +13,8 @@ import { useState, useCallback } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { PageLayout } from '@/components/layout/page-layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { ARAgingReport } from '@/components/domain/financial/ar-aging-report';
 import { getARAgingReport } from '@/server/functions/financial/ar-aging';
 
@@ -23,6 +24,20 @@ import { getARAgingReport } from '@/server/functions/financial/ar-aging';
 
 export const Route = createFileRoute('/_authenticated/financial/ar-aging')({
   component: ARAgingReportPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/financial" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="AR Aging Report"
+        description="Accounts receivable aging analysis by customer"
+      />
+      <PageLayout.Content>
+        <FinancialTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

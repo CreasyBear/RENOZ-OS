@@ -13,7 +13,8 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { createFileRoute } from '@tanstack/react-router';
-import { PageLayout } from '@/components/layout/page-layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { RevenueReports } from '@/components/domain/financial/revenue-reports';
 import { recognitionStateValues } from '@/lib/schemas/financial/revenue-recognition';
 import type { RecognitionState } from '@/lib/schemas/financial/revenue-recognition';
@@ -31,6 +32,20 @@ import { startOfYear } from 'date-fns';
 
 export const Route = createFileRoute('/_authenticated/financial/revenue')({
   component: RevenueRecognitionPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/financial" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Revenue Recognition"
+        description="Track recognized and deferred revenue with sync status"
+      />
+      <PageLayout.Content>
+        <FinancialTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

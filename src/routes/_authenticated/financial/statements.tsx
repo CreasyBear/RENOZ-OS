@@ -19,7 +19,8 @@ import { useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { PageLayout } from '@/components/layout/page-layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { CustomerStatements } from '@/components/domain/financial/customer-statements';
 import {
   generateStatement,
@@ -34,6 +35,20 @@ import type { StatementHistoryRecord } from '@/lib/schemas';
 
 export const Route = createFileRoute('/_authenticated/financial/statements')({
   component: CustomerStatementsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/financial" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Customer Statements"
+        description="Generate and view customer account statements"
+      />
+      <PageLayout.Content>
+        <FinancialTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

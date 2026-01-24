@@ -14,7 +14,8 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { PageLayout } from '@/components/layout/page-layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { FormSkeleton } from '@/components/skeletons/shared';
 import { PaymentPlansList, type PaymentSchedule } from '@/components/domain/financial/payment-plans-list';
 import {
   createPaymentPlan,
@@ -39,6 +40,20 @@ const paymentPlansSearchSchema = z.object({
 export const Route = createFileRoute('/_authenticated/financial/payment-plans')({
   component: PaymentPlansPage,
   validateSearch: paymentPlansSearchSchema,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/financial" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Payment Plans"
+        description="Customer payment plans and installment tracking"
+      />
+      <PageLayout.Content>
+        <FormSkeleton sections={2} />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

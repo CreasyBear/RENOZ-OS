@@ -12,7 +12,8 @@
 
 import { useState, useCallback } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { PageLayout } from '@/components/layout/page-layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import {
   XeroSyncStatus,
   type InvoiceWithSyncStatus,
@@ -26,6 +27,20 @@ import type { XeroSyncStatus as SyncStatus } from '@/lib/schemas';
 
 export const Route = createFileRoute('/_authenticated/financial/xero-sync')({
   component: XeroSyncStatusPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/financial" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Xero Sync"
+        description="Invoice synchronization status and history"
+      />
+      <PageLayout.Content>
+        <FinancialTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================
