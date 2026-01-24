@@ -19,7 +19,8 @@ import {
 } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { PageLayout } from '@/components/layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { JobsKanbanSkeleton } from '@/components/skeletons/jobs';
 import {
   JobsBoard,
   JobsFilters,
@@ -58,6 +59,20 @@ import { queryKeys } from '@/lib/query-keys';
 
 export const Route = createFileRoute('/_authenticated/jobs/kanban')({
   component: JobsKanbanPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header
+        title="Jobs Kanban"
+        description="Task board for job management"
+      />
+      <PageLayout.Content>
+        <JobsKanbanSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================

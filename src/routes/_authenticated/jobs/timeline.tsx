@@ -11,6 +11,8 @@ import * as React from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { JobsTimelineView } from '@/components/domain/jobs/timeline';
 import { UnifiedJobsProvider, useUnifiedJobs } from '@/components/domain/jobs/jobs-unified-context';
+import { RouteErrorFallback } from '@/components/layout';
+import { JobsTimelineSkeleton } from '@/components/skeletons/jobs';
 import {
   useJobsTimeline,
   useCalendarInstallers,
@@ -29,6 +31,14 @@ export const Route = createFileRoute('/_authenticated/jobs/timeline')({
     <UnifiedJobsProvider initialView="timeline">
       <JobsTimelinePage />
     </UnifiedJobsProvider>
+  ),
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/" />
+  ),
+  pendingComponent: () => (
+    <div className="container h-[calc(100vh-100px)] py-6">
+      <JobsTimelineSkeleton />
+    </div>
   ),
 });
 

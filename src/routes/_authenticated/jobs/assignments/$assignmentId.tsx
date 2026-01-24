@@ -7,7 +7,8 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { ArrowLeft, Briefcase, ClipboardList, FileText, ListChecks, Timer } from 'lucide-react';
-import { PageLayout } from '@/components/layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { JobAssignmentSkeleton } from '@/components/skeletons/jobs';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCurrentOrg } from '@/hooks/auth';
@@ -21,6 +22,17 @@ import { JobChecklistTabContainer } from '../_components/job-checklist-tab-conta
 
 export const Route = createFileRoute('/_authenticated/jobs/assignments/$assignmentId')({
   component: JobAssignmentDocumentsPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/jobs/kanban" />
+  ),
+  pendingComponent: () => (
+    <PageLayout>
+      <PageLayout.Header title="Job Assignment" />
+      <PageLayout.Content>
+        <JobAssignmentSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 function JobAssignmentDocumentsPage() {

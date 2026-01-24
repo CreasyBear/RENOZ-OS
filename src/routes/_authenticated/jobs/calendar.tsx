@@ -14,6 +14,8 @@ import { JobsTimelineView } from '@/components/domain/jobs/timeline';
 import { UnifiedJobsProvider, useUnifiedJobs } from '@/components/domain/jobs/jobs-unified-context';
 import { JobsErrorBoundary } from '@/components/domain/jobs/jobs-error-boundary';
 import { CalendarSkeleton } from '@/components/domain/jobs/calendar-skeleton';
+import { RouteErrorFallback } from '@/components/layout';
+import { JobsCalendarSkeleton } from '@/components/skeletons/jobs';
 import { Calendar as BigCalendar, dateFnsLocalizer, type View } from 'react-big-calendar';
 import withDragAndDrop, {
   type EventInteractionArgs,
@@ -94,6 +96,14 @@ export const Route = createFileRoute('/_authenticated/jobs/calendar')({
     <UnifiedJobsProvider initialView="weekly">
       <JobsCalendarPage />
     </UnifiedJobsProvider>
+  ),
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/" />
+  ),
+  pendingComponent: () => (
+    <div className="container py-6">
+      <JobsCalendarSkeleton />
+    </div>
   ),
 });
 
