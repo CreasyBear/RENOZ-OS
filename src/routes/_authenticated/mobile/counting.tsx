@@ -24,6 +24,8 @@ import {
   Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { RouteErrorFallback } from "@/components/layout";
+import { InventoryTableSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -58,6 +60,10 @@ import { listInventory } from "@/server/functions/inventory";
 
 export const Route = createFileRoute("/_authenticated/mobile/counting" as any)({
   component: MobileCountingPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/mobile" />
+  ),
+  pendingComponent: () => <InventoryTableSkeleton />,
 });
 
 // ============================================================================

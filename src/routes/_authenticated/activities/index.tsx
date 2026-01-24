@@ -8,7 +8,8 @@
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
-import { PageLayout } from "@/components/layout";
+import { RouteErrorFallback, PageLayout } from "@/components/layout";
+import { AdminTableSkeleton } from "@/components/skeletons/admin";
 import { ActivityFeed } from "@/components/activity";
 import type { ActivityFiltersValue } from "@/components/activity/activity-filters";
 import {
@@ -37,6 +38,10 @@ export type ActivitySearch = z.infer<typeof activitySearchSchema>;
 export const Route = createFileRoute("/_authenticated/activities/")({
   validateSearch: activitySearchSchema,
   component: ActivitiesPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/" />
+  ),
+  pendingComponent: () => <AdminTableSkeleton />,
 });
 
 // ============================================================================

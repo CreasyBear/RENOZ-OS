@@ -13,6 +13,8 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useEffect, memo } from "react";
 import { Package, MapPin, Check, AlertTriangle, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { RouteErrorFallback } from "@/components/layout";
+import { InventoryTableSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +45,10 @@ import { MOCK_PICK_LIST } from "./__fixtures__";
 
 export const Route = createFileRoute("/_authenticated/mobile/picking" as any)({
   component: MobilePickingPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/mobile" />
+  ),
+  pendingComponent: () => <InventoryTableSkeleton />,
 });
 
 // ============================================================================

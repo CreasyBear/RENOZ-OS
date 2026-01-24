@@ -21,6 +21,8 @@ import {
   Wifi,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { RouteErrorFallback } from "@/components/layout";
+import { InventoryDashboardSkeleton } from "@/components/skeletons/inventory";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -35,6 +37,10 @@ import { useOnlineStatus } from "@/hooks";
 
 export const Route = createFileRoute("/_authenticated/mobile/" as any)({
   component: MobileHomePage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/" />
+  ),
+  pendingComponent: () => <InventoryDashboardSkeleton />,
 });
 
 // ============================================================================

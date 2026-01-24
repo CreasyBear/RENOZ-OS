@@ -12,6 +12,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useEffect } from "react";
 import { Package, MapPin, AlertTriangle, Loader2 } from "lucide-react";
+import { RouteErrorFallback } from "@/components/layout";
+import { InventoryTableSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -54,6 +56,10 @@ import { listProducts } from "@/lib/server/functions/products";
 
 export const Route = createFileRoute("/_authenticated/mobile/receiving" as any)({
   component: MobileReceivingPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/mobile" />
+  ),
+  pendingComponent: () => <InventoryTableSkeleton />,
 });
 
 // ============================================================================
