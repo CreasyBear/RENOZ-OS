@@ -39,7 +39,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/formatters";
 import { listAmendments } from "@/lib/server/functions/order-amendments";
-import type { AmendmentStatus, AmendmentType, AmendmentChanges, FinancialImpact } from "@/lib/schemas/order-amendments";
+import type { AmendmentStatus, AmendmentType, AmendmentChanges, FinancialImpact } from "@/lib/schemas/orders";
 
 // ============================================================================
 // TYPES

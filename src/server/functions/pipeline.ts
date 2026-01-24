@@ -41,7 +41,7 @@ import {
   opportunityActivityParamsSchema,
   type OpportunityStage,
 } from "@/lib/schemas/pipeline";
-import { paginationSchema } from "@/lib/schemas/patterns";
+import { paginationSchema } from "@/lib/schemas";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 

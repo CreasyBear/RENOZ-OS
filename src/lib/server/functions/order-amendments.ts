@@ -27,7 +27,7 @@ import {
   amendmentParamsSchema,
   amendmentListQuerySchema,
   type ItemChange,
-} from "@/lib/schemas/order-amendments";
+} from "@/lib/schemas/orders";
 
 // ============================================================================
 // TYPES

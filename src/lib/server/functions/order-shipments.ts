@@ -29,7 +29,7 @@ import {
   shipmentListQuerySchema,
   type ShipmentStatus,
   type TrackingEvent,
-} from "@/lib/schemas/shipments";
+} from "@/lib/schemas/orders";
 
 // ============================================================================
 // TYPES

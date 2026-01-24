@@ -57,7 +57,7 @@ import {
   approveAmendment,
   rejectAmendment,
 } from "@/lib/server/functions/order-amendments";
-import type { AmendmentChanges, ItemChange, FinancialImpact, AmendmentStatus } from "@/lib/schemas/order-amendments";
+import type { AmendmentChanges, ItemChange, FinancialImpact, AmendmentStatus } from "@/lib/schemas/orders";
 
 // ============================================================================
 // TYPES

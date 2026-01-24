@@ -54,7 +54,7 @@ import { formatCurrency } from "@/lib/formatters";
 import { toastSuccess, toastError } from "@/hooks/use-toast";
 import { getOrderWithCustomer } from "@/lib/server/functions/orders";
 import { requestAmendment } from "@/lib/server/functions/order-amendments";
-import type { AmendmentType, ItemChange } from "@/lib/schemas/order-amendments";
+import type { AmendmentType, ItemChange } from "@/lib/schemas/orders";
 
 // ============================================================================
 // TYPES

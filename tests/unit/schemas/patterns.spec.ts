@@ -17,7 +17,7 @@ import {
   quantitySchema,
   addressSchema,
   createEnumSchema,
-} from "@/lib/schemas/patterns";
+} from "@/lib/schemas";
 
 describe("ID Parameter Schemas", () => {
   describe("idParamSchema", () => {

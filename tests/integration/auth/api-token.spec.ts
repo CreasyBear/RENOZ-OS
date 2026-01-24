@@ -12,7 +12,7 @@ import {
   validateApiTokenSchema,
   API_TOKEN_SCOPES,
   type ApiTokenScope,
-} from "@/lib/schemas/api-tokens";
+} from "@/lib/schemas/auth";
 import { scopeIncludesPermission } from "@/lib/server/api-tokens";
 
 describe("API Token Integration Tests", () => {

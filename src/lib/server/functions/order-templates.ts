@@ -29,7 +29,7 @@ import {
   templateParamsSchema,
   templateListQuerySchema,
   createTemplateItemSchema,
-} from "@/lib/schemas/order-templates";
+} from "@/lib/schemas/orders";
 
 // ============================================================================
 // TYPES

@@ -26,7 +26,7 @@ import {
   type CreateApiTokenResponse,
   type ApiTokenListItem,
   type ApiTokenScope,
-} from "@/lib/schemas/api-tokens";
+} from "@/lib/schemas/auth";
 
 // ============================================================================
 // CRYPTO UTILITIES
