@@ -8,7 +8,7 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { and, eq, ilike, isNull, sql, inArray, desc, asc } from "drizzle-orm";
+import { and, eq, ilike, isNull, sql, inArray, desc, asc, gte } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { emailSuppression } from "drizzle/schema";
 import { withAuth } from "@/lib/server/protected";
@@ -303,3 +303,265 @@ export const removeSuppression = createServerFn({ method: "POST" })
 
     return { success: true };
   });
+
+// ============================================================================
+// INTERNAL FUNCTIONS (for Trigger.dev jobs - no auth required)
+// ============================================================================
+
+/**
+ * Internal function to add email to suppression list.
+ * Used by webhook processing and other background jobs.
+ * Does not require auth context.
+ *
+ * @see INT-RES-004
+ */
+export async function addSuppressionDirect(params: {
+  organizationId: string;
+  email: string;
+  reason: "bounce" | "complaint" | "unsubscribe" | "manual";
+  bounceType?: "hard" | "soft" | null;
+  source?: "webhook" | "manual" | "import" | "api";
+  resendEventId?: string | null;
+  metadata?: Record<string, unknown>;
+}): Promise<{ id: string; isNew: boolean }> {
+  const normalizedEmail = params.email.toLowerCase().trim();
+
+  // Check for existing active suppression
+  const [existing] = await db
+    .select({ id: emailSuppression.id })
+    .from(emailSuppression)
+    .where(
+      and(
+        eq(emailSuppression.organizationId, params.organizationId),
+        eq(emailSuppression.email, normalizedEmail),
+        isNull(emailSuppression.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (existing) {
+    // Email is already suppressed
+    return { id: existing.id, isNew: false };
+  }
+
+  // Insert new suppression
+  const [inserted] = await db
+    .insert(emailSuppression)
+    .values({
+      organizationId: params.organizationId,
+      email: normalizedEmail,
+      reason: params.reason,
+      bounceType: params.bounceType ?? null,
+      source: params.source ?? "webhook",
+      resendEventId: params.resendEventId ?? null,
+      metadata: params.metadata ?? {},
+    })
+    .returning({ id: emailSuppression.id });
+
+  return { id: inserted.id, isNew: true };
+}
+
+/**
+ * Internal function to check suppression status for a single email.
+ * Used by scheduled email processing.
+ * Does not require auth context.
+ *
+ * @see INT-RES-004
+ */
+export async function isEmailSuppressedDirect(
+  organizationId: string,
+  email: string
+): Promise<{
+  suppressed: boolean;
+  reason?: "bounce" | "complaint" | "unsubscribe" | "manual";
+  bounceType?: "hard" | "soft" | null;
+}> {
+  const normalizedEmail = email.toLowerCase().trim();
+
+  const [suppression] = await db
+    .select({
+      reason: emailSuppression.reason,
+      bounceType: emailSuppression.bounceType,
+    })
+    .from(emailSuppression)
+    .where(
+      and(
+        eq(emailSuppression.organizationId, organizationId),
+        eq(emailSuppression.email, normalizedEmail),
+        isNull(emailSuppression.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (suppression) {
+    return {
+      suppressed: true,
+      reason: suppression.reason,
+      bounceType: suppression.bounceType,
+    };
+  }
+
+  return { suppressed: false };
+}
+
+/**
+ * Internal function to batch check suppression status.
+ * Used by campaign sends for efficient batch filtering.
+ * Does not require auth context.
+ *
+ * @see INT-RES-004
+ */
+export async function checkSuppressionBatchDirect(
+  organizationId: string,
+  emails: string[]
+): Promise<
+  Array<{
+    email: string;
+    suppressed: boolean;
+    reason?: "bounce" | "complaint" | "unsubscribe" | "manual";
+  }>
+> {
+  if (emails.length === 0) {
+    return [];
+  }
+
+  const normalizedEmails = emails.map((e) => e.toLowerCase().trim());
+
+  // Fetch all suppressions in one query
+  const suppressions = await db
+    .select({
+      email: emailSuppression.email,
+      reason: emailSuppression.reason,
+    })
+    .from(emailSuppression)
+    .where(
+      and(
+        eq(emailSuppression.organizationId, organizationId),
+        inArray(emailSuppression.email, normalizedEmails),
+        isNull(emailSuppression.deletedAt)
+      )
+    );
+
+  // Create lookup map
+  const suppressionMap = new Map(suppressions.map((s) => [s.email, s.reason]));
+
+  // Build results
+  return normalizedEmails.map((email) => {
+    const reason = suppressionMap.get(email);
+    return {
+      email,
+      suppressed: !!reason,
+      reason: reason ?? undefined,
+    };
+  });
+}
+
+// ============================================================================
+// SOFT BOUNCE TRACKING (INT-RES-004)
+// ============================================================================
+
+/**
+ * Soft bounce threshold for auto-suppression.
+ * After this many soft bounces within SOFT_BOUNCE_WINDOW_DAYS, the email is suppressed.
+ */
+const SOFT_BOUNCE_THRESHOLD = 3;
+
+/**
+ * Time window (in days) to count soft bounces.
+ * Only bounces within this window count toward the threshold.
+ */
+const SOFT_BOUNCE_WINDOW_DAYS = 7;
+
+/**
+ * Track a soft bounce occurrence.
+ * - If no existing record: create one with bounceCount=1
+ * - If existing record within window: increment bounceCount
+ * - If bounceCount >= SOFT_BOUNCE_THRESHOLD: auto-suppress
+ *
+ * Returns the new bounce count and whether suppression was triggered.
+ *
+ * @see INT-RES-004
+ */
+export async function trackSoftBounce(params: {
+  organizationId: string;
+  email: string;
+  resendEventId?: string | null;
+  metadata?: Record<string, unknown>;
+}): Promise<{
+  id: string;
+  bounceCount: number;
+  suppressed: boolean;
+  isNew: boolean;
+}> {
+  const normalizedEmail = params.email.toLowerCase().trim();
+  const windowStart = new Date();
+  windowStart.setDate(windowStart.getDate() - SOFT_BOUNCE_WINDOW_DAYS);
+
+  // Check for existing soft bounce record within the time window
+  const [existing] = await db
+    .select({
+      id: emailSuppression.id,
+      bounceCount: emailSuppression.bounceCount,
+      createdAt: emailSuppression.createdAt,
+    })
+    .from(emailSuppression)
+    .where(
+      and(
+        eq(emailSuppression.organizationId, params.organizationId),
+        eq(emailSuppression.email, normalizedEmail),
+        eq(emailSuppression.reason, "bounce"),
+        eq(emailSuppression.bounceType, "soft"),
+        isNull(emailSuppression.deletedAt),
+        gte(emailSuppression.createdAt, windowStart)
+      )
+    )
+    .limit(1);
+
+  if (existing) {
+    // Increment the bounce count
+    const newBounceCount = (existing.bounceCount ?? 0) + 1;
+    const shouldSuppress = newBounceCount >= SOFT_BOUNCE_THRESHOLD;
+
+    await db
+      .update(emailSuppression)
+      .set({
+        bounceCount: newBounceCount,
+        // Update resendEventId to the latest event
+        resendEventId: params.resendEventId ?? undefined,
+        // Merge new metadata with existing
+        metadata: params.metadata
+          ? sql`COALESCE(${emailSuppression.metadata}, '{}'::jsonb) || ${JSON.stringify(params.metadata)}::jsonb`
+          : undefined,
+      })
+      .where(eq(emailSuppression.id, existing.id));
+
+    return {
+      id: existing.id,
+      bounceCount: newBounceCount,
+      suppressed: shouldSuppress,
+      isNew: false,
+    };
+  }
+
+  // No existing record within window - create a new one
+  const [inserted] = await db
+    .insert(emailSuppression)
+    .values({
+      organizationId: params.organizationId,
+      email: normalizedEmail,
+      reason: "bounce",
+      bounceType: "soft",
+      bounceCount: 1,
+      source: "webhook",
+      resendEventId: params.resendEventId ?? null,
+      metadata: params.metadata ?? {},
+    })
+    .returning({ id: emailSuppression.id });
+
+  return {
+    id: inserted.id,
+    bounceCount: 1,
+    suppressed: false, // First bounce doesn't suppress
+    isNew: true,
+  };
+}

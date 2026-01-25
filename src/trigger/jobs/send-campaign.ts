@@ -24,6 +24,23 @@ import {
   TRACKING_BASE_URL,
 } from "@/lib/server/email-tracking";
 import { createEmailActivitiesBatch, type EmailActivityInput } from "@/lib/server/activity-bridge";
+import { checkSuppressionBatchDirect } from "@/server/functions/communications/email-suppression";
+import { createHash } from "crypto";
+
+// ============================================================================
+// PRIVACY HELPERS (INT-RES-004)
+// ============================================================================
+
+/**
+ * Hash an email address for privacy-safe logging.
+ * Returns first 8 chars of SHA-256 hash.
+ */
+function hashEmail(email: string): string {
+  return createHash("sha256")
+    .update(email.toLowerCase().trim())
+    .digest("hex")
+    .slice(0, 8);
+}
 
 // ============================================================================
 // CONFIGURATION
@@ -185,6 +202,7 @@ export const sendCampaignJob = client.defineJob({
     // Track stats
     let totalSent = 0;
     let totalFailed = 0;
+    let totalSkipped = 0; // INT-RES-004: Track suppressed emails
     let batchNumber = 0;
 
     // Process recipients in batches
@@ -213,12 +231,46 @@ export const sendCampaignJob = client.defineJob({
 
       await io.logger.info(`Processing batch ${batchNumber} with ${recipients.length} recipients`);
 
+      // INT-RES-004: Check suppression list for all recipients in batch
+      const suppressionResults = await checkSuppressionBatchDirect(
+        campaign.organizationId,
+        recipients.map((r) => r.email)
+      );
+
+      // Create a suppression lookup map
+      const suppressionMap = new Map(
+        suppressionResults.map((r) => [r.email.toLowerCase(), r])
+      );
+
       // Collect activity inputs for batch insert (PERF-001)
       const activityInputs: EmailActivityInput[] = [];
 
       // Process each recipient in the batch
       for (const recipient of recipients) {
         const taskId = `send-to-${recipient.id}`;
+
+        // INT-RES-004: Check if recipient is suppressed
+        const suppression = suppressionMap.get(recipient.email.toLowerCase());
+        if (suppression?.suppressed) {
+          // INT-RES-004: Log with hashed email for privacy
+          await io.logger.info(`Skipping suppressed email: ${hashEmail(recipient.email)} (reason: ${suppression.reason})`, {
+            recipientId: recipient.id,
+            reason: suppression.reason,
+            emailHash: hashEmail(recipient.email),
+          });
+
+          // Mark recipient as skipped
+          await db
+            .update(campaignRecipients)
+            .set({
+              status: "skipped",
+              errorMessage: `Suppressed: ${suppression.reason}`,
+            })
+            .where(eq(campaignRecipients.id, recipient.id));
+
+          totalSkipped++;
+          continue;
+        }
 
         try {
           await io.runTask(taskId, async () => {
@@ -343,13 +395,15 @@ export const sendCampaignJob = client.defineJob({
         })
         .where(eq(emailCampaigns.id, campaignId));
 
-      // Reset batch counters
+      // Log batch stats (INT-RES-004: include skipped count)
       const batchSent = totalSent;
       const batchFailed = totalFailed;
+      const batchSkipped = totalSkipped;
       totalSent = 0;
       totalFailed = 0;
+      totalSkipped = 0;
 
-      await io.logger.info(`Batch ${batchNumber} complete: ${batchSent} sent, ${batchFailed} failed`);
+      await io.logger.info(`Batch ${batchNumber} complete: ${batchSent} sent, ${batchFailed} failed, ${batchSkipped} skipped (suppressed)`);
 
       // Delay between batches to respect rate limits
       if (hasMore && recipients.length === batchSize) {

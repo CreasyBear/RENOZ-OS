@@ -35,6 +35,10 @@ import {
   type ResendWebhookPayload,
   type ResendWebhookEventType,
 } from '@/routes/api/webhooks/resend';
+import {
+  addSuppressionDirect,
+  trackSoftBounce,
+} from '@/server/functions/communications/email-suppression';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -498,13 +502,94 @@ export const processResendWebhookJob = client.defineJob({
             isHardBounce: bounceType === 'Permanent',
           };
 
-          if (bouncedResult.updated && bounceType === 'Permanent') {
-            await io.logger.warn('Hard bounce - email should be suppressed', {
-              emailId,
-              toAddress: bouncedResult.toAddress,
-              organizationId: bouncedResult.organizationId,
-            });
-            // TODO (INT-RES-004): Auto-add to suppression list
+          // INT-RES-004: Auto-add hard bounces to suppression list immediately
+          if (
+            bouncedResult.updated &&
+            bounceType === 'Permanent' &&
+            bouncedResult.toAddress &&
+            bouncedResult.organizationId
+          ) {
+            try {
+              const suppressionResult = await addSuppressionDirect({
+                organizationId: bouncedResult.organizationId,
+                email: bouncedResult.toAddress,
+                reason: 'bounce',
+                bounceType: 'hard',
+                source: 'webhook',
+                resendEventId: emailId,
+                metadata: {
+                  bounceMessage: bounceMessage ?? undefined,
+                },
+              });
+
+              await io.logger.info('Added email to suppression list for hard bounce', {
+                emailId,
+                toAddress: bouncedResult.toAddress,
+                suppressionId: suppressionResult.id,
+                isNew: suppressionResult.isNew,
+              });
+
+              (result as Record<string, unknown>).suppressionAdded = true;
+              (result as Record<string, unknown>).suppressionId = suppressionResult.id;
+            } catch (suppressionError) {
+              await io.logger.error('Failed to add email to suppression list', {
+                emailId,
+                toAddress: bouncedResult.toAddress,
+                error:
+                  suppressionError instanceof Error
+                    ? suppressionError.message
+                    : 'Unknown error',
+              });
+            }
+          }
+
+          // INT-RES-004: Track soft bounces with 3-strike rule
+          if (
+            bouncedResult.updated &&
+            bounceType === 'Transient' &&
+            bouncedResult.toAddress &&
+            bouncedResult.organizationId
+          ) {
+            try {
+              const softBounceResult = await trackSoftBounce({
+                organizationId: bouncedResult.organizationId,
+                email: bouncedResult.toAddress,
+                resendEventId: emailId,
+                metadata: {
+                  bounceMessage: bounceMessage ?? undefined,
+                },
+              });
+
+              await io.logger.info('Tracked soft bounce', {
+                emailId,
+                toAddress: bouncedResult.toAddress,
+                suppressionId: softBounceResult.id,
+                bounceCount: softBounceResult.bounceCount,
+                suppressed: softBounceResult.suppressed,
+                isNewRecord: softBounceResult.isNew,
+              });
+
+              (result as Record<string, unknown>).softBounceTracked = true;
+              (result as Record<string, unknown>).bounceCount = softBounceResult.bounceCount;
+              (result as Record<string, unknown>).suppressionTriggered = softBounceResult.suppressed;
+
+              if (softBounceResult.suppressed) {
+                await io.logger.warn('Email auto-suppressed after 3 soft bounces', {
+                  emailId,
+                  toAddress: bouncedResult.toAddress,
+                  bounceCount: softBounceResult.bounceCount,
+                });
+              }
+            } catch (softBounceError) {
+              await io.logger.error('Failed to track soft bounce', {
+                emailId,
+                toAddress: bouncedResult.toAddress,
+                error:
+                  softBounceError instanceof Error
+                    ? softBounceError.message
+                    : 'Unknown error',
+              });
+            }
           }
           break;
         }
@@ -520,16 +605,40 @@ export const processResendWebhookJob = client.defineJob({
             emailHistoryId: complainedResult.emailHistoryId,
           };
 
-          if (complainedResult.updated) {
-            await io.logger.warn(
-              'Spam complaint - email should be immediately suppressed',
-              {
+          // INT-RES-004: Immediately add complaints to suppression list
+          if (
+            complainedResult.updated &&
+            complainedResult.toAddress &&
+            complainedResult.organizationId
+          ) {
+            try {
+              const suppressionResult = await addSuppressionDirect({
+                organizationId: complainedResult.organizationId,
+                email: complainedResult.toAddress,
+                reason: 'complaint',
+                source: 'webhook',
+                resendEventId: emailId,
+              });
+
+              await io.logger.info('Added email to suppression list for spam complaint', {
                 emailId,
                 toAddress: complainedResult.toAddress,
-                organizationId: complainedResult.organizationId,
-              }
-            );
-            // TODO (INT-RES-004): Immediately add to suppression list
+                suppressionId: suppressionResult.id,
+                isNew: suppressionResult.isNew,
+              });
+
+              (result as Record<string, unknown>).suppressionAdded = true;
+              (result as Record<string, unknown>).suppressionId = suppressionResult.id;
+            } catch (suppressionError) {
+              await io.logger.error('Failed to add email to suppression list', {
+                emailId,
+                toAddress: complainedResult.toAddress,
+                error:
+                  suppressionError instanceof Error
+                    ? suppressionError.message
+                    : 'Unknown error',
+              });
+            }
           }
           break;
         }

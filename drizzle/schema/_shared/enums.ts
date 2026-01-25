@@ -400,6 +400,7 @@ export const campaignRecipientStatusEnum = pgEnum("campaign_recipient_status", [
   "bounced",
   "failed",
   "unsubscribed",
+  "skipped", // INT-RES-004: Added for suppressed recipients
 ]);
 
 export const scheduledCallStatusEnum = pgEnum("scheduled_call_status", [

@@ -18,6 +18,7 @@ import {
   uniqueIndex,
   timestamp,
   pgPolicy,
+  integer,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { suppressionReasonEnum, bounceTypeEnum } from "../_shared/enums";
@@ -68,6 +69,10 @@ export const emailSuppression = pgTable(
 
     // Bounce type (only for bounce reason)
     bounceType: bounceTypeEnum("bounce_type"),
+
+    // Soft bounce counter (for "3 strikes" rule)
+    // Incremented on each soft bounce, auto-suppress at 3
+    bounceCount: integer("bounce_count").notNull().default(0),
 
     // Source of suppression
     source: text("source"), // 'webhook', 'manual', 'import', 'api'

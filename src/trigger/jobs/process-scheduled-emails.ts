@@ -15,12 +15,29 @@ import {
 } from "@/lib/server/scheduled-emails";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { emailHistory, type NewEmailHistory } from "drizzle/schema";
+import { emailHistory, scheduledEmails, type NewEmailHistory } from "drizzle/schema";
 import {
   prepareEmailForTracking,
   TRACKING_BASE_URL,
 } from "@/lib/server/email-tracking";
 import { createEmailSentActivity } from "@/lib/server/activity-bridge";
+import { isEmailSuppressedDirect } from "@/server/functions/communications/email-suppression";
+import { createHash } from "crypto";
+
+// ============================================================================
+// PRIVACY HELPERS (INT-RES-004)
+// ============================================================================
+
+/**
+ * Hash an email address for privacy-safe logging.
+ * Returns first 8 chars of SHA-256 hash.
+ */
+function hashEmail(email: string): string {
+  return createHash("sha256")
+    .update(email.toLowerCase().trim())
+    .digest("hex")
+    .slice(0, 8);
+}
 
 // ============================================================================
 // EMAIL TEMPLATES (simple template rendering)
@@ -133,15 +150,45 @@ export const processScheduledEmailsJob = client.defineJob({
     await io.logger.info(`Found ${dueEmails.length} scheduled emails to process`);
 
     if (dueEmails.length === 0) {
-      return { processed: 0, sent: 0, failed: 0 };
+      return { processed: 0, sent: 0, failed: 0, skipped: 0 };
     }
 
     let sent = 0;
     let failed = 0;
+    let skipped = 0; // INT-RES-004: Track suppressed emails
 
     // Process each email
     for (const scheduledEmail of dueEmails) {
       const taskId = `send-email-${scheduledEmail.id}`;
+
+      // INT-RES-004: Check if recipient is suppressed before sending
+      const suppression = await isEmailSuppressedDirect(
+        scheduledEmail.organizationId,
+        scheduledEmail.recipientEmail
+      );
+
+      if (suppression.suppressed) {
+        // INT-RES-004: Log with hashed email for privacy
+        await io.logger.info(`Skipping suppressed scheduled email: ${hashEmail(scheduledEmail.recipientEmail)} (reason: ${suppression.reason})`, {
+          scheduledEmailId: scheduledEmail.id,
+          reason: suppression.reason,
+          emailHash: hashEmail(scheduledEmail.recipientEmail),
+        });
+
+        // Mark scheduled email as skipped
+        await db
+          .update(scheduledEmails)
+          .set({
+            status: "cancelled",
+            cancelledAt: new Date(),
+            cancelReason: `Suppressed: ${suppression.reason}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(scheduledEmails.id, scheduledEmail.id));
+
+        skipped++;
+        continue;
+      }
 
       try {
         await io.runTask(taskId, async () => {
@@ -237,6 +284,7 @@ export const processScheduledEmailsJob = client.defineJob({
       processed: dueEmails.length,
       sent,
       failed,
+      skipped, // INT-RES-004: Include suppressed count
     };
   },
 });
