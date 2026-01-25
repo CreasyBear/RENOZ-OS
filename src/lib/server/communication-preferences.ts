@@ -264,26 +264,44 @@ export async function isSmsOptedIn(
 }
 
 /**
- * Generate secure unsubscribe token for a contact
- * Uses HMAC with organization secret
+ * Generate secure unsubscribe token for a contact.
+ *
+ * @deprecated Use `generateUnsubscribeToken` from `@/lib/server/unsubscribe-tokens.ts` instead.
+ * This legacy function is kept for backward compatibility only.
+ *
+ * The legacy format (base64 without HMAC) is insecure and should not be used
+ * for new unsubscribe links.
  */
 export function generateUnsubscribeToken(
   contactId: string,
   channel: "email" | "sms"
 ): string {
-  // Simple token format: base64(contactId:channel:timestamp)
-  // In production, this should use HMAC with a secret
+  // Legacy token format: base64(contactId:channel:timestamp)
+  // WARNING: This format is insecure - use the new HMAC-signed tokens instead
+  // @see src/lib/server/unsubscribe-tokens.ts
+  console.warn(
+    "[communication-preferences] generateUnsubscribeToken is deprecated. " +
+      "Use generateUnsubscribeToken from @/lib/server/unsubscribe-tokens.ts instead."
+  );
   const payload = `${contactId}:${channel}:${Date.now()}`;
   return Buffer.from(payload).toString("base64url");
 }
 
 /**
- * Verify unsubscribe token and return contact ID
+ * Verify legacy unsubscribe token and return contact ID.
+ *
+ * @deprecated This function only verifies legacy (insecure) tokens.
+ * New HMAC-signed tokens should be verified using `verifyUnsubscribeToken`
+ * from `@/lib/server/unsubscribe-tokens.ts`.
+ *
+ * This is kept for backward compatibility with existing unsubscribe links.
+ * It will be removed in a future version after migration period.
  */
 export function verifyUnsubscribeToken(
   token: string
 ): { contactId: string; channel: "email" | "sms" } | null {
   try {
+    // Legacy format: base64(contactId:channel:timestamp)
     const payload = Buffer.from(token, "base64url").toString();
     const [contactId, channel] = payload.split(":");
     if (!contactId || !["email", "sms"].includes(channel)) {

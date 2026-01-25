@@ -25,6 +25,7 @@ import {
 } from "@/lib/server/email-tracking";
 import { createEmailActivitiesBatch, type EmailActivityInput } from "@/lib/server/activity-bridge";
 import { checkSuppressionBatchDirect } from "@/server/functions/communications/email-suppression";
+import { generateUnsubscribeUrl } from "@/lib/server/unsubscribe-tokens";
 import { createHash } from "crypto";
 
 // ============================================================================
@@ -274,12 +275,21 @@ export const sendCampaignJob = client.defineJob({
 
         try {
           await io.runTask(taskId, async () => {
+            // INT-RES-007: Generate secure unsubscribe URL for this recipient
+            const unsubscribeUrl = generateUnsubscribeUrl({
+              contactId: recipient.contactId || recipient.id, // Use contactId if available
+              email: recipient.email,
+              channel: "email",
+              organizationId: campaign.organizationId,
+            });
+
             // Merge recipient-specific data with campaign data
             const recipientData = (recipient.recipientData ?? {}) as Record<string, unknown>;
             const variables: Record<string, string | number | boolean> = {
               ...campaignVariables,
               first_name: recipient.name?.split(" ")[0] || "there",
               email: recipient.email,
+              unsubscribe_url: unsubscribeUrl, // INT-RES-007: Add unsubscribe URL to template variables
               ...Object.fromEntries(
                 Object.entries(recipientData).filter(([, v]) =>
                   typeof v === "string" || typeof v === "number" || typeof v === "boolean"
@@ -323,7 +333,20 @@ export const sendCampaignJob = client.defineJob({
               .where(eq(emailHistory.id, emailRecord.id));
 
             // TODO: Actually send the email via Resend
-            // In production, this would call the Resend API
+            // In production, this would call the Resend API with List-Unsubscribe headers:
+            //
+            // const { data, error } = await resend.emails.send({
+            //   from: fromAddress,
+            //   to: recipient.email,
+            //   subject,
+            //   html: trackedHtml,
+            //   headers: {
+            //     // INT-RES-007: CAN-SPAM compliant unsubscribe headers
+            //     'List-Unsubscribe': `<${unsubscribeUrl}>`,
+            //     'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+            //   },
+            // });
+            //
             // For now, we'll simulate success
 
             await io.logger.info(`Sent email to ${recipient.email} (emailHistoryId: ${emailRecord.id})`);

@@ -5,20 +5,135 @@
  * GET: Shows unsubscribe confirmation page
  * POST: Processes the unsubscribe
  *
+ * Security features (INT-RES-007):
+ * - HMAC-signed tokens prevent forgery
+ * - 30-day token expiration
+ * - Rate limiting: 10 requests/minute per IP
+ * - Integration with suppression list
+ *
  * @see DOM-COMMS-005
+ * @see INT-RES-007
  */
 
 import { db } from "@/lib/db";
 import { contacts, customerActivities } from "drizzle/schema";
 import { eq } from "drizzle-orm";
 import {
-  verifyUnsubscribeToken,
+  verifyUnsubscribeToken as verifyLegacyToken,
 } from "@/lib/server/communication-preferences";
+import { verifyUnsubscribeToken as verifySecureToken } from "@/lib/server/unsubscribe-tokens";
+import { addSuppressionDirect } from "@/server/functions/communications/email-suppression";
+import {
+  checkRateLimitSync,
+  getClientIdentifier,
+} from "@/lib/server/rate-limit";
 
-export async function GET({ params }: { params: { token: string } }) {
+// ============================================================================
+// RATE LIMIT CONFIGURATION (SEC-003)
+// ============================================================================
+
+/**
+ * Rate limit for unsubscribe endpoint.
+ * 10 requests per minute per IP address.
+ */
+const UNSUBSCRIBE_RATE_LIMIT = {
+  maxRequests: 10,
+  windowMs: 60 * 1000, // 1 minute
+  message: "Too many unsubscribe requests. Please try again in a minute.",
+};
+
+// ============================================================================
+// TOKEN VERIFICATION (supports both legacy and secure tokens)
+// ============================================================================
+
+interface VerifiedToken {
+  contactId: string;
+  channel: "email" | "sms";
+  organizationId?: string;
+  email?: string;
+  emailId?: string;
+  isSecure: boolean;
+}
+
+/**
+ * Verify an unsubscribe token.
+ * Supports both legacy (base64-only) and secure (HMAC-signed) token formats.
+ * Legacy tokens are supported for backwards compatibility during transition.
+ *
+ * @param token - The token to verify
+ * @returns Verified token data or null if invalid
+ */
+function verifyToken(token: string): VerifiedToken | null {
+  // Try secure token format first (recommended)
+  const securePayload = verifySecureToken(token);
+  if (securePayload) {
+    return {
+      contactId: securePayload.contactId,
+      channel: securePayload.channel,
+      organizationId: securePayload.organizationId,
+      email: securePayload.email,
+      emailId: securePayload.emailId,
+      isSecure: true,
+    };
+  }
+
+  // Fall back to legacy token format (for existing links)
+  // This should be removed after migration period
+  const legacyData = verifyLegacyToken(token);
+  if (legacyData) {
+    console.warn(
+      "[unsubscribe] Legacy token format used. Consider regenerating unsubscribe links."
+    );
+    return {
+      contactId: legacyData.contactId,
+      channel: legacyData.channel,
+      isSecure: false,
+    };
+  }
+
+  return null;
+}
+
+// ============================================================================
+// GET HANDLER - Show confirmation page
+// ============================================================================
+
+export async function GET({
+  params,
+  request,
+}: {
+  params: { token: string };
+  request: Request;
+}) {
   const { token } = params;
 
-  const tokenData = verifyUnsubscribeToken(token);
+  // Rate limiting (SEC-003)
+  const clientId = getClientIdentifier(request);
+  const rateLimitResult = checkRateLimitSync(
+    "unsubscribe",
+    clientId,
+    UNSUBSCRIBE_RATE_LIMIT
+  );
+
+  if (!rateLimitResult.allowed) {
+    return new Response(
+      renderHtml({
+        title: "Too Many Requests",
+        message: UNSUBSCRIBE_RATE_LIMIT.message,
+        success: false,
+      }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "text/html",
+          "Retry-After": String(Math.ceil(rateLimitResult.retryAfterMs / 1000)),
+        },
+      }
+    );
+  }
+
+  // Verify token
+  const tokenData = verifyToken(token);
   if (!tokenData) {
     return new Response(
       renderHtml({
@@ -92,10 +207,46 @@ export async function GET({ params }: { params: { token: string } }) {
   );
 }
 
-export async function POST({ params }: { params: { token: string } }) {
+// ============================================================================
+// POST HANDLER - Process unsubscribe
+// ============================================================================
+
+export async function POST({
+  params,
+  request,
+}: {
+  params: { token: string };
+  request: Request;
+}) {
   const { token } = params;
 
-  const tokenData = verifyUnsubscribeToken(token);
+  // Rate limiting (SEC-003)
+  const clientId = getClientIdentifier(request);
+  const rateLimitResult = checkRateLimitSync(
+    "unsubscribe",
+    clientId,
+    UNSUBSCRIBE_RATE_LIMIT
+  );
+
+  if (!rateLimitResult.allowed) {
+    return new Response(
+      renderHtml({
+        title: "Too Many Requests",
+        message: UNSUBSCRIBE_RATE_LIMIT.message,
+        success: false,
+      }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "text/html",
+          "Retry-After": String(Math.ceil(rateLimitResult.retryAfterMs / 1000)),
+        },
+      }
+    );
+  }
+
+  // Verify token
+  const tokenData = verifyToken(token);
   if (!tokenData) {
     return new Response(
       renderHtml({
@@ -118,6 +269,7 @@ export async function POST({ params }: { params: { token: string } }) {
       organizationId: contacts.organizationId,
       firstName: contacts.firstName,
       lastName: contacts.lastName,
+      email: contacts.email,
       emailOptIn: contacts.emailOptIn,
       smsOptIn: contacts.smsOptIn,
     })
@@ -153,6 +305,34 @@ export async function POST({ params }: { params: { token: string } }) {
     .set(updateData)
     .where(eq(contacts.id, tokenData.contactId));
 
+  // INT-RES-007: Add to suppression list for email channel
+  if (tokenData.channel === "email") {
+    // Use email from secure token if available, otherwise use contact's email
+    const emailToSuppress = tokenData.email || contact.email;
+    // Use organizationId from secure token if available, otherwise use contact's org
+    const orgId = tokenData.organizationId || contact.organizationId;
+
+    if (emailToSuppress && orgId) {
+      try {
+        await addSuppressionDirect({
+          organizationId: orgId,
+          email: emailToSuppress,
+          reason: "unsubscribe",
+          source: "api",
+          metadata: {
+            contactId: contact.id,
+            emailId: tokenData.emailId,
+            method: "unsubscribe-link",
+            unsubscribedAt: now,
+          },
+        });
+      } catch (error) {
+        // Log but don't fail the unsubscribe if suppression fails
+        console.error("[unsubscribe] Failed to add to suppression list:", error);
+      }
+    }
+  }
+
   // Log to activities for compliance
   await db.insert(customerActivities).values({
     organizationId: contact.organizationId,
@@ -170,6 +350,7 @@ export async function POST({ params }: { params: { token: string } }) {
       changedBy: "self-service",
       method: "unsubscribe-link",
       contactName: `${contact.firstName} ${contact.lastName}`,
+      secureToken: tokenData.isSecure, // Track which token format was used
     },
   });
 

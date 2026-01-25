@@ -22,6 +22,7 @@ import {
 } from "@/lib/server/email-tracking";
 import { createEmailSentActivity } from "@/lib/server/activity-bridge";
 import { isEmailSuppressedDirect } from "@/server/functions/communications/email-suppression";
+import { generateUnsubscribeUrl } from "@/lib/server/unsubscribe-tokens";
 import { createHash } from "crypto";
 
 // ============================================================================
@@ -194,9 +195,24 @@ export const processScheduledEmailsJob = client.defineJob({
         await io.runTask(taskId, async () => {
           await io.logger.info(`Processing scheduled email ${scheduledEmail.id}`);
 
+          // INT-RES-007: Generate secure unsubscribe URL for this recipient
+          // Note: scheduledEmails table has customerId, not contactId
+          // We use customerId if available, otherwise fall back to email record ID
+          const unsubscribeUrl = generateUnsubscribeUrl({
+            contactId: scheduledEmail.customerId || scheduledEmail.id,
+            email: scheduledEmail.recipientEmail,
+            channel: "email",
+            organizationId: scheduledEmail.organizationId,
+          });
+
           // Get template content
           const template = getTemplateContent(scheduledEmail.templateType);
-          const variables = (scheduledEmail.templateData?.variables || {}) as Record<string, string | number | boolean>;
+          const baseVariables = (scheduledEmail.templateData?.variables || {}) as Record<string, string | number | boolean>;
+          // INT-RES-007: Add unsubscribe URL to template variables
+          const variables: Record<string, string | number | boolean> = {
+            ...baseVariables,
+            unsubscribe_url: unsubscribeUrl,
+          };
 
           // Check for subject/body override
           const templateData = scheduledEmail.templateData || {};
@@ -233,8 +249,21 @@ export const processScheduledEmailsJob = client.defineJob({
           const linkMapObject = Object.fromEntries(linkMap);
 
           // TODO: Actually send the email via email provider (Resend, SendGrid, etc.)
+          // In production, this would call the Resend API with List-Unsubscribe headers:
+          //
+          // const { data, error } = await resend.emails.send({
+          //   from: fromAddress,
+          //   to: scheduledEmail.recipientEmail,
+          //   subject,
+          //   html: trackedHtml,
+          //   headers: {
+          //     // INT-RES-007: CAN-SPAM compliant unsubscribe headers
+          //     'List-Unsubscribe': `<${unsubscribeUrl}>`,
+          //     'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          //   },
+          // });
+          //
           // For now, we just log and mark as sent
-          // The trackedHtml would be sent as the email body when integrated with a provider
           await io.logger.info(`Would send email to ${scheduledEmail.recipientEmail}`, {
             subject,
             recipientName: scheduledEmail.recipientName,
