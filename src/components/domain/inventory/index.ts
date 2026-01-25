@@ -77,4 +77,9 @@ export * from './reports';
 export type { ValuationSummary, CategoryValuation, LocationValuation } from './reports/valuation-report';
 export type { AgingSummary, AgeBucket, AgingItem } from './reports/aging-report';
 export type { TurnoverSummary, CategoryTurnover, TurnoverTrend } from './reports/turnover-report';
-export type { MovementByType, MovementTrend } from './reports/movement-analytics';
+export type {
+  MovementSummary as ReportMovementSummary,
+  MovementByType,
+  TopMover as ReportTopMover,
+  MovementTrend,
+} from './reports/movement-analytics';

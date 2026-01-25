@@ -45,7 +45,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/formatters";
-import { getWinLossAnalysis, getCompetitors } from "@/server/functions/win-loss-reasons";
+import { getWinLossAnalysis, getCompetitors } from "@/server/functions/pipeline/win-loss-reasons";
 
 // ============================================================================
 // TYPES

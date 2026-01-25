@@ -70,7 +70,8 @@ import { FormatAmount } from "@/components/shared/format";
 import { toastSuccess, toastError } from "@/hooks";
 import { getCustomers } from "@/server/customers";
 import { listProducts } from "@/lib/server/functions/products";
-import { createQuoteVersion } from "@/server/functions/quote-versions";
+import { createQuoteVersion } from "@/server/functions/pipeline/quote-versions";
+import { GST_RATE } from "@/lib/order-calculations";
 
 // ============================================================================
 // TYPES
@@ -93,7 +94,6 @@ interface QuoteLineItem {
   discount: number;
 }
 
-const GST_RATE = 0.1; // 10% GST
 const DEFAULT_VALIDITY_DAYS = 30;
 
 // ============================================================================

@@ -45,7 +45,7 @@ import {
   getUpcomingFollowUps,
   logActivity,
   completeActivity,
-} from "@/server/functions/pipeline";
+} from "@/server/functions/pipeline/pipeline";
 
 // ============================================================================
 // TYPES

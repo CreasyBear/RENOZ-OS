@@ -61,7 +61,7 @@ const reasonPresets = [
 
 interface Location {
   id: string;
-  code: string;
+  locationCode: string;
   name: string;
 }
 
@@ -120,13 +120,14 @@ export function StockAdjustment({
     const loadLocations = async () => {
       setIsLoadingLocations(true);
       try {
-        const result = await listLocations({ data: { isActive: true } });
-        setLocations(result.locations as Location[]);
+        const result = await listLocations({ data: { isActive: true } }) as any;
+        const locs = (result.locations ?? []) as Location[];
+        setLocations(locs);
         // Set default location
-        if (result.locations.length > 0) {
+        if (locs.length > 0) {
           const defaultLoc = defaultLocationId
-            ? result.locations.find((l: Location) => l.id === defaultLocationId)
-            : result.locations[0];
+            ? locs.find((l) => l.id === defaultLocationId)
+            : locs[0];
           if (defaultLoc) {
             setValue("locationId", defaultLoc.id);
           }
@@ -260,7 +261,7 @@ export function StockAdjustment({
               <SelectContent>
                 {locations.map((location) => (
                   <SelectItem key={location.id} value={location.id}>
-                    {location.code} - {location.name}
+                    {location.locationCode} - {location.name}
                   </SelectItem>
                 ))}
               </SelectContent>

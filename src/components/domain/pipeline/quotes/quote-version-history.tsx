@@ -58,7 +58,7 @@ import {
   listQuoteVersions,
   restoreQuoteVersion,
   compareQuoteVersions,
-} from "@/server/functions/quote-versions";
+} from "@/server/functions/pipeline/quote-versions";
 import { formatCurrency } from "@/lib/formatters";
 import { FormatAmount } from "@/components/shared/format";
 import type { QuoteVersion } from "@/lib/schemas/pipeline";
