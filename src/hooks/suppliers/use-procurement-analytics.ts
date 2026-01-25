@@ -62,9 +62,15 @@ export function useSpendMetrics(options: UseSpendMetricsOptions = {}) {
   const { enabled = true, ...params } = options;
   const fn = useServerFn(getSpendMetrics);
 
+  // Build input with schema defaults (groupBy defaults to 'month' in schema)
+  const input: SpendMetricsInput = {
+    groupBy: params.groupBy ?? 'month',
+    ...params,
+  };
+
   return useQuery({
     queryKey: queryKeys.procurement.spend(params),
-    queryFn: () => fn({ data: params as SpendMetricsInput }),
+    queryFn: () => fn({ data: input }),
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -81,9 +87,12 @@ export function useOrderMetrics(options: UseOrderMetricsOptions = {}) {
   const { enabled = true, ...params } = options;
   const fn = useServerFn(getOrderMetrics);
 
+  // OrderMetricsInput has all optional fields, so params is already valid
+  const input: OrderMetricsInput = { ...params };
+
   return useQuery({
     queryKey: queryKeys.procurement.orders(params),
-    queryFn: () => fn({ data: params as OrderMetricsInput }),
+    queryFn: () => fn({ data: input }),
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -100,9 +109,16 @@ export function useSupplierMetrics(options: UseSupplierMetricsOptions = {}) {
   const { enabled = true, ...params } = options;
   const fn = useServerFn(getSupplierMetrics);
 
+  // Build input with schema defaults (limit=10, sortBy='spend' in schema)
+  const input: SupplierMetricsInput = {
+    limit: params.limit ?? 10,
+    sortBy: params.sortBy ?? 'spend',
+    ...params,
+  };
+
   return useQuery({
     queryKey: queryKeys.procurement.suppliers(params),
-    queryFn: () => fn({ data: params as SupplierMetricsInput }),
+    queryFn: () => fn({ data: input }),
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -141,9 +157,15 @@ export function useProcurementDashboard(options: UseProcurementDashboardOptions 
   const { enabled = true, ...params } = options;
   const fn = useServerFn(getProcurementDashboard);
 
+  // Build input with schema default (includePreviousPeriod=true in schema)
+  const input: DashboardInput = {
+    includePreviousPeriod: params.includePreviousPeriod ?? true,
+    ...params,
+  };
+
   return useQuery({
     queryKey: queryKeys.procurement.dashboard(params),
-    queryFn: () => fn({ data: params as DashboardInput }),
+    queryFn: () => fn({ data: input }),
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });

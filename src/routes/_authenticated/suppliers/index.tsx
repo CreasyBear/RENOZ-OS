@@ -15,7 +15,7 @@ import { toast } from '@/lib/toast';
 import { SupplierDirectory, type SupplierTableData } from '@/components/domain/suppliers';
 import { useSuppliers, useDeleteSupplier } from '@/hooks/suppliers';
 import type { SupplierFiltersState } from '@/lib/schemas/suppliers';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -115,13 +115,12 @@ function SuppliersPage() {
     [deleteMutation, confirm]
   );
 
-  // TODO: Implement supplier detail route at src/routes/_authenticated/suppliers/$supplierId.tsx
-  // const handleEdit = useCallback(
-  //   (id: string) => {
-  //     navigate({ to: '/suppliers/$supplierId', params: { supplierId: id } });
-  //   },
-  //   [navigate]
-  // );
+  const handleEdit = useCallback(
+    (id: string) => {
+      navigate({ to: '/suppliers/$supplierId', params: { supplierId: id } });
+    },
+    [navigate]
+  );
 
   // Transform data for table
   const suppliers: SupplierTableData[] = (suppliersData?.items ?? []).map((supplier) => ({
@@ -167,7 +166,7 @@ function SuppliersPage() {
           pagination={pagination}
           onPageChange={handlePageChange}
           onDelete={handleDelete}
-          // onEdit={handleEdit} // TODO: Re-enable once $supplierId route exists
+          onEdit={handleEdit}
         />
       </PageLayout.Content>
     </PageLayout>

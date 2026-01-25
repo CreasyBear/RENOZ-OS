@@ -19,15 +19,42 @@ import { eq, and, sql, isNull, gte, lte, ne, asc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { purchaseOrders, suppliers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 
 // ============================================================================
 // INPUT SCHEMAS
 // ============================================================================
 
-const dateRangeSchema = z.object({
-  dateFrom: z.coerce.date().optional(),
-  dateTo: z.coerce.date().optional(),
-});
+// Validation bounds for date ranges to prevent DoS
+const MAX_DATE_RANGE_DAYS = 2 * 365; // 2 years max
+const MIN_DATE_YEARS_AGO = 5; // 5 years back max
+const MAX_DATE_DAYS_AHEAD = 30; // 30 days ahead max
+
+const dateRangeSchema = z
+  .object({
+    dateFrom: z.coerce
+      .date()
+      .refine(
+        (d) => d >= new Date(Date.now() - MIN_DATE_YEARS_AGO * 365 * 24 * 60 * 60 * 1000),
+        'Date cannot be more than 5 years in the past'
+      )
+      .optional(),
+    dateTo: z.coerce
+      .date()
+      .refine(
+        (d) => d <= new Date(Date.now() + MAX_DATE_DAYS_AHEAD * 24 * 60 * 60 * 1000),
+        'Date cannot be more than 30 days in the future'
+      )
+      .optional(),
+  })
+  .refine(
+    (data) => {
+      if (!data.dateFrom || !data.dateTo) return true;
+      const diffDays = (data.dateTo.getTime() - data.dateFrom.getTime()) / (1000 * 60 * 60 * 24);
+      return diffDays <= MAX_DATE_RANGE_DAYS;
+    },
+    { message: 'Date range cannot exceed 2 years' }
+  );
 
 const spendMetricsQuerySchema = dateRangeSchema.extend({
   groupBy: z.enum(['supplier', 'category', 'month']).default('month'),
@@ -105,7 +132,7 @@ export type SpendMetricsInput = z.infer<typeof spendMetricsQuerySchema>;
 export const getSpendMetrics = createServerFn({ method: 'GET' })
   .inputValidator(spendMetricsQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const now = new Date();
     const dateFrom = data.dateFrom ?? new Date(now.getFullYear(), 0, 1); // Default YTD
@@ -228,7 +255,7 @@ export type OrderMetricsInput = z.infer<typeof orderMetricsQuerySchema>;
 export const getOrderMetrics = createServerFn({ method: 'GET' })
   .inputValidator(orderMetricsQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const now = new Date();
     const dateFrom = data.dateFrom ?? new Date(now.getFullYear(), now.getMonth(), 1); // Default MTD
@@ -354,7 +381,7 @@ export type SupplierMetricsInput = z.infer<typeof supplierMetricsQuerySchema>;
 export const getSupplierMetrics = createServerFn({ method: 'GET' })
   .inputValidator(supplierMetricsQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const now = new Date();
     const dateFrom = data.dateFrom ?? new Date(now.getFullYear(), 0, 1); // Default YTD
@@ -454,7 +481,7 @@ export const getSupplierMetrics = createServerFn({ method: 'GET' })
  */
 export const getProcurementAlerts = createServerFn({ method: 'GET' })
   .handler(async () => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
     const now = new Date();
     const todayStr = now.toISOString().split('T')[0];
 
@@ -569,7 +596,7 @@ export type DashboardInput = z.infer<typeof dashboardQuerySchema>;
 export const getProcurementDashboard = createServerFn({ method: 'GET' })
   .inputValidator(dashboardQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const now = new Date();
     const dateFrom = data.dateFrom ?? new Date(now.getFullYear(), now.getMonth(), 1);

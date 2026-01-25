@@ -157,6 +157,15 @@ export interface ReportConfig {
 
 const CHART_COLORS = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6', '#06b6d4', '#ec4899'];
 
+/**
+ * Safe average calculation to prevent division by zero.
+ * Returns 0 if array is empty.
+ */
+function safeAverage<T>(items: T[], getValue: (item: T) => number): number {
+  if (items.length === 0) return 0;
+  return items.reduce((sum, item) => sum + getValue(item), 0) / items.length;
+}
+
 const REPORT_TYPES = [
   { value: 'supplier-performance', label: 'Supplier Performance', icon: Award },
   { value: 'spend-analysis', label: 'Spend Analysis', icon: DollarSign },
@@ -329,17 +338,10 @@ export const ProcurementReports = memo(function ProcurementReports({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {(
-                analytics.supplierPerformance.reduce((sum, s) => sum + s.qualityScore, 0) /
-                analytics.supplierPerformance.length
-              ).toFixed(1)}
-              %
+              {safeAverage(analytics.supplierPerformance, (s) => s.qualityScore).toFixed(1)}%
             </div>
             <Progress
-              value={
-                analytics.supplierPerformance.reduce((sum, s) => sum + s.qualityScore, 0) /
-                analytics.supplierPerformance.length
-              }
+              value={safeAverage(analytics.supplierPerformance, (s) => s.qualityScore)}
               className="mt-2"
             />
           </CardContent>
@@ -352,17 +354,10 @@ export const ProcurementReports = memo(function ProcurementReports({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {(
-                analytics.supplierPerformance.reduce((sum, s) => sum + s.onTimeDelivery, 0) /
-                analytics.supplierPerformance.length
-              ).toFixed(1)}
-              %
+              {safeAverage(analytics.supplierPerformance, (s) => s.onTimeDelivery).toFixed(1)}%
             </div>
             <Progress
-              value={
-                analytics.supplierPerformance.reduce((sum, s) => sum + s.onTimeDelivery, 0) /
-                analytics.supplierPerformance.length
-              }
+              value={safeAverage(analytics.supplierPerformance, (s) => s.onTimeDelivery)}
               className="mt-2"
             />
           </CardContent>
