@@ -16,24 +16,6 @@
  */
 export type Role = 'owner' | 'admin' | 'manager' | 'sales' | 'operations' | 'support' | 'viewer'
 
-/**
- * Permission action format: 'domain.action'
- */
-export type PermissionAction = string
-
-/**
- * Permission definition with optional description
- */
-export interface Permission {
-  action: PermissionAction
-  description?: string
-}
-
-/**
- * Mapping of roles to their permitted actions
- */
-export type RolePermissions = Record<Role, PermissionAction[]>
-
 // ============================================================================
 // PERMISSIONS BY DOMAIN
 // ============================================================================
@@ -232,6 +214,61 @@ export const PERMISSIONS = {
 } as const
 
 // ============================================================================
+// DERIVED TYPES (must come after PERMISSIONS is defined)
+// ============================================================================
+
+/**
+ * Permission action format: 'domain.action'
+ * Type-safe union derived from PERMISSIONS constant.
+ * This ensures compile-time validation of permission strings.
+ *
+ * @example
+ * // These will work:
+ * const p1: PermissionAction = 'customer.read'
+ * const p2: PermissionAction = PERMISSIONS.customer.read
+ *
+ * // These will cause compile errors:
+ * const p3: PermissionAction = 'customer.creat'  // typo
+ * const p4: PermissionAction = 'custmer.read'    // wrong domain
+ */
+export type PermissionAction =
+  | typeof PERMISSIONS.customer[keyof typeof PERMISSIONS.customer]
+  | typeof PERMISSIONS.contact[keyof typeof PERMISSIONS.contact]
+  | typeof PERMISSIONS.order[keyof typeof PERMISSIONS.order]
+  | typeof PERMISSIONS.product[keyof typeof PERMISSIONS.product]
+  | typeof PERMISSIONS.inventory[keyof typeof PERMISSIONS.inventory]
+  | typeof PERMISSIONS.opportunity[keyof typeof PERMISSIONS.opportunity]
+  | typeof PERMISSIONS.quote[keyof typeof PERMISSIONS.quote]
+  | typeof PERMISSIONS.user[keyof typeof PERMISSIONS.user]
+  | typeof PERMISSIONS.organization[keyof typeof PERMISSIONS.organization]
+  | typeof PERMISSIONS.report[keyof typeof PERMISSIONS.report]
+  | typeof PERMISSIONS.apiToken[keyof typeof PERMISSIONS.apiToken]
+  | typeof PERMISSIONS.activity[keyof typeof PERMISSIONS.activity]
+  | typeof PERMISSIONS.dashboard[keyof typeof PERMISSIONS.dashboard]
+  | typeof PERMISSIONS.scheduledReport[keyof typeof PERMISSIONS.scheduledReport]
+  | typeof PERMISSIONS.job[keyof typeof PERMISSIONS.job]
+  | typeof PERMISSIONS.team[keyof typeof PERMISSIONS.team]
+  | typeof PERMISSIONS.audit[keyof typeof PERMISSIONS.audit]
+  | typeof PERMISSIONS.settings[keyof typeof PERMISSIONS.settings]
+  | typeof PERMISSIONS.suppliers[keyof typeof PERMISSIONS.suppliers]
+  | typeof PERMISSIONS.warranty[keyof typeof PERMISSIONS.warranty]
+  | typeof PERMISSIONS.financial[keyof typeof PERMISSIONS.financial]
+  | typeof PERMISSIONS.support[keyof typeof PERMISSIONS.support]
+
+/**
+ * Permission definition with optional description
+ */
+export interface Permission {
+  action: PermissionAction
+  description?: string
+}
+
+/**
+ * Mapping of roles to their permitted actions
+ */
+export type RolePermissions = Record<Role, readonly PermissionAction[]>
+
+// ============================================================================
 // ROLE PERMISSIONS MATRIX
 // ============================================================================
 
@@ -274,6 +311,9 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.inventory.transfer,
     PERMISSIONS.inventory.receive,
     PERMISSIONS.inventory.allocate,
+    PERMISSIONS.inventory.manage,
+    PERMISSIONS.inventory.count,
+    PERMISSIONS.inventory.forecast,
     // Opportunity
     PERMISSIONS.opportunity.create,
     PERMISSIONS.opportunity.read,
@@ -337,6 +377,23 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.suppliers.update,
     PERMISSIONS.suppliers.delete,
     PERMISSIONS.suppliers.approve,
+    // Warranty
+    PERMISSIONS.warranty.read,
+    PERMISSIONS.warranty.create,
+    PERMISSIONS.warranty.update,
+    PERMISSIONS.warranty.approve,
+    PERMISSIONS.warranty.resolve,
+    PERMISSIONS.warranty.assign,
+    // Financial
+    PERMISSIONS.financial.read,
+    PERMISSIONS.financial.create,
+    PERMISSIONS.financial.update,
+    PERMISSIONS.financial.delete,
+    // Support
+    PERMISSIONS.support.read,
+    PERMISSIONS.support.create,
+    PERMISSIONS.support.update,
+    PERMISSIONS.support.delete,
   ],
 
   // Admin: Almost full access, except billing
@@ -373,6 +430,9 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.inventory.transfer,
     PERMISSIONS.inventory.receive,
     PERMISSIONS.inventory.allocate,
+    PERMISSIONS.inventory.manage,
+    PERMISSIONS.inventory.count,
+    PERMISSIONS.inventory.forecast,
     // Opportunity
     PERMISSIONS.opportunity.create,
     PERMISSIONS.opportunity.read,
@@ -435,6 +495,23 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.suppliers.update,
     PERMISSIONS.suppliers.delete,
     PERMISSIONS.suppliers.approve,
+    // Warranty
+    PERMISSIONS.warranty.read,
+    PERMISSIONS.warranty.create,
+    PERMISSIONS.warranty.update,
+    PERMISSIONS.warranty.approve,
+    PERMISSIONS.warranty.resolve,
+    PERMISSIONS.warranty.assign,
+    // Financial
+    PERMISSIONS.financial.read,
+    PERMISSIONS.financial.create,
+    PERMISSIONS.financial.update,
+    PERMISSIONS.financial.delete,
+    // Support
+    PERMISSIONS.support.read,
+    PERMISSIONS.support.create,
+    PERMISSIONS.support.update,
+    PERMISSIONS.support.delete,
   ],
 
   // Manager: Manage team and operations, no user/org management
@@ -464,6 +541,9 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.inventory.transfer,
     PERMISSIONS.inventory.receive,
     PERMISSIONS.inventory.allocate,
+    PERMISSIONS.inventory.manage,
+    PERMISSIONS.inventory.count,
+    PERMISSIONS.inventory.forecast,
     // Opportunity
     PERMISSIONS.opportunity.create,
     PERMISSIONS.opportunity.read,
@@ -486,6 +566,17 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     // Dashboard (read + targets)
     PERMISSIONS.dashboard.read,
     PERMISSIONS.dashboard.manageTargets,
+    // Warranty (read + approve)
+    PERMISSIONS.warranty.read,
+    PERMISSIONS.warranty.approve,
+    // Financial (read + manage)
+    PERMISSIONS.financial.read,
+    PERMISSIONS.financial.create,
+    PERMISSIONS.financial.update,
+    // Support (read + manage)
+    PERMISSIONS.support.read,
+    PERMISSIONS.support.create,
+    PERMISSIONS.support.update,
   ],
 
   // Sales: Customer and sales focused
@@ -521,6 +612,10 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.apiToken.revoke,
     // Dashboard (read only)
     PERMISSIONS.dashboard.read,
+    // Financial (read only - view payment schedules)
+    PERMISSIONS.financial.read,
+    // Support (read only)
+    PERMISSIONS.support.read,
   ],
 
   // Operations: Inventory and fulfillment focused
@@ -541,10 +636,15 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.inventory.adjust,
     PERMISSIONS.inventory.transfer,
     PERMISSIONS.inventory.receive,
+    PERMISSIONS.inventory.manage,
+    PERMISSIONS.inventory.count,
+    PERMISSIONS.inventory.forecast,
     // Reports (operations only)
     PERMISSIONS.report.viewOperations,
     // Dashboard (read only)
     PERMISSIONS.dashboard.read,
+    // Warranty (read only - view claims related to operations)
+    PERMISSIONS.warranty.read,
   ],
 
   // Support: Customer service focused
@@ -564,6 +664,13 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.inventory.read,
     // Dashboard (read only)
     PERMISSIONS.dashboard.read,
+    // Warranty (read + assign)
+    PERMISSIONS.warranty.read,
+    PERMISSIONS.warranty.assign,
+    // Support (full - CSAT and tickets)
+    PERMISSIONS.support.read,
+    PERMISSIONS.support.create,
+    PERMISSIONS.support.update,
   ],
 
   // Viewer: Read-only access
@@ -576,6 +683,12 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.opportunity.read,
     PERMISSIONS.quote.read,
     PERMISSIONS.dashboard.read,
+    // Warranty (read only)
+    PERMISSIONS.warranty.read,
+    // Financial (read only)
+    PERMISSIONS.financial.read,
+    // Support (read only)
+    PERMISSIONS.support.read,
   ],
 }
 
@@ -617,7 +730,7 @@ export function hasPermission(role: Role, action: PermissionAction): boolean {
  * // ['customer.create', 'customer.read', ...]
  * ```
  */
-export function getPermittedActions(role: Role): PermissionAction[] {
+export function getPermittedActions(role: Role): readonly PermissionAction[] {
   return ROLE_PERMISSIONS[role] ?? []
 }
 
