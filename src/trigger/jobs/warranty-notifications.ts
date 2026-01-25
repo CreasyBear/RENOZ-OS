@@ -498,31 +498,31 @@ export const sendWarrantyRegistrationEmail = task({
     const durationDisplay = formatDuration(durationMonths);
     const cycleDisplay = cycleLimit ? `${cycleLimit.toLocaleString()} cycles` : null;
 
-    // Generate email content
+    // Generate email content (coerce undefined to null/defaults for template)
     const emailHtml = generateWarrantyRegistrationHtml({
       productName,
-      productSerial,
+      productSerial: productSerial ?? null,
       policyTypeDisplay,
-      policyName,
+      policyName: policyName ?? policyTypeDisplay,
       durationDisplay,
       cycleDisplay,
       expiryDate,
-      slaResponseHours,
-      slaResolutionDays,
-      certificateUrl,
+      slaResponseHours: slaResponseHours ?? 24,
+      slaResolutionDays: slaResolutionDays ?? 5,
+      certificateUrl: certificateUrl ?? null,
     });
 
     const emailText = generateWarrantyRegistrationText({
       productName,
-      productSerial,
+      productSerial: productSerial ?? null,
       policyTypeDisplay,
-      policyName,
+      policyName: policyName ?? policyTypeDisplay,
       durationDisplay,
       cycleDisplay,
       expiryDate,
-      slaResponseHours,
-      slaResolutionDays,
-      certificateUrl,
+      slaResponseHours: slaResponseHours ?? 24,
+      slaResolutionDays: slaResolutionDays ?? 5,
+      certificateUrl: certificateUrl ?? null,
     });
 
     // Step 1: Send email via Resend
@@ -710,7 +710,7 @@ export const sendWarrantyExpiryReminder = task({
     // Get policy type display
     const policyTypeDisplay = getPolicyTypeLabel(policyType);
 
-    // Generate email content
+    // Generate email content (coerce undefined to null for template)
     const emailHtml = generateWarrantyExpiryHtml({
       productName,
       policyTypeDisplay,
@@ -718,7 +718,7 @@ export const sendWarrantyExpiryReminder = task({
       daysUntilExpiry,
       urgencyLevel,
       cycleStatusDisplay,
-      renewalUrl,
+      renewalUrl: renewalUrl ?? null,
     });
 
     const emailText = generateWarrantyExpiryText({
@@ -727,7 +727,7 @@ export const sendWarrantyExpiryReminder = task({
       expiryDate,
       daysUntilExpiry,
       cycleStatusDisplay,
-      renewalUrl,
+      renewalUrl: renewalUrl ?? null,
     });
 
     // Step 1: Send email via Resend
