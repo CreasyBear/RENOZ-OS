@@ -561,12 +561,12 @@ export const evaluateApprovalRules = createServerFn({ method: 'POST' })
 ```
 
 **Acceptance:**
-- [ ] 10 server functions created
-- [ ] All use Zod validation
-- [ ] Permission checks on all operations
-- [ ] Multi-level approval logic implemented
-- [ ] Escalation with automatic and manual triggers
-- [ ] Delegation with delegatedFrom tracking
+- [x] 10 server functions created
+- [x] All use Zod validation
+- [x] Permission checks on all operations
+- [x] Multi-level approval logic implemented
+- [x] Escalation with automatic and manual triggers
+- [x] Delegation with delegatedFrom tracking
 
 ---
 
@@ -640,9 +640,9 @@ export type BulkApproval = z.infer<typeof bulkApprovalSchema>;
 ```
 
 **Acceptance:**
-- [ ] All schemas created with JSDoc
-- [ ] Types exported
-- [ ] Added to `src/lib/schemas/suppliers/index.ts`
+- [x] All schemas created with JSDoc (already existed in src/lib/schemas/approvals/)
+- [x] Types exported
+- [x] Added to `src/lib/schemas/approvals/index.ts`
 
 ---
 
@@ -692,10 +692,10 @@ export function useRevokeDelegation() { ... }
 ```
 
 **Acceptance:**
-- [ ] 11 hooks created
-- [ ] All use `queryKeys.approvals.*`
-- [ ] Proper cache invalidation on mutations
-- [ ] Options interfaces follow `UseXxxOptions` pattern
+- [x] 12 hooks created (4 query + 8 mutation hooks)
+- [x] All use `queryKeys.approvals.*`
+- [x] Proper cache invalidation on mutations
+- [x] Options interfaces follow `UseXxxOptions` pattern
 
 ---
 
@@ -724,23 +724,25 @@ approvals: {
 #### Task 2.5.1: Update `src/routes/_authenticated/approvals/index.tsx`
 
 **Changes:**
-- [ ] Remove mock data
-- [ ] Import hooks from `@/hooks/suppliers`
-- [ ] Use `usePendingApprovals()` for data
-- [ ] Wire handlers to mutations
-- [ ] Add loading/error states
+- [x] Remove mock data
+- [x] Import hooks from `@/hooks/suppliers`
+- [x] Use `usePendingApprovals()` for data
+- [x] Wire handlers to mutations
+- [x] Add loading/error states
 
 ---
 
 ### Phase 2 Success Criteria
 
-- [ ] All 10 server functions implemented
-- [ ] All 11 hooks created
-- [ ] Route displays real data
-- [ ] Approve/Reject workflow functional
-- [ ] Escalation workflow functional
-- [ ] Delegation workflow functional
-- [ ] Rule evaluation creates approval records
+- [x] All 10 server functions implemented
+- [x] All 12 hooks created (4 query + 8 mutation)
+- [x] Route displays real data
+- [x] Approve/Reject workflow functional
+- [x] Escalation workflow functional
+- [x] Delegation workflow functional
+- [x] Rule evaluation creates approval records
+
+**Commit:** `8d2da19 - feat(approvals): implement approval workflow server functions and hooks`
 
 ---
 
@@ -833,22 +835,34 @@ export function useProcurementDashboard(dateRange?: DateRange) { ... }
 
 #### Task 3.3.1: Update `src/routes/_authenticated/reports/procurement/index.tsx`
 
-- [ ] Remove mock data
-- [ ] Import `useProcurementDashboard` from hooks
-- [ ] Wire to presenter components
-- [ ] Add date range picker integration
+- [x] Remove mock data
+- [x] Import `useProcurementDashboard` from hooks
+- [x] Wire to presenter components
+- [x] Add date range picker integration
 
 ---
 
 ### Phase 3 Success Criteria
 
-- [ ] 5 server functions implemented
-- [ ] 5 hooks created
-- [ ] Dashboard shows real spend metrics
-- [ ] Dashboard shows real order metrics
-- [ ] Dashboard shows real supplier metrics
-- [ ] Alerts display real data
-- [ ] Date range filtering works
+- [x] 5 server functions implemented
+- [x] 5 hooks created
+- [x] Dashboard shows real spend metrics
+- [x] Dashboard shows real order metrics
+- [x] Dashboard shows real supplier metrics
+- [x] Alerts display real data
+- [x] Date range filtering works
+
+**Completed:** 2026-01-25
+
+**Files Created:**
+- `src/server/functions/suppliers/procurement-analytics.ts` - 5 server functions
+- `src/hooks/suppliers/use-procurement-analytics.ts` - 5 hooks
+
+**Files Modified:**
+- `src/lib/query-keys.ts` - Added procurement section
+- `src/hooks/suppliers/index.ts` - Added procurement exports
+- `src/server/functions/suppliers/index.ts` - Added procurement-analytics export
+- `src/routes/_authenticated/reports/procurement/index.tsx` - Wired to real hooks
 
 ---
 

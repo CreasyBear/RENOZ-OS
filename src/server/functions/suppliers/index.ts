@@ -41,4 +41,4 @@ export * from './approvals';
 // ANALYTICS & REPORTING
 // ============================================================================
 
-// TODO: Add supplier-analytics.ts for performance analytics
+export * from './procurement-analytics';

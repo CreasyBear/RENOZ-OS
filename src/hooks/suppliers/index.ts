@@ -50,3 +50,19 @@ export {
   useEvaluateApprovalRules,
 } from './use-approvals';
 export type { UsePendingApprovalsOptions, UseApprovalDetailsOptions } from './use-approvals';
+
+// Procurement analytics hooks
+export {
+  useSpendMetrics,
+  useOrderMetrics,
+  useSupplierMetrics,
+  useProcurementAlerts,
+  useProcurementDashboard,
+} from './use-procurement-analytics';
+export type {
+  UseSpendMetricsOptions,
+  UseOrderMetricsOptions,
+  UseSupplierMetricsOptions,
+  UseProcurementAlertsOptions,
+  UseProcurementDashboardOptions,
+} from './use-procurement-analytics';

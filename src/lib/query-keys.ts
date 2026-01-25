@@ -349,8 +349,8 @@ export const queryKeys = {
       all: () => [...queryKeys.customers.all, 'health'] as const,
       metrics: (customerId: string) =>
         [...queryKeys.customers.health.all(), 'metrics', customerId] as const,
-      history: (customerId: string) =>
-        [...queryKeys.customers.health.all(), 'history', customerId] as const,
+      history: (customerId: string, months?: number) =>
+        [...queryKeys.customers.health.all(), 'history', customerId, months] as const,
     },
     segments: {
       all: () => [...queryKeys.customers.all, 'segments'] as const,
@@ -368,8 +368,8 @@ export const queryKeys = {
         [...queryKeys.customers.duplicates.all(), 'scan', customerId] as const,
       detection: (input?: Record<string, unknown>) =>
         [...queryKeys.customers.duplicates.all(), 'detection', input] as const,
-      history: () =>
-        [...queryKeys.customers.duplicates.all(), 'history'] as const,
+      history: (filters?: Record<string, unknown>) =>
+        [...queryKeys.customers.duplicates.all(), 'history', filters] as const,
       check: (input?: Record<string, unknown>) =>
         [...queryKeys.customers.duplicates.all(), 'check', input] as const,
     },
@@ -418,8 +418,8 @@ export const queryKeys = {
       [...queryKeys.orders.all, 'amendments', 'detail', id] as const,
     withCustomer: (orderId: string) =>
       [...queryKeys.orders.details(), orderId, 'withCustomer'] as const,
-    assignees: (filters?: Record<string, unknown>) =>
-      [...queryKeys.orders.all, 'assignees', filters ?? {}] as const,
+    assignees: (orgId?: string, roles?: readonly string[]) =>
+      [...queryKeys.orders.all, 'assignees', orgId, roles] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -504,7 +504,7 @@ export const queryKeys = {
     details: () => [...queryKeys.jobs.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.jobs.details(), id] as const,
     active: () => [...queryKeys.jobs.all, 'active'] as const,
-    viewSync: () => [...queryKeys.jobs.all, 'viewSync'] as const,
+    viewSync: (interval?: number) => [...queryKeys.jobs.all, 'viewSync', interval] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -1333,6 +1333,32 @@ export const queryKeys = {
     // Procurement Reports
     procurementAnalytics: (dateRange?: Record<string, unknown>) =>
       [...queryKeys.reports.all, 'procurementAnalytics', dateRange ?? {}] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // PROCUREMENT ANALYTICS
+  // -------------------------------------------------------------------------
+  procurement: {
+    all: ['procurement'] as const,
+
+    // Spend metrics
+    spend: (filters?: Record<string, unknown>) =>
+      [...queryKeys.procurement.all, 'spend', filters ?? {}] as const,
+
+    // Order metrics
+    orders: (filters?: Record<string, unknown>) =>
+      [...queryKeys.procurement.all, 'orders', filters ?? {}] as const,
+
+    // Supplier metrics
+    suppliers: (filters?: Record<string, unknown>) =>
+      [...queryKeys.procurement.all, 'suppliers', filters ?? {}] as const,
+
+    // Alerts
+    alerts: () => [...queryKeys.procurement.all, 'alerts'] as const,
+
+    // Combined dashboard
+    dashboard: (filters?: Record<string, unknown>) =>
+      [...queryKeys.procurement.all, 'dashboard', filters ?? {}] as const,
   },
 
   // -------------------------------------------------------------------------
