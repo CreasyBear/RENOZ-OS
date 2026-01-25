@@ -744,14 +744,15 @@ export const assignCustomerTag = createServerFn({ method: 'POST' })
 
     const { customerId, tagId, notes } = data;
 
-    // Check if assignment already exists
+    // Check if assignment already exists (include org filter for tenant isolation)
     const existing = await db
       .select()
       .from(customerTagAssignments)
       .where(
         and(
           eq(customerTagAssignments.customerId, customerId),
-          eq(customerTagAssignments.tagId, tagId)
+          eq(customerTagAssignments.tagId, tagId),
+          eq(customerTagAssignments.organizationId, ctx.organizationId)
         )
       )
       .limit(1);
@@ -880,7 +881,7 @@ export const createCustomerHealthMetric = createServerFn({ method: 'POST' })
       })
       .returning();
 
-    // Update customer's current health score
+    // Update customer's current health score (include org filter for tenant isolation)
     if (data.overallScore !== undefined) {
       await db
         .update(customers)
@@ -888,7 +889,12 @@ export const createCustomerHealthMetric = createServerFn({ method: 'POST' })
           healthScore: Math.round(data.overallScore),
           healthScoreUpdatedAt: new Date().toISOString(),
         })
-        .where(eq(customers.id, data.customerId));
+        .where(
+          and(
+            eq(customers.id, data.customerId),
+            eq(customers.organizationId, ctx.organizationId)
+          )
+        );
     }
 
     return result[0];

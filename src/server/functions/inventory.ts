@@ -76,7 +76,7 @@ interface ListMovementsResult {
 export const listInventory = createServerFn({ method: "GET" })
   .inputValidator(inventoryListQuerySchema)
   .handler(async ({ data }): Promise<ListInventoryResult> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.READ });
     const { page = 1, pageSize = 20, search, sortBy, sortOrder, ...filters } = data;
     const limit = pageSize;
 
@@ -171,7 +171,7 @@ export const getInventoryItem = createServerFn({ method: "GET" })
     movements: InventoryMovementRecord[];
     costLayers: (typeof inventoryCostLayers.$inferSelect)[];
   }> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.READ });
 
     // Get inventory item
     const [item] = await db
@@ -826,7 +826,7 @@ export const receiveInventory = createServerFn({ method: "POST" })
 export const listMovements = createServerFn({ method: "GET" })
   .inputValidator(movementListQuerySchema)
   .handler(async ({ data }): Promise<ListMovementsResult> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.READ });
     const { page = 1, pageSize = 50, sortBy, sortOrder, ...filters } = data;
     const limit = pageSize;
 
@@ -900,7 +900,7 @@ export const listMovements = createServerFn({ method: "GET" })
  */
 export const getInventoryDashboard = createServerFn({ method: "GET" })
   .handler(async () => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.READ });
 
     // Get inventory metrics
     const [metrics] = await db

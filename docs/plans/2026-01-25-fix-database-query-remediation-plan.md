@@ -132,9 +132,9 @@ export function escapeLike(value: string): string {
 ))
 ```
 
-- [ ] Add `organizationId` to tag assignment existence check
-- [ ] Add `organizationId` to customer health metric update
-- [ ] Audit all UPDATE/DELETE queries for missing org filters
+- [x] Add `organizationId` to tag assignment existence check
+- [x] Add `organizationId` to customer health metric update
+- [ ] Audit all UPDATE/DELETE queries for missing org filters (deferred - needs deeper review)
 
 ### 1.4 Add Missing Permission Checks
 
@@ -158,11 +158,11 @@ const ctx = await withAuth({ permission: PERMISSIONS.domain.action });
 | `forecasting.ts` | 64, 120, 370, 463, 587 | `inventory.read` |
 | `stock-counts.ts` | 46, 102, 736, 836 | `inventory.adjust` |
 
-- [ ] Update `csat-responses.ts` with proper permissions (5 handlers)
-- [ ] Update `inventory.ts` with proper permissions (4 handlers)
-- [ ] Update `forecasting.ts` with proper permissions (5 handlers)
-- [ ] Update `stock-counts.ts` with proper permissions (4 handlers)
-- [ ] Update remaining 12 files with missing permissions
+- [x] Update `csat-responses.ts` with proper permissions (5 handlers)
+- [x] Update `inventory.ts` with proper permissions (4 handlers)
+- [x] Update `forecasting.ts` with proper permissions (5 handlers)
+- [x] Update `stock-counts.ts` with proper permissions (4 handlers)
+- [ ] Update remaining 12 files with missing permissions (deferred - lower priority)
 
 ---
 

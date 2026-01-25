@@ -16,6 +16,7 @@ import {
   products,
 } from "../../../drizzle/schema";
 import { withAuth } from "@/lib/server/protected";
+import { PERMISSIONS } from "@/lib/constants";
 import { NotFoundError, ValidationError } from "@/lib/server/errors";
 import {
   createForecastSchema,
@@ -61,7 +62,7 @@ interface ListForecastsResult {
 export const listForecasts = createServerFn({ method: "GET" })
   .inputValidator(forecastListQuerySchema)
   .handler(async ({ data }): Promise<ListForecastsResult> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.FORECAST });
     const { page = 1, pageSize = 20, sortBy, sortOrder, ...filters } = data;
     const limit = pageSize;
 
@@ -117,7 +118,7 @@ export const getProductForecast = createServerFn({ method: "GET" })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.FORECAST });
 
     // Verify product exists
     const [product] = await db
@@ -367,7 +368,7 @@ export const calculateSafetyStock = createServerFn({ method: "GET" })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.FORECAST });
 
     // Verify product exists
     const [product] = await db
@@ -460,7 +461,7 @@ export const getReorderRecommendations = createServerFn({ method: "GET" })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.FORECAST });
 
     // Get products with forecasts and current stock
     const productsWithData = await db
@@ -584,7 +585,7 @@ export const getForecastAccuracy = createServerFn({ method: "GET" })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.FORECAST });
 
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - data.lookbackDays);
