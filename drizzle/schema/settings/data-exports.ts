@@ -183,23 +183,23 @@ export const dataExports = pgTable(
     selectPolicy: pgPolicy("data_exports_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     insertPolicy: pgPolicy("data_exports_insert_policy", {
       for: "insert",
       to: "authenticated",
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     updatePolicy: pgPolicy("data_exports_update_policy", {
       for: "update",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     deletePolicy: pgPolicy("data_exports_delete_policy", {
       for: "delete",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
   })
 );

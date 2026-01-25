@@ -196,23 +196,23 @@ export const customers = pgTable(
     selectPolicy: pgPolicy("customers_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     insertPolicy: pgPolicy("customers_insert_policy", {
       for: "insert",
       to: "authenticated",
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     updatePolicy: pgPolicy("customers_update_policy", {
       for: "update",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     deletePolicy: pgPolicy("customers_delete_policy", {
       for: "delete",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
   })
 );
@@ -279,23 +279,23 @@ export const contacts = pgTable(
     selectPolicy: pgPolicy("contacts_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     insertPolicy: pgPolicy("contacts_insert_policy", {
       for: "insert",
       to: "authenticated",
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     updatePolicy: pgPolicy("contacts_update_policy", {
       for: "update",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     deletePolicy: pgPolicy("contacts_delete_policy", {
       for: "delete",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
   })
 );
@@ -355,23 +355,23 @@ export const addresses = pgTable(
     selectPolicy: pgPolicy("addresses_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     insertPolicy: pgPolicy("addresses_insert_policy", {
       for: "insert",
       to: "authenticated",
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     updatePolicy: pgPolicy("addresses_update_policy", {
       for: "update",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     deletePolicy: pgPolicy("addresses_delete_policy", {
       for: "delete",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
   })
 );
@@ -526,23 +526,23 @@ export const customerTagAssignments = pgTable(
     selectPolicy: pgPolicy("customer_tag_assignments_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     insertPolicy: pgPolicy("customer_tag_assignments_insert_policy", {
       for: "insert",
       to: "authenticated",
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     updatePolicy: pgPolicy("customer_tag_assignments_update_policy", {
       for: "update",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     deletePolicy: pgPolicy("customer_tag_assignments_delete_policy", {
       for: "delete",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
   })
 );

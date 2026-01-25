@@ -20,6 +20,7 @@ import {
   check,
   index,
   uniqueIndex,
+  pgPolicy,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { purchaseOrderStatusEnum } from "../_shared/enums";
@@ -197,6 +198,29 @@ export const purchaseOrders = pgTable(
       "purchase_orders_date_order",
       sql`${table.requiredDate} IS NULL OR ${table.requiredDate} >= ${table.orderDate}`
     ),
+
+    // Standard CRUD RLS policies for org isolation
+    selectPolicy: pgPolicy("purchase_orders_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("purchase_orders_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("purchase_orders_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("purchase_orders_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 

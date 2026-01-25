@@ -176,12 +176,36 @@ export const orders = pgTable(
       table.organizationId,
       table.xeroSyncStatus
     ),
+
+    // Standard CRUD RLS policies for org isolation
+    selectPolicy: pgPolicy("orders_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("orders_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("orders_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("orders_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+
     // Portal RLS (customer + subcontractor scope)
     portalSelectPolicy: pgPolicy("orders_portal_select_policy", {
       for: "select",
       to: "authenticated",
       using: sql`(
-        ${table.organizationId} = current_setting('app.organization_id', true)::uuid
+        ${table.organizationId} = (SELECT current_setting('app.organization_id', true)::uuid)
         OR EXISTS (
           SELECT 1 FROM portal_identities pi
           WHERE pi.auth_user_id = auth.uid()
@@ -273,12 +297,36 @@ export const orderLineItems = pgTable(
       table.createdAt.desc(),
       table.id.desc()
     ),
+
+    // Standard CRUD RLS policies for org isolation
+    selectPolicy: pgPolicy("order_line_items_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("order_line_items_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("order_line_items_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("order_line_items_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+
     // Portal RLS (customer + subcontractor scope)
     portalSelectPolicy: pgPolicy("order_line_items_portal_select_policy", {
       for: "select",
       to: "authenticated",
       using: sql`(
-        ${table.organizationId} = current_setting('app.organization_id', true)::uuid
+        ${table.organizationId} = (SELECT current_setting('app.organization_id', true)::uuid)
         OR EXISTS (
           SELECT 1 FROM orders o
           WHERE o.id = ${table.orderId}

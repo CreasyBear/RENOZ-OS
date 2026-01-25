@@ -20,7 +20,9 @@ import {
   timestamp,
   index,
   uniqueIndex,
+  pgPolicy,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { relations } from "drizzle-orm";
 import { inventory, inventoryMovements } from "./inventory";
 
@@ -119,6 +121,29 @@ export const warehouseLocations = pgTable(
       table.createdAt.desc(),
       table.id.desc()
     ),
+
+    // Standard CRUD RLS policies for org isolation
+    selectPolicy: pgPolicy("warehouse_locations_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("warehouse_locations_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("warehouse_locations_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("warehouse_locations_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 

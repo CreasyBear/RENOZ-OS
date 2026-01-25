@@ -19,6 +19,7 @@ import {
   check,
   index,
   uniqueIndex,
+  pgPolicy,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import {
@@ -207,6 +208,29 @@ export const suppliers = pgTable(
       "suppliers_order_value_range",
       sql`${table.minimumOrderValue} IS NULL OR ${table.maximumOrderValue} IS NULL OR ${table.maximumOrderValue} >= ${table.minimumOrderValue}`
     ),
+
+    // Standard CRUD RLS policies for org isolation
+    selectPolicy: pgPolicy("suppliers_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("suppliers_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("suppliers_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("suppliers_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 
@@ -300,6 +324,29 @@ export const supplierPerformanceMetrics = pgTable(
       "supplier_metrics_defect_rate_range",
       sql`${table.defectRate} IS NULL OR (${table.defectRate} >= 0 AND ${table.defectRate} <= 100)`
     ),
+
+    // Standard CRUD RLS policies for org isolation
+    selectPolicy: pgPolicy("supplier_performance_metrics_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("supplier_performance_metrics_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("supplier_performance_metrics_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("supplier_performance_metrics_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 

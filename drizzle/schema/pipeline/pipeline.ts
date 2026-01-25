@@ -132,23 +132,23 @@ export const winLossReasons = pgTable(
     selectPolicy: pgPolicy("win_loss_reasons_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     insertPolicy: pgPolicy("win_loss_reasons_insert_policy", {
       for: "insert",
       to: "authenticated",
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     updatePolicy: pgPolicy("win_loss_reasons_update_policy", {
       for: "update",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     deletePolicy: pgPolicy("win_loss_reasons_delete_policy", {
       for: "delete",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
   })
 );
@@ -284,23 +284,23 @@ export const opportunities = pgTable(
     selectPolicy: pgPolicy("opportunities_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     insertPolicy: pgPolicy("opportunities_insert_policy", {
       for: "insert",
       to: "authenticated",
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     updatePolicy: pgPolicy("opportunities_update_policy", {
       for: "update",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     deletePolicy: pgPolicy("opportunities_delete_policy", {
       for: "delete",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
   })
 );
@@ -378,18 +378,18 @@ export const opportunityActivities = pgTable(
     selectPolicy: pgPolicy("opportunity_activities_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     insertPolicy: pgPolicy("opportunity_activities_insert_policy", {
       for: "insert",
       to: "authenticated",
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     // Activities are immutable - no update policy
     deletePolicy: pgPolicy("opportunity_activities_delete_policy", {
       for: "delete",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
   })
 );
@@ -473,29 +473,29 @@ export const quoteVersions = pgTable(
     selectPolicy: pgPolicy("quote_versions_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     insertPolicy: pgPolicy("quote_versions_insert_policy", {
       for: "insert",
       to: "authenticated",
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     updatePolicy: pgPolicy("quote_versions_update_policy", {
       for: "update",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     deletePolicy: pgPolicy("quote_versions_delete_policy", {
       for: "delete",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     portalSelectPolicy: pgPolicy("quote_versions_portal_select_policy", {
       for: "select",
       to: "authenticated",
       using: sql`(
-        ${table.organizationId} = current_setting('app.organization_id', true)::uuid
+        ${table.organizationId} = (SELECT current_setting('app.organization_id', true)::uuid)
         OR EXISTS (
           SELECT 1 FROM portal_identities pi
           JOIN opportunities o ON o.id = ${table.opportunityId}
@@ -584,29 +584,29 @@ export const quotes = pgTable(
     selectPolicy: pgPolicy("quotes_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     insertPolicy: pgPolicy("quotes_insert_policy", {
       for: "insert",
       to: "authenticated",
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     updatePolicy: pgPolicy("quotes_update_policy", {
       for: "update",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     deletePolicy: pgPolicy("quotes_delete_policy", {
       for: "delete",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     portalSelectPolicy: pgPolicy("quotes_portal_select_policy", {
       for: "select",
       to: "authenticated",
       using: sql`(
-        ${table.organizationId} = current_setting('app.organization_id', true)::uuid
+        ${table.organizationId} = (SELECT current_setting('app.organization_id', true)::uuid)
         OR EXISTS (
           SELECT 1 FROM portal_identities pi
           WHERE pi.auth_user_id = auth.uid()

@@ -19,8 +19,9 @@ import {
   index,
   uniqueIndex,
   pgEnum,
+  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { timestampColumns, auditColumns } from "../_shared/patterns";
 import { organizations } from "../settings/organizations";
 import { slaConfigurations } from "../support/sla-configurations";
@@ -116,6 +117,29 @@ export const warrantyPolicies = pgTable(
 
     // SLA configuration lookup
     index("idx_warranty_policies_sla").on(table.slaConfigurationId),
+
+    // Standard CRUD RLS policies for org isolation
+    pgPolicy("warranty_policies_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("warranty_policies_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("warranty_policies_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("warranty_policies_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   ]
 );
 

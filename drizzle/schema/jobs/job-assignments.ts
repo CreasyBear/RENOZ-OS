@@ -193,7 +193,7 @@ export const jobAssignments = pgTable(
       for: "select",
       to: "authenticated",
       using: sql`(
-        ${table.organizationId} = current_setting('app.organization_id', true)::uuid
+        ${table.organizationId} = (SELECT current_setting('app.organization_id', true)::uuid)
         OR EXISTS (
           SELECT 1 FROM portal_identities pi
           WHERE pi.auth_user_id = auth.uid()

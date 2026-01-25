@@ -128,23 +128,23 @@ export const emailSuppression = pgTable(
     selectPolicy: pgPolicy("email_suppression_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     insertPolicy: pgPolicy("email_suppression_insert_policy", {
       for: "insert",
       to: "authenticated",
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     updatePolicy: pgPolicy("email_suppression_update_policy", {
       for: "update",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     deletePolicy: pgPolicy("email_suppression_delete_policy", {
       for: "delete",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
   })
 );

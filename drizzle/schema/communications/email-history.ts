@@ -185,12 +185,12 @@ export const emailHistory = pgTable(
     selectPolicy: pgPolicy("email_history_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     insertPolicy: pgPolicy("email_history_insert_policy", {
       for: "insert",
       to: "authenticated",
-      withCheck: sql`organization_id = current_setting('app.organization_id', true)::uuid`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
   })
 );

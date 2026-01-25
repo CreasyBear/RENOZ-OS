@@ -234,7 +234,7 @@ export const rmaLineItems = pgTable(
       using: sql`EXISTS (
         SELECT 1 FROM return_authorizations ra
         WHERE ra.id = rma_id
-        AND ra.organization_id = current_setting('app.organization_id', true)::uuid
+        AND ra.organization_id = (SELECT current_setting('app.organization_id', true)::uuid)
       )`,
     }),
     insertPolicy: pgPolicy("rma_line_items_insert_policy", {
@@ -243,7 +243,7 @@ export const rmaLineItems = pgTable(
       withCheck: sql`EXISTS (
         SELECT 1 FROM return_authorizations ra
         WHERE ra.id = rma_id
-        AND ra.organization_id = current_setting('app.organization_id', true)::uuid
+        AND ra.organization_id = (SELECT current_setting('app.organization_id', true)::uuid)
       )`,
     }),
     updatePolicy: pgPolicy("rma_line_items_update_policy", {
@@ -252,12 +252,12 @@ export const rmaLineItems = pgTable(
       using: sql`EXISTS (
         SELECT 1 FROM return_authorizations ra
         WHERE ra.id = rma_id
-        AND ra.organization_id = current_setting('app.organization_id', true)::uuid
+        AND ra.organization_id = (SELECT current_setting('app.organization_id', true)::uuid)
       )`,
       withCheck: sql`EXISTS (
         SELECT 1 FROM return_authorizations ra
         WHERE ra.id = rma_id
-        AND ra.organization_id = current_setting('app.organization_id', true)::uuid
+        AND ra.organization_id = (SELECT current_setting('app.organization_id', true)::uuid)
       )`,
     }),
     deletePolicy: pgPolicy("rma_line_items_delete_policy", {
@@ -266,7 +266,7 @@ export const rmaLineItems = pgTable(
       using: sql`EXISTS (
         SELECT 1 FROM return_authorizations ra
         WHERE ra.id = rma_id
-        AND ra.organization_id = current_setting('app.organization_id', true)::uuid
+        AND ra.organization_id = (SELECT current_setting('app.organization_id', true)::uuid)
       )`,
     }),
   })

@@ -86,3 +86,6 @@ export * from "./dashboard";
 
 // Portal domain
 export * from "./portal";
+
+// AI Infrastructure domain
+export * from "./_ai";

@@ -84,7 +84,7 @@ export const customFieldValues = pgTable(
       using: sql`EXISTS (
         SELECT 1 FROM custom_fields cf
         WHERE cf.id = custom_field_id
-        AND cf.organization_id = current_setting('app.organization_id', true)::uuid
+        AND cf.organization_id = (SELECT current_setting('app.organization_id', true)::uuid)
       )`,
     }),
     insertPolicy: pgPolicy("custom_field_values_insert_policy", {
@@ -93,7 +93,7 @@ export const customFieldValues = pgTable(
       withCheck: sql`EXISTS (
         SELECT 1 FROM custom_fields cf
         WHERE cf.id = custom_field_id
-        AND cf.organization_id = current_setting('app.organization_id', true)::uuid
+        AND cf.organization_id = (SELECT current_setting('app.organization_id', true)::uuid)
       )`,
     }),
     updatePolicy: pgPolicy("custom_field_values_update_policy", {
@@ -102,12 +102,12 @@ export const customFieldValues = pgTable(
       using: sql`EXISTS (
         SELECT 1 FROM custom_fields cf
         WHERE cf.id = custom_field_id
-        AND cf.organization_id = current_setting('app.organization_id', true)::uuid
+        AND cf.organization_id = (SELECT current_setting('app.organization_id', true)::uuid)
       )`,
       withCheck: sql`EXISTS (
         SELECT 1 FROM custom_fields cf
         WHERE cf.id = custom_field_id
-        AND cf.organization_id = current_setting('app.organization_id', true)::uuid
+        AND cf.organization_id = (SELECT current_setting('app.organization_id', true)::uuid)
       )`,
     }),
     deletePolicy: pgPolicy("custom_field_values_delete_policy", {
@@ -116,7 +116,7 @@ export const customFieldValues = pgTable(
       using: sql`EXISTS (
         SELECT 1 FROM custom_fields cf
         WHERE cf.id = custom_field_id
-        AND cf.organization_id = current_setting('app.organization_id', true)::uuid
+        AND cf.organization_id = (SELECT current_setting('app.organization_id', true)::uuid)
       )`,
     }),
   })
