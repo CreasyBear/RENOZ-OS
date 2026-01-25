@@ -6,7 +6,7 @@
  *
  * @see src/server/functions/user-delegations.ts for server functions
  */
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useServerFn } from '@tanstack/react-start';
 import { RouteErrorFallback } from '@/components/layout';
@@ -36,7 +36,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Command,
@@ -135,6 +135,8 @@ export const Route = createFileRoute('/_authenticated/settings/delegations' as a
 
 function DelegationsPage() {
   const confirm = useConfirmation();
+  const navigate = useNavigate();
+  const router = useRouter();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const search = Route.useSearch() as any;
   const loaderData = Route.useLoaderData() as {
@@ -167,13 +169,11 @@ function DelegationsPage() {
 
   const selectedUser = filteredUsers.find((u) => u.id === selectedUserId);
 
-  // Navigation helper
-  const navigateTo = (path: string) => {
-    window.location.href = path;
-  };
-
   const handleTabChange = (newTab: string) => {
-    navigateTo(`/settings/delegations?tab=${newTab}`);
+    navigate({
+      to: '/settings/delegations',
+      search: { tab: newTab as 'my-delegations' | 'delegated-to-me' },
+    });
   };
 
   // Handlers
@@ -192,7 +192,7 @@ function DelegationsPage() {
       });
       setIsCreateOpen(false);
       resetForm();
-      window.location.reload();
+      router.invalidate();
     } catch (error) {
       console.error('Failed to create delegation:', error);
     } finally {
@@ -212,7 +212,7 @@ function DelegationsPage() {
       setIsSubmitting(true);
       try {
         await cancelDelegationFn({ data: { id: delegation.id } });
-        window.location.reload();
+        router.invalidate();
       } catch (error) {
         console.error('Failed to cancel delegation:', error);
       } finally {

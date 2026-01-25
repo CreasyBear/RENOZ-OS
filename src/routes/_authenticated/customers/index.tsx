@@ -11,13 +11,13 @@
  * - Bulk operations (delete, assign tags, export)
  * - Mobile-responsive design
  */
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useCallback } from 'react'
 import { Plus } from 'lucide-react'
 import { PageLayout, RouteErrorFallback } from '@/components/layout'
 import { CustomerTableSkeleton } from '@/components/skeletons/customers'
 import { Button } from '@/components/ui/button'
-import { toastSuccess, toastError } from '@/hooks/use-toast'
+import { toastSuccess, toastError } from '@/hooks'
 import {
   CustomerDirectory,
   type CustomerFiltersState,
@@ -54,6 +54,8 @@ export const Route = createFileRoute('/_authenticated/customers/')({
 // ============================================================================
 
 function CustomersPage() {
+  const navigate = useNavigate()
+
   // Pagination state
   const [page, setPage] = useState(1)
   const [pageSize] = useState(20)
@@ -95,13 +97,12 @@ function CustomersPage() {
 
   // Handlers
   const handleCreateCustomer = useCallback(() => {
-    // TODO: Navigate to customer creation form
-    window.location.href = '/customers/new'
-  }, [])
+    navigate({ to: '/customers/new' })
+  }, [navigate])
 
   const handleEditCustomer = useCallback((customer: CustomerTableData) => {
-    window.location.href = `/customers/${customer.id}/edit`
-  }, [])
+    navigate({ to: '/customers/$customerId/edit', params: { customerId: customer.id } })
+  }, [navigate])
 
   const handleDeleteCustomer = useCallback(
     (customer: CustomerTableData) => {
