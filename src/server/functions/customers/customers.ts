@@ -1084,13 +1084,20 @@ export const bulkAssignTags = createServerFn({ method: 'POST' })
         {} as Record<string, number>
       );
 
-      for (const [tagId, count] of Object.entries(tagCounts)) {
-        await db
-          .update(customerTags)
-          .set({
-            usageCount: sql`${customerTags.usageCount} + ${count}`,
-          })
-          .where(eq(customerTags.id, tagId));
+      if (Object.keys(tagCounts).length > 0) {
+        const tagIds = Object.keys(tagCounts);
+        await db.execute(sql`
+          UPDATE customer_tags
+          SET usage_count = usage_count + CASE id
+            ${sql.join(
+              Object.entries(tagCounts).map(([tagId, count]) =>
+                sql`WHEN ${tagId}::uuid THEN ${count}`
+              ),
+              sql` `
+            )}
+          END
+          WHERE id = ANY(${tagIds}::uuid[])
+        `);
       }
     }
 
@@ -1163,16 +1170,18 @@ export const mergeCustomers = createServerFn({ method: 'POST' })
       .from(customerTagAssignments)
       .where(inArray(customerTagAssignments.customerId, duplicateCustomerIds));
 
-    for (const assignment of duplicateAssignments) {
+    if (duplicateAssignments.length > 0) {
       await db
         .insert(customerTagAssignments)
-        .values({
-          customerId: primaryCustomerId,
-          tagId: assignment.tagId,
-          organizationId: ctx.organizationId,
-          assignedBy: ctx.user.id,
-          notes: assignment.notes,
-        })
+        .values(
+          duplicateAssignments.map((assignment) => ({
+            customerId: primaryCustomerId,
+            tagId: assignment.tagId,
+            organizationId: ctx.organizationId,
+            assignedBy: ctx.user.id,
+            notes: assignment.notes,
+          }))
+        )
         .onConflictDoNothing();
     }
 

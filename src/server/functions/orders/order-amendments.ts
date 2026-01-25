@@ -23,6 +23,7 @@ import {
   amendmentListQuerySchema,
   type ItemChange,
 } from '@/lib/schemas';
+import { GST_RATE } from '@/lib/order-calculations';
 
 // ============================================================================
 // TYPES
@@ -37,12 +38,6 @@ interface ListAmendmentsResult {
   pageSize: number;
   hasMore: boolean;
 }
-
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-const GST_RATE = 0.1; // Australian GST 10%
 
 // ============================================================================
 // HELPERS

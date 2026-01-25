@@ -45,6 +45,7 @@ import {
   buildCursorCondition,
   buildStandardCursorResponse,
 } from '@/lib/db/pagination';
+import { GST_RATE } from '@/lib/order-calculations';
 
 // ============================================================================
 // TYPES
@@ -159,8 +160,6 @@ function validateStatusTransition(current: OrderStatus, next: OrderStatus): bool
 // ============================================================================
 // PRICING CALCULATIONS
 // ============================================================================
-
-const GST_RATE = 0.1; // Australian GST 10%
 
 /**
  * Calculate line item totals including tax.

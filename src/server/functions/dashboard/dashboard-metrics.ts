@@ -201,57 +201,67 @@ async function queryMetricsFromMV(
   activeJobs: number;
   openClaims: number;
 }> {
-  // Query mv_daily_metrics for orders/revenue
-  const [orderMetrics] = await db.execute<{
-    orders_count: string;
-    revenue: string;
-    customer_count: string;
-  }>(sql`
-    SELECT
-      COALESCE(SUM(orders_count), 0) as orders_count,
-      COALESCE(SUM(revenue), 0) as revenue,
-      COALESCE(SUM(customer_count), 0) as customer_count
-    FROM mv_daily_metrics
-    WHERE organization_id = ${organizationId}
-      AND metric_date >= ${dateFrom}::date
-      AND metric_date <= ${dateTo}::date
-  `);
+  // Run all MV queries in parallel for better performance
+  const [orderMetricsResult, pipelineMetricsResult, jobMetricsResult, claimMetricsResult] =
+    await Promise.all([
+      // Query mv_daily_metrics for orders/revenue
+      db.execute<{
+        orders_count: string;
+        revenue: string;
+        customer_count: string;
+      }>(sql`
+        SELECT
+          COALESCE(SUM(orders_count), 0) as orders_count,
+          COALESCE(SUM(revenue), 0) as revenue,
+          COALESCE(SUM(customer_count), 0) as customer_count
+        FROM mv_daily_metrics
+        WHERE organization_id = ${organizationId}
+          AND metric_date >= ${dateFrom}::date
+          AND metric_date <= ${dateTo}::date
+      `),
 
-  // Query mv_daily_pipeline for pipeline value
-  const [pipelineMetrics] = await db.execute<{
-    total_value: string;
-  }>(sql`
-    SELECT COALESCE(SUM(total_value), 0) as total_value
-    FROM mv_daily_pipeline
-    WHERE organization_id = ${organizationId}
-      AND metric_date >= ${dateFrom}::date
-      AND metric_date <= ${dateTo}::date
-      AND stage NOT IN ('won', 'lost')
-  `);
+      // Query mv_daily_pipeline for pipeline value
+      db.execute<{
+        total_value: string;
+      }>(sql`
+        SELECT COALESCE(SUM(total_value), 0) as total_value
+        FROM mv_daily_pipeline
+        WHERE organization_id = ${organizationId}
+          AND metric_date >= ${dateFrom}::date
+          AND metric_date <= ${dateTo}::date
+          AND stage NOT IN ('won', 'lost')
+      `),
 
-  // Query mv_daily_jobs for active jobs
-  const [jobMetrics] = await db.execute<{
-    active_count: string;
-  }>(sql`
-    SELECT COALESCE(SUM(job_count), 0) as active_count
-    FROM mv_daily_jobs
-    WHERE organization_id = ${organizationId}
-      AND metric_date >= ${dateFrom}::date
-      AND metric_date <= ${dateTo}::date
-      AND status IN ('scheduled', 'in_progress')
-  `);
+      // Query mv_daily_jobs for active jobs
+      db.execute<{
+        active_count: string;
+      }>(sql`
+        SELECT COALESCE(SUM(job_count), 0) as active_count
+        FROM mv_daily_jobs
+        WHERE organization_id = ${organizationId}
+          AND metric_date >= ${dateFrom}::date
+          AND metric_date <= ${dateTo}::date
+          AND status IN ('scheduled', 'in_progress')
+      `),
 
-  // Query mv_daily_warranty for open claims
-  const [claimMetrics] = await db.execute<{
-    open_count: string;
-  }>(sql`
-    SELECT COALESCE(SUM(claim_count), 0) as open_count
-    FROM mv_daily_warranty
-    WHERE organization_id = ${organizationId}
-      AND metric_date >= ${dateFrom}::date
-      AND metric_date <= ${dateTo}::date
-      AND status IN ('submitted', 'under_review', 'approved')
-  `);
+      // Query mv_daily_warranty for open claims
+      db.execute<{
+        open_count: string;
+      }>(sql`
+        SELECT COALESCE(SUM(claim_count), 0) as open_count
+        FROM mv_daily_warranty
+        WHERE organization_id = ${organizationId}
+          AND metric_date >= ${dateFrom}::date
+          AND metric_date <= ${dateTo}::date
+          AND status IN ('submitted', 'under_review', 'approved')
+      `),
+    ]);
+
+  // Extract first row from each result
+  const orderMetrics = orderMetricsResult[0];
+  const pipelineMetrics = pipelineMetricsResult[0];
+  const jobMetrics = jobMetricsResult[0];
+  const claimMetrics = claimMetricsResult[0];
 
   return {
     revenue: Number(orderMetrics?.revenue ?? 0),
@@ -278,68 +288,79 @@ async function queryTodayMetricsLive(
 }> {
   const today = getTodayStr();
 
-  // Today's orders
-  const [todayOrders] = await db
-    .select({
-      total: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
-      orderCount: count(),
-    })
-    .from(orders)
-    .where(
-      and(
-        eq(orders.organizationId, organizationId),
-        sql`DATE(${orders.orderDate}) = ${today}::date`,
-        sql`${orders.deletedAt} IS NULL`
-      )
-    );
+  // Run all live queries in parallel for better performance
+  const [todayOrdersResult, todayCustomersResult, pipelineDataResult, activeJobsResult, openClaimsResult] =
+    await Promise.all([
+      // Today's orders
+      db
+        .select({
+          total: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
+          orderCount: count(),
+        })
+        .from(orders)
+        .where(
+          and(
+            eq(orders.organizationId, organizationId),
+            sql`DATE(${orders.orderDate}) = ${today}::date`,
+            sql`${orders.deletedAt} IS NULL`
+          )
+        ),
 
-  // Today's new customers
-  const [todayCustomers] = await db
-    .select({ count: count() })
-    .from(customers)
-    .where(
-      and(
-        eq(customers.organizationId, organizationId),
-        sql`DATE(${customers.createdAt}) = ${today}::date`,
-        sql`${customers.deletedAt} IS NULL`
-      )
-    );
+      // Today's new customers
+      db
+        .select({ count: count() })
+        .from(customers)
+        .where(
+          and(
+            eq(customers.organizationId, organizationId),
+            sql`DATE(${customers.createdAt}) = ${today}::date`,
+            sql`${customers.deletedAt} IS NULL`
+          )
+        ),
 
-  // Current pipeline value (always live - it's current state)
-  const [pipelineData] = await db
-    .select({
-      total: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
-    })
-    .from(opportunities)
-    .where(
-      and(
-        eq(opportunities.organizationId, organizationId),
-        sql`${opportunities.stage} NOT IN ('won', 'lost')`,
-        sql`${opportunities.deletedAt} IS NULL`
-      )
-    );
+      // Current pipeline value (always live - it's current state)
+      db
+        .select({
+          total: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
+        })
+        .from(opportunities)
+        .where(
+          and(
+            eq(opportunities.organizationId, organizationId),
+            sql`${opportunities.stage} NOT IN ('won', 'lost')`,
+            sql`${opportunities.deletedAt} IS NULL`
+          )
+        ),
 
-  // Active jobs (current state)
-  const [activeJobs] = await db
-    .select({ count: count() })
-    .from(jobAssignments)
-    .where(
-      and(
-        eq(jobAssignments.organizationId, organizationId),
-        sql`${jobAssignments.status} IN ('scheduled', 'in_progress')`
-      )
-    );
+      // Active jobs (current state)
+      db
+        .select({ count: count() })
+        .from(jobAssignments)
+        .where(
+          and(
+            eq(jobAssignments.organizationId, organizationId),
+            sql`${jobAssignments.status} IN ('scheduled', 'in_progress')`
+          )
+        ),
 
-  // Open claims (current state)
-  const [openClaims] = await db
-    .select({ count: count() })
-    .from(warrantyClaims)
-    .where(
-      and(
-        eq(warrantyClaims.organizationId, organizationId),
-        sql`${warrantyClaims.status} IN ('submitted', 'under_review', 'approved')`
-      )
-    );
+      // Open claims (current state)
+      db
+        .select({ count: count() })
+        .from(warrantyClaims)
+        .where(
+          and(
+            eq(warrantyClaims.organizationId, organizationId),
+            sql`${warrantyClaims.status} IN ('submitted', 'under_review', 'approved')`
+          )
+        ),
+    ]);
+
+  // Extract first row from each result
+  const todayOrders = todayOrdersResult[0];
+  const todayCustomers = todayCustomersResult[0];
+  const pipelineData = pipelineDataResult[0];
+  const activeJobs = activeJobsResult[0];
+  const openClaims = openClaimsResult[0];
 
   return {
     revenue: Number(todayOrders?.total ?? 0),
@@ -439,7 +460,7 @@ export const getDashboardMetrics = createServerFn({ method: 'GET' })
       if (cached) {
         return {
           ...cached,
-          cacheHit: true,
+          cacheHit: true as const,
         };
       }
     }
@@ -553,6 +574,7 @@ export const getDashboardMetrics = createServerFn({ method: 'GET' })
       },
       comparisonEnabled: !!data.comparePeriod,
       lastUpdated: new Date(),
+      cacheHit: false as const,
     };
 
     // Cache the result (only for historical ranges)
@@ -583,6 +605,7 @@ interface DashboardMetricsResponse {
   };
   comparisonEnabled: boolean;
   lastUpdated: Date;
+  cacheHit: boolean;
   dataSource?: 'mv' | 'hybrid' | 'live';
 }
 
@@ -618,35 +641,39 @@ export const getMetricsComparison = createServerFn({ method: 'GET' })
     const currentTo = new Date(data.dateTo);
     const previous = calculateComparisonPeriod(currentFrom, currentTo, data.comparisonType);
 
-    // Get current period data
+    // Get current and previous period data in parallel
     const currentPeriodCondition = and(
       eq(orders.organizationId, ctx.organizationId),
       gte(orders.orderDate, data.dateFrom),
       lte(orders.orderDate, data.dateTo)
     );
 
-    const [currentStats] = await db
-      .select({
-        revenue: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
-        ordersCount: count(),
-      })
-      .from(orders)
-      .where(currentPeriodCondition);
-
-    // Get previous period data
     const previousPeriodCondition = and(
       eq(orders.organizationId, ctx.organizationId),
       gte(orders.orderDate, previous.from.toISOString().split('T')[0]),
       lte(orders.orderDate, previous.to.toISOString().split('T')[0])
     );
 
-    const [previousStats] = await db
-      .select({
-        revenue: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
-        ordersCount: count(),
-      })
-      .from(orders)
-      .where(previousPeriodCondition);
+    const [currentStatsResult, previousStatsResult] = await Promise.all([
+      db
+        .select({
+          revenue: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
+          ordersCount: count(),
+        })
+        .from(orders)
+        .where(currentPeriodCondition),
+
+      db
+        .select({
+          revenue: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
+          ordersCount: count(),
+        })
+        .from(orders)
+        .where(previousPeriodCondition),
+    ]);
+
+    const currentStats = currentStatsResult[0];
+    const previousStats = previousStatsResult[0];
 
     // Build summary for current period
     const current: DashboardSummary = {

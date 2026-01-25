@@ -9,7 +9,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { sql, eq, and, or } from 'drizzle-orm';
+import { sql, eq, and, or, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { customers, contacts } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
@@ -189,16 +189,31 @@ export const detectDuplicates = createServerFn({ method: 'POST' })
         .orderBy(sql`similarity(${customers.name}, ${name}) DESC`)
         .limit(limit);
 
-      // Get primary contact info for name matches
-      for (const customer of nameMatches) {
-        const primaryContact = await db
+      // Batch fetch primary contacts for all name matches (avoids N+1 query)
+      const customerIds = nameMatches.map((c) => c.id);
+      const primaryContactsMap = new Map<string, { email: string | null; phone: string | null }>();
+
+      if (customerIds.length > 0) {
+        const primaryContacts = await db
           .select({
+            customerId: contacts.customerId,
             email: contacts.email,
             phone: contacts.phone,
           })
           .from(contacts)
-          .where(and(eq(contacts.customerId, customer.id), eq(contacts.isPrimary, true)))
-          .limit(1);
+          .where(and(inArray(contacts.customerId, customerIds), eq(contacts.isPrimary, true)));
+
+        for (const contact of primaryContacts) {
+          primaryContactsMap.set(contact.customerId, {
+            email: contact.email,
+            phone: contact.phone,
+          });
+        }
+      }
+
+      // Process name matches using the pre-fetched contact map
+      for (const customer of nameMatches) {
+        const primaryContact = primaryContactsMap.get(customer.id);
 
         const existing = matches.find((m) => m.customerId === customer.id);
         if (existing) {
@@ -209,8 +224,8 @@ export const detectDuplicates = createServerFn({ method: 'POST' })
             customerId: customer.id,
             customerCode: customer.customerCode,
             name: customer.name,
-            email: primaryContact[0]?.email ?? null,
-            phone: primaryContact[0]?.phone ?? null,
+            email: primaryContact?.email ?? null,
+            phone: primaryContact?.phone ?? null,
             matchScore: customer.nameSimilarity,
             matchReasons: [`Name: ${customer.name}`],
           });

@@ -34,7 +34,13 @@ export const parseJobDataSchema = z.object({
       jobNumberFields: z.array(z.string()).default(['jobNumber', 'reference', 'id']),
       currency: z.string().default('AUD'),
     })
-    .default(() => ({})),
+    .default({
+      dateFields: ['scheduledDate', 'createdDate', 'updatedDate'],
+      timeFields: ['scheduledTime', 'startTime', 'endTime'],
+      amountFields: ['amount', 'cost', 'price', 'total'],
+      jobNumberFields: ['jobNumber', 'reference', 'id'],
+      currency: 'AUD',
+    }),
 });
 
 export const validateAndParseJobDataSchema = z.object({
@@ -50,7 +56,10 @@ export const validateAndParseJobDataSchema = z.object({
       strict: z.boolean().default(false),
       currency: z.string().default('AUD'),
     })
-    .default(() => ({})),
+    .default({
+      strict: false,
+      currency: 'AUD',
+    }),
 });
 
 export const bulkParseJobDataSchema = z.object({
@@ -69,7 +78,11 @@ export const bulkParseJobDataSchema = z.object({
       currency: z.string().default('AUD'),
       dateFormat: z.enum(['auto', 'australian', 'us', 'european']).default('auto'),
     })
-    .default(() => ({})),
+    .default({
+      skipInvalidRows: true,
+      currency: 'AUD',
+      dateFormat: 'auto' as const,
+    }),
 });
 
 // ============================================================================
@@ -428,7 +441,11 @@ export const importParsedJobData = createServerFn({ method: 'POST' })
           updateExisting: z.boolean().default(false),
           createCustomers: z.boolean().default(false),
         })
-        .default(() => ({})),
+        .default({
+          skipInvalidRows: true,
+          updateExisting: false,
+          createCustomers: false,
+        }),
     })
   )
   .handler(async ({ data }) => {

@@ -302,6 +302,23 @@ export const bulkImportJobs = createServerFn({ method: 'POST' })
       errors: [] as Array<{ jobNumber: string; error: string }>,
     };
 
+    // Pre-fetch all existing jobs to avoid N+1 queries
+    const allJobNumbers = data.jobs.map((job) => job.jobNumber);
+    const existingJobsResult = await db
+      .select({ id: jobAssignments.id, jobNumber: jobAssignments.jobNumber })
+      .from(jobAssignments)
+      .where(
+        and(
+          eq(jobAssignments.organizationId, ctx.organizationId),
+          inArray(jobAssignments.jobNumber, allJobNumbers)
+        )
+      );
+
+    // Create a Map for O(1) lookups by jobNumber
+    const existingJobsMap = new Map(
+      existingJobsResult.map((job) => [job.jobNumber, job])
+    );
+
     // Process jobs in batches
     const batchSize = 10;
     for (let i = 0; i < data.jobs.length; i += batchSize) {
@@ -309,18 +326,10 @@ export const bulkImportJobs = createServerFn({ method: 'POST' })
 
       for (const jobData of batch) {
         try {
-          // Check for existing job
-          const existingJob = await db
-            .select({ id: jobAssignments.id })
-            .from(jobAssignments)
-            .where(
-              and(
-                eq(jobAssignments.organizationId, ctx.organizationId),
-                eq(jobAssignments.jobNumber, jobData.jobNumber)
-              )
-            );
+          // Check for existing job using pre-fetched Map (O(1) lookup)
+          const existingJob = existingJobsMap.get(jobData.jobNumber);
 
-          if (existingJob.length > 0) {
+          if (existingJob) {
             if (data.options.skipDuplicates) {
               results.skipped.push(jobData.jobNumber);
               continue;
@@ -343,7 +352,7 @@ export const bulkImportJobs = createServerFn({ method: 'POST' })
                 .where(
                   and(
                     eq(jobAssignments.organizationId, ctx.organizationId),
-                    eq(jobAssignments.id, existingJob[0].id)
+                    eq(jobAssignments.id, existingJob.id)
                   )
                 );
 

@@ -23,13 +23,11 @@ import {
   sendQuoteSchema,
   type QuoteLineItem,
 } from '@/lib/schemas';
+import { GST_RATE } from '@/lib/order-calculations';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-
-/** Australian GST rate */
-const GST_RATE = 0.1;
 
 /** Default quote validity in days */
 const DEFAULT_QUOTE_VALIDITY_DAYS = 30;
