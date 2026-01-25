@@ -9,6 +9,7 @@
 
 import { eventTrigger } from "@trigger.dev/sdk";
 import { z } from "zod";
+import { Resend } from "resend";
 import { client } from "../client";
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -27,6 +28,9 @@ import { createEmailActivitiesBatch, type EmailActivityInput } from "@/lib/serve
 import { checkSuppressionBatchDirect } from "@/server/functions/communications/email-suppression";
 import { generateUnsubscribeUrl } from "@/lib/server/unsubscribe-tokens";
 import { createHash } from "crypto";
+
+// Initialize Resend client
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ============================================================================
 // PRIVACY HELPERS (INT-RES-004)
@@ -332,24 +336,29 @@ export const sendCampaignJob = client.defineJob({
               .set({ bodyHtml: trackedHtml })
               .where(eq(emailHistory.id, emailRecord.id));
 
-            // TODO: Actually send the email via Resend
-            // In production, this would call the Resend API with List-Unsubscribe headers:
-            //
-            // const { data, error } = await resend.emails.send({
-            //   from: fromAddress,
-            //   to: recipient.email,
-            //   subject,
-            //   html: trackedHtml,
-            //   headers: {
-            //     // INT-RES-007: CAN-SPAM compliant unsubscribe headers
-            //     'List-Unsubscribe': `<${unsubscribeUrl}>`,
-            //     'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-            //   },
-            // });
-            //
-            // For now, we'll simulate success
+            // Get sender email from environment
+            const fromEmail = process.env.EMAIL_FROM || "noreply@resend.dev";
+            const fromName = process.env.EMAIL_FROM_NAME || "Renoz CRM";
+            const fromAddress = `${fromName} <${fromEmail}>`;
 
-            await io.logger.info(`Sent email to ${recipient.email} (emailHistoryId: ${emailRecord.id})`);
+            // Send the email via Resend with List-Unsubscribe headers
+            const { data: sendResult, error: sendError } = await resend.emails.send({
+              from: fromAddress,
+              to: [recipient.email],
+              subject,
+              html: trackedHtml,
+              headers: {
+                // INT-RES-007: CAN-SPAM compliant unsubscribe headers
+                'List-Unsubscribe': `<${unsubscribeUrl}>`,
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+              },
+            });
+
+            if (sendError) {
+              throw new Error(sendError.message || "Failed to send email via Resend");
+            }
+
+            await io.logger.info(`Sent email to recipient (emailHistoryId: ${emailRecord.id}, resendMessageId: ${sendResult?.id})`);
 
             // Update recipient status to sent
             await db
@@ -361,10 +370,14 @@ export const sendCampaignJob = client.defineJob({
               })
               .where(eq(campaignRecipients.id, recipient.id));
 
-            // Update email history status
+            // Update email history status with Resend message ID for webhook correlation
             await db
               .update(emailHistory)
-              .set({ status: "sent", sentAt: new Date() })
+              .set({
+                status: "sent",
+                sentAt: new Date(),
+                resendMessageId: sendResult?.id,
+              })
               .where(eq(emailHistory.id, emailRecord.id));
 
             // Collect activity input for batch insert (PERF-001)

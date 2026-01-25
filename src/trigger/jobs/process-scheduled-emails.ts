@@ -8,6 +8,7 @@
  * @see https://trigger.dev/docs/documentation/guides/scheduled-tasks
  */
 import { cronTrigger } from "@trigger.dev/sdk";
+import { Resend } from "resend";
 import { client } from "../client";
 import {
   getDueScheduledEmails,
@@ -24,6 +25,9 @@ import { createEmailSentActivity } from "@/lib/server/activity-bridge";
 import { isEmailSuppressedDirect } from "@/server/functions/communications/email-suppression";
 import { generateUnsubscribeUrl } from "@/lib/server/unsubscribe-tokens";
 import { createHash } from "crypto";
+
+// Initialize Resend client
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ============================================================================
 // PRIVACY HELPERS (INT-RES-004)
@@ -248,35 +252,58 @@ export const processScheduledEmailsJob = client.defineJob({
           // Convert Map to plain object for JSON storage
           const linkMapObject = Object.fromEntries(linkMap);
 
-          // TODO: Actually send the email via email provider (Resend, SendGrid, etc.)
-          // In production, this would call the Resend API with List-Unsubscribe headers:
-          //
-          // const { data, error } = await resend.emails.send({
-          //   from: fromAddress,
-          //   to: scheduledEmail.recipientEmail,
-          //   subject,
-          //   html: trackedHtml,
-          //   headers: {
-          //     // INT-RES-007: CAN-SPAM compliant unsubscribe headers
-          //     'List-Unsubscribe': `<${unsubscribeUrl}>`,
-          //     'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
-          //   },
-          // });
-          //
-          // For now, we just log and mark as sent
-          await io.logger.info(`Would send email to ${scheduledEmail.recipientEmail}`, {
+          // Get sender email from environment
+          const fromEmail = process.env.EMAIL_FROM || "noreply@resend.dev";
+          const fromName = process.env.EMAIL_FROM_NAME || "Renoz CRM";
+          const fromAddress = `${fromName} <${fromEmail}>`;
+
+          // Convert HTML to plain text for email
+          const textContent = trackedHtml
+            .replace(/<br\s*\/?>/gi, "\n")
+            .replace(/<\/p>/gi, "\n\n")
+            .replace(/<\/div>/gi, "\n")
+            .replace(/<\/li>/gi, "\n")
+            .replace(/<[^>]+>/g, "")
+            .replace(/&nbsp;/g, " ")
+            .replace(/&amp;/g, "&")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&quot;/g, '"')
+            .replace(/&#039;/g, "'")
+            .replace(/\n{3,}/g, "\n\n")
+            .trim();
+
+          // Send the email via Resend with List-Unsubscribe headers
+          const { data: sendResult, error: sendError } = await resend.emails.send({
+            from: fromAddress,
+            to: [scheduledEmail.recipientEmail],
             subject,
-            recipientName: scheduledEmail.recipientName,
-            bodyLength: trackedHtml.length,
+            html: trackedHtml,
+            text: textContent,
+            headers: {
+              // INT-RES-007: CAN-SPAM compliant unsubscribe headers
+              'List-Unsubscribe': `<${unsubscribeUrl}>`,
+              'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+            },
           });
 
-          // Update email history status to sent and store linkMap for validation
+          if (sendError) {
+            throw new Error(sendError.message || "Failed to send email via Resend");
+          }
+
+          await io.logger.info(`Sent scheduled email (emailHistoryId: ${emailRecord.id}, resendMessageId: ${sendResult?.id})`, {
+            subject,
+            recipientName: scheduledEmail.recipientName,
+          });
+
+          // Update email history status to sent with Resend message ID for webhook correlation
           await db
             .update(emailHistory)
             .set({
               status: "sent",
               sentAt: new Date(),
               bodyHtml: trackedHtml, // Save tracked version
+              resendMessageId: sendResult?.id, // Store for webhook correlation
               metadata: {
                 linkMap: linkMapObject, // Store linkMap for URL validation
               },
