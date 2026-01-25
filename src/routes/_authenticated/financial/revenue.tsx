@@ -10,22 +10,19 @@
  */
 
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { createFileRoute } from '@tanstack/react-router';
+import { startOfYear } from 'date-fns';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { RevenueReports } from '@/components/domain/financial/revenue-reports';
 import { recognitionStateValues } from '@/lib/schemas/financial/revenue-recognition';
 import type { RecognitionState } from '@/lib/schemas/financial/revenue-recognition';
 import {
-  getDeferredRevenueBalance,
-  getRecognitionSummary,
-  listRecognitionsByState,
-  retryRecognitionSync,
-} from '@/server/functions/financial/revenue-recognition';
-import { startOfYear } from 'date-fns';
-import { queryKeys } from '@/lib/query-keys';
+  useRecognitions,
+  useRecognitionSummary,
+  useDeferredRevenueBalance,
+  useRetryRecognitionSync,
+} from '@/hooks/financial';
 
 // ============================================================================
 // ROUTE
@@ -57,54 +54,31 @@ function RevenueRecognitionPage() {
   // ============================================================================
   // CONTAINER: Data Fetching
   // ============================================================================
-  const queryClient = useQueryClient();
-  const listFn = useServerFn(listRecognitionsByState);
-  const summaryFn = useServerFn(getRecognitionSummary);
-  const balanceFn = useServerFn(getDeferredRevenueBalance);
-  const retryFn = useServerFn(retryRecognitionSync);
-
   const [stateFilter, setStateFilter] = useState<RecognitionState | 'all'>('all');
   const [retryingId, setRetryingId] = useState<string | null>(null);
 
-  const { data: listData, isLoading: listLoading } = useQuery({
-    queryKey: queryKeys.financial.recognitions(stateFilter === 'all' ? undefined : stateFilter),
-    queryFn: () =>
-      listFn({
-        data: {
-          state: stateFilter === 'all' ? undefined : stateFilter,
-          page: 1,
-          pageSize: 50,
-        },
-      }),
+  const { data: listData, isLoading: listLoading } = useRecognitions({
+    state: stateFilter === 'all' ? undefined : stateFilter,
+    page: 1,
+    pageSize: 50,
   });
 
-  const { data: summaryData, isLoading: summaryLoading } = useQuery({
-    queryKey: queryKeys.financial.recognitionSummary(),
-    queryFn: () =>
-      summaryFn({
-        data: {
-          dateFrom: startOfYear(new Date()),
-          dateTo: new Date(),
-          groupBy: 'month',
-        },
-      }),
+  const { data: summaryData, isLoading: summaryLoading } = useRecognitionSummary({
+    dateFrom: startOfYear(new Date()),
+    dateTo: new Date(),
+    groupBy: 'month',
   });
 
-  const { data: balanceData, isLoading: balanceLoading } = useQuery({
-    queryKey: queryKeys.financial.deferredBalance(),
-    queryFn: () => balanceFn({ data: {} }),
-  });
+  const { data: balanceData, isLoading: balanceLoading } = useDeferredRevenueBalance();
 
-  const retryMutation = useMutation({
-    mutationFn: async (recognitionId: string) => {
-      setRetryingId(recognitionId);
-      return retryFn({ data: { recognitionId } });
-    },
-    onSettled: () => {
-      setRetryingId(null);
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.recognitions() });
-    },
-  });
+  const retryMutation = useRetryRecognitionSync();
+
+  const handleRetry = (recognitionId: string) => {
+    setRetryingId(recognitionId);
+    retryMutation.mutate(recognitionId, {
+      onSettled: () => setRetryingId(null),
+    });
+  };
 
   // ============================================================================
   // Transform data for UI
@@ -142,7 +116,7 @@ function RevenueRecognitionPage() {
           stateFilter={stateFilter}
           onStateFilterChange={setStateFilter}
           retryingId={retryingId}
-          onRetry={(id) => retryMutation.mutate(id)}
+          onRetry={handleRetry}
         />
       </PageLayout.Content>
     </PageLayout>

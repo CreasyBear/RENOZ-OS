@@ -4,7 +4,7 @@
  * Shows the Customer 360 View - a comprehensive dashboard for a single customer.
  * Displays metrics, activity timeline, contacts, addresses, and quick actions.
  */
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, useNavigate, Link } from '@tanstack/react-router'
 import { ArrowLeft, Edit, Trash2, MoreHorizontal } from 'lucide-react'
 import { PageLayout, RouteErrorFallback } from '@/components/layout'
 import { CustomerDetailSkeleton } from '@/components/skeletons/customers'
@@ -42,6 +42,7 @@ export const Route = createFileRoute('/_authenticated/customers/$customerId')({
 
 function CustomerDetailPage() {
   const { customerId } = Route.useParams()
+  const navigate = useNavigate()
 
   // Fetch customer using centralized hook
   const {
@@ -76,7 +77,7 @@ function CustomerDetailPage() {
             <p className="text-muted-foreground mb-4">
               The customer you're looking for doesn't exist or you don't have access.
             </p>
-            <Button variant="outline" onClick={() => window.history.back()}>
+            <Button variant="outline" onClick={() => navigate({ to: '/customers' })}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Go Back
             </Button>
@@ -97,14 +98,16 @@ function CustomerDetailPage() {
         }
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => window.history.back()}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
+            <Button variant="outline" asChild>
+              <Link to="/customers">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back
+              </Link>
             </Button>
             <Button
               variant="outline"
               onClick={() =>
-                (window.location.href = `/customers/${customerId}/edit`)
+                navigate({ to: '/customers/$customerId/edit', params: { customerId } })
               }
             >
               <Edit className="mr-2 h-4 w-4" />

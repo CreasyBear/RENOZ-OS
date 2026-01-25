@@ -10,23 +10,16 @@
  */
 
 import { createFileRoute } from '@tanstack/react-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { PaymentReminders } from '@/components/domain/financial/payment-reminders';
 import {
-  listReminderTemplates,
-  createReminderTemplate,
-  updateReminderTemplate,
-  deleteReminderTemplate,
-  getReminderHistory,
-} from '@/server/functions/financial/payment-reminders';
-import type {
-  CreateReminderTemplateInput,
-  UpdateReminderTemplateInput,
-} from '@/lib/schemas';
-import { queryKeys } from '@/lib/query-keys';
+  useReminderTemplates,
+  useReminderHistory,
+  useCreateReminderTemplate,
+  useUpdateReminderTemplate,
+  useDeleteReminderTemplate,
+} from '@/hooks/financial';
 
 // ============================================================================
 // ROUTE
@@ -55,55 +48,23 @@ export const Route = createFileRoute('/_authenticated/financial/reminders')({
 // ============================================================================
 
 function PaymentRemindersPage() {
-  const queryClient = useQueryClient();
-
-  // Server function wrappers
-  const listTemplatesFn = useServerFn(listReminderTemplates);
-  const createTemplateFn = useServerFn(createReminderTemplate);
-  const updateTemplateFn = useServerFn(updateReminderTemplate);
-  const deleteTemplateFn = useServerFn(deleteReminderTemplate);
-  const getHistoryFn = useServerFn(getReminderHistory);
-
   // Queries
   const {
     data: templatesData,
     isLoading: templatesLoading,
     error: templatesError,
-  } = useQuery({
-    queryKey: queryKeys.financial.reminderTemplates(),
-    queryFn: () => listTemplatesFn({ data: {} }),
-  });
+  } = useReminderTemplates();
 
   const {
     data: historyData,
     isLoading: historyLoading,
     error: historyError,
-  } = useQuery({
-    queryKey: queryKeys.financial.reminderHistory(),
-    queryFn: () => getHistoryFn({ data: { page: 1, pageSize: 50 } }),
-  });
+  } = useReminderHistory();
 
   // Mutations
-  const createMutation = useMutation({
-    mutationFn: (data: CreateReminderTemplateInput) => createTemplateFn({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.reminderTemplates() });
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: (data: UpdateReminderTemplateInput) => updateTemplateFn({ data }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.reminderTemplates() });
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => deleteTemplateFn({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.reminderTemplates() });
-    },
-  });
+  const createMutation = useCreateReminderTemplate();
+  const updateMutation = useUpdateReminderTemplate();
+  const deleteMutation = useDeleteReminderTemplate();
 
   // Derived state
   const templates = templatesData?.items ?? [];

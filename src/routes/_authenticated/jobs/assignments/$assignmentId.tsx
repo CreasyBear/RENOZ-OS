@@ -4,16 +4,12 @@
  * Provides access to job assignment documents with upload/delete support.
  */
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { ArrowLeft, Briefcase, ClipboardList, FileText, ListChecks, Timer } from 'lucide-react';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { JobAssignmentSkeleton } from '@/components/skeletons/jobs';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useCurrentOrg } from '@/hooks/auth';
-import { getJobAssignment } from '@/server/functions/jobs/job-assignments';
-import { queryKeys } from '@/lib/query-keys';
+import { useUnifiedJob } from '@/hooks/jobs';
 import { JobDocumentsTabContainer } from '../_components/job-documents-tab-container';
 import { JobTasksTabContainer } from '../_components/job-tasks-tab-container';
 import { JobMaterialsTabContainer } from '../_components/job-materials-tab-container';
@@ -38,21 +34,8 @@ export const Route = createFileRoute('/_authenticated/jobs/assignments/$assignme
 function JobAssignmentDocumentsPage() {
   const navigate = useNavigate();
   const { assignmentId } = Route.useParams();
-  const { currentOrg } = useCurrentOrg();
-  const getAssignmentFn = useServerFn(getJobAssignment);
 
-  const { data: assignmentResponse } = useQuery({
-    queryKey: queryKeys.jobAssignments.detail(assignmentId),
-    queryFn: () =>
-      getAssignmentFn({
-        data: {
-          id: assignmentId,
-          organizationId: currentOrg?.id ?? '',
-        },
-      }),
-    enabled: !!assignmentId && !!currentOrg?.id,
-  });
-  const assignment = assignmentResponse;
+  const { data: assignment } = useUnifiedJob(assignmentId);
 
   return (
     <PageLayout>

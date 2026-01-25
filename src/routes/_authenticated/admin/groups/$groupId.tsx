@@ -6,7 +6,7 @@
  *
  * @see src/server/functions/user-groups.ts for server functions
  */
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useServerFn } from '@tanstack/react-start';
 import {
@@ -37,7 +37,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 import {
   Select,
   SelectContent,
@@ -178,6 +178,7 @@ const GROUP_COLORS = [
 
 function GroupDetailPage() {
   const confirm = useConfirmation();
+  const navigate = useNavigate();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const search = Route.useSearch() as any;
   const loaderData = Route.useLoaderData() as {
@@ -216,11 +217,6 @@ function GroupDetailPage() {
   const filteredUsers = availableUsers.filter((u) => !existingMemberIds.has(u.id));
   const selectedUser = filteredUsers.find((u) => u.id === selectedUserId);
 
-  // Navigation helper
-  const navigateTo = (path: string) => {
-    window.location.href = path;
-  };
-
   // Handlers
   const handleSaveChanges = async () => {
     setIsSubmitting(true);
@@ -237,7 +233,7 @@ function GroupDetailPage() {
         },
       });
       setIsEditing(false);
-      window.location.reload();
+      navigate({ to: '/admin/groups/$groupId', params: { groupId }, search: { tab } });
     } catch (error) {
       console.error('Failed to update group:', error);
     } finally {
@@ -260,7 +256,7 @@ function GroupDetailPage() {
       setIsAddMemberOpen(false);
       setSelectedUserId('');
       setSelectedRole('member');
-      window.location.reload();
+      navigate({ to: '/admin/groups/$groupId', params: { groupId }, search: { tab } });
     } catch (error) {
       console.error('Failed to add member:', error);
     } finally {
@@ -273,7 +269,7 @@ function GroupDetailPage() {
       await updateMemberRoleFn({
         data: { groupId: member.groupId, userId: member.userId, role },
       });
-      window.location.reload();
+      navigate({ to: '/admin/groups/$groupId', params: { groupId }, search: { tab } });
     } catch (error) {
       console.error('Failed to update role:', error);
     }
@@ -293,7 +289,7 @@ function GroupDetailPage() {
         await removeMemberFn({
           data: { groupId: member.groupId, userId: member.userId },
         });
-        window.location.reload();
+        navigate({ to: '/admin/groups/$groupId', params: { groupId }, search: { tab } });
       } catch (error) {
         console.error('Failed to remove member:', error);
       } finally {
@@ -302,8 +298,8 @@ function GroupDetailPage() {
     }
   };
 
-  const handleTabChange = (newTab: string) => {
-    navigateTo(`/admin/groups/${groupId}?tab=${newTab}`);
+  const handleTabChange = (newTab: 'members' | 'settings' | 'activity') => {
+    navigate({ to: '/admin/groups/$groupId', params: { groupId }, search: { tab: newTab } });
   };
 
   return (
@@ -353,7 +349,7 @@ function GroupDetailPage() {
       </div>
 
       {/* Tabs */}
-      <Tabs value={tab} onValueChange={handleTabChange}>
+      <Tabs value={tab} onValueChange={(value) => handleTabChange(value as 'members' | 'settings' | 'activity')}>
         <TabsList>
           <TabsTrigger value="members" className="flex items-center gap-2">
             <Users className="h-4 w-4" />

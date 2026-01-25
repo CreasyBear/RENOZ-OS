@@ -6,7 +6,7 @@
  *
  * @see src/server/functions/user-groups.ts for server functions
  */
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useServerFn } from '@tanstack/react-start';
 import { listGroups, createGroup, deleteGroup } from '@/server/functions/users/user-groups';
@@ -35,7 +35,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -123,6 +123,7 @@ const GROUP_COLORS = [
 
 function GroupsAdminPage() {
   const confirm = useConfirmation();
+  const navigate = useNavigate();
   const loaderData = Route.useLoaderData() as { groups: GroupsData };
   const groups = loaderData.groups;
 
@@ -164,8 +165,8 @@ function GroupsAdminPage() {
       setNewGroupName('');
       setNewGroupDescription('');
       setNewGroupColor(GROUP_COLORS[0]);
-      // Reload page
-      window.location.reload();
+      // Invalidate and refetch by navigating to same route
+      navigate({ to: '/admin/groups' });
     } catch (error) {
       console.error('Failed to create group:', error);
     } finally {
@@ -185,7 +186,7 @@ function GroupsAdminPage() {
       setIsSubmitting(true);
       try {
         await deleteGroupFn({ data: { id: group.id } });
-        window.location.reload();
+        navigate({ to: '/admin/groups' });
       } catch (error) {
         console.error('Failed to delete group:', error);
       } finally {
@@ -314,8 +315,14 @@ function GroupsAdminPage() {
 
 // Group Card Component
 function GroupCard({ group, onDelete }: { group: GroupItem; onDelete: () => void }) {
-  const handleNavigate = (path: string) => {
-    window.location.href = path;
+  const navigate = useNavigate();
+
+  const handleNavigate = (groupId: string, tab?: 'members' | 'settings' | 'activity') => {
+    navigate({
+      to: '/admin/groups/$groupId',
+      params: { groupId },
+      search: tab ? { tab } : undefined,
+    });
   };
 
   return (
@@ -355,19 +362,15 @@ function GroupCard({ group, onDelete }: { group: GroupItem; onDelete: () => void
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleNavigate(`/admin/groups/${group.id}`)}>
+              <DropdownMenuItem onClick={() => handleNavigate(group.id)}>
                 <Pencil className="mr-2 h-4 w-4" />
                 Edit
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => handleNavigate(`/admin/groups/${group.id}?tab=members`)}
-              >
+              <DropdownMenuItem onClick={() => handleNavigate(group.id, 'members')}>
                 <UserPlus className="mr-2 h-4 w-4" />
                 Manage Members
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => handleNavigate(`/admin/groups/${group.id}?tab=settings`)}
-              >
+              <DropdownMenuItem onClick={() => handleNavigate(group.id, 'settings')}>
                 <Settings className="mr-2 h-4 w-4" />
                 Settings
               </DropdownMenuItem>

@@ -78,6 +78,9 @@ export {
 // Batch operations
 export { useProcessJobBatchOperations } from './use-job-batch-operations';
 
+// Unified job data (single job assignment fetching)
+export { useUnifiedJob } from './use-unified-job-data';
+
 // Re-export types
 export type { JobAssignmentFilters } from '@/lib/schemas/jobs/job-assignments';
 export type { TaskResponse as JobTask, CreateTaskInput, UpdateTaskInput } from '@/lib/schemas';

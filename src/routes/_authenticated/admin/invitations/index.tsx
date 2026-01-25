@@ -6,7 +6,7 @@
  *
  * @see src/server/functions/invitations.ts for server functions
  */
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useServerFn } from '@tanstack/react-start';
 import {
@@ -33,7 +33,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 import {
   Select,
   SelectContent,
@@ -158,6 +158,7 @@ const STATUS_CONFIG: Record<
 
 function InvitationsPage() {
   const confirm = useConfirmation();
+  const navigate = useNavigate();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const search = Route.useSearch() as any;
   const loaderData = Route.useLoaderData() as { invitations: InvitationsData };
@@ -191,13 +192,8 @@ function InvitationsPage() {
     expired: invitations.items.filter((i) => i.status === 'expired').length,
   };
 
-  // Navigation helper
-  const navigateTo = (path: string) => {
-    window.location.href = path;
-  };
-
-  const handleStatusFilter = (status: string) => {
-    navigateTo(`/admin/invitations?status=${status}`);
+  const handleStatusFilter = (status: 'pending' | 'accepted' | 'expired' | 'cancelled' | 'all') => {
+    navigate({ to: '/admin/invitations', search: { status } });
   };
 
   // Handlers
@@ -215,7 +211,7 @@ function InvitationsPage() {
       });
       setIsCreateOpen(false);
       resetForm();
-      window.location.reload();
+      navigate({ to: '/admin/invitations', search: { status: search.status || 'all' } });
     } catch (error) {
       console.error('Failed to send invitation:', error);
     } finally {
@@ -235,7 +231,7 @@ function InvitationsPage() {
       setIsSubmitting(true);
       try {
         await cancelInvitationFn({ data: { id: invitation.id } });
-        window.location.reload();
+        navigate({ to: '/admin/invitations', search: { status: search.status || 'all' } });
       } catch (error) {
         console.error('Failed to cancel invitation:', error);
       } finally {
@@ -255,7 +251,7 @@ function InvitationsPage() {
       setIsSubmitting(true);
       try {
         await resendInvitationFn({ data: { id: invitation.id } });
-        window.location.reload();
+        navigate({ to: '/admin/invitations', search: { status: search.status || 'all' } });
       } catch (error) {
         console.error('Failed to resend invitation:', error);
       } finally {
