@@ -66,10 +66,10 @@ Currently:
 ```
 
 **Acceptance Criteria:**
-- [ ] Breadcrumbs render above title in PageLayout.Header
-- [ ] Breadcrumbs collapse on mobile (show "..." for middle segments)
-- [ ] Works for all route depths (1-5 segments)
-- [ ] No regressions to existing PageLayout usage
+- [x] Breadcrumbs render above title in PageLayout.Header
+- [x] Breadcrumbs collapse on mobile (show "..." for middle segments)
+- [x] Works for all route depths (1-5 segments)
+- [x] No regressions to existing PageLayout usage
 
 ---
 
@@ -112,10 +112,10 @@ import { RouteShell } from '@/components/layout';
 ```
 
 **Acceptance Criteria:**
-- [ ] `RouteShell` exported from layout index
-- [ ] `ContextPanel` collapses to BottomSheet on mobile
-- [ ] No breaking changes to existing `PageLayout` usage
-- [ ] Types exported for both `RouteShell` and `PageLayout`
+- [x] `RouteShell` exported from layout index
+- [x] `ContextPanel` collapses to BottomSheet on mobile
+- [x] No breaking changes to existing `PageLayout` usage
+- [x] Types exported for both `RouteShell` and `PageLayout`
 
 ---
 
@@ -175,12 +175,12 @@ const {
 ```
 
 **Acceptance Criteria:**
-- [ ] Bar appears fixed at bottom when 1+ items selected
-- [ ] Slide-up animation on mount
-- [ ] Screen reader announces selection count
-- [ ] Keyboard accessible (Tab to navigate, Enter/Space to activate)
-- [ ] Clear button deselects all
-- [ ] Works with all DataTable instances
+- [x] Bar appears fixed at bottom when 1+ items selected
+- [x] Slide-up animation on mount
+- [x] Screen reader announces selection count
+- [x] Keyboard accessible (Tab to navigate, Enter/Space to activate)
+- [x] Clear button deselects all
+- [x] Works with all DataTable instances
 
 ---
 
@@ -193,7 +193,7 @@ const {
 - [x] **2.4.1** Update `PageLayout.Sidebar` to use vaul Drawer on mobile
 - [x] **2.4.2** Add `useContextPanel` hook for controlling open state
 - [x] **2.4.3** Add swipe-to-dismiss on mobile (built into vaul Drawer)
-- [ ] **2.4.4** Update existing routes that use `with-sidebar` variant
+- [x] **2.4.4** ~~Update existing routes that use `with-sidebar` variant~~ N/A - no routes currently use this pattern. See "Future Work" section for candidates.
 
 **Files to modify:**
 - `src/components/layout/page-layout.tsx`
@@ -239,10 +239,10 @@ Mobile (<768px): Drawer from bottom with snap points
 6. Navigation - breadcrumbs, back buttons, parent routes
 
 **Acceptance Criteria:**
-- [ ] `docs/ui-patterns.md` covers all layout decisions
-- [ ] Route template is copy-paste ready
-- [ ] CLAUDE.md references the patterns doc
-- [ ] Examples are runnable code
+- [x] `docs/ui-patterns.md` covers all layout decisions
+- [x] Route template is copy-paste ready
+- [x] CLAUDE.md references the patterns doc
+- [x] Examples are runnable code
 
 ---
 
@@ -265,9 +265,37 @@ Execute in this order for incremental value:
 | Metric | Before | After |
 |--------|--------|-------|
 | Routes with breadcrumbs | 0 | 102 (automatic via PageLayout.Header) |
-| Routes with bulk selection UI | 0 | All list routes |
-| Mobile-responsive sidebars | 0 | All `with-sidebar` routes |
+| Routes with bulk selection UI | 0 | All list routes (infrastructure ready) |
+| Mobile-responsive sidebars | 0 | Infrastructure complete, 0 routes converted yet |
 | Documentation coverage | Minimal | Complete patterns guide |
+
+---
+
+## Future Work: Route Conversions to `with-sidebar`
+
+Based on UX evaluation (2026-01-25), these routes are candidates for conversion to the `with-sidebar` pattern:
+
+### High Priority
+
+**`pipeline/$opportunityId.tsx`** - Opportunity Detail
+- **Current:** Tabbed interface (Overview | Quote | Activities | Versions)
+- **Problem:** Activity is hidden in a tab. When editing a quote, you lose context of recent conversations.
+- **Proposed:** Move activity out of tabs into persistent sidebar
+- **Effort:** Low - just move activity tab content to sidebar
+- **Benefit:** High - see recent calls/emails while working on quote
+
+### Medium Priority
+
+**`customers/$customerId.tsx`** - Customer Detail (Customer360View)
+- **Current:** Grid layout with activity timeline taking 2/3 of bottom section
+- **Problem:** Activity competes with main content; scrolling loses activity context
+- **Proposed:** Move ActivityTimeline to sidebar, restructure grid for main content
+- **Effort:** Medium - requires restructuring Customer360View component
+- **Benefit:** Medium - persistent activity context while viewing customer details
+
+### Not Recommended
+
+Routes using tabs for intentional context-switching (user explicitly chooses one view at a time) are fine as-is. The sidebar pattern is for "always visible context" not "one of many views."
 
 ---
 
