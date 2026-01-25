@@ -524,7 +524,8 @@ export const TAX = {
 - [x] Migrate 20 files from `@/lib/constants` PERMISSIONS to `@/lib/auth/permissions`
 - [x] Add missing permission domains to auth/permissions.ts (warranty, financial, support)
 - [x] Add missing inventory permissions (manage, count, forecast)
-- [ ] Remove PERMISSIONS from `@/lib/constants.ts` (deferred - may have other usage)
+- [x] Update ROLE_PERMISSIONS matrix with new permission domains
+- [x] Remove deprecated PERMISSIONS from `@/lib/constants.ts`
 
 ### 4.4 Standardize Soft Delete Pattern
 
@@ -597,10 +598,10 @@ throw new NotFoundError('Customer not found', 'customer');
 - [ ] Composite indexes created for hot paths
 
 ### Phase 4: Cleanup
-- [ ] No duplicate root-level server function files
-- [ ] Single source of truth for GST_RATE
-- [ ] Single PERMISSIONS constant system
-- [ ] Consistent soft delete and error patterns
+- [x] No duplicate root-level server function files
+- [x] Single source of truth for GST_RATE
+- [x] Single PERMISSIONS constant system
+- [ ] Consistent soft delete and error patterns (deferred - low priority)
 
 ---
 
