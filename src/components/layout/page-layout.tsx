@@ -204,5 +204,8 @@ export const PageLayout = Object.assign(PageLayoutRoot, {
   Sidebar: PageSidebar,
 })
 
+// Export hook for accessing layout context
+export { usePageLayout }
+
 // Export types for consumers
 export type { PageLayoutVariant, PageLayoutProps, PageHeaderProps }
