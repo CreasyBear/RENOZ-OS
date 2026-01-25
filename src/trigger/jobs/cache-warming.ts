@@ -2,14 +2,15 @@
  * Cache Warming Background Jobs
  *
  * Scheduled jobs for proactively warming the dashboard cache:
- * 1. warmDashboardCacheTask: Warms cache for all active organizations
- * 2. warmOrgCacheTask: Warms cache for a specific organization (event-triggered)
+ * 1. warmDashboardCacheJob: Warms cache for all active organizations
+ * 2. warmOrgCacheJob: Warms cache for a specific organization (event-triggered)
  *
  * @see dashboard.prd.json DASH-PERF-CACHE
  * @see docs/plans/2026-01-25-feat-dashboard-performance-infrastructure-plan.md
  */
-import { task, schedules } from '@trigger.dev/sdk/v3';
+import { cronTrigger, eventTrigger } from '@trigger.dev/sdk';
 import { sql, and } from 'drizzle-orm';
+import { client, dashboardEvents } from '../client';
 import { db } from '@/lib/db';
 import { DashboardCache } from '@/lib/cache/dashboard-cache';
 import { organizations } from 'drizzle/schema/settings/organizations';
@@ -211,24 +212,32 @@ async function getActiveOrganizations(): Promise<string[]> {
 }
 
 // ============================================================================
-// CACHE WARMING TASK (Every 30 Minutes During Business Hours)
+// CRON JOB - Warm Dashboard Cache (Every 30 Minutes During Business Hours)
 // ============================================================================
 
 /**
- * Warm Dashboard Cache Task
+ * Warm Dashboard Cache Job
  *
- * Warms the cache for active organizations.
+ * Warms the cache for active organizations during business hours.
+ * Runs every 30 minutes Mon-Fri 7am-7pm.
  */
-export const warmDashboardCacheTask = task({
+export const warmDashboardCacheJob = client.defineJob({
   id: 'warm-dashboard-cache',
-  run: async () => {
+  name: 'Warm Dashboard Cache',
+  version: '1.0.0',
+  trigger: cronTrigger({
+    cron: '*/30 7-19 * * 1-5', // Every 30 minutes during business hours (Mon-Fri 7am-7pm)
+  }),
+  run: async (_payload, io) => {
     const startTime = Date.now();
-    console.log('Starting dashboard cache warming');
+    await io.logger.info('Starting dashboard cache warming');
 
     // Get active organizations
-    const orgIds = await getActiveOrganizations();
+    const orgIds = await io.runTask('get-active-orgs', async () => {
+      return await getActiveOrganizations();
+    });
 
-    console.log(`Found ${orgIds.length} active organizations to warm`);
+    await io.logger.info(`Found ${orgIds.length} active organizations to warm`);
 
     if (orgIds.length === 0) {
       return {
@@ -245,24 +254,28 @@ export const warmDashboardCacheTask = task({
 
     for (const orgId of orgIds) {
       for (const range of dateRanges) {
-        try {
-          const metrics = await fetchMetricsFromMV(orgId, range.from, range.to);
+        const taskId = `warm-${orgId}-${range.label}`;
 
-          // Cache the metrics
-          await DashboardCache.setMetrics(
-            {
-              orgId,
-              dateFrom: range.from.toISOString().split('T')[0],
-              dateTo: range.to.toISOString().split('T')[0],
-              preset: range.label,
-            },
-            metrics
-          );
+        try {
+          await io.runTask(taskId, async () => {
+            const metrics = await fetchMetricsFromMV(orgId, range.from, range.to);
+
+            // Cache the metrics
+            await DashboardCache.setMetrics(
+              {
+                orgId,
+                dateFrom: range.from.toISOString().split('T')[0],
+                dateTo: range.to.toISOString().split('T')[0],
+                preset: range.label,
+              },
+              metrics
+            );
+          });
 
           warmedCount++;
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : String(error);
-          console.warn(`Failed to warm cache for ${orgId}/${range.label}`, {
+          await io.logger.warn(`Failed to warm cache for ${orgId}/${range.label}`, {
             error: errorMessage,
           });
           errorCount++;
@@ -271,16 +284,18 @@ export const warmDashboardCacheTask = task({
 
       // Also warm the current state cache
       try {
-        const [currentState] = await db.execute(sql`
-          SELECT * FROM mv_current_state WHERE organization_id = ${orgId}
-        `);
+        await io.runTask(`warm-current-state-${orgId}`, async () => {
+          const [currentState] = await db.execute(sql`
+            SELECT * FROM mv_current_state WHERE organization_id = ${orgId}
+          `);
 
-        if (currentState) {
-          await DashboardCache.setCurrentState(orgId, currentState);
-        }
+          if (currentState) {
+            await DashboardCache.setCurrentState(orgId, currentState);
+          }
+        });
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.warn(`Failed to warm current state for ${orgId}`, {
+        await io.logger.warn(`Failed to warm current state for ${orgId}`, {
           error: errorMessage,
         });
       }
@@ -288,7 +303,7 @@ export const warmDashboardCacheTask = task({
 
     const durationMs = Date.now() - startTime;
 
-    console.log('Dashboard cache warming completed', {
+    await io.logger.info('Dashboard cache warming completed', {
       organizationCount: orgIds.length,
       warmedCount,
       errorCount,
@@ -306,27 +321,28 @@ export const warmDashboardCacheTask = task({
   },
 });
 
-// Note: In Trigger.dev v3, schedules are attached directly to tasks
-// The schedule is defined in the task configuration or via the Trigger.dev dashboard
-// Cron: '*/30 7-19 * * 1-5' - Every 30 minutes during business hours (Mon-Fri 7am-7pm)
-
 // ============================================================================
-// ON-DEMAND ORGANIZATION CACHE WARMING TASK
+// EVENT JOB - On-Demand Organization Cache Warming
 // ============================================================================
 
 /**
- * Warm Organization Cache Task
+ * Warm Organization Cache Job
  *
  * Triggered when a user logs in or after significant data changes
  * to pre-populate the cache for their organization.
  */
-export const warmOrgCacheTask = task({
+export const warmOrgCacheJob = client.defineJob({
   id: 'warm-org-cache',
-  run: async (payload: { organizationId: string; dateRanges?: string[] }) => {
+  name: 'Warm Organization Cache',
+  version: '1.0.0',
+  trigger: eventTrigger({
+    name: dashboardEvents.cacheWarmed,
+  }),
+  run: async (payload: { organizationId: string; dateRanges?: string[] }, io) => {
     const { organizationId, dateRanges: requestedRanges } = payload;
     const startTime = Date.now();
 
-    console.log('Starting on-demand cache warming', {
+    await io.logger.info('Starting on-demand cache warming', {
       organizationId,
       requestedRanges,
     });
@@ -336,28 +352,32 @@ export const warmOrgCacheTask = task({
       ? allDateRanges.filter((r) => requestedRanges.includes(r.label))
       : allDateRanges;
 
-    console.log(`Warming ${rangesToWarm.length} date ranges for organization ${organizationId}`);
+    await io.logger.info(`Warming ${rangesToWarm.length} date ranges for organization ${organizationId}`);
 
     let warmedCount = 0;
 
     for (const range of rangesToWarm) {
-      try {
-        const metrics = await fetchMetricsFromMV(organizationId, range.from, range.to);
+      const taskId = `warm-${range.label}`;
 
-        await DashboardCache.setMetrics(
-          {
-            orgId: organizationId,
-            dateFrom: range.from.toISOString().split('T')[0],
-            dateTo: range.to.toISOString().split('T')[0],
-            preset: range.label,
-          },
-          metrics
-        );
+      try {
+        await io.runTask(taskId, async () => {
+          const metrics = await fetchMetricsFromMV(organizationId, range.from, range.to);
+
+          await DashboardCache.setMetrics(
+            {
+              orgId: organizationId,
+              dateFrom: range.from.toISOString().split('T')[0],
+              dateTo: range.to.toISOString().split('T')[0],
+              preset: range.label,
+            },
+            metrics
+          );
+        });
 
         warmedCount++;
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        console.warn(`Failed to warm cache for ${organizationId}/${range.label}`, {
+        await io.logger.warn(`Failed to warm cache for ${organizationId}/${range.label}`, {
           error: errorMessage,
         });
       }
@@ -365,23 +385,25 @@ export const warmOrgCacheTask = task({
 
     // Also warm the current state cache
     try {
-      const [currentState] = await db.execute(sql`
-        SELECT * FROM mv_current_state WHERE organization_id = ${organizationId}
-      `);
+      await io.runTask('warm-current-state', async () => {
+        const [currentState] = await db.execute(sql`
+          SELECT * FROM mv_current_state WHERE organization_id = ${organizationId}
+        `);
 
-      if (currentState) {
-        await DashboardCache.setCurrentState(organizationId, currentState);
-      }
+        if (currentState) {
+          await DashboardCache.setCurrentState(organizationId, currentState);
+        }
+      });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.warn(`Failed to warm current state for ${organizationId}`, {
+      await io.logger.warn(`Failed to warm current state for ${organizationId}`, {
         error: errorMessage,
       });
     }
 
     const durationMs = Date.now() - startTime;
 
-    console.log('On-demand cache warming completed', {
+    await io.logger.info('On-demand cache warming completed', {
       organizationId,
       warmedCount,
       durationMs,

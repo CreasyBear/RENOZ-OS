@@ -51,16 +51,18 @@ export {
 
 // Dashboard Performance
 export {
+  refreshDashboardMvsJob,
+  onDemandMvRefreshJob,
+  cacheInvalidationJob,
+  // Legacy exports (deprecated - all point to refreshDashboardMvsJob)
   refreshDailyMetricsJob,
   refreshCurrentStateJob,
   refreshWarrantyMetricsJob,
-  onDemandMvRefreshJob,
-  cacheInvalidationJob,
 } from './dashboard-refresh';
 
 export {
-  warmDashboardCacheTask,
-  warmOrgCacheTask,
+  warmDashboardCacheJob,
+  warmOrgCacheJob,
 } from './cache-warming';
 
 // File Cleanup Jobs
@@ -99,15 +101,13 @@ import {
   generateReportJob,
 } from './process-scheduled-reports';
 import {
-  refreshDailyMetricsJob,
-  refreshCurrentStateJob,
-  refreshWarrantyMetricsJob,
+  refreshDashboardMvsJob,
   onDemandMvRefreshJob,
   cacheInvalidationJob,
 } from './dashboard-refresh';
 import {
-  warmDashboardCacheTask,
-  warmOrgCacheTask,
+  warmDashboardCacheJob,
+  warmOrgCacheJob,
 } from './cache-warming';
 
 /**
@@ -130,12 +130,10 @@ export const jobs = [
   cleanupSoftDeletedFilesJob,
   processScheduledReportsJob,
   generateReportJob,
-  // Dashboard Performance
-  refreshDailyMetricsJob,
-  refreshCurrentStateJob,
-  refreshWarrantyMetricsJob,
+  // Dashboard Performance (consolidated into single job)
+  refreshDashboardMvsJob,
   onDemandMvRefreshJob,
   cacheInvalidationJob,
-  warmDashboardCacheTask,
-  warmOrgCacheTask,
+  warmDashboardCacheJob,
+  warmOrgCacheJob,
 ]
