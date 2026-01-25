@@ -213,9 +213,9 @@ export const recordInstallmentPayment = createServerFn({ method: 'POST' })
   });
 ```
 
-- [ ] Wrap `recordInstallmentPayment` in transaction
-- [ ] Add rollback handling for partial failures
-- [ ] Add test for atomicity
+- [x] Wrap `recordInstallmentPayment` in transaction
+- [x] Add rollback handling for partial failures (transactions auto-rollback on error)
+- [ ] Add test for atomicity (deferred)
 
 ### 2.2 Wrap Line Item Operations in Transaction
 
@@ -245,10 +245,10 @@ export const addOrderLineItem = createServerFn({ method: 'POST' })
   });
 ```
 
-- [ ] Wrap `addOrderLineItem` in transaction
-- [ ] Wrap `updateOrderLineItem` in transaction
-- [ ] Wrap `deleteOrderLineItem` in transaction
-- [ ] Update `recalculateOrderTotals` to accept transaction parameter
+- [x] Wrap `addOrderLineItem` in transaction
+- [x] Wrap `updateOrderLineItem` in transaction
+- [x] Wrap `deleteOrderLineItem` in transaction
+- [x] Update `recalculateOrderTotals` to accept transaction parameter
 
 ### 2.3 Wrap Stage Change with Activity Log in Transaction
 
@@ -275,15 +275,15 @@ return await db.transaction(async (tx) => {
 });
 ```
 
-- [ ] Wrap `updateOpportunityStage` in transaction
-- [ ] Include activity log in same transaction
+- [x] Wrap `updateOpportunityStage` in transaction
+- [x] Include activity log in same transaction
 
 ### 2.4 Wrap Quote Creation with Opportunity Update in Transaction
 
 **File**: `src/server/functions/pipeline/quote-versions.ts:133-156`
 
-- [ ] Wrap `createQuoteVersion` in transaction
-- [ ] Include opportunity value update in same transaction
+- [x] Wrap `createQuoteVersion` in transaction
+- [x] Include opportunity value update in same transaction
 
 ### 2.5 Fix Optimistic Locking Pattern
 
@@ -313,8 +313,8 @@ if (result.length === 0) {
 }
 ```
 
-- [ ] Move version check into UPDATE WHERE clause
-- [ ] Return ConflictError if no rows updated
+- [x] Move version check into UPDATE WHERE clause
+- [x] Return ConflictError if no rows updated
 
 ---
 

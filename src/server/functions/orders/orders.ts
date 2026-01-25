@@ -994,42 +994,47 @@ export const addOrderLineItem = createServerFn({ method: 'POST' })
       taxType: data.item.taxType,
     });
 
-    // Get next line number
-    const [maxLine] = await db
-      .select({ max: sql<string>`MAX(${orderLineItems.lineNumber})` })
-      .from(orderLineItems)
-      .where(eq(orderLineItems.orderId, data.orderId));
+    // Wrap insert and recalculate in transaction for atomicity
+    const newItem = await db.transaction(async (tx) => {
+      // Get next line number
+      const [maxLine] = await tx
+        .select({ max: sql<string>`MAX(${orderLineItems.lineNumber})` })
+        .from(orderLineItems)
+        .where(eq(orderLineItems.orderId, data.orderId));
 
-    const nextLineNumber = ((parseInt(maxLine?.max ?? '0', 10) || 0) + 1)
-      .toString()
-      .padStart(3, '0');
+      const nextLineNumber = ((parseInt(maxLine?.max ?? '0', 10) || 0) + 1)
+        .toString()
+        .padStart(3, '0');
 
-    // Insert line item
-    const [newItem] = await db
-      .insert(orderLineItems)
-      .values({
-        organizationId: ctx.organizationId,
-        orderId: data.orderId,
-        productId: data.item.productId,
-        lineNumber: data.item.lineNumber || nextLineNumber,
-        sku: data.item.sku,
-        description: data.item.description,
-        quantity: data.item.quantity,
-        unitPrice: data.item.unitPrice,
-        discountPercent: data.item.discountPercent,
-        discountAmount: data.item.discountAmount ?? 0,
-        taxType: data.item.taxType ?? 'gst',
-        taxAmount: totals.taxAmount,
-        lineTotal: totals.lineTotal,
-        qtyPicked: 0,
-        qtyShipped: 0,
-        qtyDelivered: 0,
-        notes: data.item.notes,
-      })
-      .returning();
+      // Insert line item
+      const [inserted] = await tx
+        .insert(orderLineItems)
+        .values({
+          organizationId: ctx.organizationId,
+          orderId: data.orderId,
+          productId: data.item.productId,
+          lineNumber: data.item.lineNumber || nextLineNumber,
+          sku: data.item.sku,
+          description: data.item.description,
+          quantity: data.item.quantity,
+          unitPrice: data.item.unitPrice,
+          discountPercent: data.item.discountPercent,
+          discountAmount: data.item.discountAmount ?? 0,
+          taxType: data.item.taxType ?? 'gst',
+          taxAmount: totals.taxAmount,
+          lineTotal: totals.lineTotal,
+          qtyPicked: 0,
+          qtyShipped: 0,
+          qtyDelivered: 0,
+          notes: data.item.notes,
+        })
+        .returning();
 
-    // Recalculate order totals
-    await recalculateOrderTotals(data.orderId, ctx.user.id);
+      // Recalculate order totals within same transaction
+      await recalculateOrderTotals(data.orderId, ctx.user.id, tx);
+
+      return inserted;
+    });
 
     return newItem;
   });
@@ -1102,24 +1107,29 @@ export const updateOrderLineItem = createServerFn({ method: 'POST' })
       taxType,
     });
 
-    // Update line item
-    const [updated] = await db
-      .update(orderLineItems)
-      .set({
-        ...data,
-        quantity,
-        unitPrice,
-        discountPercent,
-        discountAmount,
-        taxAmount: totals.taxAmount,
-        lineTotal: totals.lineTotal,
-        updatedAt: new Date(),
-      })
-      .where(eq(orderLineItems.id, itemId))
-      .returning();
+    // Wrap update and recalculate in transaction for atomicity
+    const updated = await db.transaction(async (tx) => {
+      // Update line item
+      const [updatedItem] = await tx
+        .update(orderLineItems)
+        .set({
+          ...data,
+          quantity,
+          unitPrice,
+          discountPercent,
+          discountAmount,
+          taxAmount: totals.taxAmount,
+          lineTotal: totals.lineTotal,
+          updatedAt: new Date(),
+        })
+        .where(eq(orderLineItems.id, itemId))
+        .returning();
 
-    // Recalculate order totals
-    await recalculateOrderTotals(orderId, ctx.user.id);
+      // Recalculate order totals within same transaction
+      await recalculateOrderTotals(orderId, ctx.user.id, tx);
+
+      return updatedItem;
+    });
 
     return updated;
   });
@@ -1164,25 +1174,28 @@ export const deleteOrderLineItem = createServerFn({ method: 'POST' })
       });
     }
 
-    // Get line item count
-    const [countResult] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(orderLineItems)
-      .where(eq(orderLineItems.orderId, data.orderId));
+    // Wrap count check, delete and recalculate in transaction for atomicity
+    await db.transaction(async (tx) => {
+      // Get line item count within transaction to ensure consistency
+      const [countResult] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(orderLineItems)
+        .where(eq(orderLineItems.orderId, data.orderId));
 
-    if ((countResult?.count ?? 0) <= 1) {
-      throw new ValidationError('Cannot delete last line item', {
-        lineItem: ['Order must have at least one line item'],
-      });
-    }
+      if ((countResult?.count ?? 0) <= 1) {
+        throw new ValidationError('Cannot delete last line item', {
+          lineItem: ['Order must have at least one line item'],
+        });
+      }
 
-    // Delete line item
-    await db
-      .delete(orderLineItems)
-      .where(and(eq(orderLineItems.id, data.itemId), eq(orderLineItems.orderId, data.orderId)));
+      // Delete line item
+      await tx
+        .delete(orderLineItems)
+        .where(and(eq(orderLineItems.id, data.itemId), eq(orderLineItems.orderId, data.orderId)));
 
-    // Recalculate order totals
-    await recalculateOrderTotals(data.orderId, ctx.user.id);
+      // Recalculate order totals within same transaction
+      await recalculateOrderTotals(data.orderId, ctx.user.id, tx);
+    });
 
     return { success: true };
   });
@@ -1318,10 +1331,18 @@ export const duplicateOrder = createServerFn({ method: 'POST' })
 
 /**
  * Recalculate and update order totals from line items.
+ * @param orderId - The order ID to recalculate
+ * @param userId - The user making the change
+ * @param tx - Optional transaction context (defaults to db for backwards compatibility)
  */
-async function recalculateOrderTotals(orderId: string, userId: string): Promise<void> {
+async function recalculateOrderTotals(
+  orderId: string,
+  userId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tx: any = db
+): Promise<void> {
   // Get all line items
-  const lineItems = await db
+  const lineItems: { lineTotal: string | null; taxAmount: string | null }[] = await tx
     .select({
       lineTotal: orderLineItems.lineTotal,
       taxAmount: orderLineItems.taxAmount,
@@ -1330,7 +1351,7 @@ async function recalculateOrderTotals(orderId: string, userId: string): Promise<
     .where(eq(orderLineItems.orderId, orderId));
 
   // Get current order for discount and shipping
-  const [order] = await db
+  const [order] = await tx
     .select({
       discountPercent: orders.discountPercent,
       discountAmount: orders.discountAmount,
@@ -1357,7 +1378,7 @@ async function recalculateOrderTotals(orderId: string, userId: string): Promise<
   const balanceDue = totals.total - Number(order.paidAmount);
 
   // Update order
-  await db
+  await tx
     .update(orders)
     .set({
       subtotal: totals.subtotal,
