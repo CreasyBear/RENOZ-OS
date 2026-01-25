@@ -261,6 +261,7 @@ export const upsertForecast = createServerFn({ method: 'POST' })
 
 /**
  * Bulk update forecasts.
+ * Uses PostgreSQL upsert (ON CONFLICT DO UPDATE) to avoid N+1 queries.
  */
 export const bulkUpdateForecasts = createServerFn({ method: 'POST' })
   .inputValidator(
@@ -271,70 +272,56 @@ export const bulkUpdateForecasts = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.FORECAST });
 
-    const results: { forecast: ForecastRecord; created: boolean }[] = [];
+    // Build all values upfront
+    const forecastValues = data.forecasts.map((forecastData) => ({
+      organizationId: ctx.organizationId,
+      productId: forecastData.productId,
+      forecastDate: forecastData.forecastDate.toISOString().split('T')[0],
+      forecastPeriod: forecastData.forecastPeriod,
+      demandQuantity: String(forecastData.demandQuantity),
+      forecastAccuracy: forecastData.forecastAccuracy
+        ? String(forecastData.forecastAccuracy)
+        : null,
+      confidenceLevel: forecastData.confidenceLevel
+        ? String(forecastData.confidenceLevel)
+        : null,
+      safetyStockLevel: forecastData.safetyStockLevel,
+      reorderPoint: forecastData.reorderPoint,
+      recommendedOrderQuantity: forecastData.recommendedOrderQuantity,
+    }));
 
-    await db.transaction(async (tx) => {
-      for (const forecastData of data.forecasts) {
-        const dateStr = forecastData.forecastDate.toISOString().split('T')[0];
+    // Single upsert using ON CONFLICT DO UPDATE
+    // The unique constraint is on (organizationId, productId, forecastDate, forecastPeriod)
+    const upsertedForecasts = await db
+      .insert(inventoryForecasts)
+      .values(forecastValues)
+      .onConflictDoUpdate({
+        target: [
+          inventoryForecasts.organizationId,
+          inventoryForecasts.productId,
+          inventoryForecasts.forecastDate,
+          inventoryForecasts.forecastPeriod,
+        ],
+        set: {
+          demandQuantity: sql`excluded.demand_quantity`,
+          forecastAccuracy: sql`excluded.forecast_accuracy`,
+          confidenceLevel: sql`excluded.confidence_level`,
+          safetyStockLevel: sql`excluded.safety_stock_level`,
+          reorderPoint: sql`excluded.reorder_point`,
+          recommendedOrderQuantity: sql`excluded.recommended_order_quantity`,
+          calculatedAt: new Date(),
+        },
+      })
+      .returning();
 
-        // Check for existing
-        const [existing] = await tx
-          .select()
-          .from(inventoryForecasts)
-          .where(
-            and(
-              eq(inventoryForecasts.organizationId, ctx.organizationId),
-              eq(inventoryForecasts.productId, forecastData.productId),
-              eq(inventoryForecasts.forecastDate, dateStr),
-              eq(inventoryForecasts.forecastPeriod, forecastData.forecastPeriod)
-            )
-          )
-          .limit(1);
-
-        if (existing) {
-          const [forecast] = await tx
-            .update(inventoryForecasts)
-            .set({
-              demandQuantity: String(forecastData.demandQuantity),
-              forecastAccuracy: forecastData.forecastAccuracy
-                ? String(forecastData.forecastAccuracy)
-                : null,
-              confidenceLevel: forecastData.confidenceLevel
-                ? String(forecastData.confidenceLevel)
-                : null,
-              safetyStockLevel: forecastData.safetyStockLevel,
-              reorderPoint: forecastData.reorderPoint,
-              recommendedOrderQuantity: forecastData.recommendedOrderQuantity,
-              calculatedAt: new Date(),
-            })
-            .where(eq(inventoryForecasts.id, existing.id))
-            .returning();
-
-          results.push({ forecast, created: false });
-        } else {
-          const [forecast] = await tx
-            .insert(inventoryForecasts)
-            .values({
-              organizationId: ctx.organizationId,
-              productId: forecastData.productId,
-              forecastDate: dateStr,
-              forecastPeriod: forecastData.forecastPeriod,
-              demandQuantity: String(forecastData.demandQuantity),
-              forecastAccuracy: forecastData.forecastAccuracy
-                ? String(forecastData.forecastAccuracy)
-                : null,
-              confidenceLevel: forecastData.confidenceLevel
-                ? String(forecastData.confidenceLevel)
-                : null,
-              safetyStockLevel: forecastData.safetyStockLevel,
-              reorderPoint: forecastData.reorderPoint,
-              recommendedOrderQuantity: forecastData.recommendedOrderQuantity,
-            })
-            .returning();
-
-          results.push({ forecast, created: true });
-        }
-      }
+    // Build composite keys to check which were created vs updated
+    // by querying createdAt vs calculatedAt
+    const results = upsertedForecasts.map((forecast) => {
+      // If createdAt is very close to now (within 1 second), it was created
+      const createdAtTime = new Date(forecast.createdAt).getTime();
+      const now = Date.now();
+      const isNew = now - createdAtTime < 1000;
+      return { forecast, created: isNew };
     });
 
     return {

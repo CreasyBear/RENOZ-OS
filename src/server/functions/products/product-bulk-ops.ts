@@ -7,7 +7,7 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, inArray, isNull } from 'drizzle-orm';
+import { eq, and, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { products, categories } from 'drizzle/schema';
@@ -591,29 +591,33 @@ export const bulkUpdatePrices = createServerFn({ method: 'POST' })
 
     if (data.adjustment.type === 'percentage') {
       const multiplier = 1 + data.adjustment.value / 100;
+      const applyToBase =
+        data.adjustment.applyTo === 'basePrice' || data.adjustment.applyTo === 'both';
+      const applyToCost =
+        data.adjustment.applyTo === 'costPrice' || data.adjustment.applyTo === 'both';
 
-      for (const product of currentProducts) {
-        const updates: Record<string, unknown> = {
-          updatedBy: ctx.user.id,
-          updatedAt: new Date(),
-        };
+      // Single UPDATE using CASE/WHEN for percentage adjustments
+      await db.execute(sql`
+        UPDATE products
+        SET
+          base_price = CASE
+            WHEN ${applyToBase}
+            THEN ROUND(CAST(base_price AS numeric) * ${multiplier}, 2)::text
+            ELSE base_price
+          END,
+          cost_price = CASE
+            WHEN ${applyToCost} AND cost_price IS NOT NULL AND CAST(cost_price AS numeric) > 0
+            THEN ROUND(CAST(cost_price AS numeric) * ${multiplier}, 2)::text
+            ELSE cost_price
+          END,
+          updated_by = ${ctx.user.id},
+          updated_at = NOW()
+        WHERE id = ANY(${data.productIds}::uuid[])
+          AND organization_id = ${ctx.organizationId}
+          AND deleted_at IS NULL
+      `);
 
-        if (data.adjustment.applyTo === 'basePrice' || data.adjustment.applyTo === 'both') {
-          const currentBase = Number(product.basePrice) || 0;
-          updates.basePrice = String(Math.round(currentBase * multiplier * 100) / 100);
-        }
-
-        if (data.adjustment.applyTo === 'costPrice' || data.adjustment.applyTo === 'both') {
-          const currentCost = Number(product.costPrice) || 0;
-          if (currentCost > 0) {
-            updates.costPrice = String(Math.round(currentCost * multiplier * 100) / 100);
-          }
-        }
-
-        await db.update(products).set(updates).where(eq(products.id, product.id));
-
-        updatedCount++;
-      }
+      updatedCount = currentProducts.length;
     } else {
       // Fixed price update
       const updates: Record<string, unknown> = {

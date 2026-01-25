@@ -9,7 +9,7 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, desc, ilike, or } from 'drizzle-orm';
+import { eq, and, desc, ilike, or, gte, lte } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
 import {
@@ -134,7 +134,7 @@ async function startSlaTrackingForIssue(
   issueId: string,
   configId: string
 ) {
-  // Get the SLA configuration
+  // Get the SLA configuration first (needed to determine if we need business hours)
   const [config] = await db
     .select()
     .from(slaConfigurations)
@@ -145,31 +145,51 @@ async function startSlaTrackingForIssue(
     throw new Error('SLA configuration not found');
   }
 
-  // Get business hours if configured
-  let businessHours: BusinessHoursConfigType | null = null;
-  if (config.businessHoursConfigId) {
-    const [bh] = await db
+  // Fetch business hours and holidays in parallel
+  // For holidays, filter to relevant date range: current year ± 1 year to cover SLA periods
+  const now = new Date();
+  const oneYearAgo = new Date(now.getFullYear() - 1, 0, 1).toISOString().split('T')[0];
+  const oneYearAhead = new Date(now.getFullYear() + 1, 11, 31).toISOString().split('T')[0];
+
+  const [businessHoursResult, holidays] = await Promise.all([
+    config.businessHoursConfigId
+      ? db
+          .select()
+          .from(businessHoursConfig)
+          .where(eq(businessHoursConfig.id, config.businessHoursConfigId))
+          .limit(1)
+      : Promise.resolve([]),
+    db
       .select()
-      .from(businessHoursConfig)
-      .where(eq(businessHoursConfig.id, config.businessHoursConfigId))
-      .limit(1);
-    if (bh) {
-      businessHours = {
+      .from(organizationHolidays)
+      .where(
+        and(
+          eq(organizationHolidays.organizationId, organizationId),
+          or(
+            // Include recurring holidays (checked every year)
+            eq(organizationHolidays.isRecurring, true),
+            // Include non-recurring holidays within the relevant date range
+            and(
+              gte(organizationHolidays.date, oneYearAgo),
+              lte(organizationHolidays.date, oneYearAhead)
+            )
+          )
+        )
+      ),
+  ]);
+
+  // Transform business hours result if present
+  const bh = businessHoursResult[0];
+  const businessHours: BusinessHoursConfigType | null = bh
+    ? {
         id: bh.id,
         organizationId: bh.organizationId,
         name: bh.name,
         weeklySchedule: bh.weeklySchedule as any,
         timezone: bh.timezone,
         isDefault: bh.isDefault,
-      };
-    }
-  }
-
-  // Get holidays
-  const holidays = await db
-    .select()
-    .from(organizationHolidays)
-    .where(eq(organizationHolidays.organizationId, organizationId));
+      }
+    : null;
 
   const holidayDates = holidays.map((h) => new Date(h.date));
 
@@ -286,25 +306,21 @@ export const getIssueById = createServerFn({ method: 'GET' })
       throw new Error('Issue not found');
     }
 
-    // Get SLA state if tracking exists
+    // Get SLA state if tracking exists - use a single JOIN query instead of sequential queries
     let slaState = null;
     if (issue.slaTrackingId) {
-      const [tracking] = await db
-        .select()
+      const [slaData] = await db
+        .select({
+          tracking: slaTracking,
+          config: slaConfigurations,
+        })
         .from(slaTracking)
+        .innerJoin(slaConfigurations, eq(slaTracking.slaConfigurationId, slaConfigurations.id))
         .where(eq(slaTracking.id, issue.slaTrackingId))
         .limit(1);
 
-      if (tracking) {
-        const [config] = await db
-          .select()
-          .from(slaConfigurations)
-          .where(eq(slaConfigurations.id, tracking.slaConfigurationId))
-          .limit(1);
-
-        if (config) {
-          slaState = computeStateSnapshot(tracking as any, config as any);
-        }
+      if (slaData?.tracking && slaData?.config) {
+        slaState = computeStateSnapshot(slaData.tracking as any, slaData.config as any);
       }
     }
 

@@ -352,14 +352,14 @@ const allMatches = await db.select().from(customers)
 const matchesByName = groupBy(allMatches, m => /* matching logic */);
 ```
 
-- [ ] Fix `scanDuplicatesProgressive` - batch customer queries
-- [ ] Fix `findDuplicateCustomers` - JOIN for contacts
-- [ ] Fix `mergeCustomers` - batch insert tags
-- [ ] Fix tag usage updates - single CASE/WHEN UPDATE
-- [ ] Fix `bulkImportJobs` - pre-fetch existence
-- [ ] Fix `bulkRegisterWarranties` - batch insert
-- [ ] Fix `bulkUpdatePrices` - single UPDATE with CASE
-- [ ] Fix `saveBulkForecasts` - ON CONFLICT DO UPDATE
+- [x] Fix `scanDuplicatesProgressive` - batch customer queries
+- [x] Fix `findDuplicateCustomers` - JOIN for contacts (already optimized)
+- [x] Fix `mergeCustomers` - batch insert tags (already optimized)
+- [x] Fix tag usage updates - single CASE/WHEN UPDATE (already optimized)
+- [x] Fix `bulkImportJobs` - pre-fetch existence (already optimized)
+- [x] Fix `bulkRegisterWarranties` - batch insert (already optimized)
+- [x] Fix `bulkUpdatePrices` - single UPDATE with CASE
+- [x] Fix `saveBulkForecasts` - ON CONFLICT DO UPDATE
 
 ### 3.2 Replace In-Memory Aggregation with SQL
 
@@ -396,8 +396,8 @@ const result = await db.execute(sql`
 `);
 ```
 
-- [ ] Refactor `getARAgingReport` to use SQL aggregation
-- [ ] Add similar fix to `financial-dashboard.ts` metrics
+- [x] Refactor `getARAgingReport` to use SQL aggregation
+- [ ] Add similar fix to `financial-dashboard.ts` metrics (deferred)
 
 ### 3.3 Parallelize Sequential Queries
 
@@ -419,9 +419,9 @@ const [config, businessHours, holidays] = await Promise.all([
 ]);
 ```
 
-- [ ] Parallelize SLA calculation queries
-- [ ] Add date filter to holidays query (only fetch relevant window)
-- [ ] Apply Promise.all pattern to other sequential reads
+- [x] Parallelize SLA calculation queries (used JOIN instead)
+- [x] Add date filter to holidays query (only fetch relevant window)
+- [ ] Apply Promise.all pattern to other sequential reads (deferred)
 
 ### 3.4 Add Missing Composite Indexes
 
