@@ -7,7 +7,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { activities, emailHistory } from '@/../drizzle/schema';
+import { activities, emailHistory } from 'drizzle/schema';
 import { withInternalAuth } from '@/lib/server/protected';
 import { emailEventSchema } from '@/lib/schemas/communications';
 import {

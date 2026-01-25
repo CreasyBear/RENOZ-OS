@@ -7,7 +7,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { db } from '@/lib/db';
-import { jobAssignments } from '@/../drizzle/schema';
+import { jobAssignments } from 'drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { withAuth } from '@/lib/server/protected';
 import { z } from 'zod';
@@ -82,7 +82,7 @@ export const bulkParseJobDataSchema = z.object({
 export const parseJobData = createServerFn({ method: 'POST' })
   .inputValidator(parseJobDataSchema)
   .handler(async ({ data }) => {
-    const _ctx = await withAuth();
+    await withAuth();
 
     const parsedData: Record<string, any> = {};
     const parsingResults: Array<{
@@ -232,7 +232,7 @@ export const parseJobData = createServerFn({ method: 'POST' })
 export const validateAndParseJobSchedulingData = createServerFn({ method: 'POST' })
   .inputValidator(validateAndParseJobDataSchema)
   .handler(async ({ data }) => {
-    const _ctx = await withAuth();
+    await withAuth();
 
     const validation = validateJobSchedulingData({
       scheduledDate: data.jobData.scheduledDate,
@@ -285,7 +285,7 @@ export const validateAndParseJobSchedulingData = createServerFn({ method: 'POST'
 export const bulkParseJobData = createServerFn({ method: 'POST' })
   .inputValidator(bulkParseJobDataSchema)
   .handler(async ({ data }) => {
-    const _ctx = await withAuth();
+    await withAuth();
 
     const results = {
       parsedRows: [] as Array<{
@@ -489,24 +489,28 @@ export const importParsedJobData = createServerFn({ method: 'POST' })
           continue;
         }
 
-        // Create new job (simplified - would need customer lookup/validation)
-        // Note: This is incomplete - requires customerId and installerId which aren't in parsed data
-        // TODO: Add customer lookup logic before production use
+        // Create new job - requires customerId and installerId
+        // TODO: Add customer/installer lookup logic before production use
+        // For now, these must be provided in parsedData or the import will fail validation
+        const customerId = jobData.customerId as string | undefined;
+        const installerId = jobData.installerId as string | undefined;
+
+        if (!customerId || !installerId) {
+          throw new Error('Missing required fields: customerId and installerId must be provided in job data');
+        }
+
         const newJob = await db
           .insert(jobAssignments)
           .values({
-            id: crypto.randomUUID(),
             organizationId: ctx.organizationId,
+            customerId,
+            installerId,
             jobNumber: jobData.jobNumber,
             title: jobData.title,
             scheduledDate: jobData.scheduledDate,
             scheduledTime: jobData.scheduledTime,
             status: 'scheduled',
-            // customerId and installerId would need to be resolved from parsed data
-            // This is a simplified example and will fail without these required fields
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          } as any) // Using 'as any' because this is incomplete - needs customerId/installerId
+          })
           .returning({ id: jobAssignments.id, jobNumber: jobAssignments.jobNumber });
 
         results.imported.push({

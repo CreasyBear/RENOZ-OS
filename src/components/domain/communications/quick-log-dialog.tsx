@@ -16,6 +16,7 @@
 
 import * as React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -200,8 +201,8 @@ export function QuickLogDialog({
             ? "Note added"
             : "Meeting recorded"
       );
-      queryClient.invalidateQueries({ queryKey: ["activities"] });
-      queryClient.invalidateQueries({ queryKey: ["customer-activities", customerId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.activities.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.activities.byCustomer(customerId) });
       onOpenChange(false);
     },
     onError: (error) => {

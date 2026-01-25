@@ -32,7 +32,8 @@ import {
   type ConnectionStatus,
   type UseRealtimeBroadcastResult,
 } from './use-realtime'
-import { toast } from '../use-toast'
+import { toast } from '../_shared/use-toast'
+import { queryKeys } from '@/lib/query-keys'
 
 // ============================================================================
 // TYPES
@@ -151,13 +152,13 @@ export function useInventoryRealtime(
     channel: `inventory:${organizationId}`,
     event: 'db_changes',
     queryKeys: [
-      ['inventory'],
-      ['inventory', 'list'],
-      ['inventory', organizationId],
-      ['inventory', 'alerts'],
-      ['products', 'stock'],
-      ['dashboard', 'inventory'],
-      ['dashboard', 'alerts'],
+      queryKeys.inventory.all,
+      queryKeys.inventory.lists(),
+      queryKeys.inventory.items({ organizationId }),
+      queryKeys.inventory.alerts(),
+      queryKeys.products.stock(),
+      queryKeys.dashboard.inventory(),
+      queryKeys.dashboard.alerts(),
     ],
     onUpdate: handleUpdate,
     enabled: enabled && !!organizationId,
@@ -208,8 +209,8 @@ export function useLowStockAlerts(
     channel: `inventory:${organizationId}`,
     event: 'db_changes',
     queryKeys: [
-      ['inventory', 'alerts'],
-      ['dashboard', 'alerts'],
+      queryKeys.inventory.alerts(),
+      queryKeys.dashboard.alerts(),
     ],
     onUpdate: handleUpdate,
     enabled: enabled && !!organizationId,

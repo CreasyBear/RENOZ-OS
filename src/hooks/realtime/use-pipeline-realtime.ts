@@ -27,7 +27,8 @@ import {
   type ConnectionStatus,
   type UseRealtimeBroadcastResult,
 } from './use-realtime'
-import { toast } from '../use-toast'
+import { toast } from '../_shared/use-toast'
+import { queryKeys } from '@/lib/query-keys'
 
 // ============================================================================
 // TYPES
@@ -151,14 +152,12 @@ export function usePipelineRealtime(
     channel: `pipeline:${organizationId}`,
     event: 'db_changes',
     queryKeys: [
-      ['pipeline'],
-      ['pipeline', 'board'],
-      ['opportunities'],
-      ['opportunities', organizationId],
-      ['deals'],
-      ['quotes'],
-      ['dashboard', 'pipeline'],
-      ['dashboard', 'stats'],
+      queryKeys.opportunities.all,
+      queryKeys.opportunities.lists(),
+      queryKeys.opportunities.list({ organizationId }),
+      queryKeys.quotes.all,
+      queryKeys.dashboard.pipeline(),
+      queryKeys.dashboard.stats(),
     ],
     onUpdate: handleUpdate,
     enabled: enabled && !!organizationId,
@@ -235,9 +234,8 @@ export function usePipelineByStage(
     channel: `pipeline:${organizationId}`,
     event: 'db_changes',
     queryKeys: [
-      ['pipeline'],
-      ['pipeline', 'stage', stage],
-      ['opportunities', 'stage', stage],
+      queryKeys.opportunities.all,
+      queryKeys.opportunities.byStage(stage),
     ],
     onUpdate: handleUpdate,
     enabled: enabled && !!organizationId,

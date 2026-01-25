@@ -18,7 +18,7 @@ import {
   emailHistory,
   type NewEmailHistory,
   type CampaignTemplateData,
-} from "@/../drizzle/schema";
+} from "drizzle/schema";
 import {
   prepareEmailForTracking,
   TRACKING_BASE_URL,

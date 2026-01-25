@@ -1,4 +1,4 @@
-import { JobTimeTab } from '@/components/domain/jobs/job-time-tab';
+import { JobTimeTab } from '@/components/domain/jobs';
 import {
   useJobTimeEntries,
   useStartTimer,

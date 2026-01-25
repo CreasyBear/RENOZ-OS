@@ -15,7 +15,7 @@ import {
 } from "@/lib/server/scheduled-emails";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { emailHistory, type NewEmailHistory } from "@/../drizzle/schema";
+import { emailHistory, type NewEmailHistory } from "drizzle/schema";
 import {
   prepareEmailForTracking,
   TRACKING_BASE_URL,

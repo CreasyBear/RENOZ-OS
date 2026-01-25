@@ -4,7 +4,7 @@
  * Export all inventory-related components for use throughout the application.
  */
 
-// Dashboard components
+// --- Core Components ---
 export {
   MetricCard,
   StockOverviewWidget,
@@ -15,28 +15,15 @@ export {
   type MovementSummary,
   type TopMover,
   type LocationUtilization,
-} from "./dashboard-widgets";
+} from './dashboard-widgets';
 
-// Alerts components
-export {
-  AlertsPanel,
-  type AlertType,
-  type AlertSeverity,
-  type InventoryAlert,
-} from "./alerts-panel";
+export { QuickActionsBar, QuickActionsGrid } from './quick-actions';
 
-// Quick actions
-export {
-  QuickActionsBar,
-  QuickActionsGrid,
-} from "./quick-actions";
-
-// Browser components
 export {
   FilterPanel,
   type InventoryFilters,
   defaultInventoryFilters,
-} from "./filter-panel";
+} from './filter-panel';
 
 export {
   ViewModeToggle,
@@ -45,17 +32,11 @@ export {
   InventoryMapView,
   type InventoryItem,
   type ViewMode,
-} from "./view-modes";
+} from './view-modes';
 
-export {
-  InventoryBrowser,
-} from "./inventory-browser";
+export { InventoryBrowser } from './inventory-browser';
 
-// Item detail components
-export {
-  ItemDetail,
-  type ItemDetailData,
-} from "./item-detail";
+export { ItemDetail, type ItemDetailData } from './item-detail';
 
 export {
   ItemTabs,
@@ -63,90 +44,37 @@ export {
   type CostLayer,
   type ForecastData,
   type QualityRecord,
-} from "./item-tabs";
+} from './item-tabs';
 
-// Location management components
-export {
-  LocationTree,
-  type LocationType,
-  type WarehouseLocation,
-} from "./location-tree";
+export { AllocationsTab } from './allocations-tab';
 
-export { LocationForm } from "./location-form";
+// --- Alerts ---
+export * from './alerts';
+export type { AlertType, AlertSeverity, InventoryAlert } from './alerts/alerts-panel';
+export type { AlertRule } from './alerts/alerts-list';
 
-export {
-  LocationDetail,
-  type LocationContents,
-} from "./location-detail";
+// --- Counts ---
+export * from './counts';
+export type { CountStatus, CountType, StockCount } from './counts/stock-count-list';
+export type { CountItem, CountProgress } from './counts/count-sheet';
 
-// Stock counting components
-export {
-  StockCountList,
-  type CountStatus,
-  type CountType,
-  type StockCount,
-} from "./stock-count-list";
+// --- Forecasting ---
+export * from './forecasting';
+export type { ReorderUrgency, ReorderRecommendation } from './forecasting/reorder-recommendations';
+export type { ForecastPeriod, ForecastDataPoint, ForecastAccuracy } from './forecasting/forecast-chart';
 
-export {
-  CountSheet,
-  type CountItem,
-  type CountProgress,
-} from "./count-sheet";
+// --- Locations ---
+export * from './locations';
+export type { LocationType, WarehouseLocation } from './locations/location-tree';
+export type { LocationContents } from './locations/location-detail';
 
-export { VarianceReport } from "./variance-report";
+// --- Receiving ---
+export * from './receiving';
+export type { ReceivingRecord } from './receiving/receiving-history';
 
-// Receiving components
-export { ReceivingForm } from "./receiving-form";
-export {
-  ReceivingHistory,
-  type ReceivingRecord,
-} from "./receiving-history";
-
-// Forecasting components
-export {
-  ReorderRecommendations,
-  type ReorderUrgency,
-  type ReorderRecommendation,
-} from "./reorder-recommendations";
-
-export {
-  ForecastChart,
-  type ForecastPeriod,
-  type ForecastDataPoint,
-  type ForecastAccuracy,
-} from "./forecast-chart";
-
-// Alerts management components
-export { AlertConfigForm } from "./alert-config-form";
-export {
-  AlertsList,
-  type AlertRule,
-} from "./alerts-list";
-
-// Analytics and reporting components
-export {
-  ValuationReport,
-  type ValuationSummary,
-  type CategoryValuation,
-  type LocationValuation,
-} from "./valuation-report";
-
-export {
-  AgingReport,
-  type AgingSummary,
-  type AgeBucket,
-  type AgingItem,
-} from "./aging-report";
-
-export {
-  TurnoverReport,
-  type TurnoverSummary,
-  type CategoryTurnover,
-  type TurnoverTrend,
-} from "./turnover-report";
-
-export {
-  MovementAnalytics,
-  type MovementByType,
-  type MovementTrend,
-} from "./movement-analytics";
+// --- Reports ---
+export * from './reports';
+export type { ValuationSummary, CategoryValuation, LocationValuation } from './reports/valuation-report';
+export type { AgingSummary, AgeBucket, AgingItem } from './reports/aging-report';
+export type { TurnoverSummary, CategoryTurnover, TurnoverTrend } from './reports/turnover-report';
+export type { MovementByType, MovementTrend } from './reports/movement-analytics';

@@ -19,14 +19,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { LoadingState } from '@/components/shared/loading-state';
 import { ErrorState } from '@/components/shared/error-state';
-import { SlaBadge } from '@/components/domain/support/sla-badge';
-import { SlaStatusCard } from '@/components/domain/support/sla-status-card';
-import { EscalationDialog } from '@/components/domain/support/escalation-dialog';
+import { SlaBadge } from '@/components/domain/support';
+import { SlaStatusCard } from '@/components/domain/support';
+import { EscalationDialog } from '@/components/domain/support';
 import {
   IssueStatusChangeDialog,
   type StatusChangeResult,
   type IssueStatus as DialogIssueStatus,
-} from '@/components/domain/support/issue-status-change-dialog';
+} from '@/components/domain/support';
 import { useIssue, useUpdateIssue } from '@/hooks/support';
 import type { IssueStatus, IssuePriority, IssueType } from '@/lib/schemas/support/issues';
 import { useState } from 'react';
@@ -58,9 +58,9 @@ export const Route = createFileRoute('/_authenticated/support/issues/$issueId')(
 // ============================================================================
 
 const STATUS_COLORS: Record<IssueStatus, string> = {
-  new: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
   open: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
   in_progress: 'bg-purple-500/10 text-purple-600 border-purple-500/20',
+  pending: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
   on_hold: 'bg-slate-500/10 text-slate-600 border-slate-500/20',
   escalated: 'bg-red-500/10 text-red-600 border-red-500/20',
   resolved: 'bg-green-500/10 text-green-600 border-green-500/20',
@@ -167,7 +167,8 @@ function IssueDetailPage() {
       await updateMutation.mutateAsync({
         issueId,
         status: 'escalated',
-        escalationReason: reason,
+        // Store escalation reason in holdReason field
+        holdReason: `Escalation reason: ${reason}`,
       });
       toast.success('Issue escalated');
       setEscalationDialogOpen(false);

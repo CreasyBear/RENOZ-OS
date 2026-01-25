@@ -24,7 +24,7 @@
  */
 import { useEffect, useState, useRef } from 'react';
 import { useQueryClient, type QueryKey } from '@tanstack/react-query';
-import { createClient } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 // Simplified payload type for our use case
@@ -110,7 +110,6 @@ export function useRealtimeSubscription<T = unknown>(
     enabled = true,
   } = options;
 
-  const supabase = createClient();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
   const channelRef = useRef<RealtimeChannel | null>(null);

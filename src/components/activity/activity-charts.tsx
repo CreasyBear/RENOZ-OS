@@ -23,7 +23,7 @@ import {
 } from "recharts";
 import { cn } from "~/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useActivityStats } from "@/hooks/use-activities";
+import { useActivityStats } from "@/hooks";
 import { format } from "date-fns";
 import type { ActivityAction, ActivityEntityType } from "@/lib/schemas/activities";
 

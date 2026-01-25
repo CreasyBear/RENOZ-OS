@@ -48,7 +48,7 @@ import {
   type KanbanTask,
 } from '@/hooks/jobs';
 import { toast } from '@/lib/toast';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 import { listJobAssignments } from '@/server/functions/jobs/job-assignments';
 import { useCurrentOrg } from '@/hooks/auth';
 import { queryKeys } from '@/lib/query-keys';

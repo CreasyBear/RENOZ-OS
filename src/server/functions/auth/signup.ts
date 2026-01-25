@@ -1,6 +1,7 @@
 import { redirect } from '@tanstack/react-router';
 import { createServerFn } from '@tanstack/react-start';
-import { createClient } from '@/lib/supabase/server';
+import { getRequest } from '@tanstack/react-start/server';
+import { createServerSupabase } from '@/lib/supabase/server';
 
 export type SignupResult = { error: true; message: string } | undefined;
 
@@ -9,7 +10,8 @@ export const signupFn = createServerFn({ method: 'POST' })
     (d: { email: string; password: string; name: string; organizationName: string }) => d
   )
   .handler(async ({ data }): Promise<SignupResult> => {
-    const supabase = createClient();
+    const request = getRequest();
+    const supabase = createServerSupabase(request);
 
     const { error } = await supabase.auth.signUp({
       email: data.email,

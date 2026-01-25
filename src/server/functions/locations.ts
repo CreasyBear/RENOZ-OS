@@ -11,10 +11,12 @@ import { eq, and, sql, desc, asc, isNull, ne } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
-  locations,
   warehouseLocations,
   inventory,
 } from "../../../drizzle/schema";
+
+// Alias for backward compatibility
+const locations = warehouseLocations;
 import { withAuth } from "@/lib/server/protected";
 import { NotFoundError, ValidationError, ConflictError } from "@/lib/server/errors";
 import {
@@ -27,7 +29,7 @@ import {
 // TYPES
 // ============================================================================
 
-type LocationRecord = typeof locations.$inferSelect;
+type LocationRecord = typeof warehouseLocations.$inferSelect;
 type WarehouseLocationRecord = typeof warehouseLocations.$inferSelect;
 
 interface WarehouseLocationWithChildren extends WarehouseLocationRecord {
@@ -64,7 +66,7 @@ export const listLocations = createServerFn({ method: "GET" })
     if (search) {
       conditions.push(
         sql`(
-          ${locations.code} ILIKE ${`%${search}%`} OR
+          ${locations.locationCode} ILIKE ${`%${search}%`} OR
           ${locations.name} ILIKE ${`%${search}%`}
         )`
       );
@@ -85,7 +87,7 @@ export const listLocations = createServerFn({ method: "GET" })
     // Build order clause
     const orderColumn =
       sortBy === "code"
-        ? locations.code
+        ? locations.locationCode
         : sortBy === "name"
           ? locations.name
           : locations.createdAt;
@@ -176,7 +178,7 @@ export const createLocation = createServerFn({ method: "POST" })
       .where(
         and(
           eq(locations.organizationId, ctx.organizationId),
-          eq(locations.code, data.code)
+          eq(locations.locationCode, data.code)
         )
       )
       .limit(1);
@@ -185,24 +187,14 @@ export const createLocation = createServerFn({ method: "POST" })
       throw new ConflictError(`Location with code '${data.code}' already exists`);
     }
 
-    // If this is set as default, unset others
-    if (data.isDefault) {
-      await db
-        .update(locations)
-        .set({ isDefault: false })
-        .where(
-          and(
-            eq(locations.organizationId, ctx.organizationId),
-            eq(locations.isDefault, true)
-          )
-        );
-    }
-
     const [location] = await db
       .insert(locations)
       .values({
         organizationId: ctx.organizationId,
-        ...data,
+        locationCode: data.code,
+        name: data.name,
+        locationType: 'storage', // Default type for simple locations
+        isActive: data.isActive ?? true,
         createdBy: ctx.user.id,
         updatedBy: ctx.user.id,
       })
@@ -237,14 +229,14 @@ export const updateLocation = createServerFn({ method: "POST" })
     }
 
     // Check for duplicate code if changing
-    if (data.code && data.code !== existing.code) {
+    if (data.code && data.code !== existing.locationCode) {
       const [duplicate] = await db
         .select()
         .from(locations)
         .where(
           and(
             eq(locations.organizationId, ctx.organizationId),
-            eq(locations.code, data.code),
+            eq(locations.locationCode, data.code),
             ne(locations.id, id)
           )
         )
@@ -255,23 +247,12 @@ export const updateLocation = createServerFn({ method: "POST" })
       }
     }
 
-    // If setting as default, unset others
-    if (data.isDefault && !existing.isDefault) {
-      await db
-        .update(locations)
-        .set({ isDefault: false })
-        .where(
-          and(
-            eq(locations.organizationId, ctx.organizationId),
-            eq(locations.isDefault, true)
-          )
-        );
-    }
-
     const [location] = await db
       .update(locations)
       .set({
-        ...data,
+        ...(data.code && { locationCode: data.code }),
+        ...(data.name && { name: data.name }),
+        ...(data.isActive !== undefined && { isActive: data.isActive }),
         updatedAt: new Date(),
         updatedBy: ctx.user.id,
       })
@@ -334,7 +315,6 @@ const warehouseLocationListQuerySchema = z.object({
  */
 export const listWarehouseLocations = createServerFn({ method: "GET" })
   .inputValidator(warehouseLocationListQuerySchema)
-  // @ts-expect-error - TanStack Start v1 type issue: handler expects ServerFn after inputValidator
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -380,7 +360,6 @@ export const listWarehouseLocations = createServerFn({ method: "GET" })
  */
 export const getWarehouseLocationHierarchy = createServerFn({ method: "GET" })
   .inputValidator(z.object({ id: z.string().uuid().optional() }))
-  // @ts-expect-error - TanStack Start v1 type issue: handler expects ServerFn after inputValidator
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -442,7 +421,6 @@ const createWarehouseLocationSchema = z.object({
  */
 export const createWarehouseLocation = createServerFn({ method: "POST" })
   .inputValidator(createWarehouseLocationSchema)
-  // @ts-expect-error - TanStack Start v1 type issue: handler expects ServerFn after inputValidator
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: "inventory.manage" });
 
@@ -507,7 +485,6 @@ export const updateWarehouseLocation = createServerFn({ method: "POST" })
       data: updateWarehouseLocationSchema,
     })
   )
-  // @ts-expect-error - TanStack Start v1 type issue: handler expects ServerFn after inputValidator
   .handler(async ({ data: { id, data } }) => {
     const ctx = await withAuth({ permission: "inventory.manage" });
 
@@ -675,7 +652,6 @@ export const bulkCreateLocations = createServerFn({ method: "POST" })
       locations: z.array(createWarehouseLocationSchema).min(1).max(500),
     })
   )
-  // @ts-expect-error - TanStack Start v1 type issue: handler expects ServerFn after inputValidator
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: "inventory.manage" });
 

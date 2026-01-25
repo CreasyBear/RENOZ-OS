@@ -134,15 +134,15 @@ export const insightCategoryValues = [
   'recommendation',
 ] as const;
 
-export const insightCategorySchema = z.enum(insightCategoryValues);
+export const comparisonInsightCategorySchema = z.enum(insightCategoryValues);
 
-export type InsightCategory = z.infer<typeof insightCategorySchema>;
+export type ComparisonInsightCategory = z.infer<typeof comparisonInsightCategorySchema>;
 
 export const insightPriorityValues = ['high', 'medium', 'low'] as const;
 
-export const insightPrioritySchema = z.enum(insightPriorityValues);
+export const comparisonInsightPrioritySchema = z.enum(insightPriorityValues);
 
-export type InsightPriority = z.infer<typeof insightPrioritySchema>;
+export type ComparisonInsightPriority = z.infer<typeof comparisonInsightPrioritySchema>;
 
 export const comparisonInsightSchema = z.object({
   /** Unique insight ID */
@@ -150,9 +150,9 @@ export const comparisonInsightSchema = z.object({
   /** Related metric */
   metric: metricKeySchema,
   /** Insight category */
-  category: insightCategorySchema,
+  category: comparisonInsightCategorySchema,
   /** Priority level */
-  priority: insightPrioritySchema,
+  priority: comparisonInsightPrioritySchema,
   /** Insight title */
   title: z.string(),
   /** Detailed description */

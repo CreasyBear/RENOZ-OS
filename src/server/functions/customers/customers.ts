@@ -24,7 +24,7 @@ import {
   customerTagAssignments,
   customerHealthMetrics,
   customerPriorities,
-} from '@/../drizzle/schema';
+} from 'drizzle/schema';
 import {
   createCustomerSchema,
   updateCustomerSchema,

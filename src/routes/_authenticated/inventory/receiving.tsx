@@ -14,12 +14,12 @@ import { History, Plus } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { FormSkeleton } from "@/components/skeletons/shared/form-skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { toast } from "@/hooks/use-toast";
-import { ReceivingForm } from "@/components/domain/inventory/receiving-form";
+import { toast } from "@/hooks";
+import { ReceivingForm } from "@/components/domain/inventory";
 import {
   ReceivingHistory,
   type ReceivingRecord,
-} from "@/components/domain/inventory/receiving-history";
+} from "@/components/domain/inventory";
 import { receiveInventory, listMovements } from "@/server/functions/inventory";
 import { listLocations } from "@/server/functions/locations";
 import { listProducts } from "@/lib/server/functions/products";

@@ -78,7 +78,14 @@ export const Route = createFileRoute("/_authenticated/reports/pipeline-forecast"
 // HELPERS
 // ============================================================================
 
-function getDateRange(period: string): { startDate: Date; endDate: Date } {
+/**
+ * Format a Date to YYYY-MM-DD string for API calls.
+ */
+function formatDateToYMD(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
+function getDateRange(period: string): { startDate: string; endDate: string } {
   const now = new Date();
   const startDate = new Date();
   const endDate = new Date();
@@ -108,7 +115,8 @@ function getDateRange(period: string): { startDate: Date; endDate: Date } {
       break;
   }
 
-  return { startDate, endDate };
+  // Return YYYY-MM-DD strings for API compatibility
+  return { startDate: formatDateToYMD(startDate), endDate: formatDateToYMD(endDate) };
 }
 
 // ============================================================================
@@ -128,9 +136,9 @@ function PipelineForecastPage() {
     [timePeriod]
   );
 
-  // Fetch forecast data
+  // Fetch forecast data - startDate and endDate are already YYYY-MM-DD strings
   const forecastQuery = useQuery({
-    queryKey: queryKeys.reports.pipelineForecast(startDate.toISOString(), endDate.toISOString(), groupBy),
+    queryKey: queryKeys.reports.pipelineForecast(startDate, endDate, groupBy),
     queryFn: async () => {
       const result = await getPipelineForecast({
         data: {
@@ -144,9 +152,9 @@ function PipelineForecastPage() {
     },
   });
 
-  // Fetch velocity metrics
+  // Fetch velocity metrics - dateFrom/dateTo are optional YYYY-MM-DD strings
   const velocityQuery = useQuery({
-    queryKey: queryKeys.reports.pipelineVelocity(startDate.toISOString(), endDate.toISOString()),
+    queryKey: queryKeys.reports.pipelineVelocity(startDate, endDate),
     queryFn: async () => {
       const result = await getPipelineVelocity({
         data: {
@@ -158,9 +166,9 @@ function PipelineForecastPage() {
     },
   });
 
-  // Fetch revenue attribution
+  // Fetch revenue attribution - dateFrom/dateTo are required YYYY-MM-DD strings
   const attributionQuery = useQuery({
-    queryKey: queryKeys.reports.revenueAttribution(startDate.toISOString(), endDate.toISOString()),
+    queryKey: queryKeys.reports.revenueAttribution(startDate, endDate),
     queryFn: async () => {
       const result = await getRevenueAttribution({
         data: {

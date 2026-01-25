@@ -23,9 +23,9 @@ import {
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { SegmentManager } from '@/components/domain/customers/segment-manager'
-import { SegmentBuilder } from '@/components/domain/customers/segment-builder'
-import { SegmentAnalytics } from '@/components/domain/customers/segment-analytics'
+import { SegmentManager } from '@/components/domain/customers'
+import { SegmentBuilder } from '@/components/domain/customers'
+import { SegmentAnalytics } from '@/components/domain/customers'
 import { useSegments, useSegmentDetail } from '@/hooks'
 
 export const Route = createFileRoute('/_authenticated/customers/segments/')({

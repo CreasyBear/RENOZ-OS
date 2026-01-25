@@ -10,7 +10,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { eq, and, desc, asc, sql, gte, lte, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { winLossReasons, opportunities } from '@/../drizzle/schema';
+import { winLossReasons, opportunities } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import {

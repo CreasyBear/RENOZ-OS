@@ -17,8 +17,8 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useSupportMetrics } from '@/hooks/support';
 import { useCsatMetrics } from '@/hooks/support';
-import { CsatMetricsWidget } from '@/components/domain/support/csat-metrics-widget';
-import { CsatLowRatingAlerts } from '@/components/domain/support/csat-low-rating-alerts';
+import { CsatMetricsWidget } from '@/components/domain/support';
+import { CsatLowRatingAlerts } from '@/components/domain/support';
 import {
   AlertCircle,
   Clock,

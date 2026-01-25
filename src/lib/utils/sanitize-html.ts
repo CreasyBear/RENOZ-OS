@@ -7,7 +7,7 @@
  * @see https://github.com/cure53/DOMPurify
  */
 
-import * as DOMPurify from 'dompurify';
+import DOMPurify from 'dompurify';
 
 /**
  * Sanitize HTML content to prevent XSS attacks.

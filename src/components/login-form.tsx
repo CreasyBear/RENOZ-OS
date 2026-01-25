@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { cn } from '~/lib/utils';
-import { createClient } from '~/lib/supabase/client';
+import { supabase } from '~/lib/supabase/client';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
@@ -18,7 +18,6 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const supabase = createClient();
     setIsLoading(true);
     setError(null);
 

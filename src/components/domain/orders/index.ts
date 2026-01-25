@@ -4,58 +4,40 @@
  * Exports all order-related UI components.
  */
 
-export { OrderList, type OrderListProps, type OrderFilters } from "./order-list";
+// --- Core Components ---
+export { OrderList, type OrderListProps, type OrderFilters } from './order-list';
 export {
   OrderFilters as OrderFiltersComponent,
   type OrderFiltersProps,
   type OrderFiltersState,
-} from "./order-filters";
-export { OrderDetail, type OrderDetailProps } from "./order-detail";
-export {
-  OrderCreationWizard,
-  type OrderCreationWizardProps,
-} from "./order-creation-wizard";
-export {
-  CustomerSelector,
-  type CustomerSelectorProps,
-  type SelectedCustomer,
-} from "./customer-selector";
-export {
-  ProductSelector,
-  type ProductSelectorProps,
-  type OrderLineItemDraft,
-} from "./product-selector";
-export {
-  ShipOrderDialog,
-  type ShipOrderDialogProps,
-} from "./ship-order-dialog";
-export { ShipmentList, type ShipmentListProps } from "./shipment-list";
-export {
-  ConfirmDeliveryDialog,
-  type ConfirmDeliveryDialogProps,
-} from "./confirm-delivery-dialog";
-export {
-  TemplateLibrary,
-  type TemplateLibraryProps,
-} from "./template-library";
-export {
-  TemplateSelector,
-  type TemplateSelectorProps,
-} from "./template-selector";
-export {
-  TemplateEditor,
-  type TemplateEditorProps,
-} from "./template-editor";
-export {
-  AmendmentRequestDialog,
-  type AmendmentRequestDialogProps,
-} from "./amendment-request-dialog";
-export {
-  AmendmentReviewDialog,
-  type AmendmentReviewDialogProps,
-} from "./amendment-review-dialog";
-export { AmendmentList, type AmendmentListProps } from "./amendment-list";
-export {
-  FulfillmentDashboard,
-  type FulfillmentDashboardProps,
-} from "./fulfillment-dashboard";
+} from './order-filters';
+export { OrderDetail, type OrderDetailProps } from './order-detail';
+export { OrderBulkOperationsDialog } from './order-bulk-operations-dialog';
+
+// --- Amendments ---
+export * from './amendments';
+export type { AmendmentListProps } from './amendments/amendment-list';
+export type { AmendmentRequestDialogProps } from './amendments/amendment-request-dialog';
+export type { AmendmentReviewDialogProps } from './amendments/amendment-review-dialog';
+
+// --- Cards ---
+export * from './cards';
+
+// --- Creation ---
+export * from './creation';
+export type { OrderCreationWizardProps } from './creation/order-creation-wizard';
+export type { CustomerSelectorProps, SelectedCustomer } from './creation/customer-selector';
+export type { ProductSelectorProps, OrderLineItemDraft } from './creation/product-selector';
+
+// --- Fulfillment ---
+export * from './fulfillment';
+export type { ShipOrderDialogProps } from './fulfillment/ship-order-dialog';
+export type { ShipmentListProps } from './fulfillment/shipment-list';
+export type { ConfirmDeliveryDialogProps } from './fulfillment/confirm-delivery-dialog';
+export type { FulfillmentDashboardProps } from './fulfillment/fulfillment-dashboard';
+
+// --- Templates ---
+export * from './templates';
+export type { TemplateLibraryProps } from './templates/template-library';
+export type { TemplateSelectorProps } from './templates/template-selector';
+export type { TemplateEditorProps } from './templates/template-editor';

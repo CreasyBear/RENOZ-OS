@@ -34,7 +34,7 @@ import {
   useHasPermission,
   useHasAnyPermission,
   useHasAllPermissions,
-} from '@/hooks/use-has-permission'
+} from '@/hooks'
 import type { PermissionAction } from '@/lib/auth/permissions'
 
 /**

@@ -5,8 +5,6 @@
  * Handles contact synchronization, deduplication, and field mapping.
  */
 
-import type { PostgresJsDatabase } from 'drizzle-orm';
-
 // ============================================================================
 // CONTACT DATA TYPES
 // ============================================================================
@@ -903,15 +901,15 @@ export class OutlookContactsProvider implements ContactsProvider {
       title: contact.title,
       companyName: contact.company,
       department: contact.department,
-      emailAddresses: contact.emails?.map((email, index) => ({
+      emailAddresses: contact.emails?.map((email) => ({
         address: email.address,
         name: this.reverseMapEmailType(email.type),
       })),
-      phoneNumbers: contact.phones?.map((phone, index) => ({
+      phoneNumbers: contact.phones?.map((phone) => ({
         number: phone.number,
         type: this.reverseMapPhoneType(phone.type),
       })),
-      addresses: contact.addresses?.map((address, index) => ({
+      addresses: contact.addresses?.map((address) => ({
         street: address.street,
         city: address.city,
         state: address.region,

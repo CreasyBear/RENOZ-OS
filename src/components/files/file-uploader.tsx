@@ -29,7 +29,7 @@ import {
 import { cn } from "~/lib/utils"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
-import { useUploadFile } from "@/hooks/use-files"
+import { useUploadFile } from "@/hooks"
 import type { AttachmentInfo } from "@/lib/schemas/files"
 
 // ============================================================================

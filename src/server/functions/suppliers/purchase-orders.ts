@@ -12,7 +12,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, ilike, desc, asc, sql, gte, lte, count, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { currencySchema, percentageSchema, quantitySchema } from '@/lib/schemas/_shared/patterns';
+import { currencySchema, percentageSchema } from '@/lib/schemas/_shared/patterns';
 import { purchaseOrders, purchaseOrderItems, suppliers } from 'drizzle/schema/suppliers';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/constants';

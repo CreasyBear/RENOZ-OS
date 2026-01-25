@@ -68,7 +68,6 @@ interface ListAlertsResult {
  */
 export const listAlerts = createServerFn({ method: "GET" })
   .inputValidator(alertListQuerySchema)
-  // @ts-expect-error - TanStack Start type issue: handler expects ServerFn type but we provide function with ServerFnCtx
   .handler(async ({ data }): Promise<ListAlertsResult> => {
     const ctx = await withAuth();
     const { page = 1, pageSize = 20, sortBy, sortOrder, ...filters } = data;
@@ -137,7 +136,6 @@ export const listAlerts = createServerFn({ method: "GET" })
  */
 export const getAlert = createServerFn({ method: "GET" })
   .inputValidator(z.object({ id: z.string().uuid() }))
-  // @ts-expect-error - TanStack Start type issue: handler expects ServerFn type but we provide function with ServerFnCtx
   .handler(async ({ data }): Promise<AlertWithDetails> => {
     const ctx = await withAuth();
 
@@ -188,7 +186,6 @@ export const getAlert = createServerFn({ method: "GET" })
  */
 export const createAlert = createServerFn({ method: "POST" })
   .inputValidator(createAlertSchema)
-  // @ts-expect-error - TanStack Start type issue: handler expects ServerFn type but we provide function with ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: "inventory.manage" });
 
@@ -251,7 +248,6 @@ export const updateAlert = createServerFn({ method: "POST" })
       data: updateAlertSchema,
     })
   )
-  // @ts-expect-error - TanStack Start type issue: handler expects ServerFn type but we provide function with ServerFnCtx
   .handler(async ({ data: { id, data } }) => {
     const ctx = await withAuth({ permission: "inventory.manage" });
 
@@ -320,7 +316,6 @@ export const deleteAlert = createServerFn({ method: "POST" })
  * Get currently triggered alerts.
  */
 export const getTriggeredAlerts = createServerFn({ method: "GET" })
-  // @ts-expect-error - TanStack Start type issue: handler expects ServerFn type but we provide function with ServerFnCtx
   .handler(async (): Promise<{ alerts: TriggeredAlert[]; count: number }> => {
     const ctx = await withAuth();
 
@@ -360,7 +355,6 @@ export const getTriggeredAlerts = createServerFn({ method: "GET" })
  * Check and trigger alerts (for scheduled job).
  */
 export const checkAndTriggerAlerts = createServerFn({ method: "POST" })
-  // @ts-expect-error - TanStack Start type issue: handler expects ServerFn type but we provide function with ServerFnCtx
   .handler(async () => {
     const ctx = await withAuth({ permission: "inventory.manage" });
 
@@ -408,7 +402,6 @@ export const acknowledgeAlert = createServerFn({ method: "POST" })
       notes: z.string().optional(),
     })
   )
-  // @ts-expect-error - TanStack Start type issue: handler expects ServerFn type but we provide function with ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 

@@ -17,9 +17,8 @@ import { Package, ExternalLink } from 'lucide-react';
 
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SupportTableSkeleton } from '@/components/skeletons/support';
-import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { RmaList } from '@/components/domain/support/rma-list';
+import { RmaList } from '@/components/domain/support';
 import { useRmas } from '@/hooks/support';
 import type { RmaStatus, RmaReason, RmaResponse } from '@/lib/schemas/support/rma';
 
@@ -88,7 +87,7 @@ function RmasListPage() {
   });
 
   const rmas = data?.data ?? [];
-  const totalCount = data?.pagination?.total ?? 0;
+  const totalCount = data?.pagination?.totalCount ?? 0;
 
   // Update search params
   const updateSearch = (updates: Partial<z.infer<typeof rmasSearchSchema>>) => {

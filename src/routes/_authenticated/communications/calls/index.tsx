@@ -9,8 +9,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import { useScheduledCalls, useCompleteCall, useCancelCall, useRescheduleCall } from "@/hooks/communications";
-import { ScheduledCallsList } from "@/components/domain/communications/scheduled-calls-list";
-import { toastSuccess, toastError } from "@/hooks/use-toast";
+import { ScheduledCallsList } from "@/components/domain/communications";
+import { toastSuccess, toastError } from "@/hooks";
 import { ErrorState } from "@/components/shared";
 import { RouteErrorFallback } from "@/components/layout";
 import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
@@ -110,7 +110,7 @@ function ScheduledCallsContainer() {
     return (
       <ErrorState
         title="Failed to load scheduled calls"
-        description="There was an error loading your scheduled calls."
+        message="There was an error loading your scheduled calls."
         onRetry={() => refetch()}
       />
     );

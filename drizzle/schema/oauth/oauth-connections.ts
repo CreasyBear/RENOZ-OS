@@ -18,9 +18,9 @@ import {
   integer,
 } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
-import { timestampColumns } from 'drizzle/schema/_shared/patterns';
-import { organizations } from 'drizzle/schema/settings/organizations';
-import { users } from 'drizzle/schema/users/users';
+import { timestampColumns } from '../_shared/patterns';
+import { organizations } from '../settings/organizations';
+import { users } from '../users/users';
 
 // ============================================================================
 // OAUTH CONNECTIONS TABLE

@@ -16,7 +16,7 @@ import { Plus } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { InventoryTableSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/hooks";
 import {
   InventoryBrowser,
   type InventoryFilters,

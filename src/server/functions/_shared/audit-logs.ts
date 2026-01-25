@@ -36,7 +36,7 @@ import { buildSafeCSV } from '@/lib/utils/csv-sanitize';
 export const listAuditLogs = createServerFn({ method: 'GET' })
   .inputValidator(auditLogFilterSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.audit?.read || PERMISSIONS.user.read });
+    const ctx = await withAuth({ permission: PERMISSIONS.audit.read });
 
     const { page, pageSize, userId, action, entityType, entityId, dateFrom, dateTo } = data;
     const offset = (page - 1) * pageSize;
@@ -126,7 +126,7 @@ const entityAuditTrailSchema = z.object({
 export const getEntityAuditTrail = createServerFn({ method: 'GET' })
   .inputValidator(entityAuditTrailSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.audit?.read || PERMISSIONS.user.read });
+    const ctx = await withAuth({ permission: PERMISSIONS.audit.read });
 
     const { entityType, entityId, page, pageSize } = data;
     const offset = (page - 1) * pageSize;
@@ -199,7 +199,7 @@ const userActivitySchema = z.object({
 export const getUserActivity = createServerFn({ method: 'GET' })
   .inputValidator(userActivitySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.audit?.read || PERMISSIONS.user.read });
+    const ctx = await withAuth({ permission: PERMISSIONS.audit.read });
 
     const { userId, page, pageSize, dateFrom, dateTo } = data;
     const offset = (page - 1) * pageSize;
@@ -315,7 +315,7 @@ const auditStatsSchema = z.object({
 export const getAuditStats = createServerFn({ method: 'GET' })
   .inputValidator(auditStatsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.audit?.read || PERMISSIONS.user.read });
+    const ctx = await withAuth({ permission: PERMISSIONS.audit.read });
 
     const conditions = [eq(auditLogs.organizationId, ctx.organizationId)];
 
@@ -475,7 +475,7 @@ const exportAuditLogsSchema = auditLogFilterSchema.extend({
 export const exportAuditLogs = createServerFn({ method: 'POST' })
   .inputValidator(exportAuditLogsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.audit?.export || PERMISSIONS.user.read });
+    const ctx = await withAuth({ permission: PERMISSIONS.audit.export });
 
     const { userId, action, entityType, entityId, dateFrom, dateTo, format } = data;
 

@@ -15,9 +15,9 @@ import {
   useDeleteSignature,
   useSetDefaultSignature,
 } from "@/hooks/communications";
-import { SignaturesList } from "@/components/domain/communications/signatures-list";
-import { type SignatureFormValues } from "@/components/domain/communications/signature-editor";
-import { toastSuccess, toastError } from "@/hooks/use-toast";
+import { SignaturesList } from "@/components/domain/communications";
+import { type SignatureFormValues } from "@/components/domain/communications";
+import { toastSuccess, toastError } from "@/hooks";
 import { ErrorState } from "@/components/shared";
 import { RouteErrorFallback } from "@/components/layout";
 import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
@@ -136,7 +136,7 @@ function SignaturesContainer() {
     return (
       <ErrorState
         title="Failed to load signatures"
-        description="There was an error loading your email signatures."
+        message="There was an error loading your email signatures."
         onRetry={() => refetch()}
       />
     );

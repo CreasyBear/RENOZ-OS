@@ -5,8 +5,6 @@
  * Handles message fetching, sending, threading, and attachment processing.
  */
 
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-
 // ============================================================================
 // EMAIL DATA TYPES
 // ============================================================================
@@ -355,7 +353,7 @@ export class GmailProvider implements EmailProvider {
     messageIds: string[],
     read: boolean
   ): Promise<void> {
-    const requests = messageIds.map((messageId) => ({
+    const requests = messageIds.map(() => ({
       removeLabelIds: read ? [] : ['UNREAD'],
       addLabelIds: read ? [] : ['UNREAD'],
     }));
@@ -561,7 +559,7 @@ export class GmailProvider implements EmailProvider {
       participants: this.extractParticipants(messages),
       messageCount: messages.length,
       lastMessageAt: messages[messages.length - 1]?.receivedAt || new Date(),
-      isRead: messages.every((msg) => msg.isRead),
+      isRead: messages.every((msg: EmailMessage) => msg.isRead),
       labels: messages[0]?.labels,
       messages,
     };
@@ -727,7 +725,7 @@ export class OutlookProvider implements EmailProvider {
       participants: this.extractParticipants(messages),
       messageCount: messages.length,
       lastMessageAt: messages[0].receivedAt,
-      isRead: messages.every((msg) => msg.isRead),
+      isRead: messages.every((msg: EmailMessage) => msg.isRead),
       messages,
     }));
   }
@@ -827,7 +825,7 @@ export class OutlookProvider implements EmailProvider {
     connection: { accessToken: string; refreshToken?: string },
     messageIds: string[],
     addLabels?: string[],
-    removeLabels?: string[]
+    _removeLabels?: string[]
   ): Promise<void> {
     // Outlook uses categories instead of labels
     // This is simplified - would need proper category mapping

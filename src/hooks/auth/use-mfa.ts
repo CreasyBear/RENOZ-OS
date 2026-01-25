@@ -9,7 +9,7 @@
 import { useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/query-keys';
-import { createClient } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 import type { Factor } from '@supabase/supabase-js';
 
 export interface MFAState {
@@ -28,11 +28,10 @@ export interface EnrollmentData {
 }
 
 export function useMFA() {
-  const supabase = createClient();
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: queryKeys.auth.mfa(),
+    queryKey: queryKeys.auth.mfa.all(),
     queryFn: async (): Promise<MFAState> => {
       // Get AAL levels
       const { data: aalData, error: aalError } =
@@ -45,7 +44,7 @@ export function useMFA() {
 
       if (factorsError) throw factorsError;
 
-      const verifiedFactors = factorsData.totp.filter((f) => f.status === 'verified');
+      const verifiedFactors = factorsData.totp.filter((f: Factor) => f.status === 'verified');
 
       return {
         isEnrolled: verifiedFactors.length > 0,
@@ -61,7 +60,7 @@ export function useMFA() {
   });
 
   const refreshStatus = () => {
-    queryClient.invalidateQueries({ queryKey: queryKeys.auth.mfa() });
+    queryClient.invalidateQueries({ queryKey: queryKeys.auth.mfa.all() });
   };
 
   /**
@@ -77,7 +76,7 @@ export function useMFA() {
       if (error) throw error;
 
       // Invalidate MFA status to refresh the UI
-      queryClient.invalidateQueries({ queryKey: queryKeys.auth.mfa() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.auth.mfa.all() });
 
       return {
         factorId: data.id,

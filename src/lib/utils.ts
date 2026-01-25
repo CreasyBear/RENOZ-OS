@@ -26,3 +26,6 @@ export {
   buildSafeCSV,
   downloadCSV,
 } from "./utils/csv-sanitize";
+
+// Re-export HTML sanitization
+export { sanitizeHtml, sanitizeEmailPreview } from "./utils/sanitize-html";

@@ -12,7 +12,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { eq, and, desc, asc, sql, gte, lte, inArray, count } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { activities, users } from "@/../drizzle/schema";
+import { activities, users } from "drizzle/schema";
 import {
   activityFeedQuerySchema,
   entityActivitiesQuerySchema,

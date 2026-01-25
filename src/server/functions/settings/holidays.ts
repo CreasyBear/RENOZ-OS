@@ -175,7 +175,7 @@ export const getHoliday = createServerFn({ method: 'GET' })
 export const createHoliday = createServerFn({ method: 'POST' })
   .inputValidator(createHolidaySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
     // Check for duplicate date (data.date is already YYYY-MM-DD string)
     const [existing] = await db
@@ -241,7 +241,7 @@ export const createHoliday = createServerFn({ method: 'POST' })
 export const updateHoliday = createServerFn({ method: 'POST' })
   .inputValidator(updateHolidaySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
     // Get current holiday
     const [current] = await db
@@ -332,7 +332,7 @@ export const updateHoliday = createServerFn({ method: 'POST' })
 export const deleteHoliday = createServerFn({ method: 'POST' })
   .inputValidator(idParamSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
     const [deleted] = await db
       .delete(organizationHolidays)
@@ -373,7 +373,7 @@ export const deleteHoliday = createServerFn({ method: 'POST' })
 export const bulkCreateHolidays = createServerFn({ method: 'POST' })
   .inputValidator(bulkCreateHolidaysSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
     const results: Array<{ id: string; name: string; date: string }> = [];
     const errors: Array<{ name: string; date: string; error: string }> = [];

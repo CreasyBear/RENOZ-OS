@@ -10,7 +10,7 @@
 import { cronTrigger } from "@trigger.dev/sdk";
 import { client } from "../client";
 import { db } from "@/lib/db";
-import { scheduledCalls, customers, notifications } from "@/../drizzle/schema";
+import { scheduledCalls, customers, notifications } from "drizzle/schema";
 import { eq, and, sql, gte, lte } from "drizzle-orm";
 
 // ============================================================================

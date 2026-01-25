@@ -11,7 +11,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { sql, eq, and, or } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { customers, contacts } from '@/../drizzle/schema'
+import { customers, contacts } from 'drizzle/schema'
 import { withAuth } from '@/lib/server/protected'
 import { PERMISSIONS } from '@/lib/auth/permissions'
 

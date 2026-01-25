@@ -15,15 +15,15 @@ import { BookOpen, Settings } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/shared/loading-state';
-import { KbCategoryTree } from '@/components/domain/support/kb-category-tree';
-import { KbArticleList } from '@/components/domain/support/kb-article-list';
-import { KbArticleSearch } from '@/components/domain/support/kb-article-search';
-import { KbPopularArticles } from '@/components/domain/support/kb-popular-articles';
-import { KbSuggestedArticles } from '@/components/domain/support/kb-suggested-articles';
+import { KbCategoryTree } from '@/components/domain/support';
+import { KbArticleList } from '@/components/domain/support';
+import { KbArticleSearch } from '@/components/domain/support';
+import { KbPopularArticles } from '@/components/domain/support';
+import { KbSuggestedArticles } from '@/components/domain/support';
 import {
   KbArticleFormDialog,
   type ArticleFormValues,
-} from '@/components/domain/support/kb-article-form-dialog';
+} from '@/components/domain/support';
 import {
   useKbCategories,
   useKbArticles,
@@ -34,7 +34,7 @@ import {
   useRecordArticleFeedback,
 } from '@/hooks/support';
 import { useDebounce } from '@/hooks/_shared';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 import { toast } from 'sonner';
 import type {
   KbCategoryResponse,

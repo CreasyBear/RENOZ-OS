@@ -23,7 +23,7 @@ import {
 } from '@/server/functions/pipeline/win-loss-reasons';
 import { queryKeys } from '@/lib/query-keys';
 import { toast } from '@/lib/toast';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 
 // ============================================================================
 // ROUTE DEFINITION

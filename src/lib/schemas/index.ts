@@ -49,7 +49,8 @@ export * from "./settings";
 // Suppliers and procurement
 export * from "./suppliers";
 export * from "./purchase-orders";
-export * from "./pricing";
+// Note: pricing schemas excluded from barrel to avoid conflicts with suppliers.
+// Import directly from "@/lib/schemas/pricing" if needed.
 
 // Portal
 export * from "./portal";

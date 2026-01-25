@@ -16,14 +16,14 @@
 import { createServerFn } from "@tanstack/react-start";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { jobs, notifications, type JobMetadata } from "@/../drizzle/schema";
+import { jobs, notifications, type JobMetadata } from "drizzle/schema";
 import {
   createJobSchema,
   updateJobProgressSchema,
   completeJobSchema,
   jobIdSchema,
   userJobsSchema,
-} from "@/lib/schemas/jobs";
+} from "@/lib/schemas/automation-jobs";
 import { withAuth, withInternalAuth } from "@/lib/server/protected";
 
 // ============================================================================

@@ -9,52 +9,40 @@
  */
 
 // --- Core Product Components ---
-export { ProductTable } from './product-table'
-export { ProductFilters } from './product-filters'
-export { SearchInterface } from './search-interface'
+export { ProductTable } from './product-table';
+export { ProductFilters } from './product-filters';
+export { ProductSearchInterface as SearchInterface } from './search-interface';
 
 // --- Product Form ---
-export { ProductForm } from './product-form'
-export { useProductForm } from './product-form/hooks/use-product-form'
-export type { ProductFormProps, ProductFormValues } from './product-form/types'
+export { ProductForm } from './product-form';
+export { useProductForm } from './product-form/hooks/use-product-form';
+export type { ProductFormProps, ProductFormValues } from './product-form/types';
 
-// --- Category Components ---
-export { CategorySidebar } from './category-sidebar'
-export { CategoryTree } from './category-tree'
-export { CategoryEditor } from './category-editor'
+// --- Categories ---
+export * from './categories';
 
-// --- Pricing Components ---
-export { PricingEngine } from './pricing-engine'
-export { PriceTiers } from './price-tiers'
-export { PriceHistory } from './price-history'
-export { CustomerPricing } from './customer-pricing'
+// --- Pricing ---
+export * from './pricing';
 
-// --- Inventory Components ---
-export { InventoryHistory } from './inventory-history'
-export { StockAdjustment } from './stock-adjustment'
+// --- Inventory ---
+export * from './inventory';
 
-// --- Bundle Components ---
-export { BundleCreator } from './bundle-creator'
-export { BundleEditor } from './bundle-editor'
-export { ComponentSelector } from './component-selector'
+// --- Bundles ---
+export * from './bundles';
 
-// --- Attribute Components ---
-export { AttributeDefinitions } from './attribute-definitions'
-export { AttributeValueEditor } from './attribute-value-editor'
+// --- Attributes ---
+export * from './attributes';
 
-// --- Image Components ---
-export { ImageGallery } from './image-gallery'
-export { ImageUploader } from './image-uploader'
-export { ImageEditor } from './image-editor'
+// --- Images ---
+export * from './images';
 
 // --- Bulk Operations ---
-export { BulkImport } from './bulk-import'
-export { BulkOperations } from './bulk-operations'
+export * from './bulk';
 
 // --- Product Detail Tabs ---
-export { OverviewTab } from './tabs/overview-tab'
-export { PricingTab } from './tabs/pricing-tab'
-export { InventoryTab } from './tabs/inventory-tab'
-export { ImagesTab } from './tabs/images-tab'
-export { AttributesTab } from './tabs/attributes-tab'
-export { RelationsTab } from './tabs/relations-tab'
+export { ProductOverviewTab as OverviewTab } from './tabs/overview-tab';
+export { ProductPricingTab as PricingTab } from './tabs/pricing-tab';
+export { ProductInventoryTab as InventoryTab } from './tabs/inventory-tab';
+export { ProductImagesTab as ImagesTab } from './tabs/images-tab';
+export { ProductAttributesTab as AttributesTab } from './tabs/attributes-tab';
+export { ProductRelationsTab as RelationsTab } from './tabs/relations-tab';

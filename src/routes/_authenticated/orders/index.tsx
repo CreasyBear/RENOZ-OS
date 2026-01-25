@@ -12,7 +12,7 @@ import { Plus, Download, RefreshCw } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { OrdersTableSkeleton } from "@/components/skeletons/orders";
 import { Button } from "@/components/ui/button";
-import { toastSuccess, toastError } from "@/hooks/use-toast";
+import { toastSuccess, toastError } from "@/hooks";
 import {
   OrderList,
   OrderFiltersComponent,

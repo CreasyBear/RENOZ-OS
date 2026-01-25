@@ -16,17 +16,17 @@ import { InventoryTabsSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/hooks";
 import {
   ReorderRecommendations,
   type ReorderRecommendation,
-} from "@/components/domain/inventory/reorder-recommendations";
+} from "@/components/domain/inventory";
 import {
   ForecastChart,
   type ForecastDataPoint,
   type ForecastPeriod,
   type ForecastAccuracy,
-} from "@/components/domain/inventory/forecast-chart";
+} from "@/components/domain/inventory";
 import {
   getReorderRecommendations,
   getProductForecast,

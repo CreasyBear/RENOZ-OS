@@ -9,6 +9,7 @@
 
 import { memo, useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import {
   Search,
   Plus,
@@ -59,7 +60,7 @@ export const ProductQuickAdd = memo(function ProductQuickAdd({
 
   // Fetch products
   const productsQuery = useQuery({
-    queryKey: ["products", "quick-add"],
+    queryKey: queryKeys.products.list({ status: "active" }),
     queryFn: () => listProducts({ data: { pageSize: 200, status: "active" } }),
   });
 

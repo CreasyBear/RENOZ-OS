@@ -86,7 +86,7 @@ export function useCreateSlaConfiguration() {
   return useMutation({
     mutationFn: (data: Parameters<typeof createSlaConfiguration>[0]['data']) =>
       createSlaConfiguration({ data }),
-    onSuccess: (result) => {
+    onSuccess: () => {
       // Invalidate all SLA configuration lists
       queryClient.invalidateQueries({
         queryKey: queryKeys.support.slaConfigurations(),

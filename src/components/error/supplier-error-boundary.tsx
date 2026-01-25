@@ -4,7 +4,8 @@
  * Error boundary for supplier-related components with graceful fallback UI.
  * Prevents crashes and provides user-friendly error recovery.
  */
-import { Component, ReactNode } from 'react';
+import { Component } from 'react';
+import type { ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';

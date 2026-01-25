@@ -9,6 +9,7 @@
 
 import { memo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import {
   Plus,
   Edit2,
@@ -58,7 +59,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { toastSuccess, toastError } from "@/hooks/use-toast";
+import { toastSuccess, toastError } from "@/hooks";
 import {
   listWinLossReasons,
   createWinLossReason,
@@ -106,7 +107,7 @@ export const WinLossReasonsManager = memo(function WinLossReasonsManager({
 
   // Fetch reasons
   const { data, isLoading } = useQuery({
-    queryKey: ["win-loss-reasons"],
+    queryKey: queryKeys.settings.winLossReasons(),
     queryFn: async () => {
       const result = await listWinLossReasons({ data: {} });
       return result;
@@ -122,7 +123,7 @@ export const WinLossReasonsManager = memo(function WinLossReasonsManager({
       toastSuccess("Reason created successfully");
       setDialogOpen(false);
       setForm(EMPTY_FORM);
-      queryClient.invalidateQueries({ queryKey: ["win-loss-reasons"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.winLossReasons() });
     },
     onError: () => {
       toastError("Failed to create reason");
@@ -139,7 +140,7 @@ export const WinLossReasonsManager = memo(function WinLossReasonsManager({
       setDialogOpen(false);
       setEditingId(null);
       setForm(EMPTY_FORM);
-      queryClient.invalidateQueries({ queryKey: ["win-loss-reasons"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.winLossReasons() });
     },
     onError: () => {
       toastError("Failed to update reason");
@@ -159,7 +160,7 @@ export const WinLossReasonsManager = memo(function WinLossReasonsManager({
       }
       setDeleteDialogOpen(false);
       setDeletingId(null);
-      queryClient.invalidateQueries({ queryKey: ["win-loss-reasons"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.settings.winLossReasons() });
     },
     onError: () => {
       toastError("Failed to delete reason");

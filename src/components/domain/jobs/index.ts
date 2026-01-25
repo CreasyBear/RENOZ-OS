@@ -7,61 +7,74 @@
  * @see _Initiation/_prd/2-domains/jobs/jobs.prd.json
  */
 
-// Task Management Components (DOM-JOBS-001c)
-export { TaskCard, type TaskCardProps } from './task-card';
-export { TaskFormDialog, type TaskFormDialogProps } from './task-form-dialog';
-export { TaskListSkeleton, TaskCardSkeleton } from './task-list-skeleton';
-export { SortableTaskList, type SortableTaskListProps } from './sortable-task-list';
-export { JobTasksTab, type JobTasksTabProps } from './job-tasks-tab';
-
-// Kanban Board Components (DOM-JOBS-005c)
-export { JobsBoard, type JobsBoardProps } from './jobs-board';
-export { JobsColumn, type JobsColumnProps } from './jobs-column';
-export { JobsCard, type JobsCardProps } from './jobs-card';
-
-// Filter Components (DOM-JOBS-005d)
+// --- Core Components ---
 export { JobsFilters, type JobsFiltersProps, type JobsFiltersState } from './jobs-filters';
-
-// Bulk Operations Components (DOM-JOBS-005e)
-export { JobsBulkActions, type JobsBulkActionsProps } from './jobs-bulk-actions';
-
-// Task Management Components (DOM-JOBS-005f)
-export { JobsTaskCreateDialog, type JobsTaskCreateDialogProps } from './jobs-task-create-dialog';
-export { JobsBulkCreateDialog, type JobsBulkCreateDialogProps } from './jobs-bulk-create-dialog';
+export { JobsErrorBoundary } from './jobs-error-boundary';
+export { JobsFilterBar } from './jobs-filter-bar';
 export {
-  JobsCardInlineEdit,
-  type JobsCardInlineEditProps,
-  useJobsCardInlineEdit,
-} from './jobs-card-inline-edit';
-export { JobsCardContextMenu, type JobsCardContextMenuProps } from './jobs-card-context-menu';
+  UnifiedJobsProvider,
+  useUnifiedJobs,
+  useUnifiedJobData,
+  useCrossViewJobSync,
+  useJobViewPerformance,
+} from './jobs-unified-context';
+export type {
+  JobViewType,
+  UnifiedJobFilters,
+  UnifiedJobViewState,
+  UnifiedJobAction,
+} from './jobs-unified-context';
+export { JobsViewProvider, useJobsView, useJobsViewSync } from './jobs-view-context';
+export type { JobsViewType, JobsViewFilters, JobsViewState } from './jobs-view-context';
+export { JobDocumentsTab } from './job-documents-tab';
 
-// Error Handling Components
-export { KanbanErrorBoundary } from './kanban-error-boundary';
+// --- Kanban ---
+export * from './kanban';
+export { useJobsCardInlineEdit } from './kanban/jobs-card-inline-edit';
 
-// Materials/BOM Management Components (DOM-JOBS-002c)
-export { MaterialCard, type MaterialCardProps } from './material-card';
-export {
-  AddMaterialDialog,
-  type AddMaterialDialogProps,
-  type Product as MaterialProduct,
-} from './add-material-dialog';
-export {
-  MaterialsTableSkeleton,
-  MaterialRowSkeleton,
-  MaterialCardSkeleton,
-} from './materials-table-skeleton';
-export { JobMaterialsTab, type JobMaterialsTabProps } from './job-materials-tab';
+// --- Tasks ---
+export * from './tasks';
+export { TaskCardSkeleton } from './tasks/task-list-skeleton';
 
-// Time Tracking Components (DOM-JOBS-003c)
-export { ActiveTimer, type ActiveTimerProps } from './active-timer';
-export { TimeEntryDialog, type TimeEntryDialogProps } from './time-entry-dialog';
-export { JobTimeTab, type JobTimeTabProps } from './job-time-tab';
+// --- Materials ---
+export * from './materials';
+export { MaterialRowSkeleton, MaterialCardSkeleton } from './materials/materials-table-skeleton';
+export type { Product as MaterialProduct } from './materials/add-material-dialog';
 
-// Commissioning Checklist Components (DOM-JOBS-004c)
-export { ChecklistItemCard, type ChecklistItemCardProps } from './checklist-item-card';
-export { ApplyChecklistDialog, type ApplyChecklistDialogProps } from './apply-checklist-dialog';
-export { JobChecklistTab, type JobChecklistTabProps } from './job-checklist-tab';
+// --- Time Tracking ---
+export * from './time';
 
-// Job Template Components (DOM-JOBS-007c)
-export { JobTemplateList } from './job-template-list';
-export { JobTemplateFormDialog } from './job-template-form-dialog';
+// --- Templates & Checklists ---
+export * from './templates';
+
+// --- Bulk Operations ---
+export * from './bulk';
+
+// --- Calendar (existing subdirectory) ---
+export * from './calendar';
+
+// --- Timeline (existing subdirectory) ---
+export * from './timeline';
+
+// Type re-exports
+export type { TaskCardProps } from './tasks/task-card';
+export type { TaskFormDialogProps } from './tasks/task-form-dialog';
+export type { SortableTaskListProps } from './tasks/sortable-task-list';
+export type { JobTasksTabProps } from './tasks/job-tasks-tab';
+export type { JobsBoardProps } from './kanban/jobs-board';
+export type { JobsColumnProps } from './kanban/jobs-column';
+export type { JobsCardProps } from './kanban/jobs-card';
+export type { JobsCardInlineEditProps } from './kanban/jobs-card-inline-edit';
+export type { JobsCardContextMenuProps } from './kanban/jobs-card-context-menu';
+export type { JobsBulkActionsProps } from './bulk/jobs-bulk-actions';
+export type { JobsTaskCreateDialogProps } from './tasks/jobs-task-create-dialog';
+export type { JobsBulkCreateDialogProps } from './bulk/jobs-bulk-create-dialog';
+export type { MaterialCardProps } from './materials/material-card';
+export type { AddMaterialDialogProps } from './materials/add-material-dialog';
+export type { JobMaterialsTabProps } from './materials/job-materials-tab';
+export type { ActiveTimerProps } from './time/active-timer';
+export type { TimeEntryDialogProps } from './time/time-entry-dialog';
+export type { JobTimeTabProps } from './time/job-time-tab';
+export type { ChecklistItemCardProps } from './templates/checklist-item-card';
+export type { ApplyChecklistDialogProps } from './templates/apply-checklist-dialog';
+export type { JobChecklistTabProps } from './templates/job-checklist-tab';

@@ -21,3 +21,6 @@ export * from './scheduled-reports';
 
 // Comparison Analysis
 export * from './comparison';
+
+// AI Insights
+export * from './ai-insights';

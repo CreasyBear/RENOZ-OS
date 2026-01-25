@@ -32,7 +32,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { SearchEmptyState } from "@/components/shared/search-empty-state";
 import { listProducts, getCategoryTree } from "@/lib/server/functions/products";
 import { ProductTable } from "@/components/domain/products/product-table";
-import { CategorySidebar } from "@/components/domain/products/category-sidebar";
+import { CategorySidebar } from "@/components/domain/products";
 
 // Search params schema for URL-based filtering
 const searchParamsSchema = z.object({

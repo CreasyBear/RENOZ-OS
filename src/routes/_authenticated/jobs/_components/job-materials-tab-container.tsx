@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { JobMaterialsTab } from '@/components/domain/jobs/job-materials-tab';
+import { JobMaterialsTab } from '@/components/domain/jobs';
 import {
   useJobMaterials,
   useJobMaterialCost,

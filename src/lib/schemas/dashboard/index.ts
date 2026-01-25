@@ -22,3 +22,6 @@ export * from './layouts';
 
 // Comparison Analysis
 export * from './comparison';
+
+// AI Insights
+export * from './ai-insights';

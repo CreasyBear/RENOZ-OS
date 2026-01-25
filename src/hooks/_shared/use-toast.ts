@@ -6,7 +6,7 @@
  *
  * @example
  * ```tsx
- * import { toast } from '@/hooks/use-toast'
+ * import { toast } from '@/hooks'
  *
  * // Basic variants
  * toast.success('Item saved successfully!')

@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useDropzone } from 'react-dropzone';
-import { JobDocumentsTab } from '@/components/domain/jobs/job-documents-tab';
+import { JobDocumentsTab } from '@/components/domain/jobs';
 import {
   uploadJobDocument,
   listJobDocuments,

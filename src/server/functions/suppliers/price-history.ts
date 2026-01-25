@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { priceChangeHistory, supplierPriceLists } from 'drizzle/schema/suppliers';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 
 // ============================================================================
 // INPUT SCHEMAS
@@ -58,7 +58,7 @@ const approvePriceChangeSchema = z.object({
 export const listPriceChangeHistory = createServerFn({ method: 'GET' })
   .inputValidator(listPriceChangeHistorySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const {
       priceListId,
@@ -173,7 +173,7 @@ export const listPriceChangeHistory = createServerFn({ method: 'GET' })
 export const getPriceChangeRecord = createServerFn({ method: 'GET' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const result = await db
       .select()
@@ -199,7 +199,7 @@ export const getPriceChangeRecord = createServerFn({ method: 'GET' })
 export const createPriceChangeRequest = createServerFn({ method: 'POST' })
   .inputValidator(createPriceChangeRequestSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     // Calculate price change and percentage
     const previousPrice = data.previousPrice ?? 0;
@@ -235,7 +235,7 @@ export const createPriceChangeRequest = createServerFn({ method: 'POST' })
 export const approvePriceChange = createServerFn({ method: 'POST' })
   .inputValidator(approvePriceChangeSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.APPROVE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.approve });
 
     const updates: Record<string, unknown> = {};
 
@@ -275,7 +275,7 @@ export const approvePriceChange = createServerFn({ method: 'POST' })
 export const applyPriceChange = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     // Get the price change record
     const changeRecord = await db
@@ -334,7 +334,7 @@ export const applyPriceChange = createServerFn({ method: 'POST' })
 export const cancelPriceChangeRequest = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     const result = await db
       .update(priceChangeHistory)
@@ -368,7 +368,7 @@ export const getPendingApprovals = createServerFn({ method: 'GET' })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const items = await db
       .select({
@@ -411,7 +411,7 @@ export const getSupplierPriceChangeStats = createServerFn({ method: 'GET' })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const conditions = [
       eq(priceChangeHistory.organizationId, ctx.organizationId),

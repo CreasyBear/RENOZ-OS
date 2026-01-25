@@ -5,7 +5,6 @@
  * Based on midday's email processing patterns with renoz-v3 adaptations.
  */
 
-import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type {
   EmailMessage,
   EmailThread,
@@ -464,7 +463,7 @@ export interface ProcessedAttachment {
  */
 export async function processEmailAttachments(
   attachments: EmailAttachment[],
-  organizationId: string
+  _organizationId: string
 ): Promise<ProcessedAttachment[]> {
   // This would integrate with the existing document processing utilities
   // For now, return basic processing results

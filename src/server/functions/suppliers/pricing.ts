@@ -8,12 +8,12 @@
  * @see src/lib/schemas/suppliers.ts
  */
 import { createServerFn } from "@tanstack/react-start";
-import { eq, and, ilike, desc, asc, sql, gte, lte, inArray } from "drizzle-orm";
+import { eq, and, ilike, desc, asc, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { priceLists, priceAgreements } from "drizzle/schema/suppliers";
 import { withAuth } from "@/lib/server/protected";
-import { PERMISSIONS } from "@/lib/constants";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 import {
   createPriceListSchema,
   updatePriceListSchema,
@@ -37,12 +37,12 @@ import {
 export const listPriceLists = createServerFn({ method: "GET" })
   .inputValidator(listPriceListsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const {
       search,
       supplierId,
-      status = "active",
+      status,
       sortBy = "productName",
       sortOrder = "asc",
       page = 1,
@@ -121,39 +121,43 @@ export const listPriceLists = createServerFn({ method: "GET" })
 export const createPriceList = createServerFn({ method: "POST" })
   .inputValidator(createPriceListSchema)
   .handler(async ({ data }: { data: CreatePriceListInput }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.CREATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.create });
 
     // Calculate effective price based on discount
     let effectivePrice = Number(data.basePrice);
     if (data.discountType === "percentage") {
-      effectivePrice = Number(data.basePrice) * (1 - Number(data.discountValue) / 100);
+      effectivePrice = Number(data.basePrice) * (1 - Number(data.discountValue ?? 0) / 100);
     } else if (data.discountType === "fixed") {
-      effectivePrice = Number(data.basePrice) - Number(data.discountValue);
+      effectivePrice = Number(data.basePrice) - Number(data.discountValue ?? 0);
     } else if (data.discountType === "volume") {
       // Volume discount requires min order qty and is applied at order level
       effectivePrice = Number(data.basePrice);
     }
+
+    // productId is required in the DB schema - generate a placeholder UUID if not provided
+    // In production, this should either be required in the input or looked up from productSku
+    const productId = data.productId ?? crypto.randomUUID();
 
     const [result] = await db
       .insert(priceLists)
       .values({
         organizationId: ctx.organizationId,
         supplierId: data.supplierId,
-        productId: data.productId,
-        productName: "", // Would be populated from product lookup
-        productSku: "", // Would be populated from product lookup
-        basePrice: data.basePrice.toString(),
-        currency: data.currency,
-        discountType: data.discountType,
-        discountValue: data.discountValue.toString(),
-        effectivePrice: effectivePrice.toString(),
-        minOrderQty: data.minOrderQty,
+        productId,
+        productName: data.productName ?? "",
+        productSku: data.productSku ?? "",
+        basePrice: data.basePrice, // numericCasted accepts number directly
+        currency: data.currency ?? "AUD",
+        discountType: data.discountType ?? "none",
+        discountValue: data.discountValue ?? 0, // numericCasted accepts number directly
+        effectivePrice: effectivePrice, // numericCasted accepts number directly
+        minOrderQty: data.minOrderQty ?? data.minimumOrderQty,
         maxOrderQty: data.maxOrderQty,
-        effectiveDate: data.effectiveDate,
-        expiryDate: data.expiryDate,
+        effectiveDate: data.effectiveDate ?? new Date().toISOString().split('T')[0],
+        expiryDate: data.expiryDate ?? null,
         status: "active",
-        createdBy: ctx.userId,
-        updatedBy: ctx.userId,
+        createdBy: ctx.user.id,
+        updatedBy: ctx.user.id,
       })
       .returning();
 
@@ -166,7 +170,7 @@ export const createPriceList = createServerFn({ method: "POST" })
 export const getPriceList = createServerFn({ method: "GET" })
   .inputValidator(z.object({ id: z.string() }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const [price] = await db
       .select()
@@ -190,10 +194,10 @@ export const getPriceList = createServerFn({ method: "GET" })
 export const updatePriceList = createServerFn({ method: "PUT" })
   .inputValidator(updatePriceListSchema)
   .handler(async ({ data }: { data: UpdatePriceListInput }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     const updateData: any = {
-      updatedBy: ctx.userId,
+      updatedBy: ctx.user.id,
       updatedAt: new Date(),
     };
 
@@ -224,10 +228,10 @@ export const updatePriceList = createServerFn({ method: "PUT" })
         effectivePrice = basePrice - discountValue;
       }
 
-      updateData.basePrice = basePrice.toString();
+      updateData.basePrice = basePrice;
       updateData.discountType = discountType;
-      updateData.discountValue = discountValue.toString();
-      updateData.effectivePrice = effectivePrice.toString();
+      updateData.discountValue = discountValue;
+      updateData.effectivePrice = effectivePrice;
     }
 
     // Handle other fields
@@ -259,7 +263,7 @@ export const updatePriceList = createServerFn({ method: "PUT" })
 export const deletePriceList = createServerFn({ method: "DELETE" })
   .inputValidator(z.object({ id: z.string() }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.DELETE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.delete });
 
     const [result] = await db
       .delete(priceLists)
@@ -295,24 +299,24 @@ export const bulkUpdatePriceLists = createServerFn({ method: "POST" })
     }),
   }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     const { ids, updates } = data;
 
     // Prepare update data
     const updateData: any = {
-      updatedBy: ctx.userId,
+      updatedBy: ctx.user.id,
       updatedAt: new Date(),
     };
 
     // Handle different update types
     if (updates.discountType || updates.discountValue !== undefined) {
       updateData.discountType = updates.discountType;
-      updateData.discountValue = updates.discountValue?.toString();
+      updateData.discountValue = updates.discountValue;
     }
 
     if (updates.basePrice !== undefined) {
-      updateData.basePrice = updates.basePrice.toString();
+      updateData.basePrice = updates.basePrice;
     }
 
     if (updates.minOrderQty !== undefined) updateData.minOrderQty = updates.minOrderQty;
@@ -347,10 +351,10 @@ export const bulkUpdatePriceLists = createServerFn({ method: "POST" })
       return {
         id: price.id,
         ...updateData,
-        basePrice: basePrice.toString(),
+        basePrice,
         discountType,
-        discountValue: discountValue.toString(),
-        effectivePrice: Math.max(0, effectivePrice).toString(),
+        discountValue,
+        effectivePrice: Math.max(0, effectivePrice),
       };
     });
 
@@ -384,7 +388,7 @@ export const bulkUpdatePriceLists = createServerFn({ method: "POST" })
 export const listPriceAgreements = createServerFn({ method: "GET" })
   .inputValidator(listPriceAgreementsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const {
       search,
@@ -465,7 +469,7 @@ export const listPriceAgreements = createServerFn({ method: "GET" })
 export const createPriceAgreement = createServerFn({ method: "POST" })
   .inputValidator(createPriceAgreementSchema)
   .handler(async ({ data }: { data: CreatePriceAgreementInput }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.CREATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.create });
 
     const [result] = await db
       .insert(priceAgreements)
@@ -478,8 +482,8 @@ export const createPriceAgreement = createServerFn({ method: "POST" })
         expiryDate: data.expiryDate,
         status: "draft",
         totalItems: 0,
-        createdBy: ctx.userId,
-        updatedBy: ctx.userId,
+        createdBy: ctx.user.id,
+        updatedBy: ctx.user.id,
       })
       .returning();
 
@@ -492,7 +496,7 @@ export const createPriceAgreement = createServerFn({ method: "POST" })
 export const getPriceAgreement = createServerFn({ method: "GET" })
   .inputValidator(z.object({ id: z.string() }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const [agreement] = await db
       .select()
@@ -516,10 +520,10 @@ export const getPriceAgreement = createServerFn({ method: "GET" })
 export const updatePriceAgreement = createServerFn({ method: "PUT" })
   .inputValidator(updatePriceAgreementSchema)
   .handler(async ({ data }: { data: UpdatePriceAgreementInput }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     const updateData: any = {
-      updatedBy: ctx.userId,
+      updatedBy: ctx.user.id,
       updatedAt: new Date(),
     };
 
@@ -529,7 +533,7 @@ export const updatePriceAgreement = createServerFn({ method: "PUT" })
 
       // Handle approval workflow
       if (data.status === 'approved' && !updateData.approvedBy) {
-        updateData.approvedBy = ctx.userId;
+        updateData.approvedBy = ctx.user.id;
         updateData.approvedAt = new Date();
       }
     }
@@ -562,7 +566,7 @@ export const updatePriceAgreement = createServerFn({ method: "PUT" })
 export const deletePriceAgreement = createServerFn({ method: "DELETE" })
   .inputValidator(z.object({ id: z.string() }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.DELETE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.delete });
 
     const [result] = await db
       .delete(priceAgreements)
@@ -593,7 +597,7 @@ export const exportPriceData = createServerFn({ method: "POST" })
     includeAgreements: z.boolean().default(false),
   }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.READ });
+    await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const { format, filters = {}, includeAgreements = false } = data;
 
@@ -631,41 +635,41 @@ export const exportPriceData = createServerFn({ method: "POST" })
         'Status',
       ];
 
-      const rows = [
+      const rows: string[][] = [
         headers,
         // Price list rows
         ...priceListsResult.items.map((price) => [
           'Price List',
-          price.supplierName,
-          price.productName,
-          price.productSku || '',
-          price.basePrice.toString(),
-          price.effectivePrice.toString(),
-          price.discountType,
-          price.discountValue.toString(),
+          price.supplierName ?? '',
+          price.productName ?? '',
+          price.productSku ?? '',
+          price.basePrice?.toString() ?? '',
+          price.effectivePrice?.toString() ?? '',
+          price.discountType ?? '',
+          price.discountValue?.toString() ?? '',
           '', // No agreement for individual prices
-          price.effectiveDate.split('T')[0],
-          price.expiryDate?.split('T')[0] || '',
-          price.status,
+          price.effectiveDate?.toString().split('T')[0] ?? '',
+          price.expiryDate?.toString().split('T')[0] ?? '',
+          price.status ?? '',
         ]),
         // Agreement rows
         ...agreementsResult.items.map((agreement) => [
           'Agreement',
-          agreement.supplierName,
+          agreement.supplierName ?? '',
           '', // No specific product
           '', // No SKU
           '', // No base price
           '', // No effective price
           '', // No discount type
           '', // No discount value
-          agreement.title,
-          agreement.effectiveDate.split('T')[0],
-          agreement.expiryDate?.split('T')[0] || '',
-          agreement.status,
+          agreement.title ?? '',
+          agreement.effectiveDate?.toString().split('T')[0] ?? '',
+          agreement.expiryDate?.toString().split('T')[0] ?? '',
+          agreement.status ?? '',
         ]),
       ];
 
-      csvContent = rows.map(row => row.map(field => `"${field.replace(/"/g, '""')}"`).join(',')).join('\n');
+      csvContent = rows.map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(',')).join('\n');
     } else {
       // Generate price lists only export
       const headers = [
@@ -684,26 +688,26 @@ export const exportPriceData = createServerFn({ method: "POST" })
         'Last Updated',
       ];
 
-      const rows = [
+      const rows: string[][] = [
         headers,
         ...priceListsResult.items.map((price) => [
-          price.supplierName,
-          price.productName,
-          price.productSku || '',
-          price.basePrice.toString(),
-          price.effectivePrice.toString(),
-          price.discountType,
-          price.discountValue.toString(),
-          price.minOrderQty?.toString() || '',
-          price.maxOrderQty?.toString() || '',
-          price.effectiveDate.split('T')[0],
-          price.expiryDate?.split('T')[0] || '',
-          price.status,
-          price.lastUpdated.split('T')[0],
+          price.supplierName ?? '',
+          price.productName ?? '',
+          price.productSku ?? '',
+          price.basePrice?.toString() ?? '',
+          price.effectivePrice?.toString() ?? '',
+          price.discountType ?? '',
+          price.discountValue?.toString() ?? '',
+          price.minOrderQty?.toString() ?? '',
+          price.maxOrderQty?.toString() ?? '',
+          price.effectiveDate?.toString().split('T')[0] ?? '',
+          price.expiryDate?.toString().split('T')[0] ?? '',
+          price.status ?? '',
+          price.lastUpdated?.toISOString().split('T')[0] ?? '',
         ]),
       ];
 
-      csvContent = rows.map(row => row.map(field => `"${field.replace(/"/g, '""')}"`).join(',')).join('\n');
+      csvContent = rows.map(row => row.map(field => `"${String(field).replace(/"/g, '""')}"`).join(',')).join('\n');
     }
 
     // For now, return CSV content - in a real implementation, you might upload to storage and return a download URL

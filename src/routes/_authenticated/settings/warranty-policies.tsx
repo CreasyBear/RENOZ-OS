@@ -24,7 +24,7 @@ import {
   useCreateWarrantyPolicy,
   useUpdateWarrantyPolicy,
 } from '@/hooks';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 import type { WarrantyPolicy, WarrantyPolicyTerms } from '../../../../drizzle/schema';
 import type { WarrantyPolicyTypeValue } from '@/lib/schemas/warranty/policies';
 

@@ -7,6 +7,7 @@
 
 import { useState, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query-keys';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -55,7 +56,7 @@ export function OAuthStatusDashboard({
   const refetchInterval = refreshInterval || 60000;
 
   const { data, isLoading } = useQuery({
-    queryKey: ['oauth-dashboard', organizationId, selectedTimeframe],
+    queryKey: queryKeys.oauth.dashboard(organizationId, selectedTimeframe),
     queryFn: async () => {
       const response = await fetch('/api/oauth/dashboard');
       if (!response.ok) {

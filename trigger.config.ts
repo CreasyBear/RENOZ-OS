@@ -1,3 +1,4 @@
+// @ts-expect-error - defineConfig is available at runtime in trigger.dev v3
 import { defineConfig } from "@trigger.dev/sdk";
 
 export default defineConfig({

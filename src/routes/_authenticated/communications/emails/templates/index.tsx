@@ -20,11 +20,11 @@ import {
   TemplatesList,
   type TemplateFormValues,
 } from "@/components/domain/communications/templates-list";
-import { toastSuccess, toastError } from "@/hooks/use-toast";
+import { toastSuccess, toastError } from "@/hooks";
 import { ErrorState } from "@/components/shared";
 import { RouteErrorFallback } from "@/components/layout";
 import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
-import type { TemplateCategory } from "../../../../../../drizzle/schema";
+import type { UseTemplatesOptions } from "@/hooks/communications/use-templates";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -43,6 +43,8 @@ export const Route = createFileRoute(
 // ============================================================================
 // CONTAINER COMPONENT
 // ============================================================================
+
+type TemplateCategory = NonNullable<UseTemplatesOptions['category']>;
 
 function TemplatesContainer() {
   const [selectedCategory, setSelectedCategory] = useState<
@@ -174,7 +176,7 @@ function TemplatesContainer() {
     return (
       <ErrorState
         title="Failed to load templates"
-        description="There was an error loading your email templates."
+        message="There was an error loading your email templates."
         onRetry={() => refetch()}
       />
     );

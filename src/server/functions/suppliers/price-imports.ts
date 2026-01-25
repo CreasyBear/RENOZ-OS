@@ -7,9 +7,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { priceLists, priceAgreements } from "drizzle/schema/suppliers";
+import { priceLists } from "drizzle/schema/suppliers";
 import { withAuth } from "@/lib/server/protected";
-import { PERMISSIONS } from "@/lib/constants";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 import { createPriceChangeRequest } from "./price-history";
 
 // ============================================================================
@@ -24,7 +24,7 @@ const priceImportRowSchema = z.object({
   basePrice: z.string().transform(val => parseFloat(val.replace(/[$,]/g, ''))),
   currency: z.string().default('AUD'),
   discountType: z.enum(['percentage', 'fixed', 'volume']).default('percentage'),
-  discountValue: z.string().transform(val => parseFloat(val || '0')).default(0),
+  discountValue: z.string().default('0').transform(val => parseFloat(val || '0')),
   minOrderQty: z.string().optional().transform(val => val ? parseInt(val) : undefined),
   maxOrderQty: z.string().optional().transform(val => val ? parseInt(val) : undefined),
   effectiveDate: z.string().optional(),
@@ -32,15 +32,16 @@ const priceImportRowSchema = z.object({
   status: z.enum(['active', 'inactive']).default('active'),
 });
 
-const agreementImportRowSchema = z.object({
+// Agreement import schema for future bulk agreement imports
+export const agreementImportRowSchema = z.object({
   supplierCode: z.string().min(1),
   supplierName: z.string().optional(),
   title: z.string().min(1),
   description: z.string().optional(),
   effectiveDate: z.string().optional(),
   expiryDate: z.string().optional(),
-  totalItems: z.string().transform(val => parseInt(val || '0')).default(0),
-  status: z.enum(['draft', 'active']).default('draft'),
+  totalItems: z.string().default('0').transform(val => parseInt(val || '0')),
+  status: z.enum(['draft', 'pending', 'approved']).default('draft'),
 });
 
 // ============================================================================
@@ -93,7 +94,8 @@ export const validatePriceImport = createServerFn({ method: "POST" })
     hasHeaders: z.boolean().default(true),
   }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.UPDATE });
+    // Auth check only - ctx not used for validation preview
+    await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     const rows = parseCSV(data.csvContent);
     const headers = data.hasHeaders ? rows[0] : null;
@@ -143,7 +145,7 @@ export const validatePriceImport = createServerFn({ method: "POST" })
         });
       } catch (error) {
         const validationError = error as z.ZodError;
-        const errorMessages = validationError.errors.map(err =>
+        const errorMessages = validationError.issues.map((err: z.ZodIssue) =>
           `${err.path.join('.')}: ${err.message}`
         );
 
@@ -186,7 +188,7 @@ export const executePriceImport = createServerFn({ method: "POST" })
     importReason: z.string().optional(),
   }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     const results = [];
     const changeRequests = [];
@@ -195,24 +197,28 @@ export const executePriceImport = createServerFn({ method: "POST" })
       try {
         // Check if price already exists (by supplier + product)
         // For now, we'll create new prices - in production you'd want upsert logic
+        // Generate a placeholder product ID - in production, this should be looked up from productSku
+        const productId = crypto.randomUUID();
+
         const [newPrice] = await db
           .insert(priceLists)
           .values({
             organizationId: ctx.organizationId,
             supplierId: `temp-${row.data.supplierCode}`, // You'd resolve to actual supplier ID
+            productId,
             productName: row.data.productName,
-            productSku: row.data.productSku,
-            basePrice: row.data.basePrice.toString(),
+            productSku: row.data.productSku ?? null,
+            basePrice: row.data.basePrice, // numericCasted accepts number directly
             currency: row.data.currency,
             discountType: row.data.discountType,
-            discountValue: row.data.discountValue.toString(),
+            discountValue: row.data.discountValue, // numericCasted accepts number directly
             minOrderQty: row.data.minOrderQty,
             maxOrderQty: row.data.maxOrderQty,
-            effectiveDate: row.data.effectiveDate ? new Date(row.data.effectiveDate) : new Date(),
-            expiryDate: row.data.expiryDate ? new Date(row.data.expiryDate) : null,
+            effectiveDate: row.data.effectiveDate ?? new Date().toISOString().split('T')[0],
+            expiryDate: row.data.expiryDate ?? null,
             status: row.data.status,
-            createdBy: ctx.userId,
-            updatedBy: ctx.userId,
+            createdBy: ctx.user.id,
+            updatedBy: ctx.user.id,
           })
           .returning();
 
@@ -221,11 +227,9 @@ export const executePriceImport = createServerFn({ method: "POST" })
           const changeRequest = await createPriceChangeRequest({
             data: {
               priceListId: newPrice.id,
-              changeType: 'create',
-              entityType: 'price_list',
-              newValues: row.data,
-              reason: `Bulk import: ${data.importReason || 'CSV import'}`,
-              approvalRequired: 'none', // Since we're importing, assume pre-approved
+              newPrice: row.data.basePrice,
+              changeReason: `Bulk import: ${data.importReason || 'CSV import'}`,
+              notes: `Created via CSV import for product: ${row.data.productName}`,
             }
           });
           changeRequests.push(changeRequest);

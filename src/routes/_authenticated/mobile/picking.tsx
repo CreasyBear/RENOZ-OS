@@ -29,7 +29,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/hooks";
 import { useOnlineStatus, useOfflineQueue } from "@/hooks";
 import {
   BarcodeScanner,

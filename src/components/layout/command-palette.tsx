@@ -23,7 +23,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getNavRoutes } from '@/lib/routing'
-import { useCurrentUser } from '@/hooks/use-current-user'
+import { useCurrentUser } from '@/hooks'
 import { hasPermission, type PermissionAction } from '@/lib/auth/permissions'
 
 // ============================================================================
@@ -94,7 +94,7 @@ export function CommandPalette({ open: controlledOpen, onOpenChange }: CommandPa
   const [internalOpen, setInternalOpen] = useState(false)
   const [search, setSearch] = useState('')
   const navigate = useNavigate()
-  const { currentUser } = useCurrentUser()
+  const { user } = useCurrentUser()
 
   const open = controlledOpen ?? internalOpen
 
@@ -137,10 +137,10 @@ export function CommandPalette({ open: controlledOpen, onOpenChange }: CommandPa
     const navRoutes = getNavRoutes()
 
     // Filter routes based on user permissions
-    const filteredRoutes = currentUser
+    const filteredRoutes = user
       ? navRoutes.filter((route) => {
           if (!route.requiredPermission) return true
-          return hasPermission(currentUser.role, route.requiredPermission)
+          return hasPermission(user.role, route.requiredPermission)
         })
       : navRoutes
 
@@ -152,15 +152,15 @@ export function CommandPalette({ open: controlledOpen, onOpenChange }: CommandPa
       onSelect: () => navigate({ to: route.path }),
       group: 'navigation' as const,
     }))
-  }, [currentUser, navigate])
+  }, [user, navigate])
 
   // Build action items filtered by permissions
   const actionItems = useMemo((): CommandItem[] => {
     // Filter actions based on user permissions
-    const filteredActions = currentUser
+    const filteredActions = user
       ? QUICK_ACTIONS.filter((action) => {
           if (!action.requiredPermission) return true
-          return hasPermission(currentUser.role, action.requiredPermission)
+          return hasPermission(user.role, action.requiredPermission)
         })
       : QUICK_ACTIONS
 
@@ -172,7 +172,7 @@ export function CommandPalette({ open: controlledOpen, onOpenChange }: CommandPa
       onSelect: () => navigate({ to: action.route }),
       group: 'actions' as const,
     }))
-  }, [currentUser, navigate])
+  }, [user, navigate])
 
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>

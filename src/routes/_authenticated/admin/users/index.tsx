@@ -18,7 +18,7 @@ import {
   exportUsers,
 } from '@/server/functions/users/users';
 import { z } from 'zod';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 
 // Explicit types for loader data
 type UserRole = 'owner' | 'admin' | 'manager' | 'sales' | 'operations' | 'support' | 'viewer';

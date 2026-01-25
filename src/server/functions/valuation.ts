@@ -14,7 +14,7 @@ import {
   inventory,
   inventoryCostLayers,
   products,
-  locations,
+  warehouseLocations,
 } from "../../../drizzle/schema";
 import { withAuth } from "@/lib/server/protected";
 import { NotFoundError, ValidationError } from "@/lib/server/errors";
@@ -246,17 +246,17 @@ export const getInventoryValuation = createServerFn({ method: "GET" })
     // Get by location
     const byLocation = await db
       .select({
-        locationId: locations.id,
-        locationCode: locations.code,
-        locationName: locations.name,
+        locationId: warehouseLocations.id,
+        locationCode: warehouseLocations.locationCode,
+        locationName: warehouseLocations.name,
         itemCount: sql<number>`COUNT(DISTINCT ${inventory.id})::int`,
         totalQuantity: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::int`,
         totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
       })
       .from(inventory)
-      .innerJoin(locations, eq(inventory.locationId, locations.id))
+      .innerJoin(warehouseLocations, eq(inventory.locationId, warehouseLocations.id))
       .where(and(...invConditions))
-      .groupBy(locations.id, locations.code, locations.name)
+      .groupBy(warehouseLocations.id, warehouseLocations.locationCode, warehouseLocations.name)
       .orderBy(desc(sql`SUM(${inventory.totalValue})`));
 
     // Get by product

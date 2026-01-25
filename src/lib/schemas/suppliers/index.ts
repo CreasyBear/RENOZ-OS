@@ -50,6 +50,9 @@ export const supplierAddressSchema = z.object({
   country: z.string(),
 });
 
+// Alias for backward compatibility with createSupplierSchema
+const addressSchema = supplierAddressSchema;
+
 export type SupplierAddress = z.infer<typeof supplierAddressSchema>;
 
 // ============================================================================
@@ -133,3 +136,76 @@ export const defaultSupplierFilters: SupplierFiltersState = {
   status: [],
   supplierType: [],
 };
+
+// ============================================================================
+// PRICING SCHEMAS
+// ============================================================================
+
+export const listPriceListsSchema = z.object({
+  search: z.string().optional(),
+  supplierId: z.string().uuid().optional(),
+  status: z.enum(['active', 'inactive', 'pending', 'expired']).optional(),
+  sortBy: z.enum(['productName', 'unitPrice', 'basePrice', 'effectivePrice', 'effectiveDate', 'expiryDate']).default('productName'),
+  sortOrder: z.enum(['asc', 'desc']).default('asc'),
+  page: z.number().int().min(1).default(1),
+  pageSize: z.number().int().min(1).max(100).default(20),
+});
+
+export const discountTypeSchema = z.enum(['none', 'percentage', 'fixed', 'volume']);
+
+export const createPriceListSchema = z.object({
+  supplierId: z.string().uuid(),
+  productId: z.string().uuid().optional(),
+  productSku: z.string().optional(),
+  productName: z.string(),
+  basePrice: z.number().min(0),
+  unitPrice: z.number().min(0).optional(), // Alias for basePrice
+  currency: z.string().default('AUD'),
+  discountType: discountTypeSchema.default('none'),
+  discountValue: z.number().min(0).default(0),
+  unitOfMeasure: z.string().optional(),
+  minimumOrderQty: z.number().int().min(1).optional(),
+  minOrderQty: z.number().int().min(1).optional(), // Alias
+  maxOrderQty: z.number().int().min(1).optional(),
+  leadTimeDays: z.number().int().min(0).optional(),
+  effectiveDate: z.string().optional(),
+  expiryDate: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export const updatePriceListSchema = createPriceListSchema.partial().extend({
+  id: z.string().uuid(),
+  status: z.enum(['active', 'inactive', 'pending']).optional(),
+});
+
+export const listPriceAgreementsSchema = z.object({
+  search: z.string().optional(),
+  supplierId: z.string().uuid().optional(),
+  status: z.enum(['draft', 'pending', 'approved', 'rejected', 'expired', 'cancelled']).optional(),
+  sortBy: z.enum(['title', 'effectiveDate', 'status', 'createdAt']).default('title'),
+  sortOrder: z.enum(['asc', 'desc']).default('asc'),
+  page: z.number().int().min(1).default(1),
+  pageSize: z.number().int().min(1).max(100).default(20),
+});
+
+export const createPriceAgreementSchema = z.object({
+  supplierId: z.string().uuid(),
+  title: z.string().min(1),
+  description: z.string().optional(),
+  effectiveDate: z.string(),
+  expiryDate: z.string().optional(),
+  notes: z.string().optional(),
+});
+
+export const updatePriceAgreementSchema = createPriceAgreementSchema.partial().extend({
+  id: z.string().uuid(),
+  status: z.enum(['draft', 'pending', 'approved', 'rejected', 'expired', 'cancelled']).optional(),
+});
+
+// Inferred types for pricing
+export type ListPriceListsInput = z.infer<typeof listPriceListsSchema>;
+export type CreatePriceListInput = z.infer<typeof createPriceListSchema>;
+export type UpdatePriceListInput = z.infer<typeof updatePriceListSchema>;
+export type ListPriceAgreementsInput = z.infer<typeof listPriceAgreementsSchema>;
+export type CreatePriceAgreementInput = z.infer<typeof createPriceAgreementSchema>;
+export type UpdatePriceAgreementInput = z.infer<typeof updatePriceAgreementSchema>;

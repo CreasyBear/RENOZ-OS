@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start';
+import { getRequest } from '@tanstack/react-start/server';
 import { z } from 'zod';
-import { createClient } from '@/lib/supabase/server';
+import { createServerSupabase } from '@/lib/supabase/server';
 import { checkPasswordResetRateLimit, RateLimitError } from '@/lib/auth/rate-limit';
 
 const passwordResetInputSchema = z.object({
@@ -24,7 +25,8 @@ export const requestPasswordReset = createServerFn({ method: 'POST' })
       await checkPasswordResetRateLimit(email);
 
       // Send password reset email
-      const supabase = createClient();
+      const request = getRequest();
+      const supabase = createServerSupabase(request);
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${process.env.VITE_APP_URL}/update-password`,
       });

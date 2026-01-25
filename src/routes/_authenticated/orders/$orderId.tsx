@@ -12,7 +12,7 @@ import { ArrowLeft } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { OrderDetailSkeleton } from "@/components/skeletons/orders";
 import { Button } from "@/components/ui/button";
-import { toastSuccess, toastError } from "@/hooks/use-toast";
+import { toastSuccess, toastError } from "@/hooks";
 import { OrderDetail } from "@/components/domain/orders";
 import { duplicateOrder } from "@/lib/server/functions/orders";
 import { queryKeys } from "@/lib/query-keys";

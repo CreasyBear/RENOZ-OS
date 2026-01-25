@@ -15,7 +15,7 @@ import { Plus, Upload, Download, RefreshCw } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { TreeDetailSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/hooks";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,12 +29,12 @@ import {
 import {
   LocationTree,
   type WarehouseLocation,
-} from "@/components/domain/inventory/location-tree";
-import { LocationForm } from "@/components/domain/inventory/location-form";
+} from "@/components/domain/inventory";
+import { LocationForm } from "@/components/domain/inventory";
 import {
   LocationDetail,
   type LocationContents,
-} from "@/components/domain/inventory/location-detail";
+} from "@/components/domain/inventory";
 import {
   getWarehouseLocationHierarchy,
   getLocation,

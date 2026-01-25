@@ -405,10 +405,10 @@ export const getStatementHistory = createServerFn()
     ];
 
     if (dateFrom) {
-      conditions.push(gte(statementHistory.endDate, dateFrom));
+      conditions.push(gte(statementHistory.endDate, dateFrom.toISOString().split('T')[0]));
     }
     if (dateTo) {
-      conditions.push(lte(statementHistory.startDate, dateTo));
+      conditions.push(lte(statementHistory.startDate, dateTo.toISOString().split('T')[0]));
     }
 
     // Get total count
@@ -574,10 +574,10 @@ export const listStatements = createServerFn()
       conditions.push(eq(statementHistory.customerId, customerId));
     }
     if (dateFrom) {
-      conditions.push(gte(statementHistory.endDate, dateFrom));
+      conditions.push(gte(statementHistory.endDate, dateFrom.toISOString().split('T')[0]));
     }
     if (dateTo) {
-      conditions.push(lte(statementHistory.startDate, dateTo));
+      conditions.push(lte(statementHistory.startDate, dateTo.toISOString().split('T')[0]));
     }
     if (onlySent) {
       conditions.push(sql`${statementHistory.sentAt} IS NOT NULL`);

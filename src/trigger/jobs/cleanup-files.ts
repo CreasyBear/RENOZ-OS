@@ -11,7 +11,7 @@ import { cronTrigger } from "@trigger.dev/sdk";
 import { eq, and, isNotNull, lt } from "drizzle-orm";
 import { client } from "../client";
 import { db } from "@/lib/db";
-import { attachments } from "@/../drizzle/schema";
+import { attachments } from "drizzle/schema";
 import { deleteObject } from "@/lib/storage";
 
 // ============================================================================

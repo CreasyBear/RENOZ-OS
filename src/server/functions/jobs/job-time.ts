@@ -13,7 +13,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, isNull, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { jobTimeEntries, jobAssignments, users } from '@/../drizzle/schema';
+import { jobTimeEntries, jobAssignments, users } from 'drizzle/schema';
 import {
   startTimerSchema,
   stopTimerSchema,

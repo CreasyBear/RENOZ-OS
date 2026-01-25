@@ -23,3 +23,6 @@ export type {
 
 export { ActivityFeedWidget } from './activity-feed-widget';
 export type { ActivityFeedWidgetProps } from './activity-feed-widget';
+
+export { AiInsightsWidget } from './ai-insights-widget';
+export type { AiInsightsWidgetProps } from './ai-insights-widget';

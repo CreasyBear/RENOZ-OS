@@ -30,7 +30,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import {
   AttributeValueEditor,
   type AttributeDefinition,
-} from "../attribute-value-editor";
+} from "../attributes/attribute-value-editor";
 import {
   getProductAttributeValues,
   deleteProductAttribute,

@@ -15,7 +15,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useActivityStats } from "@/hooks/use-activities";
+import { useActivityStats } from "@/hooks";
 
 // ============================================================================
 // TYPES

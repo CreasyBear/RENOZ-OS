@@ -7,7 +7,7 @@
 
 import { useMemo } from 'react';
 import { type ColumnDef } from '@tanstack/react-table';
-import { Eye, Shield } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import { DataTable } from '@/components/shared/data-table/data-table';
 import { DateCell } from '@/components/shared/data-table/cells/date-cell';
 import { NameCell } from '@/components/shared/data-table/cells/name-cell';

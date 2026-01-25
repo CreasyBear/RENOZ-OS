@@ -17,7 +17,6 @@
 
 import { memo, useCallback, useEffect } from 'react';
 import { useForm } from '@tanstack/react-form';
-import { zodValidator } from '@tanstack/zod-form-adapter';
 import { format } from 'date-fns';
 import { CalendarIcon, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -47,7 +46,6 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet';
 import {
-  createTargetSchema,
   targetMetricValues,
   targetPeriodValues,
   type TargetMetric,
@@ -73,7 +71,16 @@ export interface TargetFormProps {
   isSubmitting?: boolean;
 }
 
-type FormValues = CreateTargetInput;
+/** Form values use string for targetValue (input field) */
+interface FormValues {
+  name: string;
+  metric: TargetMetric;
+  period: TargetPeriod;
+  startDate: string;
+  endDate: string;
+  targetValue: string;
+  description?: string;
+}
 
 // ============================================================================
 // CONSTANTS
@@ -160,14 +167,20 @@ export const TargetForm = memo(function TargetForm({
 }: TargetFormProps) {
   const isEditMode = !!target;
 
-  const form = useForm({
+  const form = useForm<FormValues>({
     defaultValues: target ? targetToFormValues(target) : getDefaultFormValues(),
-    validatorAdapter: zodValidator(),
-    validators: {
-      onChange: createTargetSchema,
-    },
     onSubmit: async ({ value }) => {
-      await onSubmit(value);
+      // Convert form values to schema input (string targetValue -> number)
+      const submitData: CreateTargetInput = {
+        name: value.name,
+        metric: value.metric,
+        period: value.period,
+        startDate: value.startDate,
+        endDate: value.endDate,
+        targetValue: parseFloat(value.targetValue) || 0,
+        description: value.description,
+      };
+      await onSubmit(submitData);
       onOpenChange(false);
     },
   });

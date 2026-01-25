@@ -15,7 +15,7 @@ import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { InventoryTabsSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/hooks";
 import {
   Dialog,
   DialogContent,
@@ -25,12 +25,12 @@ import {
 import {
   AlertsPanel,
   type InventoryAlert,
-} from "@/components/domain/inventory/alerts-panel";
-import { AlertConfigForm } from "@/components/domain/inventory/alert-config-form";
+} from "@/components/domain/inventory";
+import { AlertConfigForm } from "@/components/domain/inventory";
 import {
   AlertsList,
   type AlertRule,
-} from "@/components/domain/inventory/alerts-list";
+} from "@/components/domain/inventory";
 import {
   listAlerts,
   createAlert,

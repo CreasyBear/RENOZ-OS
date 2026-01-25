@@ -11,7 +11,7 @@
 import { cronTrigger, eventTrigger } from '@trigger.dev/sdk';
 import { and, eq, gte, lte, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { warranties, warrantyPolicies, customers, notifications } from '@/../drizzle/schema';
+import { warranties, warrantyPolicies, customers, notifications } from 'drizzle/schema';
 import { client, warrantyEvents, type WarrantyExpiringSoonPayload } from '../client';
 
 // ============================================================================
@@ -179,7 +179,7 @@ export const checkExpiringWarrantiesJob = client.defineJob({
     const productNamesResult = await io.runTask('get-product-names', async () => {
       if (productIds.length === 0) return {} as Record<string, string>;
 
-      const { products } = await import('@/../drizzle/schema');
+      const { products } = await import('drizzle/schema');
       const productRecords = await db
         .select({ id: products.id, name: products.name })
         .from(products)

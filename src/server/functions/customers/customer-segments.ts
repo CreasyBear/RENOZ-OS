@@ -9,7 +9,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { sql, eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { customerTags } from '@/../drizzle/schema';
+import { customerTags } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 

@@ -17,7 +17,7 @@ const confirmPortalFn = createServerFn({ method: 'GET' })
   })
   .handler(async (ctx) => {
     const { getRequest } = await import('@tanstack/react-start/server');
-    const { createClient } = await import('~/lib/supabase/server');
+    const { createServerSupabase } = await import('~/lib/supabase/server');
 
     const request = getRequest();
     if (!request) {
@@ -31,7 +31,7 @@ const confirmPortalFn = createServerFn({ method: 'GET' })
     const next = _next?.startsWith('/') ? _next : '/portal';
 
     if (token_hash && type) {
-      const supabase = createClient();
+      const supabase = createServerSupabase(request);
       const { error } = await supabase.auth.verifyOtp({
         type,
         token_hash,

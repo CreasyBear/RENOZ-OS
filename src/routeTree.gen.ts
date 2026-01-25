@@ -45,6 +45,7 @@ import { Route as AuthenticatedActivitiesIndexRouteImport } from './routes/_auth
 import { Route as AuthenticatedSupportKnowledgeBaseRouteImport } from './routes/_authenticated/support/knowledge-base'
 import { Route as AuthenticatedSupportIssuesBoardRouteImport } from './routes/_authenticated/support/issues-board'
 import { Route as AuthenticatedSupportDashboardRouteImport } from './routes/_authenticated/support/dashboard'
+import { Route as AuthenticatedSuppliersSupplierIdRouteImport } from './routes/_authenticated/suppliers/$supplierId'
 import { Route as AuthenticatedSettingsWinLossReasonsRouteImport } from './routes/_authenticated/settings/win-loss-reasons'
 import { Route as AuthenticatedSettingsWarrantyPoliciesRouteImport } from './routes/_authenticated/settings/warranty-policies'
 import { Route as AuthenticatedSettingsWarrantyImportRouteImport } from './routes/_authenticated/settings/warranty-import'
@@ -120,6 +121,7 @@ import { Route as AuthenticatedSupportIssuesNewRouteImport } from './routes/_aut
 import { Route as AuthenticatedSupportIssuesIssueIdRouteImport } from './routes/_authenticated/support/issues/$issueId'
 import { Route as AuthenticatedSupportClaimsClaimIdRouteImport } from './routes/_authenticated/support/claims/$claimId'
 import { Route as AuthenticatedProductsProductIdEditRouteImport } from './routes/_authenticated/products/$productId/edit'
+import { Route as AuthenticatedPipelineQuotesQuoteIdRouteImport } from './routes/_authenticated/pipeline/quotes/$quoteId'
 import { Route as AuthenticatedJobsAssignmentsAssignmentIdRouteImport } from './routes/_authenticated/jobs/assignments/$assignmentId'
 import { Route as AuthenticatedCustomersCustomerIdEditRouteImport } from './routes/_authenticated/customers/$customerId_.edit'
 import { Route as AuthenticatedCommunicationsSettingsPreferencesRouteImport } from './routes/_authenticated/communications/settings/preferences'
@@ -323,6 +325,12 @@ const AuthenticatedSupportDashboardRoute =
   AuthenticatedSupportDashboardRouteImport.update({
     id: '/support/dashboard',
     path: '/support/dashboard',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSuppliersSupplierIdRoute =
+  AuthenticatedSuppliersSupplierIdRouteImport.update({
+    id: '/suppliers/$supplierId',
+    path: '/suppliers/$supplierId',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedSettingsWinLossReasonsRoute =
@@ -774,6 +782,12 @@ const AuthenticatedProductsProductIdEditRoute =
     path: '/edit',
     getParentRoute: () => AuthenticatedProductsProductIdRoute,
   } as any)
+const AuthenticatedPipelineQuotesQuoteIdRoute =
+  AuthenticatedPipelineQuotesQuoteIdRouteImport.update({
+    id: '/pipeline/quotes/$quoteId',
+    path: '/pipeline/quotes/$quoteId',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedJobsAssignmentsAssignmentIdRoute =
   AuthenticatedJobsAssignmentsAssignmentIdRouteImport.update({
     id: '/jobs/assignments/$assignmentId',
@@ -907,6 +921,7 @@ export interface FileRoutesByFullPath {
   '/settings/warranty-import': typeof AuthenticatedSettingsWarrantyImportRoute
   '/settings/warranty-policies': typeof AuthenticatedSettingsWarrantyPoliciesRoute
   '/settings/win-loss-reasons': typeof AuthenticatedSettingsWinLossReasonsRoute
+  '/suppliers/$supplierId': typeof AuthenticatedSuppliersSupplierIdRoute
   '/support/dashboard': typeof AuthenticatedSupportDashboardRoute
   '/support/issues-board': typeof AuthenticatedSupportIssuesBoardRoute
   '/support/knowledge-base': typeof AuthenticatedSupportKnowledgeBaseRoute
@@ -932,6 +947,7 @@ export interface FileRoutesByFullPath {
   '/communications/settings/preferences': typeof AuthenticatedCommunicationsSettingsPreferencesRoute
   '/customers/$customerId/edit': typeof AuthenticatedCustomersCustomerIdEditRoute
   '/jobs/assignments/$assignmentId': typeof AuthenticatedJobsAssignmentsAssignmentIdRoute
+  '/pipeline/quotes/$quoteId': typeof AuthenticatedPipelineQuotesQuoteIdRoute
   '/products/$productId/edit': typeof AuthenticatedProductsProductIdEditRoute
   '/support/claims/$claimId': typeof AuthenticatedSupportClaimsClaimIdRoute
   '/support/issues/$issueId': typeof AuthenticatedSupportIssuesIssueIdRoute
@@ -1027,6 +1043,7 @@ export interface FileRoutesByTo {
   '/settings/warranty-import': typeof AuthenticatedSettingsWarrantyImportRoute
   '/settings/warranty-policies': typeof AuthenticatedSettingsWarrantyPoliciesRoute
   '/settings/win-loss-reasons': typeof AuthenticatedSettingsWinLossReasonsRoute
+  '/suppliers/$supplierId': typeof AuthenticatedSuppliersSupplierIdRoute
   '/support/dashboard': typeof AuthenticatedSupportDashboardRoute
   '/support/issues-board': typeof AuthenticatedSupportIssuesBoardRoute
   '/support/knowledge-base': typeof AuthenticatedSupportKnowledgeBaseRoute
@@ -1052,6 +1069,7 @@ export interface FileRoutesByTo {
   '/communications/settings/preferences': typeof AuthenticatedCommunicationsSettingsPreferencesRoute
   '/customers/$customerId/edit': typeof AuthenticatedCustomersCustomerIdEditRoute
   '/jobs/assignments/$assignmentId': typeof AuthenticatedJobsAssignmentsAssignmentIdRoute
+  '/pipeline/quotes/$quoteId': typeof AuthenticatedPipelineQuotesQuoteIdRoute
   '/products/$productId/edit': typeof AuthenticatedProductsProductIdEditRoute
   '/support/claims/$claimId': typeof AuthenticatedSupportClaimsClaimIdRoute
   '/support/issues/$issueId': typeof AuthenticatedSupportIssuesIssueIdRoute
@@ -1151,6 +1169,7 @@ export interface FileRoutesById {
   '/_authenticated/settings/warranty-import': typeof AuthenticatedSettingsWarrantyImportRoute
   '/_authenticated/settings/warranty-policies': typeof AuthenticatedSettingsWarrantyPoliciesRoute
   '/_authenticated/settings/win-loss-reasons': typeof AuthenticatedSettingsWinLossReasonsRoute
+  '/_authenticated/suppliers/$supplierId': typeof AuthenticatedSuppliersSupplierIdRoute
   '/_authenticated/support/dashboard': typeof AuthenticatedSupportDashboardRoute
   '/_authenticated/support/issues-board': typeof AuthenticatedSupportIssuesBoardRoute
   '/_authenticated/support/knowledge-base': typeof AuthenticatedSupportKnowledgeBaseRoute
@@ -1176,6 +1195,7 @@ export interface FileRoutesById {
   '/_authenticated/communications/settings/preferences': typeof AuthenticatedCommunicationsSettingsPreferencesRoute
   '/_authenticated/customers/$customerId_/edit': typeof AuthenticatedCustomersCustomerIdEditRoute
   '/_authenticated/jobs/assignments/$assignmentId': typeof AuthenticatedJobsAssignmentsAssignmentIdRoute
+  '/_authenticated/pipeline/quotes/$quoteId': typeof AuthenticatedPipelineQuotesQuoteIdRoute
   '/_authenticated/products/$productId/edit': typeof AuthenticatedProductsProductIdEditRoute
   '/_authenticated/support/claims/$claimId': typeof AuthenticatedSupportClaimsClaimIdRoute
   '/_authenticated/support/issues/$issueId': typeof AuthenticatedSupportIssuesIssueIdRoute
@@ -1274,6 +1294,7 @@ export interface FileRouteTypes {
     | '/settings/warranty-import'
     | '/settings/warranty-policies'
     | '/settings/win-loss-reasons'
+    | '/suppliers/$supplierId'
     | '/support/dashboard'
     | '/support/issues-board'
     | '/support/knowledge-base'
@@ -1299,6 +1320,7 @@ export interface FileRouteTypes {
     | '/communications/settings/preferences'
     | '/customers/$customerId/edit'
     | '/jobs/assignments/$assignmentId'
+    | '/pipeline/quotes/$quoteId'
     | '/products/$productId/edit'
     | '/support/claims/$claimId'
     | '/support/issues/$issueId'
@@ -1394,6 +1416,7 @@ export interface FileRouteTypes {
     | '/settings/warranty-import'
     | '/settings/warranty-policies'
     | '/settings/win-loss-reasons'
+    | '/suppliers/$supplierId'
     | '/support/dashboard'
     | '/support/issues-board'
     | '/support/knowledge-base'
@@ -1419,6 +1442,7 @@ export interface FileRouteTypes {
     | '/communications/settings/preferences'
     | '/customers/$customerId/edit'
     | '/jobs/assignments/$assignmentId'
+    | '/pipeline/quotes/$quoteId'
     | '/products/$productId/edit'
     | '/support/claims/$claimId'
     | '/support/issues/$issueId'
@@ -1517,6 +1541,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/warranty-import'
     | '/_authenticated/settings/warranty-policies'
     | '/_authenticated/settings/win-loss-reasons'
+    | '/_authenticated/suppliers/$supplierId'
     | '/_authenticated/support/dashboard'
     | '/_authenticated/support/issues-board'
     | '/_authenticated/support/knowledge-base'
@@ -1542,6 +1567,7 @@ export interface FileRouteTypes {
     | '/_authenticated/communications/settings/preferences'
     | '/_authenticated/customers/$customerId_/edit'
     | '/_authenticated/jobs/assignments/$assignmentId'
+    | '/_authenticated/pipeline/quotes/$quoteId'
     | '/_authenticated/products/$productId/edit'
     | '/_authenticated/support/claims/$claimId'
     | '/_authenticated/support/issues/$issueId'
@@ -1838,6 +1864,13 @@ declare module '@tanstack/react-router' {
       path: '/support/dashboard'
       fullPath: '/support/dashboard'
       preLoaderRoute: typeof AuthenticatedSupportDashboardRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/suppliers/$supplierId': {
+      id: '/_authenticated/suppliers/$supplierId'
+      path: '/suppliers/$supplierId'
+      fullPath: '/suppliers/$supplierId'
+      preLoaderRoute: typeof AuthenticatedSuppliersSupplierIdRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/settings/win-loss-reasons': {
@@ -2365,6 +2398,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProductsProductIdEditRouteImport
       parentRoute: typeof AuthenticatedProductsProductIdRoute
     }
+    '/_authenticated/pipeline/quotes/$quoteId': {
+      id: '/_authenticated/pipeline/quotes/$quoteId'
+      path: '/pipeline/quotes/$quoteId'
+      fullPath: '/pipeline/quotes/$quoteId'
+      preLoaderRoute: typeof AuthenticatedPipelineQuotesQuoteIdRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/jobs/assignments/$assignmentId': {
       id: '/_authenticated/jobs/assignments/$assignmentId'
       path: '/jobs/assignments/$assignmentId'
@@ -2555,6 +2595,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedReportsPipelineForecastRoute: typeof AuthenticatedReportsPipelineForecastRoute
   AuthenticatedReportsWarrantiesRoute: typeof AuthenticatedReportsWarrantiesRoute
   AuthenticatedReportsWinLossRoute: typeof AuthenticatedReportsWinLossRoute
+  AuthenticatedSuppliersSupplierIdRoute: typeof AuthenticatedSuppliersSupplierIdRoute
   AuthenticatedSupportDashboardRoute: typeof AuthenticatedSupportDashboardRoute
   AuthenticatedSupportIssuesBoardRoute: typeof AuthenticatedSupportIssuesBoardRoute
   AuthenticatedSupportKnowledgeBaseRoute: typeof AuthenticatedSupportKnowledgeBaseRoute
@@ -2579,6 +2620,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedCommunicationsSettingsPreferencesRoute: typeof AuthenticatedCommunicationsSettingsPreferencesRoute
   AuthenticatedCustomersCustomerIdEditRoute: typeof AuthenticatedCustomersCustomerIdEditRoute
   AuthenticatedJobsAssignmentsAssignmentIdRoute: typeof AuthenticatedJobsAssignmentsAssignmentIdRoute
+  AuthenticatedPipelineQuotesQuoteIdRoute: typeof AuthenticatedPipelineQuotesQuoteIdRoute
   AuthenticatedSupportClaimsClaimIdRoute: typeof AuthenticatedSupportClaimsClaimIdRoute
   AuthenticatedSupportIssuesIssueIdRoute: typeof AuthenticatedSupportIssuesIssueIdRoute
   AuthenticatedSupportIssuesNewRoute: typeof AuthenticatedSupportIssuesNewRoute
@@ -2657,6 +2699,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedReportsPipelineForecastRoute,
   AuthenticatedReportsWarrantiesRoute: AuthenticatedReportsWarrantiesRoute,
   AuthenticatedReportsWinLossRoute: AuthenticatedReportsWinLossRoute,
+  AuthenticatedSuppliersSupplierIdRoute: AuthenticatedSuppliersSupplierIdRoute,
   AuthenticatedSupportDashboardRoute: AuthenticatedSupportDashboardRoute,
   AuthenticatedSupportIssuesBoardRoute: AuthenticatedSupportIssuesBoardRoute,
   AuthenticatedSupportKnowledgeBaseRoute:
@@ -2687,6 +2730,8 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedCustomersCustomerIdEditRoute,
   AuthenticatedJobsAssignmentsAssignmentIdRoute:
     AuthenticatedJobsAssignmentsAssignmentIdRoute,
+  AuthenticatedPipelineQuotesQuoteIdRoute:
+    AuthenticatedPipelineQuotesQuoteIdRoute,
   AuthenticatedSupportClaimsClaimIdRoute:
     AuthenticatedSupportClaimsClaimIdRoute,
   AuthenticatedSupportIssuesIssueIdRoute:
@@ -2762,12 +2807,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-  }
-}

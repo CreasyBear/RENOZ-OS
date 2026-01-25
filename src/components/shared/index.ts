@@ -207,3 +207,13 @@ export {
   INVENTORY_ALERT_CONFIG,
   CUSTOMER_STATUS_CONFIG,
 } from "./status-badge"
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Activity Timeline
+// ─────────────────────────────────────────────────────────────────────────────
+export {
+  ActivityTimeline,
+  type Activity,
+  type BaseActivity,
+  type ActivityTimelineProps,
+} from "./activity-timeline"

@@ -75,9 +75,9 @@ export const descriptionSchema = z
   .optional();
 
 /**
- * Address validation.
+ * Address validation (simple string for job forms).
  */
-export const addressSchema = z
+export const jobAddressSchema = z
   .string()
   .max(255, 'Address must be no more than 255 characters')
   .optional();
@@ -85,7 +85,7 @@ export const addressSchema = z
 /**
  * Phone number validation with auto-cleaning.
  */
-export const phoneNumberSchema = z
+export const jobPhoneNumberSchema = z
   .string()
   .optional()
   .transform((val) => {
@@ -98,9 +98,9 @@ export const phoneNumberSchema = z
   });
 
 /**
- * Email validation.
+ * Email validation (simple string for job forms).
  */
-export const emailSchema = z
+export const jobEmailSchema = z
   .string()
   .optional()
   .transform((val) => val?.trim() || '')
@@ -119,11 +119,11 @@ export const jobFormSchema = z.object({
   jobNumber: jobNumberSchema.optional(), // Auto-generated, optional for creation
   customerName: customerNameSchema,
   description: descriptionSchema,
-  address: addressSchema,
+  address: jobAddressSchema,
   scheduledDate: flexibleDateSchema,
   estimatedAmount: flexibleAmountSchema,
-  phoneNumber: phoneNumberSchema,
-  email: emailSchema,
+  phoneNumber: jobPhoneNumberSchema,
+  email: jobEmailSchema,
 });
 
 export type JobFormInput = z.input<typeof jobFormSchema>;
@@ -134,9 +134,9 @@ export type JobFormOutput = z.output<typeof jobFormSchema>;
  */
 export const contactFormSchema = z.object({
   customerName: customerNameSchema,
-  phoneNumber: phoneNumberSchema,
-  email: emailSchema,
-  address: addressSchema,
+  phoneNumber: jobPhoneNumberSchema,
+  email: jobEmailSchema,
+  address: jobAddressSchema,
 });
 
 export type ContactFormInput = z.input<typeof contactFormSchema>;

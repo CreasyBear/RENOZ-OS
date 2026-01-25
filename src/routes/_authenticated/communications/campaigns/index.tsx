@@ -13,8 +13,8 @@ import {
   useCancelCampaign,
   useDeleteCampaign,
 } from "@/hooks/communications";
-import { CampaignsList } from "@/components/domain/communications/campaigns-list";
-import { toastSuccess, toastError } from "@/hooks/use-toast";
+import { CampaignsList } from "@/components/domain/communications";
+import { toastSuccess, toastError } from "@/hooks";
 import { ErrorState } from "@/components/shared";
 import { RouteErrorFallback } from "@/components/layout";
 import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
@@ -109,7 +109,7 @@ function CampaignsContainer() {
     return (
       <ErrorState
         title="Failed to load campaigns"
-        description="There was an error loading your email campaigns."
+        message="There was an error loading your email campaigns."
         onRetry={() => refetch()}
       />
     );

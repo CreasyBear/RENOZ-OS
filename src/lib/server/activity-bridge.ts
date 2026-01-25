@@ -9,7 +9,7 @@
  */
 
 import { db } from "@/lib/db";
-import { activities, type ActivityMetadata, type ActivitySource } from "@/../drizzle/schema";
+import { activities, type ActivityMetadata, type ActivitySource } from "drizzle/schema";
 
 // ============================================================================
 // TYPES

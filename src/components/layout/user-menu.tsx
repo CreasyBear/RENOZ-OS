@@ -8,7 +8,7 @@ import { Link, useNavigate } from '@tanstack/react-router'
 import { User, Settings, LogOut, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth, useSignOut } from '@/lib/auth/hooks'
-import { toast } from '@/hooks/use-toast'
+import { toast } from '@/hooks'
 
 export function UserMenu() {
   const [isOpen, setIsOpen] = useState(false)

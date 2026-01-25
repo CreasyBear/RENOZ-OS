@@ -56,7 +56,7 @@ import {
   type ReportFormat,
   type CreateScheduledReportInput,
 } from '@/lib/schemas/dashboard/scheduled-reports';
-import type { ScheduledReport } from '@/../drizzle/schema/dashboard/scheduled-reports';
+import type { ScheduledReport } from 'drizzle/schema/dashboard/scheduled-reports';
 
 // ============================================================================
 // TYPES

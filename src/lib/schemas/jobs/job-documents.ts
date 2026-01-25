@@ -149,7 +149,7 @@ export type DeleteJobDocumentResponse = z.infer<typeof deleteJobDocumentResponse
 export const documentClassificationResultSchema = z.object({
   documentType: z.string(),
   confidence: z.number().min(0).max(1),
-  extractedData: z.record(z.any()).optional(),
+  extractedData: z.record(z.string(), z.any()).optional(),
   tags: z.array(z.string()).optional(),
 });
 

@@ -16,7 +16,7 @@ import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { InventoryTableSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/hooks";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,13 +30,13 @@ import {
 import {
   StockCountList,
   type StockCount,
-} from "@/components/domain/inventory/stock-count-list";
+} from "@/components/domain/inventory";
 import {
   CountSheet,
   type CountItem,
   type CountProgress,
-} from "@/components/domain/inventory/count-sheet";
-import { VarianceReport } from "@/components/domain/inventory/variance-report";
+} from "@/components/domain/inventory";
+import { VarianceReport } from "@/components/domain/inventory";
 import {
   listStockCounts,
   getStockCount,

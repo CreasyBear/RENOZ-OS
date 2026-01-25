@@ -34,7 +34,7 @@ export interface ReportDefinitionInput {
 
 export const reportDefinitionSchema = z.object({
   columns: z.array(z.string()).min(1, 'At least one column is required'),
-  filters: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
+  filters: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
   groupBy: z.array(z.string()).optional(),
   sortBy: z.string().optional(),
   sortDirection: z.enum(['asc', 'desc']).optional(),
@@ -127,7 +127,7 @@ export type CustomReport = z.infer<typeof customReportSchema>;
 
 export const reportResultSchema = z.object({
   columns: z.array(z.string()),
-  rows: z.array(z.record(z.unknown())),
+  rows: z.array(z.record(z.string(), z.unknown())),
   totalCount: z.number().int(),
   generatedAt: z.coerce.date(),
 });

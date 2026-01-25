@@ -2,10 +2,12 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { portalIdentities } from 'drizzle/schema';
 import { getServerUser } from '@/lib/supabase/server';
+import { getRequest } from '@tanstack/react-start/server';
 import { AuthError, NotFoundError } from '@/lib/server/errors';
 
 export async function getActivePortalIdentity() {
-  const authUser = await getServerUser();
+  const request = getRequest();
+  const authUser = await getServerUser(request);
   if (!authUser) {
     throw new AuthError('Portal authentication required');
   }

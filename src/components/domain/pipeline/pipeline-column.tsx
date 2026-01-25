@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/formatters";
 import { FormatAmount } from "@/components/shared/format";
-import { OpportunityCard } from "./opportunity-card";
+import { OpportunityCard } from "./opportunities/opportunity-card";
 import type { Opportunity, OpportunityStage } from "@/lib/schemas/pipeline";
 
 // ============================================================================

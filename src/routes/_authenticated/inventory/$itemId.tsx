@@ -17,7 +17,7 @@ import { ArrowLeft, Edit, Trash2, ArrowLeftRight, Package } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { InventoryDetailSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/hooks";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,8 +32,8 @@ import {
   ItemTabs,
   type MovementRecord,
   type CostLayer,
-} from "@/components/domain/inventory/item-tabs";
-import { type ItemDetailData } from "@/components/domain/inventory/item-detail";
+} from "@/components/domain/inventory";
+import { type ItemDetailData } from "@/components/domain/inventory";
 import { getInventoryItem } from "@/server/functions/inventory";
 
 // ============================================================================

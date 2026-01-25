@@ -14,15 +14,15 @@ import { createFileRoute } from '@tanstack/react-router';
 import { RouteErrorFallback } from '@/components/layout';
 import { SettingsPageSkeleton } from '@/components/skeletons/settings';
 import { PageLayout } from '@/components/layout/page-layout';
-import { IssueTemplateList } from '@/components/domain/support/issue-template-list';
-import { IssueTemplateFormDialog } from '@/components/domain/support/issue-template-form-dialog';
+import { IssueTemplateList } from '@/components/domain/support';
+import { IssueTemplateFormDialog } from '@/components/domain/support';
 import {
   useIssueTemplates,
   useDeleteIssueTemplate,
   useCreateIssueTemplate,
   useUpdateIssueTemplate,
 } from '@/hooks';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 import { toast } from 'sonner';
 import type {
   IssueTemplateResponse,

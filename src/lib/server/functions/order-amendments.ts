@@ -635,3 +635,9 @@ export const cancelAmendment = createServerFn({ method: "POST" })
 
     return amendment;
   });
+
+// ============================================================================
+// ALIASES (for backwards compatibility with tests)
+// ============================================================================
+
+export const getOrderAmendments = listAmendments;

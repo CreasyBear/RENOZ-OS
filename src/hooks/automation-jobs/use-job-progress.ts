@@ -12,7 +12,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import { getJobStatus, getActiveJobs } from '@/server/automation-jobs';
-import type { Job, JobStatus } from '@/../drizzle/schema/automation-jobs';
+import type { Job, JobStatus } from 'drizzle/schema/automation-jobs';
 import { toast } from 'sonner';
 
 // ============================================================================

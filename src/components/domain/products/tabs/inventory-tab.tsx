@@ -26,8 +26,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/shared/empty-state";
-import { StockAdjustment } from "../stock-adjustment";
-import { InventoryHistory } from "../inventory-history";
+import { StockAdjustment } from "../inventory/stock-adjustment";
+import { InventoryHistory } from "../inventory/inventory-history";
 import {
   getProductInventory,
   getInventoryStats,

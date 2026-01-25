@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { requestPasswordReset } from '@/server/functions/auth/password-reset';
-import { useMutation } from '@/hooks/useMutation';
+import { useMutation } from '@/hooks';
 
 export function ForgotPasswordForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
   const [email, setEmail] = useState('');

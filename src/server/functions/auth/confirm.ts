@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server';
+import { createServerSupabase } from '@/lib/supabase/server';
 import { type EmailOtpType } from '@supabase/supabase-js';
 import { redirect } from '@tanstack/react-router';
 import { createServerFn } from '@tanstack/react-start';
@@ -22,7 +22,8 @@ const completeSignupSchema = z.object({
 export const completeSignup = createServerFn({ method: 'POST' })
   .inputValidator(completeSignupSchema)
   .handler(async ({ data }) => {
-    const supabase = createClient();
+    const request = getRequest();
+    const supabase = createServerSupabase(request);
 
     // Get the user from Supabase auth
     const { data: authUser, error: authError } = await supabase.auth.getUser();

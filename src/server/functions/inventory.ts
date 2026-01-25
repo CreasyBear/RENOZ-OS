@@ -13,11 +13,12 @@ import { db } from "@/lib/db";
 import {
   inventory,
   inventoryMovements,
-  locations,
+  warehouseLocations,
   products,
   inventoryCostLayers,
 } from "../../../drizzle/schema";
 import { withAuth } from "@/lib/server/protected";
+import { PERMISSIONS } from "@/lib/auth/permissions";
 import { NotFoundError, ValidationError } from "@/lib/server/errors";
 import {
   inventoryListQuerySchema,
@@ -49,7 +50,7 @@ interface ListInventoryResult {
 
 interface InventoryWithRelations extends InventoryRecord {
   product: typeof products.$inferSelect | null;
-  location: typeof locations.$inferSelect | null;
+  location: typeof warehouseLocations.$inferSelect | null;
 }
 
 interface ListMovementsResult {
@@ -165,7 +166,6 @@ export const listInventory = createServerFn({ method: "GET" })
  */
 export const getInventoryItem = createServerFn({ method: "GET" })
   .inputValidator(z.object({ id: z.string().uuid() }))
-  // @ts-expect-error - ServerFnCtx destructuring pattern, actual runtime type matches
   .handler(async ({ data }): Promise<{
     item: InventoryWithRelations;
     movements: InventoryMovementRecord[];
@@ -201,8 +201,8 @@ export const getInventoryItem = createServerFn({ method: "GET" })
       // Location
       db
         .select()
-        .from(locations)
-        .where(eq(locations.id, item.locationId))
+        .from(warehouseLocations)
+        .where(eq(warehouseLocations.id, item.locationId))
         .limit(1)
         .then((r) => r[0] || null),
       // Recent movements
@@ -240,9 +240,8 @@ export const getInventoryItem = createServerFn({ method: "GET" })
  */
 export const adjustInventory = createServerFn({ method: "POST" })
   .inputValidator(stockAdjustmentSchema)
-  // @ts-expect-error - ServerFnCtx destructuring pattern, actual runtime type matches
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: "inventory.adjust" });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.adjust });
 
     // Find or create inventory record
     let [inventoryRecord] = await db
@@ -264,11 +263,12 @@ export const adjustInventory = createServerFn({ method: "POST" })
       // Check if location allows negative inventory
       const [loc] = await db
         .select()
-        .from(locations)
-        .where(eq(locations.id, data.locationId))
+        .from(warehouseLocations)
+        .where(eq(warehouseLocations.id, data.locationId))
         .limit(1);
 
-      if (!loc?.allowNegative) {
+      const allowNegative = loc?.attributes?.allowNegative ?? false;
+      if (!allowNegative) {
         throw new ValidationError("Adjustment would result in negative inventory", {
           adjustmentQty: ["Would result in negative inventory"],
         });
@@ -279,6 +279,7 @@ export const adjustInventory = createServerFn({ method: "POST" })
     return await db.transaction(async (tx) => {
       if (!inventoryRecord) {
         // Create new inventory record
+        // Note: quantityAvailable is a generated column (quantityOnHand - quantityAllocated)
         [inventoryRecord] = await tx
           .insert(inventory)
           .values({
@@ -288,7 +289,6 @@ export const adjustInventory = createServerFn({ method: "POST" })
             status: "available",
             quantityOnHand: newQuantity,
             quantityAllocated: 0,
-            quantityAvailable: newQuantity,
             unitCost: 0,
             totalValue: 0,
             createdBy: ctx.user.id,
@@ -297,11 +297,11 @@ export const adjustInventory = createServerFn({ method: "POST" })
           .returning();
       } else {
         // Update existing record
+        // Note: quantityAvailable is a generated column (quantityOnHand - quantityAllocated)
         [inventoryRecord] = await tx
           .update(inventory)
           .set({
             quantityOnHand: newQuantity,
-            quantityAvailable: newQuantity - (inventoryRecord.quantityAllocated ?? 0),
             totalValue: sql`${newQuantity} * COALESCE(${inventory.unitCost}, 0)`,
             updatedAt: new Date(),
             updatedBy: ctx.user.id,
@@ -345,9 +345,8 @@ export const adjustInventory = createServerFn({ method: "POST" })
  */
 export const transferInventory = createServerFn({ method: "POST" })
   .inputValidator(stockTransferSchema)
-  // @ts-expect-error - ServerFnCtx destructuring pattern, actual runtime type matches
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: "inventory.transfer" });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.transfer });
 
     if (data.fromLocationId === data.toLocationId) {
       throw new ValidationError("Cannot transfer to the same location", {
@@ -383,12 +382,12 @@ export const transferInventory = createServerFn({ method: "POST" })
     // Begin transaction
     return await db.transaction(async (tx) => {
       // Deduct from source
+      // Note: quantityAvailable is a generated column (quantityOnHand - quantityAllocated)
       const newSourceQty = (sourceInventory.quantityOnHand ?? 0) - data.quantity;
       await tx
         .update(inventory)
         .set({
           quantityOnHand: newSourceQty,
-          quantityAvailable: newSourceQty - (sourceInventory.quantityAllocated ?? 0),
           totalValue: sql`${newSourceQty} * COALESCE(${inventory.unitCost}, 0)`,
           updatedAt: new Date(),
           updatedBy: ctx.user.id,
@@ -429,6 +428,7 @@ export const transferInventory = createServerFn({ method: "POST" })
       const destNewQty = destPrevQty + data.quantity;
 
       if (!destInventory) {
+        // Note: quantityAvailable is a generated column (quantityOnHand - quantityAllocated)
         [destInventory] = await tx
           .insert(inventory)
           .values({
@@ -438,7 +438,6 @@ export const transferInventory = createServerFn({ method: "POST" })
             status: "available",
             quantityOnHand: destNewQty,
             quantityAllocated: 0,
-            quantityAvailable: destNewQty,
             unitCost: sourceInventory.unitCost,
             totalValue: sql`${destNewQty} * COALESCE(${sourceInventory.unitCost}, 0)`,
             createdBy: ctx.user.id,
@@ -446,11 +445,11 @@ export const transferInventory = createServerFn({ method: "POST" })
           })
           .returning();
       } else {
+        // Note: quantityAvailable is a generated column (quantityOnHand - quantityAllocated)
         [destInventory] = await tx
           .update(inventory)
           .set({
             quantityOnHand: destNewQty,
-            quantityAvailable: destNewQty - (destInventory.quantityAllocated ?? 0),
             totalValue: sql`${destNewQty} * COALESCE(${inventory.unitCost}, 0)`,
             updatedAt: new Date(),
             updatedBy: ctx.user.id,
@@ -504,9 +503,8 @@ const allocateInventorySchema = z.object({
  */
 export const allocateInventory = createServerFn({ method: "POST" })
   .inputValidator(allocateInventorySchema)
-  // @ts-expect-error - ServerFnCtx destructuring pattern, actual runtime type matches
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: "inventory.allocate" });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.allocate });
 
     // Get inventory item
     const [item] = await db
@@ -535,11 +533,11 @@ export const allocateInventory = createServerFn({ method: "POST" })
       const newAvailable = (item.quantityOnHand ?? 0) - newAllocated;
 
       // Update inventory
+      // Note: quantityAvailable is a generated column (quantityOnHand - quantityAllocated)
       const [updatedItem] = await tx
         .update(inventory)
         .set({
           quantityAllocated: newAllocated,
-          quantityAvailable: newAvailable,
           status: newAvailable <= 0 ? "allocated" : "available",
           updatedAt: new Date(),
           updatedBy: ctx.user.id,
@@ -587,9 +585,8 @@ export const deallocateInventory = createServerFn({ method: "POST" })
       reason: z.string().optional(),
     })
   )
-  // @ts-expect-error - ServerFnCtx destructuring pattern, actual runtime type matches
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: "inventory.allocate" });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.allocate });
 
     // Get inventory item
     const [item] = await db
@@ -618,11 +615,11 @@ export const deallocateInventory = createServerFn({ method: "POST" })
       const newAvailable = (item.quantityOnHand ?? 0) - newAllocated;
 
       // Update inventory
+      // Note: quantityAvailable is a generated column (quantityOnHand - quantityAllocated)
       const [updatedItem] = await tx
         .update(inventory)
         .set({
           quantityAllocated: newAllocated,
-          quantityAvailable: newAvailable,
           status: newAllocated > 0 ? "allocated" : "available",
           updatedAt: new Date(),
           updatedBy: ctx.user.id,
@@ -680,9 +677,8 @@ const receiveInventorySchema = z.object({
  */
 export const receiveInventory = createServerFn({ method: "POST" })
   .inputValidator(receiveInventorySchema)
-  // @ts-expect-error - ServerFnCtx destructuring pattern, actual runtime type matches
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: "inventory.receive" });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.receive });
 
     // Validate product exists
     const [product] = await db
@@ -703,11 +699,11 @@ export const receiveInventory = createServerFn({ method: "POST" })
     // Validate location exists
     const [location] = await db
       .select()
-      .from(locations)
+      .from(warehouseLocations)
       .where(
         and(
-          eq(locations.id, data.locationId),
-          eq(locations.organizationId, ctx.organizationId)
+          eq(warehouseLocations.id, data.locationId),
+          eq(warehouseLocations.organizationId, ctx.organizationId)
         )
       )
       .limit(1);
@@ -741,6 +737,7 @@ export const receiveInventory = createServerFn({ method: "POST" })
       const newTotalCost = prevTotalCost + data.quantity * data.unitCost;
       const newUnitCost = newQuantity > 0 ? newTotalCost / newQuantity : data.unitCost;
 
+      // Note: quantityAvailable is a generated column (quantityOnHand - quantityAllocated)
       if (!inventoryRecord) {
         [inventoryRecord] = await tx
           .insert(inventory)
@@ -751,7 +748,6 @@ export const receiveInventory = createServerFn({ method: "POST" })
             status: "available",
             quantityOnHand: newQuantity,
             quantityAllocated: 0,
-            quantityAvailable: newQuantity,
             unitCost: newUnitCost,
             totalValue: newTotalCost,
             lotNumber: data.lotNumber,
@@ -766,7 +762,6 @@ export const receiveInventory = createServerFn({ method: "POST" })
           .update(inventory)
           .set({
             quantityOnHand: newQuantity,
-            quantityAvailable: newQuantity - (inventoryRecord.quantityAllocated ?? 0),
             unitCost: newUnitCost,
             totalValue: newTotalCost,
             updatedAt: new Date(),
@@ -830,7 +825,6 @@ export const receiveInventory = createServerFn({ method: "POST" })
  */
 export const listMovements = createServerFn({ method: "GET" })
   .inputValidator(movementListQuerySchema)
-  // @ts-expect-error - ServerFnCtx destructuring pattern, actual runtime type matches
   .handler(async ({ data }): Promise<ListMovementsResult> => {
     const ctx = await withAuth();
     const { page = 1, pageSize = 50, sortBy, sortOrder, ...filters } = data;
@@ -905,7 +899,6 @@ export const listMovements = createServerFn({ method: "GET" })
  * Get inventory dashboard metrics.
  */
 export const getInventoryDashboard = createServerFn({ method: "GET" })
-  // @ts-expect-error - ServerFnCtx destructuring pattern, actual runtime type matches
   .handler(async () => {
     const ctx = await withAuth();
 
@@ -978,7 +971,7 @@ const bulkUpdateStatusSchema = z.object({
 export const bulkUpdateStatus = createServerFn({ method: "POST" })
   .inputValidator(bulkUpdateStatusSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: "inventory.adjust" });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.adjust });
 
     return await db.transaction(async (tx) => {
       // Update all items

@@ -31,7 +31,7 @@ import { Button } from '@/components/ui/button';
 import { CalendarPlus, History, AlertCircle, RefreshCw } from 'lucide-react';
 import { formatDateAustralian } from '@/lib/warranty/date-utils';
 import type { WarrantyExtensionTypeValue } from '@/lib/schemas/warranty/extensions';
-import { formatPrice } from '../orders/order-creation-wizard/types';
+import { formatPrice } from '../orders/creation/order-creation-wizard/types';
 
 // ============================================================================
 // TYPES

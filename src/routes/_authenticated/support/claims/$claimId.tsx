@@ -156,10 +156,18 @@ function ClaimDetailPage() {
 
   // SLA status
   const responseSla = currentClaim.slaTracking?.responseDueAt
-    ? getSlaDueStatus(currentClaim.slaTracking.responseDueAt)
+    ? getSlaDueStatus(
+        currentClaim.slaTracking.responseDueAt,
+        currentClaim.slaTracking?.respondedAt ?? null,
+        currentClaim.submittedAt
+      )
     : null;
   const resolutionSla = currentClaim.slaTracking?.resolutionDueAt
-    ? getSlaDueStatus(currentClaim.slaTracking.resolutionDueAt)
+    ? getSlaDueStatus(
+        currentClaim.slaTracking.resolutionDueAt,
+        currentClaim.slaTracking?.resolvedAt ?? null,
+        currentClaim.submittedAt
+      )
     : null;
 
   // Can actions
@@ -458,18 +466,18 @@ function ClaimDetailPage() {
                 </div>
               ) : responseSla ? (
                 <div className="flex items-center gap-2 text-sm">
-                  {responseSla.isOverdue ? (
+                  {responseSla.status === 'breached' ? (
                     <AlertTriangle className="text-destructive h-4 w-4" />
-                  ) : responseSla.isAtRisk ? (
+                  ) : responseSla.status === 'at_risk' ? (
                     <AlertTriangle className="h-4 w-4 text-yellow-500" />
                   ) : (
                     <Clock className="text-muted-foreground h-4 w-4" />
                   )}
                   <span
                     className={
-                      responseSla.isOverdue
+                      responseSla.status === 'breached'
                         ? 'text-destructive'
-                        : responseSla.isAtRisk
+                        : responseSla.status === 'at_risk'
                           ? 'text-yellow-600'
                           : ''
                     }
@@ -494,18 +502,18 @@ function ClaimDetailPage() {
                 </div>
               ) : resolutionSla ? (
                 <div className="flex items-center gap-2 text-sm">
-                  {resolutionSla.isOverdue ? (
+                  {resolutionSla.status === 'breached' ? (
                     <AlertTriangle className="text-destructive h-4 w-4" />
-                  ) : resolutionSla.isAtRisk ? (
+                  ) : resolutionSla.status === 'at_risk' ? (
                     <AlertTriangle className="h-4 w-4 text-yellow-500" />
                   ) : (
                     <Clock className="text-muted-foreground h-4 w-4" />
                   )}
                   <span
                     className={
-                      resolutionSla.isOverdue
+                      resolutionSla.status === 'breached'
                         ? 'text-destructive'
-                        : resolutionSla.isAtRisk
+                        : resolutionSla.status === 'at_risk'
                           ? 'text-yellow-600'
                           : ''
                     }

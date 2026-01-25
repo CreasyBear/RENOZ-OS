@@ -14,6 +14,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import {
   Bold,
   Italic,
@@ -179,7 +180,7 @@ export function TemplateEditor({
     },
     onSuccess: () => {
       toast.success("Template created");
-      queryClient.invalidateQueries({ queryKey: ["email-templates"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.communications.templates() });
       onSave?.();
     },
     onError: (error) => {
@@ -207,7 +208,7 @@ export function TemplateEditor({
     },
     onSuccess: () => {
       toast.success("Template updated");
-      queryClient.invalidateQueries({ queryKey: ["email-templates"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.communications.templates() });
       onSave?.();
     },
     onError: (error) => {

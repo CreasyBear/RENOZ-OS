@@ -7,7 +7,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { db } from '@/lib/db';
-import { jobAssignments, users } from '@/../drizzle/schema';
+import { jobAssignments, users } from 'drizzle/schema';
 import { eq, and, inArray, sql } from 'drizzle-orm';
 import { withAuth } from '@/lib/server/protected';
 import { z } from 'zod';

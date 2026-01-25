@@ -16,8 +16,8 @@ import { eq, and, ilike, desc, asc, gte, lte, sql, count, inArray } from 'drizzl
 import { db } from '@/lib/db';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { targets } from '@/../drizzle/schema/dashboard';
-import { orders, customers, opportunities } from '@/../drizzle/schema';
+import { targets } from 'drizzle/schema/dashboard';
+import { orders, customers, opportunities } from 'drizzle/schema';
 import {
   createTargetSchema,
   updateTargetSchema,

@@ -1,12 +1,26 @@
-import { createFileRoute, redirect } from '@tanstack/react-router';
+/**
+ * Protected Layout Route
+ *
+ * Alternative protected route layout. Uses the same auth pattern as _authenticated.
+ */
+import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
+import { supabase } from '../lib/supabase/client';
 
 export const Route = createFileRoute('/_protected')({
-  beforeLoad: async ({ context }) => {
-    // Use user from root context (already fetched there)
-    if (!context.user) {
-      throw redirect({ to: '/login' });
+  beforeLoad: async ({ location }) => {
+    // Check if user is authenticated
+    const { data: { session } } = await supabase.auth.getSession();
+
+    if (!session) {
+      throw redirect({
+        to: '/login',
+        search: {
+          redirect: location.href,
+        },
+      });
     }
 
-    return { user: context.user };
+    return { user: session.user };
   },
+  component: () => <Outlet />,
 });

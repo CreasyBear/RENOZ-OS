@@ -30,7 +30,7 @@ import { useState, useCallback, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { PipelineColumn } from "./pipeline-column";
-import { OpportunityCard } from "./opportunity-card";
+import { OpportunityCard } from "./opportunities/opportunity-card";
 import { WonLostDialog } from "./won-lost-dialog";
 import type { Opportunity, OpportunityStage } from "@/lib/schemas/pipeline";
 

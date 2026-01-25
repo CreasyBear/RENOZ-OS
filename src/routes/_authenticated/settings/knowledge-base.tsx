@@ -16,18 +16,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/shared/loading-state';
 import { EmptyState } from '@/components/shared/empty-state';
-import { KbCategoryTree } from '@/components/domain/support/kb-category-tree';
+import { KbCategoryTree } from '@/components/domain/support';
 import {
   KbCategoryFormDialog,
   type CategoryFormValues,
-} from '@/components/domain/support/kb-category-form-dialog';
+} from '@/components/domain/support';
 import {
   useKbCategories,
   useDeleteKbCategory,
   useCreateKbCategory,
   useUpdateKbCategory,
 } from '@/hooks';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 import { toast } from 'sonner';
 import type { KbCategoryResponse } from '@/lib/schemas/support/knowledge-base';
 

@@ -11,12 +11,12 @@ import { fileURLToPath, URL } from 'node:url'
 function virtualTanstackHeadScripts() {
   return {
     name: 'virtual-tanstack-head-scripts',
-    resolveId(id) {
+    resolveId(id: string) {
       if (id === 'tanstack-start-injected-head-scripts:v') {
         return id
       }
     },
-    load(id) {
+    load(id: string) {
       if (id === 'tanstack-start-injected-head-scripts:v') {
         // Return empty export to prevent the import error
         return 'export const injectedHeadScripts = null;'

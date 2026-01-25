@@ -45,21 +45,22 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// Type inferred from products table
-type Product = {
+// Type inferred from products table - using broader types for compatibility
+// with server function return types
+interface Product {
   id: string;
   sku: string;
   name: string;
   description: string | null;
   categoryId: string | null;
-  type: "physical" | "service" | "digital" | "bundle";
-  status: "active" | "inactive" | "discontinued";
+  type: string;
+  status: string;
   basePrice: number;
   costPrice: number | null;
   isActive: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-};
+  createdAt: Date | string;
+  updatedAt: Date | string;
+}
 
 interface ProductTableProps {
   products: Product[];
@@ -77,14 +78,14 @@ interface ProductTableProps {
 }
 
 // Status configuration for StatusCell
-const PRODUCT_STATUS_CONFIG: Record<Product["status"], StatusConfigItem> = {
+const PRODUCT_STATUS_CONFIG: Record<string, StatusConfigItem> = {
   active: { variant: "default", label: "Active" },
   inactive: { variant: "secondary", label: "Inactive" },
   discontinued: { variant: "destructive", label: "Discontinued" },
 };
 
 // Type configuration for TypeCell
-const PRODUCT_TYPE_CONFIG: Record<Product["type"], TypeConfigItem> = {
+const PRODUCT_TYPE_CONFIG: Record<string, TypeConfigItem> = {
   physical: { icon: Package, label: "Physical" },
   service: { icon: Wrench, label: "Service" },
   digital: { icon: FileDigit, label: "Digital" },

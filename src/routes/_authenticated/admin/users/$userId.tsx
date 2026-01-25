@@ -16,7 +16,7 @@ import {
   reactivateUser,
 } from '@/server/functions/users/users';
 import { getUserActivity } from '@/server/functions/_shared/audit-logs';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 
 // Explicit types for loader data to avoid inference issues
 interface UserGroup {

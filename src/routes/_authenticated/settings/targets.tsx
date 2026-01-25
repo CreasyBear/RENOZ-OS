@@ -21,7 +21,6 @@ import { RouteErrorFallback } from '@/components/layout';
 import { SettingsPageSkeleton } from '@/components/skeletons/settings';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PageLayout } from '@/components/layout/page-layout';
@@ -58,7 +57,6 @@ import { TargetForm } from '@/components/domain/settings/target-form';
 import { TargetProgressWidget } from '@/components/domain/dashboard/target-progress';
 import {
   useTargets,
-  useTarget,
   useTargetProgress,
   useCreateTarget,
   useUpdateTarget,
@@ -145,8 +143,6 @@ function TargetsSettingsPage() {
   const {
     data: targetsData,
     isLoading,
-    error,
-    refetch,
   } = useTargets({
     search: filters.search || undefined,
     metric: filters.metric !== 'all' ? filters.metric : undefined,
@@ -206,13 +202,12 @@ function TargetsSettingsPage() {
         }
         setFormOpen(false);
         setEditingTarget(null);
-      } catch (error) {
+      } catch {
         toast.error(
           editingTarget
             ? 'Failed to update target'
             : 'Failed to create target'
         );
-        throw error;
       }
     },
     [editingTarget, createMutation, updateMutation]
@@ -231,7 +226,7 @@ function TargetsSettingsPage() {
         next.delete(targetToDelete.id);
         return next;
       });
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete target');
     }
   }, [targetToDelete, deleteMutation]);
@@ -247,7 +242,7 @@ function TargetsSettingsPage() {
       toast.success(`${selectedIds.size} targets deleted`);
       setBulkDeleteConfirmOpen(false);
       setSelectedIds(new Set());
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete targets');
     }
   }, [selectedIds, bulkDeleteMutation]);

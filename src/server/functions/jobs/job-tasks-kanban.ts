@@ -11,7 +11,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, inArray, asc, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { jobTasks, jobAssignments, customers, orders } from '@/../drizzle/schema';
+import { jobTasks, jobAssignments, customers, orders } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { z } from 'zod';
@@ -152,7 +152,7 @@ export const listJobTasksForKanban = createServerFn({ method: 'GET' })
 
     let assignees: Record<string, { id: string; name: string; avatar?: string }> = {};
     if (assigneeIds.length > 0) {
-      const { users } = await import('@/../drizzle/schema');
+      const { users } = await import('drizzle/schema');
       const assigneeData = await db
         .select({
           id: users.id,

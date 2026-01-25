@@ -18,7 +18,7 @@ import { eq, sql, and, gte, lte, count } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { orders, customers, opportunities } from '@/../drizzle/schema';
+import { orders, customers, opportunities } from 'drizzle/schema';
 import {
   enhancedComparisonInputSchema,
   COMPARISON_THRESHOLDS,

@@ -4,16 +4,15 @@
  * Scheduled cron job that runs every 15 minutes to check for issues
  * that should be automatically escalated based on configured rules:
  * - Time-based: Issues unresponded for X hours
- * - VIP customer: Issues from VIP customers
- * - SLA breach: Issues that have breached SLA
+ * - Priority-based: High/critical priority issues
+ * - SLA breach: Issues linked to breached SLA tracking
  *
  * @see _Initiation/_prd/2-domains/support/support.prd.json DOM-SUP-002b
  */
-import { cronTrigger } from '@trigger.dev/sdk';
-import { and, eq, lt, isNull, inArray, sql } from 'drizzle-orm';
+import { task, schedules } from '@trigger.dev/sdk/v3';
+import { and, eq, lt, isNull, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { issues, customers, notifications, users, activities } from '@/../drizzle/schema';
-import { client } from '../client';
+import { issues, notifications, users, activities, slaTracking } from 'drizzle/schema';
 
 // ============================================================================
 // CONFIGURATION
@@ -25,8 +24,8 @@ import { client } from '../client';
 const DEFAULT_THRESHOLDS = {
   /** Hours before unresponded issue is escalated */
   unrespondedHours: 24,
-  /** Auto-escalate VIP customer issues */
-  vipCustomerAutoEscalate: true,
+  /** Auto-escalate high priority issues after this many hours */
+  highPriorityEscalateHours: 12,
   /** Auto-escalate issues that breach SLA */
   slaBreachAutoEscalate: true,
 } as const;
@@ -34,7 +33,7 @@ const DEFAULT_THRESHOLDS = {
 /**
  * Statuses that are considered "active" and eligible for escalation
  */
-const ACTIVE_STATUSES = ['new', 'open', 'in_progress'] as const;
+const ACTIVE_STATUSES = ['open', 'in_progress'] as const;
 
 // ============================================================================
 // HELPER FUNCTIONS
@@ -53,7 +52,7 @@ async function createEscalationActivity(
     entityType: 'issue',
     entityId: issueId,
     organizationId,
-    action: 'escalated',
+    action: 'updated',
     metadata: {
       escalationType: 'automatic',
       reason,
@@ -78,10 +77,8 @@ async function notifyManagerOfEscalation(
   reason: string,
   customerName: string | null
 ) {
-  // Get managers in the organization (users with manager role)
-  // For now, notify the assigned user's manager or create org-wide notification
+  // Notify the assigned user about the escalation if there is one
   if (issue.assignedToUserId) {
-    // Notify the assigned user about the escalation
     await db.insert(notifications).values({
       organizationId: issue.organizationId,
       userId: issue.assignedToUserId,
@@ -101,7 +98,7 @@ async function notifyManagerOfEscalation(
     });
   }
 
-  // Also get organization admins/managers to notify
+  // Also get organization admins to notify
   const orgAdmins = await db
     .select({ id: users.id })
     .from(users)
@@ -149,36 +146,146 @@ async function notifyManagerOfEscalation(
  * Acceptance criteria from DOM-SUP-002b:
  * 1. Trigger.dev job runs every 15 minutes to check escalation rules
  * 2. Time-based escalation works (e.g., after 24h unresponded)
- * 3. VIP customer escalation works (if customer has VIP flag)
+ * 3. Priority-based escalation works (high/critical priority)
  * 4. Manager notification sent on auto-escalation
  */
-export const autoEscalateIssuesJob = client.defineJob({
+export const autoEscalateIssuesTask = task({
   id: 'auto-escalate-issues',
-  name: 'Auto-Escalate Issues',
-  version: '1.0.0',
-  trigger: cronTrigger({
-    cron: '*/15 * * * *', // Run every 15 minutes
-  }),
-  run: async (_payload, io) => {
-    await io.logger.info('Starting auto-escalation check');
+  run: async () => {
+    console.log('Starting auto-escalation check');
 
     const now = new Date();
     const escalationCutoff = new Date(
       now.getTime() - DEFAULT_THRESHOLDS.unrespondedHours * 60 * 60 * 1000
     );
+    const highPriorityCutoff = new Date(
+      now.getTime() - DEFAULT_THRESHOLDS.highPriorityEscalateHours * 60 * 60 * 1000
+    );
 
     // Track escalation stats
     let timeBasedEscalations = 0;
-    let vipEscalations = 0;
+    let priorityEscalations = 0;
     let slaBreachEscalations = 0;
-    let skipped = 0;
 
     // ========================================================================
     // 1. TIME-BASED ESCALATION
-    // Find issues that have been unresponded for too long
+    // Find issues that have been open for too long without resolution
     // ========================================================================
-    const unrespondedIssues = await io.runTask('query-unresponded-issues', async () => {
-      return db
+    const unrespondedIssues = await db
+      .select({
+        id: issues.id,
+        issueNumber: issues.issueNumber,
+        title: issues.title,
+        organizationId: issues.organizationId,
+        customerId: issues.customerId,
+        assignedToUserId: issues.assignedToUserId,
+        createdAt: issues.createdAt,
+        status: issues.status,
+      })
+      .from(issues)
+      .where(
+        and(
+          // Active status (not escalated, resolved, or closed)
+          inArray(issues.status, [...ACTIVE_STATUSES]),
+          // Created before cutoff time
+          lt(issues.createdAt, escalationCutoff),
+          // Not already escalated
+          isNull(issues.escalatedAt),
+          // Not deleted
+          isNull(issues.deletedAt)
+        )
+      );
+
+    console.log(
+      `Found ${unrespondedIssues.length} unresponded issues older than ${DEFAULT_THRESHOLDS.unrespondedHours}h`
+    );
+
+    // Escalate each unresponded issue
+    for (const issue of unrespondedIssues) {
+      const reason = `No response for ${DEFAULT_THRESHOLDS.unrespondedHours}+ hours`;
+
+      // Update issue status to escalated
+      await db
+        .update(issues)
+        .set({
+          status: 'escalated',
+          escalatedAt: now,
+          escalationReason: reason,
+          updatedAt: now,
+        })
+        .where(eq(issues.id, issue.id));
+
+      // Create activity record
+      await createEscalationActivity(issue.id, issue.organizationId, 'time_based', reason);
+
+      // Notify manager
+      await notifyManagerOfEscalation(issue, reason, null);
+
+      console.log(`Escalated issue ${issue.issueNumber} - time-based`);
+      timeBasedEscalations++;
+    }
+
+    // ========================================================================
+    // 2. PRIORITY-BASED ESCALATION
+    // Find high/critical priority issues that haven't been addressed quickly
+    // ========================================================================
+    const highPriorityIssues = await db
+      .select({
+        id: issues.id,
+        issueNumber: issues.issueNumber,
+        title: issues.title,
+        organizationId: issues.organizationId,
+        customerId: issues.customerId,
+        assignedToUserId: issues.assignedToUserId,
+      })
+      .from(issues)
+      .where(
+        and(
+          // Active status
+          inArray(issues.status, [...ACTIVE_STATUSES]),
+          // High or critical priority
+          inArray(issues.priority, ['high', 'critical']),
+          // Created before high priority cutoff
+          lt(issues.createdAt, highPriorityCutoff),
+          // Not already escalated
+          isNull(issues.escalatedAt),
+          // Not deleted
+          isNull(issues.deletedAt)
+        )
+      );
+
+    console.log(`Found ${highPriorityIssues.length} high priority issues needing escalation`);
+
+    for (const issue of highPriorityIssues) {
+      const reason = `High priority issue unaddressed for ${DEFAULT_THRESHOLDS.highPriorityEscalateHours}+ hours`;
+
+      // Update issue status to escalated
+      await db
+        .update(issues)
+        .set({
+          status: 'escalated',
+          escalatedAt: now,
+          escalationReason: reason,
+          updatedAt: now,
+        })
+        .where(eq(issues.id, issue.id));
+
+      // Create activity record
+      await createEscalationActivity(issue.id, issue.organizationId, 'priority_based', reason);
+
+      // Notify manager
+      await notifyManagerOfEscalation(issue, reason, null);
+
+      console.log(`Escalated issue ${issue.issueNumber} - priority-based`);
+      priorityEscalations++;
+    }
+
+    // ========================================================================
+    // 3. SLA BREACH ESCALATION
+    // Find issues linked to SLA tracking records that have been breached
+    // ========================================================================
+    if (DEFAULT_THRESHOLDS.slaBreachAutoEscalate) {
+      const slaBreachedIssues = await db
         .select({
           id: issues.id,
           issueNumber: issues.issueNumber,
@@ -186,34 +293,26 @@ export const autoEscalateIssuesJob = client.defineJob({
           organizationId: issues.organizationId,
           customerId: issues.customerId,
           assignedToUserId: issues.assignedToUserId,
-          createdAt: issues.createdAt,
-          status: issues.status,
         })
         .from(issues)
+        .innerJoin(slaTracking, eq(slaTracking.id, issues.slaTrackingId))
         .where(
           and(
-            // Active status (not escalated, resolved, or closed)
+            // Active status
             inArray(issues.status, [...ACTIVE_STATUSES]),
-            // No first response yet (firstResponseAt is null)
-            isNull(issues.firstResponseAt),
-            // Created before cutoff time
-            lt(issues.createdAt, escalationCutoff),
             // Not already escalated
             isNull(issues.escalatedAt),
+            // Has SLA breach (check slaTracking status)
+            eq(slaTracking.status, 'breached'),
             // Not deleted
             isNull(issues.deletedAt)
           )
         );
-    });
 
-    await io.logger.info(
-      `Found ${unrespondedIssues.length} unresponded issues older than ${DEFAULT_THRESHOLDS.unrespondedHours}h`
-    );
+      console.log(`Found ${slaBreachedIssues.length} issues with SLA breaches`);
 
-    // Escalate each unresponded issue
-    for (const issue of unrespondedIssues) {
-      await io.runTask(`escalate-time-${issue.id}`, async () => {
-        const reason = `No response for ${DEFAULT_THRESHOLDS.unrespondedHours}+ hours`;
+      for (const issue of slaBreachedIssues) {
+        const reason = 'SLA breach - auto-escalated';
 
         // Update issue status to escalated
         await db
@@ -227,172 +326,36 @@ export const autoEscalateIssuesJob = client.defineJob({
           .where(eq(issues.id, issue.id));
 
         // Create activity record
-        await createEscalationActivity(
-          issue.id,
-          issue.organizationId,
-          'time_based',
-          reason
-        );
+        await createEscalationActivity(issue.id, issue.organizationId, 'sla_breach', reason);
 
         // Notify manager
         await notifyManagerOfEscalation(issue, reason, null);
 
-        await io.logger.info(`Escalated issue ${issue.issueNumber} - time-based`);
-        timeBasedEscalations++;
-      });
-    }
-
-    // ========================================================================
-    // 2. VIP CUSTOMER ESCALATION
-    // Find active issues from VIP customers that aren't escalated
-    // ========================================================================
-    if (DEFAULT_THRESHOLDS.vipCustomerAutoEscalate) {
-      const vipIssues = await io.runTask('query-vip-issues', async () => {
-        return db
-          .select({
-            id: issues.id,
-            issueNumber: issues.issueNumber,
-            title: issues.title,
-            organizationId: issues.organizationId,
-            customerId: issues.customerId,
-            assignedToUserId: issues.assignedToUserId,
-            customerName: customers.name,
-          })
-          .from(issues)
-          .innerJoin(customers, eq(customers.id, issues.customerId))
-          .where(
-            and(
-              // Active status
-              inArray(issues.status, [...ACTIVE_STATUSES]),
-              // VIP customer
-              eq(customers.isVip, true),
-              // Not already escalated
-              isNull(issues.escalatedAt),
-              // Created in the last 15 minutes (only escalate new VIP issues)
-              sql`${issues.createdAt} > NOW() - INTERVAL '15 minutes'`,
-              // Not deleted
-              isNull(issues.deletedAt)
-            )
-          );
-      });
-
-      await io.logger.info(`Found ${vipIssues.length} new issues from VIP customers`);
-
-      for (const issue of vipIssues) {
-        await io.runTask(`escalate-vip-${issue.id}`, async () => {
-          const reason = 'VIP customer - auto-escalated';
-
-          // Update issue status to escalated
-          await db
-            .update(issues)
-            .set({
-              status: 'escalated',
-              escalatedAt: now,
-              escalationReason: reason,
-              updatedAt: now,
-            })
-            .where(eq(issues.id, issue.id));
-
-          // Create activity record
-          await createEscalationActivity(
-            issue.id,
-            issue.organizationId,
-            'vip_customer',
-            reason
-          );
-
-          // Notify manager with customer name
-          await notifyManagerOfEscalation(issue, reason, issue.customerName);
-
-          await io.logger.info(
-            `Escalated issue ${issue.issueNumber} - VIP customer: ${issue.customerName}`
-          );
-          vipEscalations++;
-        });
+        console.log(`Escalated issue ${issue.issueNumber} - SLA breach`);
+        slaBreachEscalations++;
       }
     }
 
-    // ========================================================================
-    // 3. SLA BREACH ESCALATION
-    // Find issues that have breached SLA but aren't escalated
-    // ========================================================================
-    if (DEFAULT_THRESHOLDS.slaBreachAutoEscalate) {
-      // Query issues with breached SLA via sla_tracking
-      const slaBreachedIssues = await io.runTask('query-sla-breach-issues', async () => {
-        // Note: This assumes issues have a slaTrackingId FK
-        // If the schema uses a different approach, adjust accordingly
-        return db
-          .select({
-            id: issues.id,
-            issueNumber: issues.issueNumber,
-            title: issues.title,
-            organizationId: issues.organizationId,
-            customerId: issues.customerId,
-            assignedToUserId: issues.assignedToUserId,
-          })
-          .from(issues)
-          .where(
-            and(
-              // Active status
-              inArray(issues.status, [...ACTIVE_STATUSES]),
-              // Not already escalated
-              isNull(issues.escalatedAt),
-              // Has SLA breach (check via slaResponseBreached or slaResolutionBreached columns)
-              sql`(${issues.slaResponseBreached} = true OR ${issues.slaResolutionBreached} = true)`,
-              // Not deleted
-              isNull(issues.deletedAt)
-            )
-          );
-      });
-
-      await io.logger.info(`Found ${slaBreachedIssues.length} issues with SLA breaches`);
-
-      for (const issue of slaBreachedIssues) {
-        await io.runTask(`escalate-sla-${issue.id}`, async () => {
-          const reason = 'SLA breach - auto-escalated';
-
-          // Update issue status to escalated
-          await db
-            .update(issues)
-            .set({
-              status: 'escalated',
-              escalatedAt: now,
-              escalationReason: reason,
-              updatedAt: now,
-            })
-            .where(eq(issues.id, issue.id));
-
-          // Create activity record
-          await createEscalationActivity(
-            issue.id,
-            issue.organizationId,
-            'sla_breach',
-            reason
-          );
-
-          // Notify manager
-          await notifyManagerOfEscalation(issue, reason, null);
-
-          await io.logger.info(`Escalated issue ${issue.issueNumber} - SLA breach`);
-          slaBreachEscalations++;
-        });
-      }
-    }
-
-    await io.logger.info('Auto-escalation check completed', {
+    console.log('Auto-escalation check completed', {
       timeBasedEscalations,
-      vipEscalations,
+      priorityEscalations,
       slaBreachEscalations,
-      totalEscalated: timeBasedEscalations + vipEscalations + slaBreachEscalations,
-      skipped,
+      totalEscalated: timeBasedEscalations + priorityEscalations + slaBreachEscalations,
     });
 
     return {
       success: true,
       timeBasedEscalations,
-      vipEscalations,
+      priorityEscalations,
       slaBreachEscalations,
-      totalEscalated: timeBasedEscalations + vipEscalations + slaBreachEscalations,
+      totalEscalated: timeBasedEscalations + priorityEscalations + slaBreachEscalations,
     };
   },
+});
+
+// Schedule the task to run every 15 minutes
+export const autoEscalateIssuesSchedule = schedules.task({
+  id: 'auto-escalate-issues-schedule',
+  task: autoEscalateIssuesTask.id,
+  cron: '*/15 * * * *',
 });

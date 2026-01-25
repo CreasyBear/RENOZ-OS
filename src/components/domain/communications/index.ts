@@ -4,46 +4,41 @@
  * Components for email tracking, communication analytics, scheduling, campaigns, and template management.
  */
 
-// Email Tracking
-export { EmailTrackingBadge, type EmailTrackingData, type EmailTrackingBadgeProps } from './email-tracking-badge'
-export { EmailTrackingTimeline, type TrackingEvent, type EmailTrackingTimelineProps } from './email-tracking-timeline'
-export { TemplateStatsCard, type TemplateStats, type LinkStats, type TemplateStatsCardProps } from './template-stats-card'
+// --- Core Components ---
+export { DateTimePicker, type DateTimePickerProps } from './date-time-picker';
+export { TimezoneSelect, getLocalTimezone, formatInTimezone, type TimezoneSelectProps } from './timezone-select';
+export { CommunicationPreferences, PreferenceHistory } from './communication-preferences';
+export { QuickLogDialog, QuickLogButton, useQuickLogShortcut, type LogType } from './quick-log-dialog';
 
-// Email Scheduling
-export { DateTimePicker, type DateTimePickerProps } from './date-time-picker'
-export { TimezoneSelect, getLocalTimezone, formatInTimezone, type TimezoneSelectProps } from './timezone-select'
-export { ScheduledEmailBadge, ScheduledEmailDot, type ScheduledEmailStatus, type ScheduledEmailBadgeProps } from './scheduled-email-badge'
-export { ScheduledEmailsList, ScheduledEmailsSkeleton, type ScheduledEmailsListProps } from './scheduled-emails-list'
-export { ScheduleEmailDialog, type ScheduleEmailDialogProps } from './schedule-email-dialog'
+// --- Email Templates ---
+export { TemplateEditor } from './template-editor';
+export { TemplateVariableMenu } from './template-variable-menu';
+export { TemplateStatsCard, type TemplateStats, type LinkStats, type TemplateStatsCardProps } from './template-stats-card';
+export { TemplatesList, type TemplatesListProps, type Template, type TemplateFormValues, type TemplateVersion } from './templates-list';
 
-// Email Campaigns
-export { CampaignStatusBadge, CampaignStatusDot, type CampaignStatus, type CampaignStatusBadgeProps } from './campaign-status-badge'
-export { CampaignsList, CampaignsListSkeleton, type CampaignsListProps, type CampaignListItem } from './campaigns-list'
-export { CampaignDetailPanel, CampaignDetailSkeleton, type CampaignDetailPanelProps } from './campaign-detail-panel'
-export { RecipientFilterBuilder, type RecipientCriteria, type RecipientFilterBuilderProps } from './recipient-filter-builder'
-export { CampaignPreviewPanel, type CampaignPreviewPanelProps } from './campaign-preview-panel'
-export { CampaignWizard, type CampaignWizardProps } from './campaign-wizard'
+// --- Campaigns ---
+export * from './campaigns';
+export { CampaignStatusDot, type CampaignStatus } from './campaigns/campaign-status-badge';
+export type { CampaignStatusBadgeProps } from './campaigns/campaign-status-badge';
+export { CampaignsListSkeleton, type CampaignsListProps, type CampaignListItem } from './campaigns/campaigns-list';
+export { CampaignDetailSkeleton, type CampaignDetailPanelProps } from './campaigns/campaign-detail-panel';
+export type { RecipientCriteria, RecipientFilterBuilderProps } from './campaigns/recipient-filter-builder';
+export type { CampaignPreviewPanelProps } from './campaigns/campaign-preview-panel';
+export type { CampaignWizardProps } from './campaigns/campaign-wizard';
 
-// Scheduled Calls
-export { ScheduledCallBadge, type ScheduledCallStatus } from './scheduled-call-badge'
-export { ScheduleCallDialog } from './schedule-call-dialog'
-export { CallOutcomeDialog } from './call-outcome-dialog'
-export { ScheduledCallActionMenu } from './scheduled-call-action-menu'
-export { UpcomingCallsWidget } from './upcoming-calls-widget'
-export { ScheduledCallsList } from './scheduled-calls-list'
+// --- Calls ---
+export * from './calls';
+export type { ScheduledCallStatus } from './calls/scheduled-call-badge';
+export type { ScheduledCallsListProps, ScheduledCall } from './calls/scheduled-calls-list';
 
-// Communication Preferences
-export { CommunicationPreferences, PreferenceHistory } from './communication-preferences'
+// --- Emails ---
+export * from './emails';
+export type { EmailTrackingData, EmailTrackingBadgeProps } from './emails/email-tracking-badge';
+export type { TrackingEvent, EmailTrackingTimelineProps } from './emails/email-tracking-timeline';
+export { ScheduledEmailDot, type ScheduledEmailStatus } from './emails/scheduled-email-badge';
+export type { ScheduledEmailBadgeProps } from './emails/scheduled-email-badge';
+export { ScheduledEmailsSkeleton, type ScheduledEmailsListProps } from './emails/scheduled-emails-list';
+export type { ScheduleEmailDialogProps } from './emails/schedule-email-dialog';
 
-// Email Signatures
-export { SignatureEditor } from './signature-editor'
-export { SignatureSelector } from './signature-selector'
-export { SignaturesList } from './signatures-list'
-
-// Email Templates
-export { TemplateEditor } from './template-editor'
-export { TemplateVariableMenu } from './template-variable-menu'
-export { TemplatesList } from './templates-list'
-
-// Quick Log (COMMS-AUTO-003)
-export { QuickLogDialog, QuickLogButton, useQuickLogShortcut, type LogType } from './quick-log-dialog'
+// --- Signatures ---
+export * from './signatures';

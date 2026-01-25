@@ -34,8 +34,8 @@ import {
   SIDEBAR_WIDTH_COLLAPSED,
   type SidebarCollapsible,
 } from './sidebar-provider'
-import { toast } from '@/hooks/use-toast'
-import { useCurrentUser } from '@/hooks/use-current-user'
+import { toast } from '@/hooks'
+import { useCurrentUser } from '@/hooks'
 import { hasPermission } from '@/lib/auth/permissions'
 
 // ============================================================================
@@ -72,7 +72,7 @@ export function Sidebar({
   const navigate = useNavigate()
   const signOut = useSignOut()
   const sidebarContext = useSidebarSafe()
-  const { currentUser } = useCurrentUser()
+  const { user } = useCurrentUser()
 
   // Use context if available, otherwise fall back to legacy props
   const isCollapsed = sidebarContext?.isCollapsed ?? legacyCollapsed ?? false
@@ -97,7 +97,7 @@ export function Sidebar({
     const allRoutes = getNavRoutes()
 
     // If no user yet, show all routes (loading state)
-    if (!currentUser) {
+    if (!user) {
       return allRoutes
     }
 
@@ -108,9 +108,9 @@ export function Sidebar({
         return true
       }
       // Check if user has the required permission
-      return hasPermission(currentUser.role, route.requiredPermission)
+      return hasPermission(user.role, route.requiredPermission)
     })
-  }, [currentUser])
+  }, [user])
 
   // Width based on collapse state and mode
   const width = showCollapsedView ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH

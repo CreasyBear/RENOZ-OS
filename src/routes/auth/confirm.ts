@@ -18,7 +18,7 @@ const confirmFn = createServerFn({ method: 'GET' })
   .handler(async (ctx) => {
     // Dynamic imports to keep server code out of client bundle
     const { getRequest } = await import('@tanstack/react-start/server');
-    const { createClient } = await import('~/lib/supabase/server');
+    const { createServerSupabase } = await import('~/lib/supabase/server');
 
     const request = getRequest();
 
@@ -33,7 +33,7 @@ const confirmFn = createServerFn({ method: 'GET' })
     const next = _next?.startsWith('/') ? _next : '/';
 
     if (token_hash && type) {
-      const supabase = createClient();
+      const supabase = createServerSupabase(request);
 
       const { error } = await supabase.auth.verifyOtp({
         type,

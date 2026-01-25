@@ -22,7 +22,7 @@ import {
   useCallback,
   type ReactNode,
 } from 'react'
-import { useIsMobile } from '@/hooks/use-mobile'
+import { useIsMobile } from '@/hooks'
 
 // ============================================================================
 // CONSTANTS

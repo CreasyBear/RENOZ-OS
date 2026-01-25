@@ -19,7 +19,7 @@ import type {
   PurchaseOrderTableData,
 } from '@/lib/schemas/purchase-orders';
 import { defaultPurchaseOrderFilters } from '@/lib/schemas/purchase-orders';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 
 // ============================================================================
 // ROUTE DEFINITION

@@ -962,7 +962,7 @@ export const transferStock = createServerFn({ method: 'POST' })
           .returning();
       } else {
         // Update existing destination inventory
-        const destAllocated = Number(destInv.quantityAllocated) || 0;
+        // Note: destInv.quantityAllocated available for future allocation tracking
 
         [destInv] = await tx
           .update(inventory)
@@ -1370,7 +1370,7 @@ export const bulkReceiveStock = createServerFn({ method: 'POST' })
           });
         } else {
           // Queue for update
-          const allocated = Number(existingInv.quantityAllocated) || 0;
+          // Note: existingInv.quantityAllocated available for future allocation tracking
           inventoryToUpdate.push({
             id: existingInv.id,
             quantityOnHand: newQuantity,

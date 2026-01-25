@@ -24,10 +24,10 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { formatCurrency } from '@/lib/formatters';
 import {
-  approvalApprovalRejectionReasons,
-  approvalApprovalRejectionReasonLabels,
+  approvalRejectionReasons,
+  approvalRejectionReasonLabels,
   type ApprovalActionBarOrder,
-  type ApprovalApprovalRejectionReason,
+  type ApprovalRejectionReason,
 } from '@/lib/schemas/approvals';
 
 // ============================================================================

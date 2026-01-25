@@ -7,7 +7,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { and, asc, desc, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { searchIndex, searchIndexOutbox, recentItems } from '@/../drizzle/schema';
+import { searchIndex, searchIndexOutbox, recentItems } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import {
   searchQuerySchema,

@@ -16,6 +16,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/query-keys'
 import { getCustomerById } from '@/server/customers'
 
 // ============================================================================
@@ -93,7 +94,7 @@ export function CustomerProvider({ children }: CustomerProviderProps) {
 
   // Fetch current customer data
   const { data: customerData, isLoading: isLoadingCustomer } = useQuery({
-    queryKey: ['customer', 'context', currentCustomerId],
+    queryKey: queryKeys.customers.detail(currentCustomerId ?? ''),
     queryFn: async () => {
       if (!currentCustomerId) return null
       const result = await getCustomerById({ data: { id: currentCustomerId } })
@@ -148,7 +149,7 @@ export function CustomerProvider({ children }: CustomerProviderProps) {
     async (customerId: string): Promise<CustomerSummary | null> => {
       try {
         const result = await queryClient.fetchQuery({
-          queryKey: ['customer', 'lookup', customerId],
+          queryKey: queryKeys.customers.detail(customerId),
           queryFn: async () => {
             const data = await getCustomerById({ data: { id: customerId } })
             if (!data) return null

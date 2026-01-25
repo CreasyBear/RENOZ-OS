@@ -10,7 +10,7 @@
  */
 
 import { db } from "@/lib/db";
-import { activities, type ActivityChanges, type ActivityMetadata } from "@/../drizzle/schema";
+import { activities, type ActivityChanges, type ActivityMetadata } from "drizzle/schema";
 import type { ActivityAction, ActivityEntityType } from "./schemas/activities";
 
 // ============================================================================

@@ -11,7 +11,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { eq, and, desc, sql, isNull, isNotNull, gt, lte, lt } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { quoteVersions, opportunities, opportunityActivities } from "@/../drizzle/schema";
+import { quoteVersions, opportunities, opportunityActivities } from "drizzle/schema";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import {
@@ -308,7 +308,6 @@ export const restoreQuoteVersion = createServerFn({ method: "POST" })
  */
 export const updateQuoteExpiration = createServerFn({ method: "POST" })
   .inputValidator(updateQuoteExpirationSchema)
-  // @ts-expect-error - TanStack Start has type inference issues with property ordering in Drizzle schema
   .handler(async ({ data }): Promise<{opportunity: typeof opportunities.$inferSelect}> => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.update ?? "opportunity:update" });
 
@@ -348,7 +347,6 @@ export const updateQuoteExpiration = createServerFn({ method: "POST" })
  */
 export const setDefaultQuoteExpiration = createServerFn({ method: "POST" })
   .inputValidator(z.object({ opportunityId: z.string().uuid() }))
-  // @ts-expect-error - TanStack Start has type inference issues with property ordering in Drizzle schema
   .handler(async ({ data }): Promise<{opportunity: typeof opportunities.$inferSelect; expiresAt: Date}> => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.update ?? "opportunity:update" });
 
@@ -678,7 +676,6 @@ export const extendQuoteValidity = createServerFn({ method: "POST" })
       reason: z.string().min(1, "Reason is required").max(500),
     })
   )
-  // @ts-expect-error - TanStack Start has type inference issues with property ordering in Drizzle schema
   .handler(async ({ data }): Promise<{opportunity: typeof opportunities.$inferSelect; previousExpiration: Date | null; newExpiration: Date}> => {
     const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.update ?? "opportunity:update" });
 

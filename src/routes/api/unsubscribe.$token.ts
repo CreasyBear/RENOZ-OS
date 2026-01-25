@@ -8,179 +8,67 @@
  * @see DOM-COMMS-005
  */
 
-import { createAPIFileRoute } from "@tanstack/start/api";
 import { db } from "@/lib/db";
-import { contacts, customerActivities } from "../../../drizzle/schema";
+import { contacts, customerActivities } from "drizzle/schema";
 import { eq } from "drizzle-orm";
 import {
   verifyUnsubscribeToken,
 } from "@/lib/server/communication-preferences";
 
-export const APIRoute = createAPIFileRoute("/api/unsubscribe/$token")({
-  // GET: Show unsubscribe confirmation page
-  GET: async ({ params }) => {
-    const { token } = params;
+export async function GET({ params }: { params: { token: string } }) {
+  const { token } = params;
 
-    const tokenData = verifyUnsubscribeToken(token);
-    if (!tokenData) {
-      return new Response(
-        renderHtml({
-          title: "Invalid Link",
-          message: "This unsubscribe link is invalid or has expired.",
-          success: false,
-        }),
-        {
-          status: 400,
-          headers: { "Content-Type": "text/html" },
-        }
-      );
-    }
-
-    // Get contact info
-    const [contact] = await db
-      .select({
-        firstName: contacts.firstName,
-        lastName: contacts.lastName,
-        email: contacts.email,
-        emailOptIn: contacts.emailOptIn,
-        smsOptIn: contacts.smsOptIn,
-      })
-      .from(contacts)
-      .where(eq(contacts.id, tokenData.contactId))
-      .limit(1);
-
-    if (!contact) {
-      return new Response(
-        renderHtml({
-          title: "Contact Not Found",
-          message: "We couldn't find your contact information.",
-          success: false,
-        }),
-        {
-          status: 404,
-          headers: { "Content-Type": "text/html" },
-        }
-      );
-    }
-
-    const channelLabel = tokenData.channel === "email" ? "email" : "SMS";
-    const currentlyOptedIn =
-      tokenData.channel === "email" ? contact.emailOptIn : contact.smsOptIn;
-
-    if (!currentlyOptedIn) {
-      return new Response(
-        renderHtml({
-          title: "Already Unsubscribed",
-          message: `You are already unsubscribed from ${channelLabel} communications.`,
-          success: true,
-        }),
-        {
-          status: 200,
-          headers: { "Content-Type": "text/html" },
-        }
-      );
-    }
-
-    // Show confirmation page with form
+  const tokenData = verifyUnsubscribeToken(token);
+  if (!tokenData) {
     return new Response(
-      renderConfirmationPage({
-        name: `${contact.firstName} ${contact.lastName}`,
-        channel: channelLabel,
-        token,
+      renderHtml({
+        title: "Invalid Link",
+        message: "This unsubscribe link is invalid or has expired.",
+        success: false,
       }),
       {
-        status: 200,
+        status: 400,
         headers: { "Content-Type": "text/html" },
       }
     );
-  },
+  }
 
-  // POST: Process unsubscribe
-  POST: async ({ params }) => {
-    const { token } = params;
+  // Get contact info
+  const [contact] = await db
+    .select({
+      firstName: contacts.firstName,
+      lastName: contacts.lastName,
+      email: contacts.email,
+      emailOptIn: contacts.emailOptIn,
+      smsOptIn: contacts.smsOptIn,
+    })
+    .from(contacts)
+    .where(eq(contacts.id, tokenData.contactId))
+    .limit(1);
 
-    const tokenData = verifyUnsubscribeToken(token);
-    if (!tokenData) {
-      return new Response(
-        renderHtml({
-          title: "Invalid Link",
-          message: "This unsubscribe link is invalid or has expired.",
-          success: false,
-        }),
-        {
-          status: 400,
-          headers: { "Content-Type": "text/html" },
-        }
-      );
-    }
-
-    // Get contact info
-    const [contact] = await db
-      .select({
-        id: contacts.id,
-        customerId: contacts.customerId,
-        organizationId: contacts.organizationId,
-        firstName: contacts.firstName,
-        lastName: contacts.lastName,
-        emailOptIn: contacts.emailOptIn,
-        smsOptIn: contacts.smsOptIn,
-      })
-      .from(contacts)
-      .where(eq(contacts.id, tokenData.contactId))
-      .limit(1);
-
-    if (!contact) {
-      return new Response(
-        renderHtml({
-          title: "Contact Not Found",
-          message: "We couldn't find your contact information.",
-          success: false,
-        }),
-        {
-          status: 404,
-          headers: { "Content-Type": "text/html" },
-        }
-      );
-    }
-
-    const now = new Date().toISOString();
-    const channelLabel = tokenData.channel === "email" ? "email" : "SMS";
-
-    // Update preference
-    const updateData =
-      tokenData.channel === "email"
-        ? { emailOptIn: false, emailOptInAt: now }
-        : { smsOptIn: false, smsOptInAt: now };
-
-    await db
-      .update(contacts)
-      .set(updateData)
-      .where(eq(contacts.id, tokenData.contactId));
-
-    // Log to activities for compliance
-    await db.insert(customerActivities).values({
-      organizationId: contact.organizationId,
-      customerId: contact.customerId,
-      contactId: contact.id,
-      createdBy: contact.id, // Self-service unsubscribe
-      activityType: "note",
-      description: `Communication preference changed: ${contact.firstName} ${contact.lastName} opted out of ${channelLabel} communications via unsubscribe link`,
-      metadata: {
-        preferenceChange: true,
-        channel: channelLabel,
-        oldValue: tokenData.channel === "email" ? contact.emailOptIn : contact.smsOptIn,
-        newValue: false,
-        changedAt: now,
-        changedBy: "self-service",
-        method: "unsubscribe-link",
-        contactName: `${contact.firstName} ${contact.lastName}`,
-      },
-    });
-
+  if (!contact) {
     return new Response(
       renderHtml({
-        title: "Unsubscribed Successfully",
-        message: `You have been unsubscribed from ${channelLabel} communications.`,
+        title: "Contact Not Found",
+        message: "We couldn't find your contact information.",
+        success: false,
+      }),
+      {
+        status: 404,
+        headers: { "Content-Type": "text/html" },
+      }
+    );
+  }
+
+  const channelLabel = tokenData.channel === "email" ? "email" : "SMS";
+  const currentlyOptedIn =
+    tokenData.channel === "email" ? contact.emailOptIn : contact.smsOptIn;
+
+  if (!currentlyOptedIn) {
+    return new Response(
+      renderHtml({
+        title: "Already Unsubscribed",
+        message: `You are already unsubscribed from ${channelLabel} communications.`,
         success: true,
       }),
       {
@@ -188,8 +76,115 @@ export const APIRoute = createAPIFileRoute("/api/unsubscribe/$token")({
         headers: { "Content-Type": "text/html" },
       }
     );
-  },
-});
+  }
+
+  // Show confirmation page with form
+  return new Response(
+    renderConfirmationPage({
+      name: `${contact.firstName} ${contact.lastName}`,
+      channel: channelLabel,
+      token,
+    }),
+    {
+      status: 200,
+      headers: { "Content-Type": "text/html" },
+    }
+  );
+}
+
+export async function POST({ params }: { params: { token: string } }) {
+  const { token } = params;
+
+  const tokenData = verifyUnsubscribeToken(token);
+  if (!tokenData) {
+    return new Response(
+      renderHtml({
+        title: "Invalid Link",
+        message: "This unsubscribe link is invalid or has expired.",
+        success: false,
+      }),
+      {
+        status: 400,
+        headers: { "Content-Type": "text/html" },
+      }
+    );
+  }
+
+  // Get contact info
+  const [contact] = await db
+    .select({
+      id: contacts.id,
+      customerId: contacts.customerId,
+      organizationId: contacts.organizationId,
+      firstName: contacts.firstName,
+      lastName: contacts.lastName,
+      emailOptIn: contacts.emailOptIn,
+      smsOptIn: contacts.smsOptIn,
+    })
+    .from(contacts)
+    .where(eq(contacts.id, tokenData.contactId))
+    .limit(1);
+
+  if (!contact) {
+    return new Response(
+      renderHtml({
+        title: "Contact Not Found",
+        message: "We couldn't find your contact information.",
+        success: false,
+      }),
+      {
+        status: 404,
+        headers: { "Content-Type": "text/html" },
+      }
+    );
+  }
+
+  const now = new Date().toISOString();
+  const channelLabel = tokenData.channel === "email" ? "email" : "SMS";
+
+  // Update preference
+  const updateData =
+    tokenData.channel === "email"
+      ? { emailOptIn: false, emailOptInAt: now }
+      : { smsOptIn: false, smsOptInAt: now };
+
+  await db
+    .update(contacts)
+    .set(updateData)
+    .where(eq(contacts.id, tokenData.contactId));
+
+  // Log to activities for compliance
+  await db.insert(customerActivities).values({
+    organizationId: contact.organizationId,
+    customerId: contact.customerId,
+    contactId: contact.id,
+    createdBy: contact.id, // Self-service unsubscribe
+    activityType: "note",
+    description: `Communication preference changed: ${contact.firstName} ${contact.lastName} opted out of ${channelLabel} communications via unsubscribe link`,
+    metadata: {
+      preferenceChange: true,
+      channel: channelLabel,
+      oldValue: tokenData.channel === "email" ? contact.emailOptIn : contact.smsOptIn,
+      newValue: false,
+      changedAt: now,
+      changedBy: "self-service",
+      method: "unsubscribe-link",
+      contactName: `${contact.firstName} ${contact.lastName}`,
+    },
+  });
+
+  return new Response(
+    renderHtml({
+      title: "Unsubscribed Successfully",
+      message: `You have been unsubscribed from ${channelLabel} communications.`,
+      success: true,
+    }),
+    {
+      status: 200,
+      headers: { "Content-Type": "text/html" },
+    }
+  );
+}
 
 // ============================================================================
 // HTML RENDERING HELPERS

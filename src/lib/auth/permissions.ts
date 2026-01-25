@@ -87,6 +87,7 @@ export const PERMISSIONS = {
     adjust: 'inventory.adjust',
     transfer: 'inventory.transfer',
     receive: 'inventory.receive',
+    allocate: 'inventory.allocate',
   },
 
   // Pipeline/Opportunity domain
@@ -161,6 +162,44 @@ export const PERMISSIONS = {
     update: 'scheduled_report.update',
     delete: 'scheduled_report.delete',
   },
+
+  // Job Assignments domain (field work)
+  job: {
+    create: 'job.create',
+    read: 'job.read',
+    update: 'job.update',
+    delete: 'job.delete',
+    assign: 'job.assign',
+  },
+
+  // Team/User Groups domain
+  team: {
+    create: 'team.create',
+    read: 'team.read',
+    update: 'team.update',
+    delete: 'team.delete',
+  },
+
+  // Audit Trail domain
+  audit: {
+    read: 'audit.read',
+    export: 'audit.export',
+  },
+
+  // Settings domain
+  settings: {
+    read: 'settings.read',
+    update: 'settings.update',
+  },
+
+  // Suppliers domain
+  suppliers: {
+    read: 'suppliers.read',
+    create: 'suppliers.create',
+    update: 'suppliers.update',
+    delete: 'suppliers.delete',
+    approve: 'suppliers.approve',
+  },
 } as const
 
 // ============================================================================
@@ -205,6 +244,7 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.inventory.adjust,
     PERMISSIONS.inventory.transfer,
     PERMISSIONS.inventory.receive,
+    PERMISSIONS.inventory.allocate,
     // Opportunity
     PERMISSIONS.opportunity.create,
     PERMISSIONS.opportunity.read,
@@ -251,6 +291,23 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.scheduledReport.read,
     PERMISSIONS.scheduledReport.update,
     PERMISSIONS.scheduledReport.delete,
+    // Team/User Groups
+    PERMISSIONS.team.create,
+    PERMISSIONS.team.read,
+    PERMISSIONS.team.update,
+    PERMISSIONS.team.delete,
+    // Audit
+    PERMISSIONS.audit.read,
+    PERMISSIONS.audit.export,
+    // Settings
+    PERMISSIONS.settings.read,
+    PERMISSIONS.settings.update,
+    // Suppliers
+    PERMISSIONS.suppliers.read,
+    PERMISSIONS.suppliers.create,
+    PERMISSIONS.suppliers.update,
+    PERMISSIONS.suppliers.delete,
+    PERMISSIONS.suppliers.approve,
   ],
 
   // Admin: Almost full access, except billing
@@ -286,6 +343,7 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.inventory.adjust,
     PERMISSIONS.inventory.transfer,
     PERMISSIONS.inventory.receive,
+    PERMISSIONS.inventory.allocate,
     // Opportunity
     PERMISSIONS.opportunity.create,
     PERMISSIONS.opportunity.read,
@@ -331,6 +389,23 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.scheduledReport.read,
     PERMISSIONS.scheduledReport.update,
     PERMISSIONS.scheduledReport.delete,
+    // Team/User Groups
+    PERMISSIONS.team.create,
+    PERMISSIONS.team.read,
+    PERMISSIONS.team.update,
+    PERMISSIONS.team.delete,
+    // Audit
+    PERMISSIONS.audit.read,
+    PERMISSIONS.audit.export,
+    // Settings
+    PERMISSIONS.settings.read,
+    PERMISSIONS.settings.update,
+    // Suppliers
+    PERMISSIONS.suppliers.read,
+    PERMISSIONS.suppliers.create,
+    PERMISSIONS.suppliers.update,
+    PERMISSIONS.suppliers.delete,
+    PERMISSIONS.suppliers.approve,
   ],
 
   // Manager: Manage team and operations, no user/org management
@@ -359,6 +434,7 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.inventory.adjust,
     PERMISSIONS.inventory.transfer,
     PERMISSIONS.inventory.receive,
+    PERMISSIONS.inventory.allocate,
     // Opportunity
     PERMISSIONS.opportunity.create,
     PERMISSIONS.opportunity.read,

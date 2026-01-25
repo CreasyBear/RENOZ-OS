@@ -8,7 +8,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc, or, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { emailHistory, users, customers } from '@/../drizzle/schema';
+import { emailHistory, users, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { z } from 'zod';

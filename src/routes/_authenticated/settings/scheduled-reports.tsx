@@ -94,7 +94,7 @@ import type {
   ReportFormat,
   CreateScheduledReportInput,
 } from '@/lib/schemas/dashboard/scheduled-reports';
-import type { ScheduledReport } from '@/../drizzle/schema/dashboard/scheduled-reports';
+import type { ScheduledReport } from 'drizzle/schema/dashboard/scheduled-reports';
 
 // ============================================================================
 // ROUTE DEFINITION

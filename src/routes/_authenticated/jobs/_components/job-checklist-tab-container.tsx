@@ -1,4 +1,4 @@
-import { JobChecklistTab } from '@/components/domain/jobs/job-checklist-tab';
+import { JobChecklistTab } from '@/components/domain/jobs';
 import {
   useJobChecklist,
   useChecklistTemplates,

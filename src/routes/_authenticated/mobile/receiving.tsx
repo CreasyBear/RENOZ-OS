@@ -36,7 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/hooks";
 import { useOnlineStatus, useOfflineQueue } from "@/hooks";
 import {
   BarcodeScanner,

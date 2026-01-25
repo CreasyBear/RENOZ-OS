@@ -24,7 +24,7 @@ import {
   Check,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useCurrentOrg } from '@/hooks/use-current-org'
+import { useCurrentOrg } from '@/hooks'
 
 // ============================================================================
 // TYPES

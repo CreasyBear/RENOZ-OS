@@ -14,6 +14,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import { Mail, MessageSquare, Loader2, History, Check } from "lucide-react";
 import { format } from "date-fns";
 
@@ -127,7 +128,7 @@ export function CommunicationPreferences({
 
   // Fetch current preferences
   const { data: preferencesData, isLoading } = useQuery({
-    queryKey: ["contact-preferences", contactId],
+    queryKey: queryKeys.communications.contactPreference(contactId),
     queryFn: () => getContactPreferences({ data: { contactId } }),
     enabled: !!contactId,
   });
@@ -159,8 +160,8 @@ export function CommunicationPreferences({
     },
     onSuccess: () => {
       toast.success("Preferences updated");
-      queryClient.invalidateQueries({ queryKey: ["contact-preferences"] });
-      queryClient.invalidateQueries({ queryKey: ["preference-history"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.communications.contactPreference(contactId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.communications.preferenceHistory(contactId) });
     },
     onError: (error) => {
       toast.error(
@@ -380,7 +381,7 @@ export function PreferenceHistory({
   className,
 }: PreferenceHistoryProps) {
   const { data: historyData, isLoading } = useQuery({
-    queryKey: ["preference-history", contactId, customerId],
+    queryKey: queryKeys.communications.preferenceHistory(contactId ?? "", { customerId }),
     queryFn: () =>
       getPreferenceHistory({ data: { contactId, customerId, limit: 50 } }),
     enabled: !!contactId || !!customerId,

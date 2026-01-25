@@ -18,16 +18,16 @@
 - [x] DASH-COMPARISON-UI: Comparison Interface
 - [x] DASH-REPORTS-API: Automated Reports API
 - [x] DASH-REPORTS-UI: Reports Management Interface
-- [ ] DASH-REPORTS-BACKGROUND: Background Report Processing
-- [ ] DASH-MOBILE-UI: Mobile Dashboard Interface
-- [ ] DASH-AI-INSIGHTS: AI-Powered Insights
+- [x] DASH-REPORTS-BACKGROUND: Background Report Processing
+- [x] DASH-MOBILE-UI: Mobile Dashboard Interface
+- [x] DASH-AI-INSIGHTS: AI-Powered Insights
 
 ## Current Story
-DASH-REPORTS-BACKGROUND: Background Report Processing
+COMPLETED - All 16 stories finished
 
 ## Iteration Count
-Total: 13
-Current Story: 0
+Total: 16
+Current Story: 1
 
 ## Blockers
 None
@@ -216,3 +216,124 @@ None
     - /settings/targets (KPI Targets)
     - /settings/scheduled-reports (Scheduled Reports)
   - Updated src/components/domain/settings/index.ts with ScheduledReportForm export
+- 2026-01-24: DASH-REPORTS-BACKGROUND completed
+  - Created src/trigger/jobs/process-scheduled-reports.ts with two Trigger.dev jobs:
+    - processScheduledReportsJob: Cron trigger every 15 minutes to check for due reports
+    - generateReportJob: Event trigger for on-demand report generation
+  - calculateMetrics() function aggregates from orders, customers, opportunities tables:
+    - revenue: SUM of orders.total
+    - orders_count: COUNT of orders
+    - customer_count: COUNT of customers
+    - pipeline_value: SUM of opportunities.value for active stages
+    - average_order_value: AVG of orders.total
+  - Report generation in HTML and CSV formats:
+    - generateHtmlReport(): Professional HTML with inline styles for email compatibility
+    - generateCsvReport(): Simple CSV with metric name/value columns
+  - Added report events to src/trigger/client.ts (generate, generated, failed)
+  - Added payload types: GenerateReportPayload, ReportGeneratedPayload, ReportFailedPayload
+  - Updated src/trigger/jobs/index.ts with new job exports and registration
+- 2026-01-24: DASH-MOBILE-UI completed
+  - Created src/components/domain/dashboard/pull-to-refresh.tsx:
+    - Touch-enabled pull-to-refresh with pointer events for cross-platform support
+    - PullIndicator sub-component with spinner and pull progress
+    - Configurable pullThreshold and maxPullDistance
+    - Visual resistance at pull limits
+    - ARIA labels for accessibility
+  - Created src/components/domain/dashboard/swipe-container.tsx:
+    - Horizontal swipe navigation for paginated content
+    - PageIndicator with dot navigation
+    - NavigationArrows for desktop (hidden on mobile)
+    - Keyboard navigation support (arrow keys)
+    - Momentum-based swipe detection with velocity threshold
+    - Edge resistance to prevent overscroll
+  - Created src/components/domain/dashboard/mobile-dashboard.tsx:
+    - MobileDashboard presenter component with touch interactions
+    - FullScreenLoader for initial loading state
+    - MobileHeader with date range and refresh button
+    - WidgetSkeleton for widget-level loading
+    - ErrorState with retry button
+    - SectionHeader for page sections
+    - getDefaultPages() for automatic page grouping by widget type
+    - Integrates PullToRefresh and SwipeContainer
+  - Updated src/components/domain/dashboard/index.ts with exports
+- 2026-01-24: DASH-AI-INSIGHTS completed
+  - Created src/lib/schemas/dashboard/ai-insights.ts with comprehensive types:
+    - InsightCategorySchema: pattern, anomaly, trend, opportunity, risk, recommendation, achievement
+    - InsightPrioritySchema: critical, high, medium, low
+    - ConfidenceLevelSchema: high, medium, low
+    - InsightSourceSchema: rule_based, statistical, ai_generated, hybrid
+    - InsightSchema, InsightMetricSchema, InsightActionSchema
+    - TrendPredictionSchema with confidenceInterval and direction
+    - AnomalySchema with deviation and expectedRange
+    - GetInsightsRequestSchema/Response, GenerateInsightsRequestSchema/Response
+    - INSIGHT_THRESHOLDS constants for rule-based detection
+  - Created src/server/functions/dashboard/ai-insights.ts:
+    - generateInsights server function: rule-based insight generation from metrics
+    - getInsights server function: fetch/filter insights with pagination
+    - Helper functions: generateMetricInsights, generatePatternInsights, generateRecommendationInsights
+    - generateTrendPredictions for simple linear extrapolation (placeholder for ML)
+    - Pattern detection: revenue vs orders correlation, pipeline vs revenue correlation
+    - Uses getEnhancedComparison to fetch current/previous period metrics
+  - Created src/components/domain/dashboard/widgets/ai-insights-widget.tsx:
+    - AiInsightsWidget presenter component with Container/Presenter pattern
+    - InsightCard: priority-sorted cards with metrics preview and actions
+    - CategoryFilter: filter buttons for insight categories
+    - InsightsSkeleton, InsightsEmpty, InsightsError state components
+    - CATEGORY_CONFIG mapping categories to icons
+    - PRIORITY_STYLES and PRIORITY_BADGE_STYLES for visual styling
+    - ScrollArea with compact/full modes
+    - Dismiss, view, refresh, action click callbacks
+    - @source JSDoc annotations for props
+  - Updated barrel exports: lib/schemas/dashboard/index.ts, server/functions/dashboard/index.ts, components/domain/dashboard/widgets/index.ts
+
+## Domain Completion Summary
+All 16 feature stories + 7 performance stories completed for the Business Intelligence Dashboard System:
+
+### Feature Stories (16)
+- Core infrastructure: schema, API, grid UI (3 stories)
+- Widget system: KPI, chart, activity feed (3 stories)
+- Date range and filtering (1 story)
+- Targets management: API + UI (2 stories)
+- Comparison analysis: API + UI (2 stories)
+- Scheduled reports: API + UI + background jobs (3 stories)
+- Mobile UI (1 story)
+- AI-powered insights (1 story)
+
+### Performance Infrastructure (7) - 2026-01-25
+- DASH-PERF-MVS: Created `drizzle/migrations/0020_dashboard_materialized_views.sql`
+  - 5 materialized views: mv_daily_metrics, mv_daily_pipeline, mv_daily_jobs, mv_daily_warranty, mv_current_state
+  - Unique indexes for REFRESH CONCURRENTLY support
+  - 2-year data retention WHERE clauses
+- DASH-PERF-INDEXES: Created `drizzle/migrations/0021_dashboard_performance_indexes.sql`
+  - Composite indexes on orders, opportunities, jobs, warranty_claims, customers, activities
+  - Covering indexes with INCLUDE clauses for revenue calculations
+  - All use CREATE INDEX CONCURRENTLY for zero-downtime
+- DASH-PERF-CACHE: Created `src/lib/cache/dashboard-cache.ts`
+  - DashboardCache class with Upstash Redis
+  - TTL strategy: 5min metrics, 15min charts, 30min targets, 1min activity
+  - Pattern-based invalidation by organizationId
+  - Graceful fallback when Redis unavailable
+- DASH-PERF-REFRESH: Created `src/trigger/jobs/dashboard-refresh.ts`
+  - refreshDailyMetricsJob: Every 15 min for daily MVs
+  - refreshCurrentStateJob: Every 5 min for current state + cache invalidation
+  - refreshWarrantyMetricsJob: Hourly for warranty MV
+  - onDemandMvRefreshJob: Event-triggered refresh
+  - cacheInvalidationJob: Cache invalidation on data changes
+- DASH-PERF-PRECOMPUTE: Consolidated into refresh jobs (trend data computed during MV refresh)
+- DASH-PERF-WARMING: Created `src/trigger/jobs/cache-warming.ts`
+  - warmDashboardCacheTask: Pre-warm cache for active orgs
+  - warmOrgCacheTask: On-demand org cache warming
+  - Common date ranges: today, thisWeek, thisMonth, last7Days, last30Days
+- DASH-PERF-API: Updated `src/server/functions/dashboard/dashboard-metrics.ts`
+  - Hybrid query strategy: MVs for historical, live tables for today
+  - Cache-first with MV fallback
+  - queryMetricsFromMV, queryTodayMetricsLive, getMetricsHybrid helpers
+
+### Operational Validation Pending
+- [ ] Run migrations on dev database
+- [ ] Configure UPSTASH_REDIS_URL and UPSTASH_REDIS_TOKEN env vars
+- [ ] Test scheduled job execution in Trigger.dev dashboard
+- [ ] Performance benchmark with Year 3 data volume (10K opportunities, 100K activities)
+
+## Status: COMPLETE (Code Implementation)
+DOM_DASHBOARD_COMPLETE

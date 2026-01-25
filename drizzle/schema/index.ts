@@ -42,15 +42,22 @@ export * from "./communications";
 export * from "./oauth";
 
 // Automation jobs (background job tracking)
-// Note: We export the new names explicitly to avoid collision with jobs domain
+// Note: We export both naming conventions for backward compatibility
 export {
   automationJobs,
   automationJobsRelations,
+  jobs,
+  jobsRelations,
   type AutomationJob,
   type NewAutomationJob,
   type AutomationJobMetadata,
   type AutomationJobStatus,
   type AutomationJobType,
+  type Job,
+  type NewJob,
+  type JobMetadata,
+  type JobStatus,
+  type JobType,
 } from "./automation-jobs";
 
 // Jobs domain (field work assignments)

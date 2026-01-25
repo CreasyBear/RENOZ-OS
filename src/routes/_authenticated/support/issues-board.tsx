@@ -17,22 +17,22 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { LoadingState } from '@/components/shared/loading-state';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { IssueKanbanBoard, type IssueStatus } from '@/components/domain/support/issue-kanban-board';
+import { IssueKanbanBoard, type IssueStatus } from '@/components/domain/support';
 import {
   IssueQuickFilters,
   type QuickFilter,
-} from '@/components/domain/support/issue-quick-filters';
+} from '@/components/domain/support';
 import {
   IssueBulkActions,
   type BulkActionEvent,
-} from '@/components/domain/support/issue-bulk-actions';
+} from '@/components/domain/support';
 import {
   IssueStatusChangeDialog,
   type StatusChangeResult,
   type IssueStatus as DialogIssueStatus,
-} from '@/components/domain/support/issue-status-change-dialog';
+} from '@/components/domain/support';
 import { useIssuesWithSlaMetrics, useUpdateIssue } from '@/hooks/support';
-import type { IssueKanbanItem } from '@/components/domain/support/issue-kanban-card';
+import type { IssueKanbanItem } from '@/components/domain/support';
 
 // ============================================================================
 // ROUTE
@@ -206,7 +206,6 @@ function IssuesBoardPage() {
   // Handle issue click
   const handleIssueClick = (issue: IssueKanbanItem) => {
     // Navigate to issue detail page
-    // @ts-expect-error - Route file doesn't exist yet
     navigate({ to: '/support/issues/$issueId', params: { issueId: issue.id } });
   };
 
@@ -272,7 +271,6 @@ function IssuesBoardPage() {
                 <TabsTrigger value="board" className="px-3">
                   <LayoutGrid className="h-4 w-4" />
                 </TabsTrigger>
-                {/* @ts-expect-error - Route file doesn't exist yet */}
                 <Link to="/support/issues">
                   <TabsTrigger value="list" className="px-3">
                     <List className="h-4 w-4" />
@@ -285,7 +283,6 @@ function IssuesBoardPage() {
               <RefreshCw className="h-4 w-4" />
             </Button>
 
-            {/* @ts-expect-error - Route file doesn't exist yet */}
             <Link to="/support/issues/new">
               <Button>
                 <Plus className="mr-2 h-4 w-4" />

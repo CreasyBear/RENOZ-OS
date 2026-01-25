@@ -13,9 +13,9 @@ import { PageLayout, RouteErrorFallback } from '@/components/layout'
 import { InventoryTabsSkeleton } from '@/components/skeletons/inventory'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { CommunicationTimeline } from '@/components/domain/customers/communication-timeline'
-import { CommunicationTemplates } from '@/components/domain/customers/communication-templates'
-import { BulkCommunications } from '@/components/domain/customers/bulk-communications'
+import { CommunicationTimeline } from '@/components/domain/customers'
+import { CommunicationTemplates } from '@/components/domain/customers'
+import { BulkCommunications } from '@/components/domain/customers'
 
 export const Route = createFileRoute('/_authenticated/customers/communications')({
   component: CommunicationsPage,

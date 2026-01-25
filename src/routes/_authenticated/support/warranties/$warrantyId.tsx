@@ -73,7 +73,7 @@ import {
   formatClaimDate,
   formatClaimCost,
 } from '@/lib/warranty/claims-utils';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 import type { WarrantyExtensionTypeValue } from '@/lib/schemas/warranty/extensions';
 
 export const Route = createFileRoute('/_authenticated/support/warranties/$warrantyId')({

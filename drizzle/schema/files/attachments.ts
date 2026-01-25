@@ -21,8 +21,8 @@ import {
   timestamp,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
-import { organizations } from "../organizations";
-import { users } from "../users";
+import { organizations } from "../settings/organizations";
+import { users } from "../users/users";
 
 // ============================================================================
 // INTERFACES

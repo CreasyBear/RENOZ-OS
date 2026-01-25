@@ -20,7 +20,7 @@ import {
   useEffect,
   type ReactNode,
 } from "react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/hooks";
 import { getTriggeredAlerts } from "@/server/functions/alerts";
 import { getInventoryDashboard, listInventory } from "@/server/functions/inventory";
 

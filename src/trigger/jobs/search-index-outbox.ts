@@ -9,7 +9,7 @@ import { cronTrigger } from '@trigger.dev/sdk';
 import { and, asc, eq, sql } from 'drizzle-orm';
 import { client } from '../client';
 import { db } from '@/lib/db';
-import { searchIndex, searchIndexOutbox } from '@/../drizzle/schema';
+import { searchIndex, searchIndexOutbox } from 'drizzle/schema';
 
 const BATCH_SIZE = 50;
 

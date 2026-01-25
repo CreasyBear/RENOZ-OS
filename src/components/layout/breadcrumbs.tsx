@@ -5,7 +5,7 @@
  * Uses centralized ROUTE_METADATA for labels.
  * Collapses middle segments on mobile with an ellipsis dropdown.
  */
-import { Link, useRouterState } from '@tanstack/react-router'
+import { Link, useRouterState, type LinkProps } from '@tanstack/react-router'
 import { ChevronRight, Home, MoreHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBreadcrumbLabel } from '@/lib/routing'
@@ -15,6 +15,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+
+// Helper to create Link with dynamic href (bypasses strict route typing)
+type DynamicLinkProps = Omit<LinkProps, 'to'> & { to: string }
+function DynamicLink({ to, ...props }: DynamicLinkProps) {
+  return <Link to={to as LinkProps['to']} {...props} />
+}
 
 interface BreadcrumbItem {
   label: string
@@ -73,7 +79,7 @@ export function Breadcrumbs() {
                 {item.label}
               </span>
             ) : (
-              <Link
+              <DynamicLink
                 to={item.href}
                 className={cn(
                   'ml-1 text-gray-500 hover:text-gray-700 transition-colors truncate max-w-[150px]',
@@ -81,7 +87,7 @@ export function Breadcrumbs() {
                 )}
               >
                 {item.label}
-              </Link>
+              </DynamicLink>
             )}
           </div>
         ))}
@@ -93,7 +99,7 @@ export function Breadcrumbs() {
         {shouldCollapse && firstItem && !firstItem.current && (
           <div className="flex items-center">
             <ChevronRight className="h-4 w-4 text-gray-400" aria-hidden="true" />
-            <Link
+            <DynamicLink
               to={firstItem.href}
               className={cn(
                 'ml-1 text-gray-500 hover:text-gray-700 transition-colors truncate max-w-[80px]',
@@ -101,7 +107,7 @@ export function Breadcrumbs() {
               )}
             >
               {firstItem.label}
-            </Link>
+            </DynamicLink>
           </div>
         )}
 
@@ -122,7 +128,7 @@ export function Breadcrumbs() {
               <DropdownMenuContent align="start">
                 {middleItems.map((item) => (
                   <DropdownMenuItem key={item.href} asChild>
-                    <Link to={item.href}>{item.label}</Link>
+                    <DynamicLink to={item.href}>{item.label}</DynamicLink>
                   </DropdownMenuItem>
                 ))}
               </DropdownMenuContent>
@@ -156,7 +162,7 @@ export function Breadcrumbs() {
                   {item.label}
                 </span>
               ) : (
-                <Link
+                <DynamicLink
                   to={item.href}
                   className={cn(
                     'ml-1 text-gray-500 hover:text-gray-700 transition-colors truncate max-w-[100px]',
@@ -164,7 +170,7 @@ export function Breadcrumbs() {
                   )}
                 >
                   {item.label}
-                </Link>
+                </DynamicLink>
               )}
             </div>
           ))}

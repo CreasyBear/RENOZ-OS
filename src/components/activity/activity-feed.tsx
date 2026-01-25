@@ -20,7 +20,7 @@ import {
   useFlattenedActivities,
   useCanLoadMore,
   type UseActivityFeedOptions,
-} from "@/hooks/use-activities";
+} from "@/hooks";
 import { format, isToday, isYesterday, isSameDay } from "date-fns";
 import { RefreshCw, Inbox } from "lucide-react";
 import type { ActivityWithUser, ActivityEntityType } from "@/lib/schemas/activities";

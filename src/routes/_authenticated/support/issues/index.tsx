@@ -20,7 +20,6 @@ import {
   List,
   RefreshCw,
   Search,
-  Filter,
   X,
 } from 'lucide-react';
 
@@ -40,7 +39,7 @@ import { DataTable } from '@/components/shared/data-table/data-table';
 import { LoadingState } from '@/components/shared/loading-state';
 import { ErrorState } from '@/components/shared/error-state';
 import { EmptyState } from '@/components/shared/empty-state';
-import { SlaBadge } from '@/components/domain/support/sla-badge';
+import { SlaBadge } from '@/components/domain/support';
 import { useIssues } from '@/hooks/support';
 import type { IssueStatus, IssuePriority, IssueType } from '@/lib/schemas/support/issues';
 import { formatDistanceToNow } from 'date-fns';
@@ -51,7 +50,7 @@ import { formatDistanceToNow } from 'date-fns';
 
 const issuesSearchSchema = z.object({
   status: z
-    .enum(['new', 'open', 'in_progress', 'on_hold', 'escalated', 'resolved', 'closed'])
+    .enum(['open', 'in_progress', 'pending', 'on_hold', 'escalated', 'resolved', 'closed'])
     .optional(),
   priority: z.enum(['low', 'medium', 'high', 'critical']).optional(),
   type: z
@@ -93,9 +92,9 @@ export const Route = createFileRoute('/_authenticated/support/issues/')({
 // ============================================================================
 
 const STATUS_OPTIONS: { value: IssueStatus; label: string }[] = [
-  { value: 'new', label: 'New' },
   { value: 'open', label: 'Open' },
   { value: 'in_progress', label: 'In Progress' },
+  { value: 'pending', label: 'Pending' },
   { value: 'on_hold', label: 'On Hold' },
   { value: 'escalated', label: 'Escalated' },
   { value: 'resolved', label: 'Resolved' },
@@ -120,9 +119,9 @@ const TYPE_OPTIONS: { value: IssueType; label: string }[] = [
 
 // Status badge color mapping
 const STATUS_COLORS: Record<IssueStatus, string> = {
-  new: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
   open: 'bg-amber-500/10 text-amber-600 border-amber-500/20',
   in_progress: 'bg-purple-500/10 text-purple-600 border-purple-500/20',
+  pending: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
   on_hold: 'bg-slate-500/10 text-slate-600 border-slate-500/20',
   escalated: 'bg-red-500/10 text-red-600 border-red-500/20',
   resolved: 'bg-green-500/10 text-green-600 border-green-500/20',

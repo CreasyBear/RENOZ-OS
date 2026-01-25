@@ -10,7 +10,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { activities, scheduledCalls, type ActivityMetadata, type ActivitySource } from "@/../drizzle/schema";
+import { activities, scheduledCalls, type ActivityMetadata, type ActivitySource } from "drizzle/schema";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
 

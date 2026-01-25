@@ -16,7 +16,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { jobs, notifications, type JobMetadata } from '@/../drizzle/schema';
+import { jobs, notifications, type JobMetadata } from 'drizzle/schema';
 import {
   createJobSchema,
   updateJobProgressSchema,

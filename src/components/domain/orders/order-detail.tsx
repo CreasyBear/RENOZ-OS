@@ -8,6 +8,7 @@
 
 import { memo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import {
   Package,
   User,
@@ -63,7 +64,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { FormatAmount } from "@/components/shared/format";
-import { toastSuccess, toastError } from "@/hooks/use-toast";
+import { toastSuccess, toastError } from "@/hooks";
 import {
   getOrderWithCustomer,
   updateOrderStatus,
@@ -161,7 +162,7 @@ export const OrderDetail = memo(function OrderDetail({
 
   // Fetch order with customer details
   const { data: order, isLoading, error } = useQuery({
-    queryKey: ["order", orderId],
+    queryKey: queryKeys.orders.withCustomer(orderId),
     queryFn: () => getOrderWithCustomer({ data: { id: orderId } }),
     refetchInterval: 30000, // Poll every 30s for status changes
   });
@@ -181,8 +182,8 @@ export const OrderDetail = memo(function OrderDetail({
     },
     onSuccess: () => {
       toastSuccess("Order status updated");
-      queryClient.invalidateQueries({ queryKey: ["order", orderId] });
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.withCustomer(orderId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
     },
     onError: () => {
       toastError("Failed to update status");
@@ -196,7 +197,7 @@ export const OrderDetail = memo(function OrderDetail({
     },
     onSuccess: (result) => {
       toastSuccess(`Order duplicated as ${result.orderNumber}`);
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
       onDuplicate?.(result.id);
     },
     onError: () => {
@@ -211,7 +212,7 @@ export const OrderDetail = memo(function OrderDetail({
     },
     onSuccess: () => {
       toastSuccess("Order deleted");
-      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
       onBack?.();
     },
     onError: () => {

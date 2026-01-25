@@ -13,7 +13,7 @@ import { Plus, Download } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { PipelineKanbanSkeleton } from "@/components/skeletons/pipeline";
 import { Button } from "@/components/ui/button";
-import { toastSuccess, toastError } from "@/hooks/use-toast";
+import { toastSuccess, toastError } from "@/hooks";
 import {
   PipelineBoard,
   PipelineMetrics,

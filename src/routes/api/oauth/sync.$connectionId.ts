@@ -6,7 +6,7 @@
 
 import { withAuth } from '@/lib/server/protected';
 import { db } from '@/lib/db';
-import { oauthConnections } from '@/../drizzle/schema';
+import { oauthConnections } from 'drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { syncCalendar } from '@/server/functions/oauth/calendar-sync';
 import { syncEmails } from '@/server/functions/oauth/email-sync';

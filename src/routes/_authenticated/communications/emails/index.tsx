@@ -6,10 +6,14 @@
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
-import { useScheduledEmails, useCancelScheduledEmail } from "@/hooks/communications";
-import { ScheduledEmailsList } from "@/components/domain/communications/scheduled-emails-list";
-import { ScheduleEmailDialog } from "@/components/domain/communications/schedule-email-dialog";
-import { toastSuccess, toastError } from "@/hooks/use-toast";
+import {
+  useScheduledEmails,
+  useCancelScheduledEmail,
+  type UseScheduledEmailsOptions,
+} from "@/hooks/communications";
+import { ScheduledEmailsList } from "@/components/domain/communications";
+import { ScheduleEmailDialog } from "@/components/domain/communications";
+import { toastSuccess, toastError } from "@/hooks";
 import { ErrorState } from "@/components/shared";
 import { RouteErrorFallback } from "@/components/layout";
 import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
@@ -32,7 +36,7 @@ export const Route = createFileRoute("/_authenticated/communications/emails/")({
 
 function ScheduledEmailsContainer() {
   const navigate = useNavigate();
-  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
+  const [statusFilter, _setStatusFilter] = useState<string | undefined>(undefined);
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
 
@@ -45,7 +49,7 @@ function ScheduledEmailsContainer() {
     error,
     refetch,
   } = useScheduledEmails({
-    status: statusFilter as Parameters<typeof useScheduledEmails>[0]["status"],
+    status: statusFilter as UseScheduledEmailsOptions["status"],
   });
 
   // ============================================================================
@@ -87,7 +91,7 @@ function ScheduledEmailsContainer() {
     return (
       <ErrorState
         title="Failed to load scheduled emails"
-        description="There was an error loading your scheduled emails."
+        message="There was an error loading your scheduled emails."
         onRetry={() => refetch()}
       />
     );

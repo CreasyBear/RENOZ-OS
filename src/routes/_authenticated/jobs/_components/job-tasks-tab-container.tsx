@@ -1,4 +1,4 @@
-import { JobTasksTab } from '@/components/domain/jobs/job-tasks-tab';
+import { JobTasksTab } from '@/components/domain/jobs';
 import {
   useJobTasks,
   useCreateTask,

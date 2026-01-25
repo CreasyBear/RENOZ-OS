@@ -13,8 +13,8 @@ import { toast } from 'sonner';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SupportDetailSkeleton } from '@/components/skeletons/support';
 import { Button } from '@/components/ui/button';
-import { RmaDetailCard } from '@/components/domain/support/rma-detail-card';
-import { RmaWorkflowActions } from '@/components/domain/support/rma-workflow-actions';
+import { RmaDetailCard } from '@/components/domain/support';
+import { RmaWorkflowActions } from '@/components/domain/support';
 import {
   useRma,
   useApproveRma,
@@ -65,7 +65,7 @@ function RmaDetailPage() {
   // Workflow handlers
   const handleApprove = async (notes?: string) => {
     try {
-      await approveMutation.mutateAsync({ rmaId, approvalNotes: notes });
+      await approveMutation.mutateAsync({ rmaId, notes: notes ?? null });
       toast.success('RMA approved successfully');
     } catch {
       toast.error('Failed to approve RMA');
@@ -88,10 +88,10 @@ function RmaDetailPage() {
         inspectionNotes: inspectionNotes
           ? {
               condition: inspectionNotes.condition as
-                | 'as_described'
-                | 'minor_damage'
-                | 'major_damage'
-                | 'not_as_described'
+                | 'good'
+                | 'damaged'
+                | 'defective'
+                | 'missing_parts'
                 | undefined,
               notes: inspectionNotes.notes,
             }

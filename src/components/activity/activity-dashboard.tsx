@@ -46,7 +46,7 @@ import type { DateRange } from "react-day-picker";
 import { ActivityTrendChart, ActionDistributionChart, EntityBreakdownChart } from "./activity-charts";
 import { ActivityHeatmap } from "./activity-heatmap";
 import { ActivityLeaderboard } from "./activity-leaderboard";
-import { useActivityStats } from "@/hooks/use-activities";
+import { useActivityStats } from "@/hooks";
 
 // ============================================================================
 // TYPES

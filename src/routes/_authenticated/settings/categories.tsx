@@ -12,9 +12,9 @@ import { SettingsTreeSkeleton } from '@/components/skeletons/settings';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageLayout } from "@/components/layout/page-layout";
-import { CategoryTree } from "@/components/domain/products/category-tree";
-import type { CategoryNode } from "@/components/domain/products/category-tree";
-import { CategoryEditor } from "@/components/domain/products/category-editor";
+import { CategoryTree } from "@/components/domain/products";
+import type { CategoryNode } from "@/components/domain/products";
+import { CategoryEditor } from "@/components/domain/products";
 import {
   getCategoryTree,
   createCategory,

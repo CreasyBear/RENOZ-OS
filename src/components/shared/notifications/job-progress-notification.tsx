@@ -26,8 +26,8 @@ import {
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { useReducedMotion } from "@/hooks/use-reduced-motion";
-import type { Job, JobStatus, JobType, JobMetadata } from "@/../drizzle/schema/jobs";
+import { useReducedMotion } from "@/hooks";
+import type { Job, JobStatus, JobType, JobMetadata } from "drizzle/schema";
 
 // ============================================================================
 // JOB TYPE ICONS

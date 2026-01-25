@@ -24,7 +24,7 @@ import {
   ArrowLeftRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/hooks";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {

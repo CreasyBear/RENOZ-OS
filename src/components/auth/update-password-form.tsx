@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { createClient } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -20,7 +20,6 @@ export function UpdatePasswordForm({ className, ...props }: React.ComponentProps
     setError(null);
 
     try {
-      const supabase = createClient();
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       // Update this route to redirect to an authenticated route. The user already has an active session.

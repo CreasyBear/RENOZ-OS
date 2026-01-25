@@ -1,9 +1,11 @@
 import { redirect } from '@tanstack/react-router';
 import { createServerFn } from '@tanstack/react-start';
-import { createClient } from '@/lib/supabase/server';
+import { getRequest } from '@tanstack/react-start/server';
+import { createServerSupabase } from '@/lib/supabase/server';
 
 export const logoutFn = createServerFn().handler(async () => {
-  const supabase = createClient();
+  const request = getRequest();
+  const supabase = createServerSupabase(request);
   const { error } = await supabase.auth.signOut();
 
   if (error) {

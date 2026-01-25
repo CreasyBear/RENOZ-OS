@@ -26,7 +26,7 @@ import {
   AlertCircle,
   AlertTriangle,
 } from "lucide-react";
-import { DateRange as DayPickerRange } from "react-day-picker";
+import type { DateRange as DayPickerRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
 import {
   type DateRange,
@@ -131,7 +131,7 @@ function CustomRangePicker({
   onChange,
   onApply,
   onReset,
-  onClose,
+  onClose: _onClose,
 }: CustomRangePickerProps) {
   const [tempRange, setTempRange] = React.useState<DayPickerRange | undefined>({
     from: value.from,

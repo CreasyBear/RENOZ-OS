@@ -27,7 +27,7 @@ import {
   winLossReasons,
   customers,
   contacts,
-} from "@/../drizzle/schema";
+} from "drizzle/schema";
 import {
   createOpportunitySchema,
   updateOpportunitySchema,
@@ -73,9 +73,8 @@ function getDefaultProbability(stage: OpportunityStage): number {
  */
 export const listOpportunities = createServerFn({ method: "GET" })
   .inputValidator(opportunityListQuerySchema)
-  // @ts-expect-error - TanStack Start type issue: handler expects ServerFn type but we provide function with ServerFnCtx
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? "opportunity:read" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const {
       page,
@@ -207,9 +206,8 @@ export const listOpportunities = createServerFn({ method: "GET" })
  */
 export const getOpportunity = createServerFn({ method: "GET" })
   .inputValidator(opportunityParamsSchema)
-  // @ts-expect-error - TanStack Start type issue: handler expects ServerFn type but we provide function with ServerFnCtx
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? "opportunity:read" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { id } = data;
 
@@ -294,9 +292,8 @@ export const getOpportunity = createServerFn({ method: "GET" })
  */
 export const createOpportunity = createServerFn({ method: "POST" })
   .inputValidator(createOpportunitySchema)
-  // @ts-expect-error - TanStack Start type issue: handler expects ServerFn type but we provide function with ServerFnCtx
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.create ?? "opportunity:create" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.create });
 
     const {
       title,
@@ -329,7 +326,7 @@ export const createOpportunity = createServerFn({ method: "POST" })
         probability: actualProbability,
         value,
         weightedValue,
-        expectedCloseDate: expectedCloseDate?.toISOString().split('T')[0] ?? null,
+        expectedCloseDate: expectedCloseDate ?? null,
         metadata: metadata ?? {},
         tags: tags ?? [],
         daysInStage: 0,
@@ -351,9 +348,8 @@ export const createOpportunity = createServerFn({ method: "POST" })
  */
 export const updateOpportunity = createServerFn({ method: "POST" })
   .inputValidator(opportunityParamsSchema.merge(updateOpportunitySchema))
-  // @ts-expect-error - TanStack Start type issue: handler expects ServerFn type but we provide function with ServerFnCtx
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.update ?? "opportunity:update" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.update });
 
     const { id, version, ...updates } = data;
 
@@ -403,7 +399,7 @@ export const updateOpportunity = createServerFn({ method: "POST" })
       updateData.weightedValue = calculateWeightedValue(val, updates.probability);
     }
     if (updates.expectedCloseDate !== undefined) {
-      updateData.expectedCloseDate = updates.expectedCloseDate?.toISOString().split('T')[0] ?? null;
+      updateData.expectedCloseDate = updates.expectedCloseDate ?? null;
     }
     if (updates.metadata !== undefined) updateData.metadata = updates.metadata;
     if (updates.tags !== undefined) updateData.tags = updates.tags;
@@ -426,9 +422,8 @@ export const updateOpportunity = createServerFn({ method: "POST" })
  */
 export const updateOpportunityStage = createServerFn({ method: "POST" })
   .inputValidator(opportunityParamsSchema.merge(updateOpportunityStageSchema))
-  // @ts-expect-error - TanStack Start type issue: handler expects ServerFn type but we provide function with ServerFnCtx
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.update ?? "opportunity:update" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.update });
 
     const { id, stage, probability, winLossReasonId, lostNotes, competitorName, version } = data;
 
@@ -521,7 +516,7 @@ export const updateOpportunityStage = createServerFn({ method: "POST" })
 export const deleteOpportunity = createServerFn({ method: "POST" })
   .inputValidator(opportunityParamsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.delete ?? "opportunity:delete" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.delete });
 
     const { id } = data;
 
@@ -564,7 +559,7 @@ export const deleteOpportunity = createServerFn({ method: "POST" })
 export const getPipelineMetrics = createServerFn({ method: "GET" })
   .inputValidator(pipelineMetricsQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? "opportunity:read" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { dateFrom, dateTo, assignedTo, customerId } = data;
 
@@ -652,7 +647,7 @@ export const getPipelineMetrics = createServerFn({ method: "GET" })
 export const convertToOrder = createServerFn({ method: "POST" })
   .inputValidator(opportunityParamsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.update ?? "opportunity:update" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.update });
 
     const { id } = data;
 
@@ -705,7 +700,7 @@ export const listActivities = createServerFn({ method: "GET" })
     paginationSchema.merge(opportunityActivityFilterSchema)
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? "opportunity:read" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const {
       page = 1,
@@ -776,7 +771,7 @@ export const listActivities = createServerFn({ method: "GET" })
 export const getActivity = createServerFn({ method: "GET" })
   .inputValidator(opportunityActivityParamsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? "opportunity:read" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { id } = data;
 
@@ -805,7 +800,7 @@ export const getActivity = createServerFn({ method: "GET" })
 export const logActivity = createServerFn({ method: "POST" })
   .inputValidator(createOpportunityActivitySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.update ?? "opportunity:update" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.update });
 
     const {
       opportunityId,
@@ -861,7 +856,7 @@ export const updateActivity = createServerFn({ method: "POST" })
     )
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.update ?? "opportunity:update" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.update });
 
     const { id, ...updates } = data;
 
@@ -913,7 +908,7 @@ export const completeActivity = createServerFn({ method: "POST" })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.update ?? "opportunity:update" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.update });
 
     const { id, outcome } = data;
 
@@ -951,7 +946,7 @@ export const completeActivity = createServerFn({ method: "POST" })
 export const deleteActivity = createServerFn({ method: "POST" })
   .inputValidator(opportunityActivityParamsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.update ?? "opportunity:update" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.update });
 
     const { id } = data;
 
@@ -990,7 +985,7 @@ export const getActivityTimeline = createServerFn({ method: "GET" })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? "opportunity:read" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { opportunityId, days } = data;
 
@@ -1054,7 +1049,7 @@ export const getUpcomingFollowUps = createServerFn({ method: "GET" })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? "opportunity:read" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { days, opportunityId, assignedTo } = data;
 
@@ -1138,7 +1133,7 @@ export const getActivityAnalytics = createServerFn({ method: "GET" })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? "opportunity:read" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { dateFrom, dateTo, opportunityId } = data;
 
@@ -1238,7 +1233,7 @@ import {
 export const getPipelineForecast = createServerFn({ method: "GET" })
   .inputValidator(forecastQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? "opportunity:read" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const {
       startDate,
@@ -1250,12 +1245,12 @@ export const getPipelineForecast = createServerFn({ method: "GET" })
       stages,
     } = data;
 
-    // Build base conditions
+    // Build base conditions - startDate and endDate are already YYYY-MM-DD strings
     const conditions = [
       eq(opportunities.organizationId, ctx.organizationId),
       isNull(opportunities.deletedAt),
-      gte(opportunities.expectedCloseDate, startDate.toISOString().split('T')[0]),
-      lte(opportunities.expectedCloseDate, endDate.toISOString().split('T')[0]),
+      gte(opportunities.expectedCloseDate, startDate),
+      lte(opportunities.expectedCloseDate, endDate),
     ];
 
     if (assignedTo) {
@@ -1331,7 +1326,7 @@ export const getPipelineForecast = createServerFn({ method: "GET" })
       forecast,
       summary,
       groupBy,
-      dateRange: { startDate, endDate },
+      dateRange: { startDate: new Date(startDate), endDate: new Date(endDate) },
     };
   });
 
@@ -1341,16 +1336,16 @@ export const getPipelineForecast = createServerFn({ method: "GET" })
 export const getForecastByEntity = createServerFn({ method: "GET" })
   .inputValidator(forecastQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? "opportunity:read" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { startDate, endDate, groupBy, assignedTo, customerId } = data;
 
-    // Build conditions
+    // Build conditions - startDate and endDate are already YYYY-MM-DD strings
     const conditions = [
       eq(opportunities.organizationId, ctx.organizationId),
       isNull(opportunities.deletedAt),
-      gte(opportunities.expectedCloseDate, startDate.toISOString().split('T')[0]),
-      lte(opportunities.expectedCloseDate, endDate.toISOString().split('T')[0]),
+      gte(opportunities.expectedCloseDate, startDate),
+      lte(opportunities.expectedCloseDate, endDate),
     ];
 
     if (assignedTo) {
@@ -1439,7 +1434,7 @@ export const getForecastByEntity = createServerFn({ method: "GET" })
 export const getPipelineVelocity = createServerFn({ method: "GET" })
   .inputValidator(velocityQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? "opportunity:read" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { dateFrom, dateTo } = data;
 
@@ -1511,8 +1506,9 @@ export const getPipelineVelocity = createServerFn({ method: "GET" })
     const closedCount = wonCount + lostCount;
 
     // Calculate pipeline velocity (won value per day)
+    // dateFrom and dateTo are optional YYYY-MM-DD strings
     const daysInRange = dateFrom && dateTo
-      ? Math.max(1, Math.ceil((dateTo.getTime() - dateFrom.getTime()) / 86400000))
+      ? Math.max(1, Math.ceil((new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400000))
       : 30; // Default 30 days
     const totalWonValue = Number(wonOpportunities[0]?.totalWonValue ?? 0);
     const pipelineVelocity = Math.round(totalWonValue / daysInRange);
@@ -1535,16 +1531,17 @@ export const getPipelineVelocity = createServerFn({ method: "GET" })
 export const getRevenueAttribution = createServerFn({ method: "GET" })
   .inputValidator(revenueAttributionQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.opportunity?.read ?? "opportunity:read" });
+    const ctx = await withAuth({ permission: PERMISSIONS.opportunity.read });
 
     const { dateFrom, dateTo, groupBy } = data;
 
     // Base conditions for closed opportunities in date range
+    // dateFrom and dateTo are YYYY-MM-DD strings from the schema
     const conditions = [
       eq(opportunities.organizationId, ctx.organizationId),
       isNull(opportunities.deletedAt),
-      gte(opportunities.actualCloseDate, dateFrom.toISOString().split('T')[0]),
-      lte(opportunities.actualCloseDate, dateTo.toISOString().split('T')[0]),
+      gte(opportunities.actualCloseDate, dateFrom),
+      lte(opportunities.actualCloseDate, dateTo),
       or(eq(opportunities.stage, "won"), eq(opportunities.stage, "lost")),
     ];
 

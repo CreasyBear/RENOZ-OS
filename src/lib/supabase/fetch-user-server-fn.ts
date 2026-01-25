@@ -32,8 +32,8 @@ export const fetchUser: () => Promise<SSRSafeUser | null> = createServerFn({
   }
 
   // PRODUCTION: Use real Supabase auth
-  const { createClient } = await import('~/lib/supabase/server');
-  const supabase = createClient();
+  const { createServerSupabase } = await import('~/lib/supabase/server');
+  const supabase = createServerSupabase();
   const { data, error } = await supabase.auth.getUser();
 
   if (error || !data.user) {

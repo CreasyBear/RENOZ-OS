@@ -10,7 +10,7 @@
 
 import { z } from 'zod';
 import { idParamSchema, paginationSchema } from '../_shared/patterns';
-import { userRoleSchema, userRoleValues } from '../auth/auth';
+import { userRoleSchema } from '../auth/auth';
 
 // ============================================================================
 // DASHBOARD WIDGET TYPES

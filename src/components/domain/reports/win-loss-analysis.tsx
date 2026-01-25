@@ -8,6 +8,7 @@
 
 import { memo, useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import {
   Trophy,
   XCircle,
@@ -96,7 +97,7 @@ export const WinLossAnalysis = memo(function WinLossAnalysis({
 
   // Fetch analysis data
   const analysisQuery = useQuery({
-    queryKey: ["win-loss-analysis", dateFrom.toISOString(), dateTo.toISOString()],
+    queryKey: queryKeys.reports.winLossAnalysis(dateFrom.toISOString(), dateTo.toISOString()),
     queryFn: async () => {
       const result = await getWinLossAnalysis({
         data: { dateFrom, dateTo },
@@ -107,7 +108,7 @@ export const WinLossAnalysis = memo(function WinLossAnalysis({
 
   // Fetch competitors
   const competitorsQuery = useQuery({
-    queryKey: ["competitors", dateFrom.toISOString(), dateTo.toISOString()],
+    queryKey: queryKeys.reports.competitors(dateFrom.toISOString(), dateTo.toISOString()),
     queryFn: async () => {
       const result = await getCompetitors({
         data: { dateFrom, dateTo },

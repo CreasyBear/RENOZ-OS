@@ -14,7 +14,7 @@ import {
   products,
   inventory,
   inventoryMovements,
-  locations,
+  warehouseLocations,
 } from "../../../../drizzle/schema";
 import { withAuth } from "../protected";
 import { NotFoundError, ValidationError } from "../errors";
@@ -32,7 +32,7 @@ import {
 // TYPES
 // ============================================================================
 
-type Location = typeof locations.$inferSelect;
+type Location = typeof warehouseLocations.$inferSelect;
 type Inventory = typeof inventory.$inferSelect;
 type InventoryMovement = typeof inventoryMovements.$inferSelect;
 type Product = typeof products.$inferSelect;
@@ -95,10 +95,10 @@ export const listLocations = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
-    const conditions = [eq(locations.organizationId, ctx.organizationId)];
+    const conditions = [eq(warehouseLocations.organizationId, ctx.organizationId)];
 
     if (data.isActive !== undefined) {
-      conditions.push(eq(locations.isActive, data.isActive));
+      conditions.push(eq(warehouseLocations.isActive, data.isActive));
     }
 
     const offset = (data.page - 1) * data.limit;
@@ -106,14 +106,14 @@ export const listLocations = createServerFn({ method: "GET" })
     const [results, countResult] = await Promise.all([
       db
         .select()
-        .from(locations)
+        .from(warehouseLocations)
         .where(and(...conditions))
-        .orderBy(asc(locations.name))
+        .orderBy(asc(warehouseLocations.name))
         .limit(data.limit)
         .offset(offset),
       db
         .select({ count: sql<number>`count(*)::int` })
-        .from(locations)
+        .from(warehouseLocations)
         .where(and(...conditions)),
     ]);
 
@@ -135,11 +135,11 @@ export const getLocation = createServerFn({ method: "GET" })
 
     const [location] = await db
       .select()
-      .from(locations)
+      .from(warehouseLocations)
       .where(
         and(
-          eq(locations.id, data.id),
-          eq(locations.organizationId, ctx.organizationId)
+          eq(warehouseLocations.id, data.id),
+          eq(warehouseLocations.organizationId, ctx.organizationId)
         )
       )
       .limit(1);
@@ -161,12 +161,12 @@ export const createLocation = createServerFn({ method: "POST" })
 
     // Check for duplicate code
     const [existing] = await db
-      .select({ id: locations.id })
-      .from(locations)
+      .select({ id: warehouseLocations.id })
+      .from(warehouseLocations)
       .where(
         and(
-          eq(locations.organizationId, ctx.organizationId),
-          eq(locations.code, data.code)
+          eq(warehouseLocations.organizationId, ctx.organizationId),
+          eq(warehouseLocations.locationCode, data.code)
         )
       )
       .limit(1);
@@ -175,25 +175,44 @@ export const createLocation = createServerFn({ method: "POST" })
       throw new ValidationError("Location code already exists", { code: ["Location code already exists"] });
     }
 
-    // If setting as default, unset other defaults
+    // If setting as default, unset other defaults (stored in attributes JSON)
     if (data.isDefault) {
-      await db
-        .update(locations)
-        .set({ isDefault: false })
-        .where(eq(locations.organizationId, ctx.organizationId));
+      // For existing locations with isDefault in attributes, we'd need to update JSON
+      // This is a simplified implementation - in production, you'd want a SQL JSONB update
+      const existingDefault = await db
+        .select()
+        .from(warehouseLocations)
+        .where(
+          and(
+            eq(warehouseLocations.organizationId, ctx.organizationId),
+            sql`${warehouseLocations.attributes}->>'isDefault' = 'true'`
+          )
+        );
+
+      for (const loc of existingDefault) {
+        await db
+          .update(warehouseLocations)
+          .set({
+            attributes: { ...loc.attributes, isDefault: false },
+          })
+          .where(eq(warehouseLocations.id, loc.id));
+      }
     }
 
     const [location] = await db
-      .insert(locations)
+      .insert(warehouseLocations)
       .values({
         organizationId: ctx.organizationId,
-        code: data.code,
+        locationCode: data.code,
         name: data.name,
-        description: data.description,
-        address: data.address ?? {},
+        locationType: "warehouse", // Default to warehouse type
         isActive: data.isActive ?? true,
-        isDefault: data.isDefault ?? false,
-        allowNegative: data.allowNegative ?? false,
+        attributes: {
+          description: data.description,
+          address: data.address ?? {},
+          isDefault: data.isDefault ?? false,
+          allowNegative: data.allowNegative ?? false,
+        },
         createdBy: ctx.user.id,
         updatedBy: ctx.user.id,
       })
@@ -215,14 +234,14 @@ export const updateLocation = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
-    // Verify location exists
+    // Verify location exists and get current data
     const [existing] = await db
-      .select({ id: locations.id })
-      .from(locations)
+      .select()
+      .from(warehouseLocations)
       .where(
         and(
-          eq(locations.id, data.id),
-          eq(locations.organizationId, ctx.organizationId)
+          eq(warehouseLocations.id, data.id),
+          eq(warehouseLocations.organizationId, ctx.organizationId)
         )
       )
       .limit(1);
@@ -234,13 +253,13 @@ export const updateLocation = createServerFn({ method: "POST" })
     // Check for duplicate code if changing
     if (data.data.code) {
       const [duplicate] = await db
-        .select({ id: locations.id })
-        .from(locations)
+        .select({ id: warehouseLocations.id })
+        .from(warehouseLocations)
         .where(
           and(
-            eq(locations.organizationId, ctx.organizationId),
-            eq(locations.code, data.data.code),
-            sql`${locations.id} != ${data.id}`
+            eq(warehouseLocations.organizationId, ctx.organizationId),
+            eq(warehouseLocations.locationCode, data.data.code),
+            sql`${warehouseLocations.id} != ${data.id}`
           )
         )
         .limit(1);
@@ -250,30 +269,71 @@ export const updateLocation = createServerFn({ method: "POST" })
       }
     }
 
-    // If setting as default, unset other defaults
+    // If setting as default, unset other defaults (stored in attributes JSON)
     if (data.data.isDefault) {
-      await db
-        .update(locations)
-        .set({ isDefault: false })
+      const existingDefault = await db
+        .select()
+        .from(warehouseLocations)
         .where(
           and(
-            eq(locations.organizationId, ctx.organizationId),
-            sql`${locations.id} != ${data.id}`
+            eq(warehouseLocations.organizationId, ctx.organizationId),
+            sql`${warehouseLocations.attributes}->>'isDefault' = 'true'`,
+            sql`${warehouseLocations.id} != ${data.id}`
           )
         );
+
+      for (const loc of existingDefault) {
+        await db
+          .update(warehouseLocations)
+          .set({
+            attributes: { ...loc.attributes, isDefault: false },
+          })
+          .where(eq(warehouseLocations.id, loc.id));
+      }
     }
 
+    // Build update values - map from input schema to warehouseLocations schema
+    const updateValues: Record<string, unknown> = {
+      updatedBy: ctx.user.id,
+      updatedAt: new Date(),
+    };
+
+    if (data.data.code !== undefined) {
+      updateValues.locationCode = data.data.code;
+    }
+    if (data.data.name !== undefined) {
+      updateValues.name = data.data.name;
+    }
+    if (data.data.isActive !== undefined) {
+      updateValues.isActive = data.data.isActive;
+    }
+
+    // Handle attributes that go into the JSON column
+    const currentAttributes = existing.attributes || {};
+    const newAttributes = { ...currentAttributes };
+
+    if (data.data.description !== undefined) {
+      newAttributes.description = data.data.description;
+    }
+    if (data.data.address !== undefined) {
+      newAttributes.address = data.data.address;
+    }
+    if (data.data.isDefault !== undefined) {
+      newAttributes.isDefault = data.data.isDefault;
+    }
+    if (data.data.allowNegative !== undefined) {
+      newAttributes.allowNegative = data.data.allowNegative;
+    }
+
+    updateValues.attributes = newAttributes;
+
     const [location] = await db
-      .update(locations)
-      .set({
-        ...data.data,
-        updatedBy: ctx.user.id,
-        updatedAt: new Date(),
-      })
+      .update(warehouseLocations)
+      .set(updateValues)
       .where(
         and(
-          eq(locations.id, data.id),
-          eq(locations.organizationId, ctx.organizationId)
+          eq(warehouseLocations.id, data.id),
+          eq(warehouseLocations.organizationId, ctx.organizationId)
         )
       )
       .returning();
@@ -303,7 +363,7 @@ export const deleteLocation = createServerFn({ method: "POST" })
     if ((hasInventory?.count ?? 0) > 0) {
       // Soft delete - just deactivate
       await db
-        .update(locations)
+        .update(warehouseLocations)
         .set({
           isActive: false,
           updatedBy: ctx.user.id,
@@ -311,8 +371,8 @@ export const deleteLocation = createServerFn({ method: "POST" })
         })
         .where(
           and(
-            eq(locations.id, data.id),
-            eq(locations.organizationId, ctx.organizationId)
+            eq(warehouseLocations.id, data.id),
+            eq(warehouseLocations.organizationId, ctx.organizationId)
           )
         );
 
@@ -321,11 +381,11 @@ export const deleteLocation = createServerFn({ method: "POST" })
 
     // Hard delete if no inventory
     await db
-      .delete(locations)
+      .delete(warehouseLocations)
       .where(
         and(
-          eq(locations.id, data.id),
-          eq(locations.organizationId, ctx.organizationId)
+          eq(warehouseLocations.id, data.id),
+          eq(warehouseLocations.organizationId, ctx.organizationId)
         )
       );
 
@@ -370,22 +430,22 @@ export const getProductInventory = createServerFn({ method: "GET" })
       .select({
         inventoryId: inventory.id,
         locationId: inventory.locationId,
-        locationCode: locations.code,
-        locationName: locations.name,
+        locationCode: warehouseLocations.locationCode,
+        locationName: warehouseLocations.name,
         quantityOnHand: inventory.quantityOnHand,
         quantityAllocated: inventory.quantityAllocated,
         quantityAvailable: inventory.quantityAvailable,
         totalValue: inventory.totalValue,
       })
       .from(inventory)
-      .innerJoin(locations, eq(inventory.locationId, locations.id))
+      .innerJoin(warehouseLocations, eq(inventory.locationId, warehouseLocations.id))
       .where(
         and(
           eq(inventory.productId, data.productId),
           eq(inventory.organizationId, ctx.organizationId)
         )
       )
-      .orderBy(asc(locations.name));
+      .orderBy(asc(warehouseLocations.name));
 
     const summary: ProductInventorySummary = {
       productId: product.id,
@@ -516,7 +576,6 @@ export const getLocationInventory = createServerFn({ method: "GET" })
  */
 export const recordMovement = createServerFn({ method: "POST" })
   .inputValidator(createMovementSchema)
-  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -539,14 +598,15 @@ export const recordMovement = createServerFn({ method: "POST" })
 
       // Check for negative inventory
       if (newQuantity < 0) {
-        // Check if location allows negative
+        // Check if location allows negative (stored in attributes JSON)
         const [location] = await tx
-          .select({ allowNegative: locations.allowNegative })
-          .from(locations)
-          .where(eq(locations.id, data.locationId))
+          .select({ attributes: warehouseLocations.attributes })
+          .from(warehouseLocations)
+          .where(eq(warehouseLocations.id, data.locationId))
           .limit(1);
 
-        if (!location?.allowNegative) {
+        const allowNegative = location?.attributes?.allowNegative ?? false;
+        if (!allowNegative) {
           throw new ValidationError(
             `Insufficient stock. Available: ${previousQuantity}, Requested: ${Math.abs(data.quantity)}`,
             { quantity: [`Insufficient stock. Available: ${previousQuantity}, Requested: ${Math.abs(data.quantity)}`] }
@@ -554,6 +614,7 @@ export const recordMovement = createServerFn({ method: "POST" })
         }
       }
 
+      // Note: quantityAvailable is a generated column (quantityOnHand - quantityAllocated)
       if (!inv) {
         // Create new inventory record
         [inv] = await tx
@@ -565,7 +626,6 @@ export const recordMovement = createServerFn({ method: "POST" })
             status: "available",
             quantityOnHand: data.quantity,
             quantityAllocated: 0,
-            quantityAvailable: data.quantity,
             unitCost: data.unitCost ?? 0,
             totalValue: (data.unitCost ?? 0) * data.quantity,
             createdBy: ctx.user.id,
@@ -574,14 +634,12 @@ export const recordMovement = createServerFn({ method: "POST" })
           .returning();
       } else {
         // Update existing inventory
-        const allocated = Number(inv.quantityAllocated) || 0;
         const unitCost = data.unitCost ?? Number(inv.unitCost) ?? 0;
 
         [inv] = await tx
           .update(inventory)
           .set({
             quantityOnHand: newQuantity,
-            quantityAvailable: newQuantity - allocated,
             unitCost: unitCost,
             totalValue: unitCost * newQuantity,
             updatedBy: ctx.user.id,
@@ -635,7 +693,6 @@ export const receiveStock = createServerFn({ method: "POST" })
       notes: z.string().optional(),
     })
   )
-  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     return recordMovement({
       data: {
@@ -659,7 +716,6 @@ export const allocateStock = createServerFn({ method: "POST" })
       notes: z.string().optional(),
     })
   )
-  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -694,11 +750,11 @@ export const allocateStock = createServerFn({ method: "POST" })
       const newAvailable = available - data.quantity;
 
       // Update inventory
+      // Note: quantityAvailable is a generated column (quantityOnHand - quantityAllocated)
       await tx
         .update(inventory)
         .set({
           quantityAllocated: newAllocated,
-          quantityAvailable: newAvailable,
           updatedBy: ctx.user.id,
           updatedAt: new Date(),
         })
@@ -750,7 +806,6 @@ export const deallocateStock = createServerFn({ method: "POST" })
       notes: z.string().optional(),
     })
   )
-  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -785,11 +840,11 @@ export const deallocateStock = createServerFn({ method: "POST" })
       const newAvailable = previousAvailable + data.quantity;
 
       // Update inventory
+      // Note: quantityAvailable is a generated column (quantityOnHand - quantityAllocated)
       await tx
         .update(inventory)
         .set({
           quantityAllocated: newAllocated,
-          quantityAvailable: newAvailable,
           updatedBy: ctx.user.id,
           updatedAt: new Date(),
         })
@@ -830,7 +885,6 @@ export const deallocateStock = createServerFn({ method: "POST" })
  */
 export const adjustStock = createServerFn({ method: "POST" })
   .inputValidator(stockAdjustmentSchema)
-  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     return recordMovement({
       data: {
@@ -849,7 +903,6 @@ export const adjustStock = createServerFn({ method: "POST" })
  */
 export const transferStock = createServerFn({ method: "POST" })
   .inputValidator(stockTransferSchema)
-  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -880,6 +933,7 @@ export const transferStock = createServerFn({ method: "POST" })
       }
 
       // Deduct from source
+      // Note: quantityAvailable is a generated column (quantityOnHand - quantityAllocated)
       const sourceOnHand = Number(sourceInv.quantityOnHand) || 0;
       const newSourceOnHand = sourceOnHand - data.quantity;
       const sourceAllocated = Number(sourceInv.quantityAllocated) || 0;
@@ -890,7 +944,6 @@ export const transferStock = createServerFn({ method: "POST" })
         .update(inventory)
         .set({
           quantityOnHand: newSourceOnHand,
-          quantityAvailable: newSourceAvailable,
           totalValue: unitCost * newSourceOnHand,
           updatedBy: ctx.user.id,
           updatedAt: new Date(),
@@ -942,7 +995,6 @@ export const transferStock = createServerFn({ method: "POST" })
             status: "available",
             quantityOnHand: data.quantity,
             quantityAllocated: 0,
-            quantityAvailable: data.quantity,
             unitCost: unitCost,
             totalValue: unitCost * data.quantity,
             createdBy: ctx.user.id,
@@ -951,13 +1003,10 @@ export const transferStock = createServerFn({ method: "POST" })
           .returning();
       } else {
         // Update existing destination inventory
-        const destAllocated = Number(destInv.quantityAllocated) || 0;
-
         [destInv] = await tx
           .update(inventory)
           .set({
             quantityOnHand: destNewOnHand,
-            quantityAvailable: destNewOnHand - destAllocated,
             totalValue: unitCost * destNewOnHand,
             updatedBy: ctx.user.id,
             updatedAt: new Date(),
@@ -1016,7 +1065,6 @@ export const getProductMovements = createServerFn({ method: "GET" })
       locationId: z.string().uuid().optional(),
     })
   )
-  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -1045,14 +1093,14 @@ export const getProductMovements = createServerFn({ method: "GET" })
             name: products.name,
           },
           location: {
-            id: locations.id,
-            code: locations.code,
-            name: locations.name,
+            id: warehouseLocations.id,
+            code: warehouseLocations.locationCode,
+            name: warehouseLocations.name,
           },
         })
         .from(inventoryMovements)
         .innerJoin(products, eq(inventoryMovements.productId, products.id))
-        .innerJoin(locations, eq(inventoryMovements.locationId, locations.id))
+        .innerJoin(warehouseLocations, eq(inventoryMovements.locationId, warehouseLocations.id))
         .where(and(...conditions))
         .orderBy(desc(inventoryMovements.createdAt))
         .limit(data.limit)
@@ -1087,7 +1135,6 @@ export const getLocationMovements = createServerFn({ method: "GET" })
       movementType: z.enum(movementTypeValues).optional(),
     })
   )
-  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -1112,14 +1159,14 @@ export const getLocationMovements = createServerFn({ method: "GET" })
             name: products.name,
           },
           location: {
-            id: locations.id,
-            code: locations.code,
-            name: locations.name,
+            id: warehouseLocations.id,
+            code: warehouseLocations.locationCode,
+            name: warehouseLocations.name,
           },
         })
         .from(inventoryMovements)
         .innerJoin(products, eq(inventoryMovements.productId, products.id))
-        .innerJoin(locations, eq(inventoryMovements.locationId, locations.id))
+        .innerJoin(warehouseLocations, eq(inventoryMovements.locationId, warehouseLocations.id))
         .where(and(...conditions))
         .orderBy(desc(inventoryMovements.createdAt))
         .limit(data.limit)
@@ -1175,14 +1222,14 @@ export const getLowStockAlerts = createServerFn({ method: "GET" })
         productId: products.id,
         sku: products.sku,
         name: products.name,
-        locationId: locations.id,
-        locationCode: locations.code,
-        locationName: locations.name,
+        locationId: warehouseLocations.id,
+        locationCode: warehouseLocations.locationCode,
+        locationName: warehouseLocations.name,
         quantityAvailable: inventory.quantityAvailable,
       })
       .from(inventory)
       .innerJoin(products, eq(inventory.productId, products.id))
-      .innerJoin(locations, eq(inventory.locationId, locations.id))
+      .innerJoin(warehouseLocations, eq(inventory.locationId, warehouseLocations.id))
       .where(and(...conditions))
       .orderBy(asc(inventory.quantityAvailable));
 
@@ -1286,7 +1333,6 @@ export const bulkReceiveStock = createServerFn({ method: "POST" })
       notes: z.string().optional(),
     })
   )
-  // @ts-expect-error - TanStack Start typing issue: handler expects ServerFn but infers ServerFnCtx
   .handler(async ({ data }) => {
     const ctx = await withAuth();
 
@@ -1331,10 +1377,10 @@ export const bulkReceiveStock = createServerFn({ method: "POST" })
 
       // Step 3: Process each item and prepare batch operations
       const inventoryToCreate: Array<typeof inventory.$inferInsert> = [];
+      // Note: quantityAvailable is a generated column (quantityOnHand - quantityAllocated)
       const inventoryToUpdate: Array<{
         id: string;
         quantityOnHand: number;
-        quantityAvailable: number;
         unitCost: number;
         totalValue: number;
       }> = [];
@@ -1366,7 +1412,6 @@ export const bulkReceiveStock = createServerFn({ method: "POST" })
             status: "available",
             quantityOnHand: item.quantity,
             quantityAllocated: 0,
-            quantityAvailable: item.quantity,
             unitCost: unitCost,
             totalValue: unitCost * item.quantity,
             createdBy: ctx.user.id,
@@ -1374,11 +1419,9 @@ export const bulkReceiveStock = createServerFn({ method: "POST" })
           });
         } else {
           // Queue for update
-          const allocated = Number(existingInv.quantityAllocated) || 0;
           inventoryToUpdate.push({
             id: existingInv.id,
             quantityOnHand: newQuantity,
-            quantityAvailable: newQuantity - allocated,
             unitCost: unitCost,
             totalValue: unitCost * newQuantity,
           });
@@ -1402,7 +1445,6 @@ export const bulkReceiveStock = createServerFn({ method: "POST" })
           .update(inventory)
           .set({
             quantityOnHand: update.quantityOnHand,
-            quantityAvailable: update.quantityAvailable,
             unitCost: update.unitCost,
             totalValue: update.totalValue,
             updatedBy: ctx.user.id,
@@ -1494,15 +1536,15 @@ export const getDefaultLocation = createServerFn({ method: "GET" })
   .handler(async () => {
     const ctx = await withAuth();
 
-    // Try to find default location
+    // Try to find default location (isDefault is in the attributes JSON column)
     let [location] = await db
       .select()
-      .from(locations)
+      .from(warehouseLocations)
       .where(
         and(
-          eq(locations.organizationId, ctx.organizationId),
-          eq(locations.isDefault, true),
-          eq(locations.isActive, true)
+          eq(warehouseLocations.organizationId, ctx.organizationId),
+          sql`${warehouseLocations.attributes}->>'isDefault' = 'true'`,
+          eq(warehouseLocations.isActive, true)
         )
       )
       .limit(1);
@@ -1511,14 +1553,14 @@ export const getDefaultLocation = createServerFn({ method: "GET" })
     if (!location) {
       [location] = await db
         .select()
-        .from(locations)
+        .from(warehouseLocations)
         .where(
           and(
-            eq(locations.organizationId, ctx.organizationId),
-            eq(locations.isActive, true)
+            eq(warehouseLocations.organizationId, ctx.organizationId),
+            eq(warehouseLocations.isActive, true)
           )
         )
-        .orderBy(asc(locations.createdAt))
+        .orderBy(asc(warehouseLocations.createdAt))
         .limit(1);
     }
 

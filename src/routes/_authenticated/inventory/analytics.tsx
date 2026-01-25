@@ -20,32 +20,32 @@ import {
   RefreshCw,
   ArrowLeftRight,
 } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/hooks";
 import {
   ValuationReport,
   type ValuationSummary,
   type CategoryValuation,
   type LocationValuation,
-} from "@/components/domain/inventory/valuation-report";
+} from "@/components/domain/inventory";
 import {
   AgingReport,
   type AgingSummary,
   type AgeBucket,
   type AgingItem,
-} from "@/components/domain/inventory/aging-report";
+} from "@/components/domain/inventory";
 import {
   TurnoverReport,
   type TurnoverSummary,
   type CategoryTurnover,
   type TurnoverTrend,
-} from "@/components/domain/inventory/turnover-report";
+} from "@/components/domain/inventory";
 import {
   MovementAnalytics,
   type MovementSummary,
   type MovementByType,
   type TopMover,
   type MovementTrend,
-} from "@/components/domain/inventory/movement-analytics";
+} from "@/components/domain/inventory";
 import {
   getInventoryValuation,
   getInventoryAging,

@@ -23,7 +23,6 @@ import {
   useApproveItem,
   useRejectItem,
   useBulkApprove,
-  useEscalateApproval,
 } from '@/hooks/suppliers';
 import type { ApprovalRejectionReason } from '@/lib/schemas/approvals';
 
@@ -97,7 +96,6 @@ function ApprovalsPage() {
   const approveMutation = useApproveItem();
   const rejectMutation = useRejectItem();
   const bulkApproveMutation = useBulkApprove();
-  const escalateMutation = useEscalateApproval();
 
   // ============================================================================
   // HANDLERS

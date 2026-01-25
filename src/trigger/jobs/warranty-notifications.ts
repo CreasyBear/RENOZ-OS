@@ -8,9 +8,9 @@
  * @see src/trigger/client.ts for event definitions
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-002
  */
-import { task, cronTrigger } from '@trigger.dev/sdk';
+import { task } from '@trigger.dev/sdk/v3';
 import { db } from '@/lib/db';
-import { notifications, type NotificationData } from '../../../drizzle/schema';
+import { notifications, type NotificationData } from 'drizzle/schema';
 import { type WarrantyRegisteredPayload, type WarrantyExpiringSoonPayload } from '../client';
 
 // ============================================================================

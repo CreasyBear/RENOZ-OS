@@ -6,7 +6,7 @@
 
 import { withAuth } from '@/lib/server/protected';
 import { db } from '@/lib/db';
-import { oauthConnections, oauthSyncLogs } from '@/../drizzle/schema';
+import { oauthConnections, oauthSyncLogs } from 'drizzle/schema';
 import { and, eq, gte, sql, desc } from 'drizzle-orm';
 
 export async function GET() {

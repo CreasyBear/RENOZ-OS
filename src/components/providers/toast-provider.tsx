@@ -10,7 +10,7 @@
  * <ToastProvider />
  *
  * // In any component
- * import { toast } from '@/hooks/use-toast'
+ * import { toast } from '@/hooks'
  * toast.success('Item saved!')
  * ```
  */

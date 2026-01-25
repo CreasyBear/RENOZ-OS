@@ -15,7 +15,7 @@
 import { useState } from "react"
 import { File, FileText, ImageOff } from "lucide-react"
 import { cn } from "~/lib/utils"
-import { useDownloadUrl } from "@/hooks/use-files"
+import { useDownloadUrl } from "@/hooks"
 import { Skeleton } from "@/components/ui/skeleton"
 import type { AttachmentInfo } from "@/lib/schemas/files"
 

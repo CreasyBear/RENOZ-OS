@@ -21,10 +21,11 @@ export type { SSRSafeUser as AuthenticatedUser };
  * For full profile (role, org, etc.), fetch in route loader or server function.
  */
 export function useCurrentUser() {
-  const context = useRouteContext({ from: '__root__' });
+  // User context is provided by the _authenticated layout route
+  const context = useRouteContext({ from: '/_authenticated' });
 
   return {
-    user: context.user as SSRSafeUser | null,
+    user: (context.user ?? null) as SSRSafeUser | null,
     isLoading: false,
     isError: false,
     error: null,

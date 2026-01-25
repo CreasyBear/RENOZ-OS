@@ -20,7 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { ActivityTimeline } from './activity-timeline'
-import { MetricsDashboard } from './metrics-dashboard'
+import { MetricsDashboard } from './analytics/metrics-dashboard'
 
 // ============================================================================
 // TYPES

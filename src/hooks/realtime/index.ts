@@ -32,7 +32,7 @@ export {
   type UseRealtimeBroadcastResult,
 } from './use-realtime'
 
-// Orders channel
+// Orders channel (broadcast-based)
 export {
   useOrdersRealtime,
   type OrderRealtimePayload,
@@ -40,7 +40,7 @@ export {
   type UseOrdersRealtimeResult,
 } from './use-orders-realtime'
 
-// Pipeline channel
+// Pipeline channel (broadcast-based)
 export {
   usePipelineRealtime,
   usePipelineByStage,
@@ -60,3 +60,25 @@ export {
   type UseInventoryRealtimeResult,
   type UseLowStockAlertsOptions,
 } from './use-inventory-realtime'
+
+// Legacy postgres_changes-based hooks (backwards compatibility)
+// These use direct postgres_changes subscriptions instead of broadcast channels
+export {
+  useRealtimeOrders,
+  useRealtimeOrdersByStatus,
+} from './use-realtime-orders'
+
+export {
+  useRealtimePipeline,
+  useRealtimePipelineByStage,
+  useRealtimeHotLeads,
+} from './use-realtime-pipeline'
+
+// Re-export generic subscription hook for advanced use cases
+export {
+  useRealtimeSubscription,
+  type RealtimePayload,
+  type RealtimeSubscriptionOptions,
+  type UseRealtimeSubscriptionResult,
+  type RealtimeEvent,
+} from './use-realtime-subscription'

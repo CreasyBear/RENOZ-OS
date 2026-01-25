@@ -29,7 +29,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { useAttachments, useDownloadUrl, useDeleteFile } from "@/hooks/use-files"
+import { useAttachments, useDownloadUrl, useDeleteFile } from "@/hooks"
 import { FilePreview } from "./file-preview"
 import type { AttachmentInfo } from "@/lib/schemas/files"
 

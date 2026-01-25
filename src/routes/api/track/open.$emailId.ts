@@ -9,41 +9,38 @@
  * @see DOM-COMMS-001b
  */
 
-import { createAPIFileRoute } from "@tanstack/start/api";
 import {
   recordEmailOpen,
   TRACKING_PIXEL,
   validateTrackingSignature,
 } from "@/lib/server/email-tracking";
 
-export const APIRoute = createAPIFileRoute("/api/track/open/$emailId")({
-  GET: async ({ params, request }) => {
-    const { emailId } = params;
+export async function GET({ request, params }: { request: Request; params: { emailId: string } }) {
+  const { emailId } = params;
 
-    // Validate HMAC signature
-    const url = new URL(request.url);
-    const sig = url.searchParams.get("sig");
+  // Validate HMAC signature
+  const url = new URL(request.url);
+  const sig = url.searchParams.get("sig");
 
-    if (!sig || !validateTrackingSignature(emailId, sig)) {
-      return new Response("Invalid tracking signature", { status: 403 });
-    }
+  if (!sig || !validateTrackingSignature(emailId, sig)) {
+    return new Response("Invalid tracking signature", { status: 403 });
+  }
 
-    // Record the open (fire-and-forget, don't block response)
-    recordEmailOpen(emailId).catch((err) => {
-      console.error("[track/open] Error recording open:", err);
-    });
+  // Record the open (fire-and-forget, don't block response)
+  recordEmailOpen(emailId).catch((err) => {
+    console.error("[track/open] Error recording open:", err);
+  });
 
-    // Return the tracking pixel
-    return new Response(TRACKING_PIXEL, {
-      status: 200,
-      headers: {
-        "Content-Type": "image/gif",
-        "Content-Length": String(TRACKING_PIXEL.length),
-        // Prevent caching to ensure pixel is always fetched
-        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
-        Pragma: "no-cache",
-        Expires: "0",
-      },
-    });
-  },
-});
+  // Return the tracking pixel
+  return new Response(TRACKING_PIXEL, {
+    status: 200,
+    headers: {
+      "Content-Type": "image/gif",
+      "Content-Length": String(TRACKING_PIXEL.length),
+      // Prevent caching to ensure pixel is always fetched
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    },
+  });
+}

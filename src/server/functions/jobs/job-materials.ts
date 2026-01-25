@@ -12,7 +12,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { jobMaterials, jobAssignments, products } from '@/../drizzle/schema';
+import { jobMaterials, jobAssignments, products } from 'drizzle/schema';
 import {
   listJobMaterialsSchema,
   addJobMaterialSchema,

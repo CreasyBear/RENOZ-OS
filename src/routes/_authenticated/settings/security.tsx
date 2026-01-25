@@ -55,7 +55,7 @@ import {
   Clock,
   MapPin,
 } from 'lucide-react';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 
 // Route definition
 export const Route = createFileRoute('/_authenticated/settings/security' as any)({

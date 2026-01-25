@@ -14,8 +14,8 @@ import { createFileRoute } from '@tanstack/react-router';
 import { RouteErrorFallback } from '@/components/layout';
 import { SettingsPageSkeleton } from '@/components/skeletons/settings';
 import { PageLayout } from '@/components/layout/page-layout';
-import { JobTemplateList } from '@/components/domain/jobs/job-template-list';
-import { JobTemplateFormDialog } from '@/components/domain/jobs/job-template-form-dialog';
+import { JobTemplateList } from '@/components/domain/jobs';
+import { JobTemplateFormDialog } from '@/components/domain/jobs';
 import { useCreateJobTemplate } from '@/hooks';
 import type { JobTemplateResponse } from '@/lib/schemas';
 export const Route = createFileRoute('/_authenticated/settings/job-templates')({

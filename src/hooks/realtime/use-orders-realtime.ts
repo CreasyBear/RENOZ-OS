@@ -27,7 +27,8 @@ import {
   type ConnectionStatus,
   type UseRealtimeBroadcastResult,
 } from './use-realtime'
-import { toast } from '../use-toast'
+import { toast } from '../_shared/use-toast'
+import { queryKeys } from '@/lib/query-keys'
 
 // ============================================================================
 // TYPES
@@ -136,12 +137,12 @@ export function useOrdersRealtime(
     channel: `orders:${organizationId}`,
     event: 'db_changes',
     queryKeys: [
-      ['orders'],
-      ['orders', 'list'],
-      ['orders', 'recent'],
-      ['orders', organizationId],
-      ['dashboard', 'orders'],
-      ['dashboard', 'stats'],
+      queryKeys.orders.all,
+      queryKeys.orders.lists(),
+      queryKeys.orders.recent,
+      queryKeys.orders.list({ organizationId }),
+      queryKeys.dashboard.orders(),
+      queryKeys.dashboard.stats(),
     ],
     onUpdate: handleUpdate,
     enabled: enabled && !!organizationId,

@@ -12,10 +12,10 @@ import { cronTrigger, eventTrigger } from '@trigger.dev/sdk';
 import { eq, and, lte, sql } from 'drizzle-orm';
 import { client } from '../client';
 import { db } from '@/lib/db';
-import { scheduledReports } from '@/../drizzle/schema/dashboard';
-import { orders } from '@/../drizzle/schema/orders/orders';
-import { customers } from '@/../drizzle/schema/customers/customers';
-import { opportunities } from '@/../drizzle/schema/pipeline';
+import { scheduledReports } from 'drizzle/schema/dashboard';
+import { orders } from 'drizzle/schema/orders/orders';
+import { customers } from 'drizzle/schema/customers/customers';
+import { opportunities } from 'drizzle/schema/pipeline';
 
 // ============================================================================
 // EVENT NAMES

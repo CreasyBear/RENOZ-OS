@@ -16,7 +16,7 @@ import { eq, and, sql, ilike, desc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { dashboardLayouts } from '@/../drizzle/schema/dashboard';
+import { dashboardLayouts } from 'drizzle/schema/dashboard';
 import {
   createDashboardLayoutSchema,
   updateDashboardLayoutSchema,
@@ -270,7 +270,7 @@ export const getUserLayout = createServerFn({ method: 'GET' }).handler(
 export const createDashboardLayout = createServerFn({ method: 'POST' })
   .inputValidator(createDashboardLayoutSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.dashboard.write });
+    const ctx = await withAuth({ permission: PERMISSIONS.dashboard.update });
 
     // If this is marked as default, unset other defaults
     if (data.isDefault) {
@@ -313,7 +313,7 @@ export const createDashboardLayout = createServerFn({ method: 'POST' })
 export const updateDashboardLayout = createServerFn({ method: 'POST' })
   .inputValidator(updateDashboardLayoutSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.dashboard.write });
+    const ctx = await withAuth({ permission: PERMISSIONS.dashboard.update });
 
     const { id, ...updates } = data;
 
@@ -366,7 +366,7 @@ export const updateDashboardLayout = createServerFn({ method: 'POST' })
 export const saveDashboardLayout = createServerFn({ method: 'POST' })
   .inputValidator(saveDashboardLayoutSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.dashboard.write });
+    const ctx = await withAuth({ permission: PERMISSIONS.dashboard.update });
 
     // Get user's default layout or create one
     let [layout] = await db
@@ -422,7 +422,7 @@ export const saveDashboardLayout = createServerFn({ method: 'POST' })
 export const deleteDashboardLayout = createServerFn({ method: 'POST' })
   .inputValidator(deleteDashboardLayoutSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.dashboard.delete });
+    const ctx = await withAuth({ permission: PERMISSIONS.dashboard.update });
 
     const [layout] = await db
       .delete(dashboardLayouts)
@@ -448,7 +448,7 @@ export const deleteDashboardLayout = createServerFn({ method: 'POST' })
 export const setDefaultDashboardLayout = createServerFn({ method: 'POST' })
   .inputValidator(setDefaultDashboardLayoutSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.dashboard.write });
+    const ctx = await withAuth({ permission: PERMISSIONS.dashboard.update });
 
     // Unset all existing defaults
     await db
@@ -488,7 +488,7 @@ export const setDefaultDashboardLayout = createServerFn({ method: 'POST' })
 export const cloneDashboardLayout = createServerFn({ method: 'POST' })
   .inputValidator(cloneDashboardLayoutSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.dashboard.write });
+    const ctx = await withAuth({ permission: PERMISSIONS.dashboard.update });
 
     // Get the source layout
     const [source] = await db

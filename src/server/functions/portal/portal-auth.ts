@@ -102,7 +102,8 @@ export const requestPortalLink = createServerFn({ method: 'POST' })
 export const getPortalIdentity = createServerFn({ method: 'GET' })
   .inputValidator(getPortalIdentitySchema)
   .handler(async () => {
-    const authUser = await getServerUser();
+    const request = getRequest();
+    const authUser = await getServerUser(request);
     if (!authUser) {
       throw new AuthError('Portal authentication required');
     }

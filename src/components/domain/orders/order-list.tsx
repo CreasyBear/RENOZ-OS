@@ -10,6 +10,7 @@
 import { memo, useState, useCallback, useMemo } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
 import {
   MoreHorizontal,
   Eye,
@@ -122,7 +123,7 @@ export const OrderList = memo(function OrderList({
 
   // Fetch orders
   const { data, isLoading, error } = useQuery({
-    queryKey: ["orders", filters, page, pageSize],
+    queryKey: queryKeys.orders.list({ ...filters, page, pageSize }),
     queryFn: async () => {
       const result = await listOrders({
         data: {

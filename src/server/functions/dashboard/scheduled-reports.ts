@@ -16,7 +16,7 @@ import { eq, and, sql, ilike, desc, asc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { scheduledReports } from '@/../drizzle/schema/dashboard';
+import { scheduledReports } from 'drizzle/schema/dashboard';
 import {
   createScheduledReportSchema,
   updateScheduledReportSchema,

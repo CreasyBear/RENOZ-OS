@@ -4,7 +4,7 @@
  * Advanced search interface with autocomplete, filters, and faceted navigation.
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useDebounce } from "@/hooks/use-debounce";
+import { useDebounce } from "@/hooks";
 import {
   Search,
   X,

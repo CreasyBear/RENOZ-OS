@@ -9,9 +9,9 @@ import { Plus, Image, BarChart3 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
-import { ImageGallery, type GalleryImage } from "../image-gallery";
-import { ImageUploader } from "../image-uploader";
-import { ImageEditor, type EditableImage } from "../image-editor";
+import { ImageGallery, type GalleryImage } from "../images/image-gallery";
+import { ImageUploader } from "../images/image-uploader";
+import { ImageEditor, type EditableImage } from "../images/image-editor";
 import { listProductImages, getImageStats } from "@/lib/server/functions/product-images";
 
 interface ProductImagesTabProps {

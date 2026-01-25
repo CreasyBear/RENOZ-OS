@@ -32,7 +32,7 @@ import {
   useEntityActivities,
   useFlattenedActivities,
   useCanLoadMore,
-} from "@/hooks/use-activities";
+} from "@/hooks";
 import { formatDistanceToNow, format, isSameDay } from "date-fns";
 import type {
   ActivityWithUser,

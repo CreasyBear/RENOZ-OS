@@ -8,7 +8,7 @@
  */
 
 import { db } from "@/lib/db";
-import { emailHistory, type LinkClicks, type LinkClick } from "@/../drizzle/schema";
+import { emailHistory, type LinkClicks, type LinkClick } from "drizzle/schema";
 import { eq } from "drizzle-orm";
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import {

@@ -59,7 +59,6 @@ import { cn } from "@/lib/utils";
 
 import { TemplateEditor } from "./template-editor";
 import type { TemplateCategory } from "../../../../drizzle/schema";
-import { toast } from "sonner";
 
 // ============================================================================
 // TYPES

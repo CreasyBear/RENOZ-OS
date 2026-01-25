@@ -7,6 +7,7 @@
 
 import { useState, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '@/lib/query-keys';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +22,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 
 // Import OAuth server functions (would be implemented with tRPC or similar)
 interface OAuthConnection {
@@ -73,7 +74,7 @@ export function OAuthConnectionManager({
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['oauth-connections', organizationId],
+    queryKey: queryKeys.oauth.connections(organizationId),
     queryFn: async () => {
       const response = await fetch('/api/oauth/connections');
       if (!response.ok) {
@@ -93,7 +94,7 @@ export function OAuthConnectionManager({
 
   // Query for connection health
   const { data: healthStatuses } = useQuery({
-    queryKey: ['oauth-health', organizationId],
+    queryKey: queryKeys.oauth.health(organizationId),
     queryFn: async () => {
       const response = await fetch('/api/oauth/health');
       if (!response.ok) {
@@ -154,7 +155,7 @@ export function OAuthConnectionManager({
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['oauth-connections', organizationId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.oauth.connections(organizationId) });
       toast.success('Connection disconnected successfully');
     },
     onError: (error) => {

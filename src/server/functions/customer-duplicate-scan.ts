@@ -12,7 +12,7 @@ import { createServerFn } from '@tanstack/react-start'
 import { z } from 'zod'
 import { sql, eq, and, desc } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { customerMergeAudit } from '@/../drizzle/schema'
+import { customerMergeAudit } from 'drizzle/schema'
 import { withAuth } from '@/lib/server/protected'
 import { PERMISSIONS } from '@/lib/auth/permissions'
 

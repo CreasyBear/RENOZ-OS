@@ -215,7 +215,7 @@ export const createCustomField = createServerFn({ method: 'POST' })
   .inputValidator(createCustomFieldSchema)
   // @ts-expect-error - TanStack Start type inference limitation with complex returns
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
     // Check max fields limit
     const [{ count }] = await db
@@ -314,7 +314,7 @@ export const updateCustomField = createServerFn({ method: 'POST' })
   .inputValidator(updateCustomFieldSchema)
   // @ts-expect-error - TanStack Start type inference limitation with complex returns
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
     const [current] = await db
       .select()
@@ -368,7 +368,7 @@ export const updateCustomField = createServerFn({ method: 'POST' })
 export const deleteCustomField = createServerFn({ method: 'POST' })
   .inputValidator(idParamSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
     const [field] = await db
       .select({ id: customFields.id, name: customFields.name, entityType: customFields.entityType })
@@ -410,7 +410,7 @@ export const deleteCustomField = createServerFn({ method: 'POST' })
 export const reorderCustomFields = createServerFn({ method: 'POST' })
   .inputValidator(reorderFieldsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.settings?.update });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
     // Update sort orders based on array position
     for (let i = 0; i < data.fieldIds.length; i++) {

@@ -24,11 +24,11 @@ import {
 import { Separator } from '@/components/ui/separator';
 import {
   conditionLabels,
-  rejectionReasonLabels,
+  receiptRejectionReasonLabels,
   itemConditions,
-  rejectionReasons,
+  receiptRejectionReasons,
   type ItemCondition,
-  type RejectionReason,
+  type ReceiptRejectionReason,
 } from '@/lib/schemas/receipts';
 
 // ============================================================================
@@ -43,7 +43,7 @@ interface InspectionItem {
   quantityAccepted: number;
   quantityRejected: number;
   condition?: ItemCondition;
-  rejectionReason?: RejectionReason;
+  rejectionReason?: ReceiptRejectionReason;
   qualityNotes?: string;
 }
 
@@ -59,7 +59,7 @@ interface QualityInspectionProps {
       quantityAccepted: number;
       quantityRejected: number;
       condition?: ItemCondition;
-      rejectionReason?: RejectionReason;
+      rejectionReason?: ReceiptRejectionReason;
       qualityNotes?: string;
     }>;
   }) => Promise<void>;
@@ -175,15 +175,15 @@ function InspectionItemRow({ item, onChange }: InspectionItemRowProps) {
             <Label>Rejection Reason</Label>
             <Select
               value={item.rejectionReason || ''}
-              onValueChange={(value) => onChange({ rejectionReason: value as RejectionReason })}
+              onValueChange={(value) => onChange({ rejectionReason: value as ReceiptRejectionReason })}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select reason" />
               </SelectTrigger>
               <SelectContent>
-                {rejectionReasons.map((r) => (
+                {receiptRejectionReasons.map((r) => (
                   <SelectItem key={r} value={r}>
-                    {rejectionReasonLabels[r]}
+                    {receiptRejectionReasonLabels[r]}
                   </SelectItem>
                 ))}
               </SelectContent>

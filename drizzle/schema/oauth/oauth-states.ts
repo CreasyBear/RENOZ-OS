@@ -14,9 +14,9 @@ import {
   boolean,
   index,
 } from 'drizzle-orm/pg-core';
-import { organizations } from 'drizzle/schema/settings/organizations';
-import { users } from 'drizzle/schema/users/users';
-import { timestampColumns } from 'drizzle/schema/_shared/patterns';
+import { organizations } from '../settings/organizations';
+import { users } from '../users/users';
+import { timestampColumns } from '../_shared/patterns';
 
 export const oauthStates = pgTable(
   'oauth_states',

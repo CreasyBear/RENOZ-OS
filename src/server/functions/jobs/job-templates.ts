@@ -28,7 +28,7 @@ import {
   type JobTemplateTask,
   type JobTemplateBOMItem,
   type ChecklistTemplateItem,
-} from '@/../drizzle/schema';
+} from 'drizzle/schema';
 import {
   listJobTemplatesSchema,
   createJobTemplateSchema,

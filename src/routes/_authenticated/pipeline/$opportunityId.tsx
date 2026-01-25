@@ -22,9 +22,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { toastSuccess, toastError } from "@/hooks/use-toast";
-import { OpportunityDetail } from "@/components/domain/pipeline/opportunity-detail";
-import { OpportunityForm } from "@/components/domain/pipeline/opportunity-form";
+import { toastSuccess, toastError } from "@/hooks";
+import { OpportunityDetail } from "@/components/domain/pipeline";
+import { OpportunityForm } from "@/components/domain/pipeline";
 import { WonLostDialog } from "@/components/domain/pipeline";
 import {
   useOpportunity,

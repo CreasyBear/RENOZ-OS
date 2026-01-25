@@ -15,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useConfirmation } from '@/hooks/use-confirmation';
+import { useConfirmation } from '@/hooks';
 
 interface ConfirmationDialogProps {
   children?: React.ReactNode;
@@ -67,4 +67,4 @@ export function ConfirmationDialog({ children }: ConfirmationDialogProps) {
 }
 
 // Re-export for convenience
-export { useConfirmation } from '@/hooks/use-confirmation';
+export { useConfirmation } from '@/hooks';

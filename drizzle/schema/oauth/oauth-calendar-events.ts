@@ -5,9 +5,9 @@
  */
 
 import { pgTable, uuid, text, jsonb, timestamp, boolean, index } from 'drizzle-orm/pg-core';
-import { organizations } from 'drizzle/schema/settings/organizations';
-import { oauthConnections } from 'drizzle/schema/oauth/oauth-connections';
-import { timestampColumns } from 'drizzle/schema/_shared/patterns';
+import { organizations } from '../settings/organizations';
+import { oauthConnections } from './oauth-connections';
+import { timestampColumns } from '../_shared/patterns';
 
 export const oauthCalendarEvents = pgTable(
   'oauth_calendar_events',

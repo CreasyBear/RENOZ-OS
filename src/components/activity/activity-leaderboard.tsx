@@ -10,7 +10,7 @@ import { cn } from "~/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Trophy, Medal, Award } from "lucide-react";
-import { useActivityLeaderboard } from "@/hooks/use-activities";
+import { useActivityLeaderboard } from "@/hooks";
 
 // ============================================================================
 // TYPES

@@ -90,7 +90,6 @@ export const listPendingApprovals = createServerFn({ method: 'GET' })
 
     const {
       status,
-      search,
       sortBy = 'createdAt',
       sortOrder = 'desc',
       page = 1,
@@ -321,9 +320,9 @@ export const getApprovalStats = createServerFn({ method: 'GET' }).handler(async 
 // ============================================================================
 
 /**
- * Approve a purchase order at the current level.
+ * Approve a purchase order at the current approval level (multi-level workflow).
  */
-export const approvePurchaseOrder = createServerFn({ method: 'POST' })
+export const approvePurchaseOrderAtLevel = createServerFn({ method: 'POST' })
   .inputValidator(approveRejectSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.APPROVE });
@@ -393,9 +392,9 @@ export const approvePurchaseOrder = createServerFn({ method: 'POST' })
   });
 
 /**
- * Reject a purchase order.
+ * Reject a purchase order at the current approval level (multi-level workflow).
  */
-export const rejectPurchaseOrder = createServerFn({ method: 'POST' })
+export const rejectPurchaseOrderAtLevel = createServerFn({ method: 'POST' })
   .inputValidator(rejectSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.APPROVE });
