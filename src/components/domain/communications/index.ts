@@ -45,3 +45,6 @@ export * from './signatures';
 
 // --- Templates (Resend Integration) ---
 export * from './templates';
+
+// --- Email Settings (Resend Integration) ---
+export * from './settings';
