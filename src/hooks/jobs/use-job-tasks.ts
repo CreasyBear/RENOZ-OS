@@ -1,15 +1,15 @@
 /**
  * Job Tasks Hooks
  *
- * TanStack Query hooks for job task management:
- * - Task list for a job
- * - Task mutations (create, update, delete, reorder)
+ * TanStack Query hooks for job task management and kanban board operations.
+ * Provides data fetching and mutation hooks for task CRUD and kanban-specific operations.
  *
- * @see src/server/functions/job-tasks.ts for server functions
- * @see _Initiation/_prd/2-domains/jobs/jobs.prd.json - DOM-JOBS-001c
+ * @see src/server/functions/jobs/job-tasks.ts
+ * @see src/server/functions/jobs/job-tasks-kanban.ts
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
   listJobTasks,
@@ -19,6 +19,11 @@ import {
   reorderTasks,
   getTask,
 } from '@/server/functions/jobs/job-tasks';
+import {
+  listJobTasksForKanban,
+  type KanbanTask,
+  type ListJobTasksForKanbanInput,
+} from '@/server/functions/jobs/job-tasks-kanban';
 import type {
   CreateTaskInput,
   UpdateTaskInput,
@@ -26,7 +31,8 @@ import type {
   TaskResponse,
 } from '@/lib/schemas';
 
-// Query keys are now centralized in @/lib/query-keys.ts
+// Re-export the KanbanTask type for use in components
+export type { KanbanTask };
 
 // ============================================================================
 // LIST HOOK
@@ -200,4 +206,197 @@ export function useToggleTaskStatus() {
       });
     },
   });
+}
+
+// ============================================================================
+// KANBAN VIEW HOOKS
+// ============================================================================
+
+export interface KanbanTasksData {
+  tasks: KanbanTask[];
+  total: number;
+}
+
+export interface UseJobTasksKanbanOptions extends Partial<ListJobTasksForKanbanInput> {
+  enabled?: boolean;
+}
+
+/**
+ * Get all job tasks across all assignments for kanban board display.
+ * Provides real-time polling and data transformation for kanban UI.
+ */
+export function useJobTasksKanban(options: UseJobTasksKanbanOptions = {}) {
+  const listFn = useServerFn(listJobTasksForKanban);
+
+  const { status, priority, assigneeId, limit = 200, enabled = true } = options;
+
+  const filters: ListJobTasksForKanbanInput = {
+    status,
+    priority,
+    assigneeId,
+    limit,
+  };
+
+  return useQuery({
+    queryKey: queryKeys.jobTasks.kanban.list(filters),
+    queryFn: () => listFn({ data: filters }),
+    enabled,
+    refetchInterval: 30000, // Poll every 30 seconds for live updates
+    staleTime: 10000, // Consider data stale after 10 seconds
+    gcTime: 300000, // Keep in cache for 5 minutes
+
+    // Transform data for kanban consumption
+    select: (data: { tasks: KanbanTask[]; total: number }) => {
+      // Group tasks by status for kanban columns
+      const tasksByStatus: Record<string, KanbanTask[]> = {
+        pending: [],
+        in_progress: [],
+        completed: [],
+        blocked: [],
+      };
+
+      data.tasks.forEach((task) => {
+        if (tasksByStatus[task.status]) {
+          tasksByStatus[task.status].push(task);
+        }
+      });
+
+      // Sort tasks within each column by position
+      Object.keys(tasksByStatus).forEach((status) => {
+        tasksByStatus[status].sort((a, b) => a.position - b.position);
+      });
+
+      return {
+        tasksByStatus,
+        allTasks: data.tasks,
+        total: data.total,
+        filters,
+      };
+    },
+  });
+}
+
+export interface UseUpdateJobTaskStatusOptions {
+  onSuccess?: () => void;
+  onError?: (error: Error) => void;
+}
+
+/**
+ * Update job task status for kanban drag-drop operations.
+ * Uses existing useUpdateTask mutation with kanban-specific invalidation.
+ */
+export function useUpdateJobTaskStatus(options: UseUpdateJobTaskStatusOptions = {}) {
+  const updateTaskMutation = useUpdateTask();
+  const queryClient = useQueryClient();
+
+  return {
+    ...updateTaskMutation,
+
+    mutateAsync: async (input: { taskId: string; status: KanbanTask['status'] }) => {
+      try {
+        await updateTaskMutation.mutateAsync({
+          taskId: input.taskId,
+          status: input.status,
+        });
+
+        await queryClient.invalidateQueries({
+          queryKey: queryKeys.jobTasks.kanban.all,
+        });
+
+        options.onSuccess?.();
+      } catch (error) {
+        options.onError?.(error as Error);
+        throw error;
+      }
+    },
+
+    mutate: (input: { taskId: string; status: KanbanTask['status'] }) => {
+      const previousData = queryClient.getQueryData(queryKeys.jobTasks.kanban.list());
+
+      if (previousData) {
+        queryClient.setQueryData(queryKeys.jobTasks.kanban.list(), (oldData: {
+          tasksByStatus: Record<string, KanbanTask[]>;
+          allTasks: KanbanTask[];
+          total: number;
+          filters: ListJobTasksForKanbanInput;
+        } | undefined) => {
+          if (!oldData) return oldData;
+
+          const newAllTasks = oldData.allTasks.map((task: KanbanTask) =>
+            task.id === input.taskId ? { ...task, status: input.status } : task
+          );
+
+          const regrouped: Record<string, KanbanTask[]> = {
+            pending: [],
+            in_progress: [],
+            completed: [],
+            blocked: [],
+          };
+
+          newAllTasks.forEach((task: KanbanTask) => {
+            if (regrouped[task.status]) {
+              regrouped[task.status].push(task);
+            }
+          });
+
+          return {
+            ...oldData,
+            tasksByStatus: regrouped,
+            allTasks: newAllTasks,
+          };
+        });
+      }
+
+      updateTaskMutation.mutate(
+        {
+          taskId: input.taskId,
+          status: input.status,
+        },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({
+              queryKey: queryKeys.jobTasks.kanban.all,
+            });
+            options.onSuccess?.();
+          },
+          onError: (error) => {
+            if (previousData) {
+              queryClient.setQueryData(queryKeys.jobTasks.kanban.list(), previousData);
+            }
+            options.onError?.(error as Error);
+          },
+        }
+      );
+    },
+  };
+}
+
+/**
+ * Get kanban column configuration and status validation rules.
+ */
+export function useJobTaskKanbanConfig() {
+  return {
+    columns: [
+      { id: 'pending', name: 'Pending', color: 'gray' },
+      { id: 'in_progress', name: 'In Progress', color: 'blue' },
+      { id: 'completed', name: 'Completed', color: 'green' },
+      { id: 'blocked', name: 'Blocked', color: 'red' },
+    ] as const,
+
+    canTransition: (from: string, to: string): boolean => {
+      if (from === 'blocked') return false;
+      if (to === 'blocked' && from === 'completed') return false;
+      return true;
+    },
+
+    getColumnName: (status: string): string => {
+      const column = [
+        { id: 'pending', name: 'Pending' },
+        { id: 'in_progress', name: 'In Progress' },
+        { id: 'completed', name: 'Completed' },
+        { id: 'blocked', name: 'Blocked' },
+      ].find((col) => col.id === status);
+      return column?.name || status;
+    },
+  };
 }
