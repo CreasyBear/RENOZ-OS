@@ -29,3 +29,5 @@ export {
 } from './sidebar-provider'
 export { SidebarRail } from './sidebar-rail'
 export { RouteErrorFallback } from './route-error-fallback'
+export { BulkActionsBar } from './bulk-actions-bar'
+export type { BulkAction, BulkActionsBarProps } from './bulk-actions-bar'

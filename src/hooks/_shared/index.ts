@@ -1,11 +1,28 @@
 /**
  * Shared/Utility Hooks
+ *
+ * Cross-cutting concerns and utilities used across domains.
  */
+
+// --- UI State ---
 export * from './use-debounce';
 export * from './use-mobile';
 export * from './use-online-status';
-export * from './use-persisted-state';
 export * from './use-reduced-motion';
 export * from './use-sidebar';
+
+// --- Persistence ---
+export * from './use-persisted-state';
+
+// --- Feedback ---
 export * from './use-toast';
+export * from './use-confirmation';
+export * from './use-loading-state';
 export * from './use-undoable-action';
+
+// --- Forms ---
+export * from './use-zod-form';
+export * from './useMutation';
+
+// --- Selection ---
+export * from './use-selection';
