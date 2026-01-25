@@ -16,7 +16,7 @@ import { containsPattern } from '@/lib/db/utils';
 import { currencySchema, percentageSchema } from '@/lib/schemas/_shared/patterns';
 import { purchaseOrders, purchaseOrderItems, suppliers } from 'drizzle/schema/suppliers';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 
 // ============================================================================
 // INPUT SCHEMAS
@@ -125,7 +125,7 @@ const updatePurchaseOrderSchema = z.object({
 export const listPurchaseOrders = createServerFn({ method: 'GET' })
   .inputValidator(listPurchaseOrdersSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const {
       supplierId,
@@ -237,7 +237,7 @@ export const listPurchaseOrders = createServerFn({ method: 'GET' })
 export const getPurchaseOrder = createServerFn({ method: 'GET' })
   .inputValidator(getPurchaseOrderSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     // Get the purchase order with supplier info
     const poResult = await db
@@ -303,7 +303,7 @@ export const getPurchaseOrder = createServerFn({ method: 'GET' })
 export const createPurchaseOrder = createServerFn({ method: 'POST' })
   .inputValidator(createPurchaseOrderSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.CREATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.create });
 
     // Calculate totals from items
     let subtotal = 0;
@@ -385,7 +385,7 @@ export const createPurchaseOrder = createServerFn({ method: 'POST' })
 export const updatePurchaseOrder = createServerFn({ method: 'POST' })
   .inputValidator(updatePurchaseOrderSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     const { id, ...updateData } = data;
 
@@ -440,7 +440,7 @@ export const updatePurchaseOrder = createServerFn({ method: 'POST' })
 export const deletePurchaseOrder = createServerFn({ method: 'POST' })
   .inputValidator(getPurchaseOrderSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.DELETE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.delete });
 
     // Check if PO is in draft status
     const existing = await db
@@ -486,7 +486,7 @@ export const deletePurchaseOrder = createServerFn({ method: 'POST' })
 export const submitForApproval = createServerFn({ method: 'POST' })
   .inputValidator(getPurchaseOrderSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     const result = await db
       .update(purchaseOrders)
@@ -522,7 +522,7 @@ export const approvePurchaseOrder = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.APPROVE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.approve });
 
     const result = await db
       .update(purchaseOrders)
@@ -561,7 +561,7 @@ export const rejectPurchaseOrder = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.APPROVE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.approve });
 
     const result = await db
       .update(purchaseOrders)
@@ -598,7 +598,7 @@ export const markAsOrdered = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     const result = await db
       .update(purchaseOrders)
@@ -637,7 +637,7 @@ export const cancelPurchaseOrder = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     const result = await db
       .update(purchaseOrders)
@@ -676,7 +676,7 @@ export const closePurchaseOrder = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     const result = await db
       .update(purchaseOrders)
@@ -719,7 +719,7 @@ export const addPurchaseOrderItem = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     // Check if PO is in draft status
     const po = await db
@@ -797,7 +797,7 @@ export const removePurchaseOrderItem = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     // Get the item and PO
     const item = await db

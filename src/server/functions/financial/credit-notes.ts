@@ -13,7 +13,7 @@ import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
 import { creditNotes, customers, orders } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/server/errors';
 import {
   idParamSchema,
@@ -103,7 +103,7 @@ function calculateGst(amount: number): number {
 export const createCreditNote = createServerFn({ method: 'POST' })
   .inputValidator(createCreditNoteSchema)
   .handler(async ({ data }): Promise<CreditNoteRecord> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.FINANCIAL.CREATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.create });
 
     // Verify customer exists and belongs to organization
     const customer = await db
@@ -431,7 +431,7 @@ export const getCreditNotesByCustomer = createServerFn({ method: 'GET' })
 export const updateCreditNote = createServerFn({ method: 'POST' })
   .inputValidator(idParamSchema.merge(updateCreditNoteSchema))
   .handler(async ({ data }): Promise<CreditNoteRecord> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.FINANCIAL.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.update });
     const { id, ...updateData } = data;
 
     // Get existing credit note
@@ -486,7 +486,7 @@ export const updateCreditNote = createServerFn({ method: 'POST' })
 export const issueCreditNote = createServerFn({ method: 'POST' })
   .inputValidator(idParamSchema)
   .handler(async ({ data }): Promise<CreditNoteRecord> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.FINANCIAL.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.update });
 
     // Get existing credit note
     const existing = await db
@@ -533,7 +533,7 @@ export const issueCreditNote = createServerFn({ method: 'POST' })
 export const applyCreditNoteToInvoice = createServerFn({ method: 'POST' })
   .inputValidator(applyCreditNoteSchema)
   .handler(async ({ data }): Promise<CreditNoteRecord> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.FINANCIAL.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.update });
 
     // Get credit note
     const creditNote = await db
@@ -630,7 +630,7 @@ export const applyCreditNoteToInvoice = createServerFn({ method: 'POST' })
 export const voidCreditNote = createServerFn({ method: 'POST' })
   .inputValidator(voidCreditNoteSchema)
   .handler(async ({ data }): Promise<CreditNoteRecord> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.FINANCIAL.DELETE });
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.delete });
 
     // Get existing credit note
     const existing = await db

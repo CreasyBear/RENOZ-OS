@@ -55,7 +55,7 @@ import { toastSuccess, toastError } from "@/hooks";
 import {
   getActivityTimeline,
   completeActivity,
-} from "@/server/functions/pipeline";
+} from "@/server/functions/pipeline/pipeline";
 import type { OpportunityActivityType } from "@/lib/schemas/pipeline";
 
 // ============================================================================

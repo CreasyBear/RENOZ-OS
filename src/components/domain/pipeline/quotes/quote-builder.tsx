@@ -47,9 +47,10 @@ import {
 } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { toastSuccess, toastError } from "@/hooks";
-import { createQuoteVersion } from "@/server/functions/quote-versions";
+import { createQuoteVersion } from "@/server/functions/pipeline/quote-versions";
 import { FormatAmount } from "@/components/shared/format";
 import type { QuoteLineItem, QuoteVersion } from "@/lib/schemas/pipeline";
+import { GST_RATE } from "@/lib/order-calculations";
 
 // ============================================================================
 // TYPES
@@ -66,12 +67,6 @@ export interface QuoteBuilderProps {
 interface EditableLineItem extends QuoteLineItem {
   tempId: string; // For React keys before DB save
 }
-
-// ============================================================================
-// CONSTANTS
-// ============================================================================
-
-const GST_RATE = 0.10;
 
 const EMPTY_LINE_ITEM: Omit<EditableLineItem, "tempId"> = {
   description: "",

@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { products, productBundles } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { bundleComponentSchema, createBundleSchema } from '@/lib/schemas/products';
 
@@ -164,7 +164,7 @@ export const getBundleComponents = createServerFn({ method: 'GET' })
 export const setBundleComponents = createServerFn({ method: 'POST' })
   .inputValidator(createBundleSchema)
   .handler(async ({ data }): Promise<BundleComponent[]> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     // Verify bundle product exists and is a bundle type
     const [bundleProduct] = await db
@@ -279,7 +279,7 @@ export const addBundleComponent = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }): Promise<BundleComponent> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     // Verify bundle product
     const [bundleProduct] = await db
@@ -395,7 +395,7 @@ export const updateBundleComponent = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }): Promise<ProductBundle> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
     const { id, ...updateData } = data;
 
     const [existing] = await db
@@ -423,7 +423,7 @@ export const updateBundleComponent = createServerFn({ method: 'POST' })
 export const removeBundleComponent = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }): Promise<{ success: boolean }> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     const [existing] = await db
       .select({ id: productBundles.id })

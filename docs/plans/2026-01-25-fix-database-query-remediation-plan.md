@@ -59,11 +59,11 @@ export const expireInvitationsJob = schedules.task({
 });
 ```
 
-- [ ] Create `src/trigger/jobs/expire-invitations.ts`
-- [ ] Create `src/trigger/jobs/auto-escalate-approvals.ts`
-- [ ] Create `src/trigger/jobs/check-inventory-alerts.ts`
-- [ ] Remove public server function exports
-- [ ] Register jobs in `trigger.config.ts`
+- [x] Create `src/trigger/jobs/expire-invitations.ts`
+- [x] Create `src/trigger/jobs/auto-escalate-approvals.ts`
+- [x] Create `src/trigger/jobs/check-inventory-alerts.ts`
+- [x] Mark public server functions as @deprecated (kept for backwards compatibility)
+- [x] Register jobs in `src/trigger/jobs/index.ts`
 
 ### 1.2 Add LIKE Character Escaping Utility
 
@@ -132,9 +132,9 @@ export function escapeLike(value: string): string {
 ))
 ```
 
-- [ ] Add `organizationId` to tag assignment existence check
-- [ ] Add `organizationId` to customer health metric update
-- [ ] Audit all UPDATE/DELETE queries for missing org filters
+- [x] Add `organizationId` to tag assignment existence check
+- [x] Add `organizationId` to customer health metric update
+- [ ] Audit all UPDATE/DELETE queries for missing org filters (deferred - needs deeper review)
 
 ### 1.4 Add Missing Permission Checks
 
@@ -158,11 +158,11 @@ const ctx = await withAuth({ permission: PERMISSIONS.domain.action });
 | `forecasting.ts` | 64, 120, 370, 463, 587 | `inventory.read` |
 | `stock-counts.ts` | 46, 102, 736, 836 | `inventory.adjust` |
 
-- [ ] Update `csat-responses.ts` with proper permissions (5 handlers)
-- [ ] Update `inventory.ts` with proper permissions (4 handlers)
-- [ ] Update `forecasting.ts` with proper permissions (5 handlers)
-- [ ] Update `stock-counts.ts` with proper permissions (4 handlers)
-- [ ] Update remaining 12 files with missing permissions
+- [x] Update `csat-responses.ts` with proper permissions (5 handlers)
+- [x] Update `inventory.ts` with proper permissions (4 handlers)
+- [x] Update `forecasting.ts` with proper permissions (5 handlers)
+- [x] Update `stock-counts.ts` with proper permissions (4 handlers)
+- [ ] Update remaining 12 files with missing permissions (deferred - lower priority)
 
 ---
 
@@ -213,9 +213,9 @@ export const recordInstallmentPayment = createServerFn({ method: 'POST' })
   });
 ```
 
-- [ ] Wrap `recordInstallmentPayment` in transaction
-- [ ] Add rollback handling for partial failures
-- [ ] Add test for atomicity
+- [x] Wrap `recordInstallmentPayment` in transaction
+- [x] Add rollback handling for partial failures (transactions auto-rollback on error)
+- [ ] Add test for atomicity (deferred)
 
 ### 2.2 Wrap Line Item Operations in Transaction
 
@@ -245,10 +245,10 @@ export const addOrderLineItem = createServerFn({ method: 'POST' })
   });
 ```
 
-- [ ] Wrap `addOrderLineItem` in transaction
-- [ ] Wrap `updateOrderLineItem` in transaction
-- [ ] Wrap `deleteOrderLineItem` in transaction
-- [ ] Update `recalculateOrderTotals` to accept transaction parameter
+- [x] Wrap `addOrderLineItem` in transaction
+- [x] Wrap `updateOrderLineItem` in transaction
+- [x] Wrap `deleteOrderLineItem` in transaction
+- [x] Update `recalculateOrderTotals` to accept transaction parameter
 
 ### 2.3 Wrap Stage Change with Activity Log in Transaction
 
@@ -275,15 +275,15 @@ return await db.transaction(async (tx) => {
 });
 ```
 
-- [ ] Wrap `updateOpportunityStage` in transaction
-- [ ] Include activity log in same transaction
+- [x] Wrap `updateOpportunityStage` in transaction
+- [x] Include activity log in same transaction
 
 ### 2.4 Wrap Quote Creation with Opportunity Update in Transaction
 
 **File**: `src/server/functions/pipeline/quote-versions.ts:133-156`
 
-- [ ] Wrap `createQuoteVersion` in transaction
-- [ ] Include opportunity value update in same transaction
+- [x] Wrap `createQuoteVersion` in transaction
+- [x] Include opportunity value update in same transaction
 
 ### 2.5 Fix Optimistic Locking Pattern
 
@@ -313,8 +313,8 @@ if (result.length === 0) {
 }
 ```
 
-- [ ] Move version check into UPDATE WHERE clause
-- [ ] Return ConflictError if no rows updated
+- [x] Move version check into UPDATE WHERE clause
+- [x] Return ConflictError if no rows updated
 
 ---
 
@@ -352,14 +352,14 @@ const allMatches = await db.select().from(customers)
 const matchesByName = groupBy(allMatches, m => /* matching logic */);
 ```
 
-- [ ] Fix `scanDuplicatesProgressive` - batch customer queries
-- [ ] Fix `findDuplicateCustomers` - JOIN for contacts
-- [ ] Fix `mergeCustomers` - batch insert tags
-- [ ] Fix tag usage updates - single CASE/WHEN UPDATE
-- [ ] Fix `bulkImportJobs` - pre-fetch existence
-- [ ] Fix `bulkRegisterWarranties` - batch insert
-- [ ] Fix `bulkUpdatePrices` - single UPDATE with CASE
-- [ ] Fix `saveBulkForecasts` - ON CONFLICT DO UPDATE
+- [x] Fix `scanDuplicatesProgressive` - batch customer queries
+- [x] Fix `findDuplicateCustomers` - JOIN for contacts (already optimized)
+- [x] Fix `mergeCustomers` - batch insert tags (already optimized)
+- [x] Fix tag usage updates - single CASE/WHEN UPDATE (already optimized)
+- [x] Fix `bulkImportJobs` - pre-fetch existence (already optimized)
+- [x] Fix `bulkRegisterWarranties` - batch insert (already optimized)
+- [x] Fix `bulkUpdatePrices` - single UPDATE with CASE
+- [x] Fix `saveBulkForecasts` - ON CONFLICT DO UPDATE
 
 ### 3.2 Replace In-Memory Aggregation with SQL
 
@@ -396,8 +396,8 @@ const result = await db.execute(sql`
 `);
 ```
 
-- [ ] Refactor `getARAgingReport` to use SQL aggregation
-- [ ] Add similar fix to `financial-dashboard.ts` metrics
+- [x] Refactor `getARAgingReport` to use SQL aggregation
+- [x] Add similar fix to `financial-dashboard.ts` metrics (parallelized queries)
 
 ### 3.3 Parallelize Sequential Queries
 
@@ -419,9 +419,9 @@ const [config, businessHours, holidays] = await Promise.all([
 ]);
 ```
 
-- [ ] Parallelize SLA calculation queries
-- [ ] Add date filter to holidays query (only fetch relevant window)
-- [ ] Apply Promise.all pattern to other sequential reads
+- [x] Parallelize SLA calculation queries (used JOIN instead)
+- [x] Add date filter to holidays query (only fetch relevant window)
+- [x] Apply Promise.all pattern to other sequential reads (dashboard-metrics.ts)
 
 ### 3.4 Add Missing Composite Indexes
 
@@ -444,9 +444,9 @@ CREATE INDEX idx_activities_entity
   ON activities(organization_id, entity_type, entity_id, created_at DESC);
 ```
 
-- [ ] Create migration for composite indexes
-- [ ] Run EXPLAIN ANALYZE on hot queries before/after
-- [ ] Document index usage in schema files
+- [x] Create migration for composite indexes (0027_add_composite_indexes.sql)
+- [ ] Run EXPLAIN ANALYZE on hot queries before/after (post-deploy)
+- [ ] Document index usage in schema files (post-deploy)
 
 ---
 
@@ -480,9 +480,9 @@ CREATE INDEX idx_activities_entity
 3. Update imports to subdirectory path
 4. Delete root file
 
-- [ ] Verify each subdirectory file is canonical
-- [ ] Update imports in affected files
-- [ ] Delete 15 root-level duplicate files
+- [x] Verify each subdirectory file is canonical
+- [x] Update imports in affected files (26 imports updated)
+- [x] Delete 15 root-level duplicate files
 
 ### 4.2 Consolidate GST_RATE Constant
 
@@ -507,8 +507,8 @@ export const TAX = {
 - `order-creation-wizard.tsx`
 - `order-calculations.ts` (already exports, make this the source)
 
-- [ ] Export `GST_RATE` from `src/lib/order-calculations.ts` only
-- [ ] Update all files to import from `@/lib/order-calculations`
+- [x] Export `GST_RATE` from `src/lib/order-calculations.ts` only
+- [x] Update all files to import from `@/lib/order-calculations`
 
 ### 4.3 Consolidate PERMISSIONS Constants
 
@@ -521,9 +521,10 @@ export const TAX = {
 
 **Decision**: Keep `src/lib/auth/permissions.ts` (more usage, better casing).
 
-- [ ] Migrate 19 files from `@/lib/constants` PERMISSIONS to `@/lib/auth/permissions`
-- [ ] Remove PERMISSIONS from `@/lib/constants.ts`
-- [ ] Add deprecation warning or remove constants export
+- [x] Migrate 20 files from `@/lib/constants` PERMISSIONS to `@/lib/auth/permissions`
+- [x] Add missing permission domains to auth/permissions.ts (warranty, financial, support)
+- [x] Add missing inventory permissions (manage, count, forecast)
+- [ ] Remove PERMISSIONS from `@/lib/constants.ts` (deferred - may have other usage)
 
 ### 4.4 Standardize Soft Delete Pattern
 

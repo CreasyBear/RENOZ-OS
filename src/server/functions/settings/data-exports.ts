@@ -151,7 +151,7 @@ export const getDataExport = createServerFn({ method: 'GET' })
 export const createDataExport = createServerFn({ method: 'POST' })
   .inputValidator(createExportSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.data?.export });
+    const ctx = await withAuth({ permission: PERMISSIONS.audit.export });
     // Check concurrent export limit
     const [{ pendingCount }] = await db
       .select({ pendingCount: sql<number>`count(*)::int` })

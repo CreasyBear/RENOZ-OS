@@ -34,7 +34,7 @@ import type {
   BusinessHoursConfig as BusinessHoursConfigType,
 } from '@/lib/sla/types';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { typedGetFn, typedPostFn } from '@/lib/server/typed-server-fn';
 import {
   client,
@@ -433,7 +433,7 @@ export const updateClaimStatus = typedPostFn(
 export const approveClaim = typedPostFn(
   approveClaimSchema,
   async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.WARRANTY.APPROVE });
+    const ctx = await withAuth({ permission: PERMISSIONS.warranty.approve });
 
     const [existingClaim] = await db
       .select()
@@ -501,7 +501,7 @@ export const approveClaim = typedPostFn(
 export const denyClaim = typedPostFn(
   denyClaimSchema,
   async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.WARRANTY.APPROVE });
+    const ctx = await withAuth({ permission: PERMISSIONS.warranty.approve });
 
     const [existingClaim] = await db
       .select()
@@ -589,7 +589,7 @@ export const denyClaim = typedPostFn(
 export const resolveClaim = typedPostFn(
   resolveClaimSchema,
   async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.WARRANTY.RESOLVE });
+    const ctx = await withAuth({ permission: PERMISSIONS.warranty.resolve });
 
     const [existingClaim] = await db
       .select({
@@ -914,7 +914,7 @@ export const getWarrantyClaim = typedGetFn(
 export const assignClaim = typedPostFn(
   assignClaimSchema,
   async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.WARRANTY.ASSIGN });
+    const ctx = await withAuth({ permission: PERMISSIONS.warranty.assign });
 
     const [existingClaim] = await db
       .select()

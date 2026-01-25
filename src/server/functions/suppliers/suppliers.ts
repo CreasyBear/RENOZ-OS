@@ -16,7 +16,7 @@ import { currencySchema } from '@/lib/schemas/_shared/patterns';
 import { suppliers, supplierPerformanceMetrics } from 'drizzle/schema/suppliers';
 import { purchaseOrders } from 'drizzle/schema/suppliers';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 
 // ============================================================================
 // INPUT SCHEMAS
@@ -104,7 +104,7 @@ const updateSupplierRatingSchema = z.object({
 export const listSuppliers = createServerFn({ method: 'GET' })
   .inputValidator(listSuppliersSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const {
       search,
@@ -214,7 +214,7 @@ export const listSuppliers = createServerFn({ method: 'GET' })
 export const getSupplier = createServerFn({ method: 'GET' })
   .inputValidator(getSupplierSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const result = await db
       .select()
@@ -275,7 +275,7 @@ export const getSupplier = createServerFn({ method: 'GET' })
 export const createSupplier = createServerFn({ method: 'POST' })
   .inputValidator(createSupplierSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.CREATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.create });
 
     // Generate supplier code
     const supplierCode = await generateSupplierCode(ctx.organizationId);
@@ -320,7 +320,7 @@ export const createSupplier = createServerFn({ method: 'POST' })
 export const updateSupplier = createServerFn({ method: 'POST' })
   .inputValidator(getSupplierSchema.merge(updateSupplierSchema))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     const { id, ...updateData } = data;
 
@@ -384,7 +384,7 @@ export const updateSupplier = createServerFn({ method: 'POST' })
 export const deleteSupplier = createServerFn({ method: 'POST' })
   .inputValidator(getSupplierSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.DELETE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.delete });
 
     // Check if supplier has active purchase orders
     const activeOrders = await db
@@ -435,7 +435,7 @@ export const deleteSupplier = createServerFn({ method: 'POST' })
 export const updateSupplierRating = createServerFn({ method: 'POST' })
   .inputValidator(updateSupplierRatingSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     // Calculate overall rating
     const overallRating =
@@ -505,7 +505,7 @@ export const getSupplierPerformance = createServerFn({ method: 'GET' })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const conditions = [
       eq(supplierPerformanceMetrics.supplierId, data.supplierId),

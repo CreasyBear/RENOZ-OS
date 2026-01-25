@@ -12,7 +12,7 @@ import { eq, and, sql, asc, isNull, lte, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { paymentSchedules, orders, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { formatAmount } from '@/lib/currency';
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/server/errors';
 import {
@@ -189,7 +189,7 @@ function generatePresetInstallments(
 export const createPaymentPlan = createServerFn({ method: 'POST' })
   .inputValidator(createPaymentPlanSchema)
   .handler(async ({ data }): Promise<PaymentPlanSummary> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.FINANCIAL.CREATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.create });
 
     // Get order (outside transaction - read-only)
     const order = await db
@@ -378,7 +378,7 @@ export const getPaymentSchedule = createServerFn({ method: 'GET' })
 export const recordInstallmentPayment = createServerFn({ method: 'POST' })
   .inputValidator(recordInstallmentPaymentSchema)
   .handler(async ({ data }): Promise<PaymentScheduleRecord> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.FINANCIAL.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.update });
 
     // Get installment
     const installment = await db
@@ -413,53 +413,56 @@ export const recordInstallmentPayment = createServerFn({ method: 'POST' })
     // Calculate new paid amount
     const newPaidAmount = currentPaid + data.paidAmount;
     const isPaid = newPaidAmount >= installment[0].amount - 0.01;
-
-    // Update installment
-    const [updated] = await db
-      .update(paymentSchedules)
-      .set({
-        paidAmount: newPaidAmount,
-        status: isPaid ? 'paid' : 'due',
-        paidAt: isPaid ? new Date() : null,
-        paymentReference: data.paymentReference || installment[0].paymentReference,
-        notes: data.notes
-          ? installment[0].notes
-            ? `${installment[0].notes}\n${data.notes}`
-            : data.notes
-          : installment[0].notes,
-        updatedBy: ctx.user.id,
-      })
-      .where(eq(paymentSchedules.id, data.installmentId))
-      .returning();
-
-    // Update order's paid amount and balance
     const orderId = installment[0].orderId;
 
-    // Get all installments for order to calculate total paid
-    const allInstallments = await db
-      .select({ paidAmount: paymentSchedules.paidAmount })
-      .from(paymentSchedules)
-      .where(eq(paymentSchedules.orderId, orderId));
-
-    const totalPaid = allInstallments.reduce((sum, i) => sum + (i.paidAmount || 0), 0);
-
-    // Update order
-    const order = await db.select().from(orders).where(eq(orders.id, orderId)).limit(1);
-
-    if (order.length > 0) {
-      const orderTotal = order[0].total || 0;
-      const balanceDue = Math.max(0, orderTotal - totalPaid);
-
-      await db
-        .update(orders)
+    // Wrap all updates in a transaction for atomicity
+    const updated = await db.transaction(async (tx) => {
+      // Update installment
+      const [updatedInstallment] = await tx
+        .update(paymentSchedules)
         .set({
-          paidAmount: totalPaid,
-          balanceDue,
-          paymentStatus: balanceDue <= 0 ? 'paid' : 'partial',
+          paidAmount: newPaidAmount,
+          status: isPaid ? 'paid' : 'due',
+          paidAt: isPaid ? new Date() : null,
+          paymentReference: data.paymentReference || installment[0].paymentReference,
+          notes: data.notes
+            ? installment[0].notes
+              ? `${installment[0].notes}\n${data.notes}`
+              : data.notes
+            : installment[0].notes,
           updatedBy: ctx.user.id,
         })
-        .where(eq(orders.id, orderId));
-    }
+        .where(eq(paymentSchedules.id, data.installmentId))
+        .returning();
+
+      // Get all installments for order to calculate total paid
+      const allInstallments = await tx
+        .select({ paidAmount: paymentSchedules.paidAmount })
+        .from(paymentSchedules)
+        .where(eq(paymentSchedules.orderId, orderId));
+
+      const totalPaid = allInstallments.reduce((sum, i) => sum + (i.paidAmount || 0), 0);
+
+      // Update order's paid amount and balance
+      const order = await tx.select().from(orders).where(eq(orders.id, orderId)).limit(1);
+
+      if (order.length > 0) {
+        const orderTotal = order[0].total || 0;
+        const balanceDue = Math.max(0, orderTotal - totalPaid);
+
+        await tx
+          .update(orders)
+          .set({
+            paidAmount: totalPaid,
+            balanceDue,
+            paymentStatus: balanceDue <= 0 ? 'paid' : 'partial',
+            updatedBy: ctx.user.id,
+          })
+          .where(eq(orders.id, orderId));
+      }
+
+      return updatedInstallment;
+    });
 
     return updated;
   });
@@ -571,7 +574,7 @@ export const getOverdueInstallments = createServerFn({ method: 'GET' })
 export const updateInstallment = createServerFn({ method: 'POST' })
   .inputValidator(updateInstallmentSchema)
   .handler(async ({ data }): Promise<PaymentScheduleRecord> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.FINANCIAL.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.update });
     const { installmentId, ...updateData } = data;
 
     // Get existing
@@ -637,7 +640,7 @@ export const updateInstallment = createServerFn({ method: 'POST' })
 export const deletePaymentPlan = createServerFn({ method: 'POST' })
   .inputValidator(deletePaymentPlanSchema)
   .handler(async ({ data }): Promise<{ deleted: number }> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.FINANCIAL.DELETE });
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.delete });
 
     // Check for any paid installments
     const paidInstallments = await db

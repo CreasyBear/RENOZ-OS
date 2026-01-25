@@ -258,6 +258,51 @@ async function generateWarrantyNumber(organizationId: string): Promise<string> {
 }
 
 /**
+ * Generate multiple warranty numbers in WRN-YYYY-NNNNN format.
+ * Single query to get max, then generates all numbers in memory.
+ */
+async function generateWarrantyNumbers(
+  organizationId: string,
+  count: number
+): Promise<string[]> {
+  if (count === 0) return [];
+
+  const year = new Date().getFullYear();
+  const prefix = `WRN-${year}-`;
+
+  // Get the max warranty number for this year and org (single query)
+  const result = await db
+    .select({
+      maxNumber: sql<string>`MAX(${warranties.warrantyNumber})`,
+    })
+    .from(warranties)
+    .where(
+      and(
+        eq(warranties.organizationId, organizationId),
+        sql`${warranties.warrantyNumber} LIKE ${prefix + '%'}`
+      )
+    );
+
+  const maxNumber = result[0]?.maxNumber;
+  let nextSequence = 1;
+
+  if (maxNumber) {
+    const match = maxNumber.match(/WRN-\d{4}-(\d+)$/);
+    if (match) {
+      nextSequence = parseInt(match[1], 10) + 1;
+    }
+  }
+
+  // Generate all warranty numbers in memory
+  const warrantyNumbers: string[] = [];
+  for (let i = 0; i < count; i++) {
+    warrantyNumbers.push(`${prefix}${(nextSequence + i).toString().padStart(5, '0')}`);
+  }
+
+  return warrantyNumbers;
+}
+
+/**
  * Calculate expiry date from registration date and policy duration.
  */
 function calculateExpiryDate(registrationDate: Date, durationMonths: number): Date {
@@ -698,50 +743,68 @@ export const bulkRegisterWarrantiesFromCsv = typedPostFn(
       policies.map((p) => [p.id, { durationMonths: p.durationMonths, cycleLimit: p.cycleLimit }])
     );
 
-    // Generate warranty numbers and create records
-    const createdWarranties: BulkRegisterResult['createdWarranties'] = [];
+    // Pre-generate all warranty numbers in a single query
+    const warrantyNumbers = await generateWarrantyNumbers(ctx.organizationId, rows.length);
+
+    // Build all warranty records upfront
+    const warrantyValues = rows.map((row, index) => {
+      const registrationDate = new Date(row.registrationDate);
+      const policyInfo = policyDurationMap.get(row.warrantyPolicyId);
+      const expiryDate = calculateExpiryDate(registrationDate, policyInfo?.durationMonths || 12);
+
+      return {
+        organizationId: ctx.organizationId,
+        warrantyNumber: warrantyNumbers[index],
+        customerId: row.customerId,
+        productId: row.productId,
+        productSerial: row.serialNumber || null,
+        warrantyPolicyId: row.warrantyPolicyId,
+        registrationDate,
+        expiryDate,
+        status: 'active' as const,
+        createdBy: ctx.user.id,
+      };
+    });
+
+    // Single batch insert for all warranties
+    const insertedWarranties = await db
+      .insert(warranties)
+      .values(warrantyValues)
+      .returning({
+        id: warranties.id,
+        warrantyNumber: warranties.warrantyNumber,
+      });
+
+    // Build result and count by policy type
     const byPolicyType = {
       battery_performance: 0,
       inverter_manufacturer: 0,
       installation_workmanship: 0,
     };
 
-    for (const row of rows) {
-      const warrantyNumber = await generateWarrantyNumber(ctx.organizationId);
-      const registrationDate = new Date(row.registrationDate);
-      const policyInfo = policyDurationMap.get(row.warrantyPolicyId);
-      const expiryDate = calculateExpiryDate(registrationDate, policyInfo?.durationMonths || 12);
+    const createdWarranties: BulkRegisterResult['createdWarranties'] = insertedWarranties.map(
+      (warranty, index) => {
+        const row = rows[index];
+        byPolicyType[row.policyType]++;
 
-      const [warranty] = await db
-        .insert(warranties)
-        .values({
-          organizationId: ctx.organizationId,
-          warrantyNumber,
+        return {
+          id: warranty.id,
+          warrantyNumber: warranty.warrantyNumber,
           customerId: row.customerId,
           productId: row.productId,
-          productSerial: row.serialNumber || null,
-          warrantyPolicyId: row.warrantyPolicyId,
-          registrationDate,
-          expiryDate,
-          status: 'active',
-          createdBy: ctx.user.id,
-        })
-        .returning({
-          id: warranties.id,
-          warrantyNumber: warranties.warrantyNumber,
-        });
+        };
+      }
+    );
 
-      createdWarranties.push({
-        id: warranty.id,
-        warrantyNumber: warranty.warrantyNumber,
-        customerId: row.customerId,
-        productId: row.productId,
-      });
+    // Send notifications after batch insert (fire-and-forget, don't block)
+    if (sendNotifications) {
+      // Process notifications in parallel but don't await all of them to block return
+      const notificationPromises = insertedWarranties.map(async (warranty, index) => {
+        const row = rows[index];
+        const registrationDate = new Date(row.registrationDate);
+        const policyInfo = policyDurationMap.get(row.warrantyPolicyId);
+        const expiryDate = calculateExpiryDate(registrationDate, policyInfo?.durationMonths || 12);
 
-      byPolicyType[row.policyType]++;
-
-      // Trigger notification if enabled
-      if (sendNotifications) {
         try {
           await triggerWarrantyRegistrationNotification({
             warrantyId: warranty.id,
@@ -761,7 +824,10 @@ export const bulkRegisterWarrantiesFromCsv = typedPostFn(
             error
           );
         }
-      }
+      });
+
+      // Await all notifications (they run in parallel)
+      await Promise.all(notificationPromises);
     }
 
     return {

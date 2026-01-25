@@ -30,7 +30,7 @@ import {
 } from '@/lib/db/pagination';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError } from '@/lib/server/errors';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 
 // ============================================================================
 // ACTIVITY FEED
@@ -42,7 +42,7 @@ import { PERMISSIONS } from '@/lib/constants';
 export const getActivityFeed = createServerFn({ method: 'GET' })
   .inputValidator(activityFeedQuerySchema)
   .handler(async ({ data }): Promise<ReturnType<typeof buildStandardCursorResponse>> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.CUSTOMERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
     const { cursor, pageSize, entityType, entityId, action, userId, source, dateFrom, dateTo } =
       data;
@@ -121,7 +121,7 @@ export const getActivityFeed = createServerFn({ method: 'GET' })
 export const getEntityActivities = createServerFn({ method: 'GET' })
   .inputValidator(entityActivitiesQuerySchema)
   .handler(async ({ data }): Promise<ReturnType<typeof buildStandardCursorResponse>> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.CUSTOMERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
     const { entityType, entityId, cursor, pageSize } = data;
 
@@ -179,7 +179,7 @@ export const getEntityActivities = createServerFn({ method: 'GET' })
 export const getUserActivities = createServerFn({ method: 'GET' })
   .inputValidator(userActivitiesQuerySchema)
   .handler(async ({ data }): Promise<ReturnType<typeof buildStandardCursorResponse>> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.CUSTOMERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
     const { userId, cursor, pageSize } = data;
 
@@ -222,7 +222,7 @@ export const getUserActivities = createServerFn({ method: 'GET' })
 export const getActivity = createServerFn({ method: 'GET' })
   .inputValidator(activityParamsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.CUSTOMERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
     const { id } = data;
 
@@ -263,7 +263,7 @@ export const getActivity = createServerFn({ method: 'GET' })
 export const getActivityStats = createServerFn({ method: 'GET' })
   .inputValidator(activityStatsQuerySchema)
   .handler(async ({ data }): Promise<ActivityStatsResult> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.CUSTOMERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
     const { dateFrom, dateTo, groupBy } = data;
 
@@ -397,7 +397,7 @@ export const getActivityStats = createServerFn({ method: 'GET' })
 export const getActivityLeaderboard = createServerFn({ method: 'GET' })
   .inputValidator(activityStatsQuerySchema)
   .handler(async ({ data }): Promise<ActivityLeaderboardItem[]> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.CUSTOMERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
     const { dateFrom, dateTo } = data;
 
@@ -473,7 +473,7 @@ export const getActivityLeaderboard = createServerFn({ method: 'GET' })
 export const requestActivityExport = createServerFn({ method: 'POST' })
   .inputValidator(activityExportRequestSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.REPORTS.EXPORT });
+    const ctx = await withAuth({ permission: PERMISSIONS.report.export });
 
     const { format } = data;
 
@@ -510,7 +510,7 @@ export const requestActivityExport = createServerFn({ method: 'POST' })
 export const getRecentActivityCount = createServerFn({ method: 'GET' })
   .inputValidator(activityStatsQuerySchema.pick({ dateFrom: true, dateTo: true }).optional())
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.CUSTOMERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
     // Default to last 24 hours if no date range provided
     const dateFrom = data?.dateFrom ?? new Date(Date.now() - 24 * 60 * 60 * 1000);

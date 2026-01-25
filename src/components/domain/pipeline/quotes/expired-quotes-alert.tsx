@@ -46,7 +46,7 @@ import { formatDistanceToNow } from "date-fns";
 import {
   getExpiringQuotes,
   getExpiredQuotes,
-} from "@/server/functions/quote-versions";
+} from "@/server/functions/pipeline/quote-versions";
 import { ExtendValidityDialog } from "./extend-validity-dialog";
 
 // ============================================================================

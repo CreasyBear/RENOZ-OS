@@ -1,35 +1,61 @@
 # Resend Email Integration Progress
-# PRD: resend.prd.json
+# PRD: resend.prd.json (v2.0.0)
 # Started: 2026-01-17
-# Updated: 2026-01-17
+# Updated: 2026-01-25
 
-## Stories (15 total)
+## Stories (7 total - consolidated from 15)
 
-- [ ] INT-RES-001-A: Resend Webhook Endpoint and Schema
-- [ ] INT-RES-001-B: Resend Webhook Event Processing
-- [ ] INT-RES-002-A: Email Suppression Schema
-- [ ] INT-RES-002-B: Bounce and Complaint Handling Logic
-- [ ] INT-RES-002-C: Bounce Report UI and Admin Notifications
-- [ ] INT-RES-003-A: Email Analytics Server Functions
-- [ ] INT-RES-003-B: Email Analytics Dashboard Page
-- [ ] INT-RES-004: Domain Verification Status
-- [ ] INT-RES-005-A: Batch Email Schema and Queue
-- [ ] INT-RES-005-B: Batch Email Progress UI
-- [ ] INT-RES-006-A: Email Preview API
-- [ ] INT-RES-006-B: Email Testing and Preview UI
-- [ ] INT-RES-007: Suppression List Management UI
-- [ ] INT-RES-008: Email Status Dashboard Widget
-- [ ] INT-RES-009: Unsubscribe Management Flow
+- [x] INT-RES-001: Webhook Endpoint (4h) - COMPLETE
+- [x] INT-RES-002: Webhook Event Processing (6h) - COMPLETE
+- [x] INT-RES-003: Email Suppression Schema (3h) - COMPLETE
+- [x] INT-RES-004: Auto-Suppression Logic (5h) - COMPLETE
+- [ ] INT-RES-005: Email Settings Page (8h)
+- [x] INT-RES-006: Email Preview & Test Send (4h) - COMPLETE
+- [ ] INT-RES-007: Unsubscribe Enhancement (5h)
+
+Total Estimated: 35 hours
+Completed: 22 hours (INT-RES-001, 002, 003, 004, 006)
+Remaining: 13 hours (INT-RES-005, 007)
+
+## Parallelizable Stories
+INT-RES-001 + INT-RES-003 + INT-RES-006 can run in parallel (ALL DONE)
 
 ## Current Story
-Not started
+INT-RES-004 COMPLETED
+
+## INT-RES-004 Implementation Summary
+- Added bounceCount column to email_suppression schema
+- Implemented trackSoftBounce function for 3-strike rule (within 7 days)
+- Modified webhook processor to handle soft bounces (Transient)
+- Hard bounces: Immediately suppressed (Permanent type)
+- Soft bounces: Tracked with bounceCount, suppressed after 3 occurrences
+- Complaints: Immediately suppressed
+- Campaign send: Uses checkSuppressionBatchDirect for efficient batch filtering
+- Scheduled emails: Uses isEmailSuppressedDirect for single email check
+- Privacy: Logs use hashed email addresses (8-char SHA-256 prefix)
+- Added 'skipped' status to campaignRecipientStatusEnum
 
 ## Iteration Count
-Total: 0
+Total: 4 (INT-RES-001: 1, INT-RES-002: 1, INT-RES-003: 1, INT-RES-004: 1)
 Current Story: 0
 
 ## Blockers
 None
 
+## Pre-Implementation Checklist
+- [x] Add query keys to src/lib/query-keys.ts (done in INT-RES-003)
+- [x] Create enums in drizzle/schema/_shared/enums.ts (done in INT-RES-002/003)
+- [ ] Add env vars to .env.example
+
+## Architecture Decisions
+- RESEND_WEBHOOKS_ONLY: Use Resend webhooks for all delivery tracking
+- ASYNC_VIA_TRIGGER_DEV: Webhook processing in background jobs
+- SINGLE_TABLE_WITH_SOFT_DELETE: Suppression list architecture
+
+## Review Findings
+See todos/resend-integration/ for critical/important findings from multi-agent review
+
 ## Notes
-- Progress tracking initialized
+- PRD consolidated from 15 to 7 stories based on YAGNI analysis
+- Multi-agent review completed 2026-01-25
+- Security, data integrity, performance findings documented

@@ -63,3 +63,15 @@ export * from './use-quick-log';
 
 // Scheduled emails
 export * from './use-scheduled-emails';
+
+// Email suppression (Resend integration)
+export * from './use-email-suppression';
+
+// Email preview (Resend integration)
+export * from './use-email-preview';
+
+// Email analytics (Resend integration)
+export * from './use-email-analytics';
+
+// Domain verification (Resend integration)
+export * from './use-domain-verification';

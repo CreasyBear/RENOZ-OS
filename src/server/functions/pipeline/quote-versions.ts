@@ -23,13 +23,11 @@ import {
   sendQuoteSchema,
   type QuoteLineItem,
 } from '@/lib/schemas';
+import { GST_RATE } from '@/lib/order-calculations';
 
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-
-/** Australian GST rate */
-const GST_RATE = 0.1;
 
 /** Default quote validity in days */
 const DEFAULT_QUOTE_VALIDITY_DAYS = 30;
@@ -129,33 +127,38 @@ export const createQuoteVersion = createServerFn({ method: 'POST' })
       totalCents: calculateLineItemTotal(item),
     }));
 
-    // Create quote version
-    const result = await db
-      .insert(quoteVersions)
-      .values({
-        organizationId: ctx.organizationId,
-        opportunityId,
-        versionNumber,
-        items: processedItems,
-        subtotal,
-        taxAmount,
-        total,
-        notes: notes ?? null,
-        createdBy: ctx.user.id,
-      })
-      .returning();
+    // Wrap quote creation and opportunity update in transaction for atomicity
+    const quoteVersion = await db.transaction(async (tx) => {
+      // Create quote version
+      const [newVersion] = await tx
+        .insert(quoteVersions)
+        .values({
+          organizationId: ctx.organizationId,
+          opportunityId,
+          versionNumber,
+          items: processedItems,
+          subtotal,
+          taxAmount,
+          total,
+          notes: notes ?? null,
+          createdBy: ctx.user.id,
+        })
+        .returning();
 
-    // Update opportunity value to match latest quote total
-    await db
-      .update(opportunities)
-      .set({
-        value: total,
-        weightedValue: Math.round(total * ((opportunity[0].probability ?? 50) / 100)),
-        updatedBy: ctx.user.id,
-      })
-      .where(eq(opportunities.id, opportunityId));
+      // Update opportunity value to match latest quote total
+      await tx
+        .update(opportunities)
+        .set({
+          value: total,
+          weightedValue: Math.round(total * ((opportunity[0].probability ?? 50) / 100)),
+          updatedBy: ctx.user.id,
+        })
+        .where(eq(opportunities.id, opportunityId));
 
-    return { quoteVersion: result[0] };
+      return newVersion;
+    });
+
+    return { quoteVersion };
   });
 
 // ============================================================================

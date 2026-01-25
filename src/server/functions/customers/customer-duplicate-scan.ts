@@ -258,13 +258,27 @@ export const scanDuplicatesProgressive = createServerFn({ method: 'POST' })
       return { pairs: [], nextCursor: null, isComplete: true };
     }
 
-    // Find duplicates for this batch using index-accelerated search
+    // Find duplicates for this batch using a single batched query
+    // This eliminates the N+1 problem by finding all matches in one query
     const pairs: DuplicatePair[] = [];
 
-    for (const customer of batch) {
-      // Use % operator with GIN index
-      const matches = await db.execute(sql`
+    // Build a lookup map from batch for quick access
+    const batchMap = new Map(batch.map((c) => [c.id, c]));
+    const batchIds = batch.map((c) => c.id);
+
+    // Single batched query: find all matches for all customers in batch
+    // Uses LATERAL join to efficiently find top matches per customer
+    const allMatches = await db.execute(sql`
+      WITH batch_customers AS (
+        SELECT id, name, customer_code
+        FROM customers
+        WHERE id = ANY(${batchIds})
+      ),
+      ranked_matches AS (
         SELECT
+          bc.id as source_id,
+          bc.name as source_name,
+          bc.customer_code as source_code,
           c.id,
           c.customer_code,
           c.name,
@@ -273,47 +287,53 @@ export const scanDuplicatesProgressive = createServerFn({ method: 'POST' })
           c.created_at,
           ct.email,
           ct.phone,
-          similarity(c.name, ${customer.name}) as name_similarity
-        FROM customers c
-        LEFT JOIN contacts ct ON ct.customer_id = c.id AND ct.is_primary = true
-        WHERE c.organization_id = ${ctx.organizationId}
+          similarity(c.name, bc.name) as name_similarity,
+          ROW_NUMBER() OVER (PARTITION BY bc.id ORDER BY similarity(c.name, bc.name) DESC) as rn
+        FROM batch_customers bc
+        JOIN customers c ON c.name % bc.name
+          AND c.id != bc.id
+          AND c.id > bc.id  -- Only look forward to avoid duplicates
+          AND c.organization_id = ${ctx.organizationId}
           AND c.deleted_at IS NULL
-          AND c.id > ${customer.id}  -- Only look forward to avoid duplicates
-          AND c.name % ${customer.name}
           ${!includeArchived ? sql`AND c.status != 'inactive'` : sql``}
-        ORDER BY similarity(c.name, ${customer.name}) DESC
-        LIMIT 5  -- Max 5 matches per customer
-      `);
+        LEFT JOIN contacts ct ON ct.customer_id = c.id AND ct.is_primary = true
+      )
+      SELECT *
+      FROM ranked_matches
+      WHERE rn <= 5  -- Max 5 matches per customer
+        AND name_similarity >= ${threshold}
+      ORDER BY source_id, name_similarity DESC
+    `);
 
-      for (const match of matches as any[]) {
-        if (match.name_similarity >= threshold) {
-          pairs.push({
-            id: `pair-${customer.id}-${match.id}`,
-            customer1: {
-              id: customer.id,
-              customerCode: customer.customer_code,
-              name: customer.name,
-              email: null, // Would need to fetch
-              phone: null,
-              status: 'active',
-              lifetimeValue: 0,
-              createdAt: '',
-            },
-            customer2: {
-              id: match.id,
-              customerCode: match.customer_code,
-              name: match.name,
-              email: match.email,
-              phone: match.phone,
-              status: match.status,
-              lifetimeValue: Number(match.lifetime_value),
-              createdAt: match.created_at,
-            },
-            matchScore: match.name_similarity,
-            matchReasons: [`Name: ${Math.round(match.name_similarity * 100)}% similar`],
-            status: 'pending',
-          });
-        }
+    for (const match of allMatches as any[]) {
+      const sourceCustomer = batchMap.get(match.source_id);
+      if (sourceCustomer && match.name_similarity >= threshold) {
+        pairs.push({
+          id: `pair-${match.source_id}-${match.id}`,
+          customer1: {
+            id: match.source_id,
+            customerCode: match.source_code,
+            name: match.source_name,
+            email: null, // Source customer contact info not fetched in batch query
+            phone: null,
+            status: 'active',
+            lifetimeValue: 0,
+            createdAt: '',
+          },
+          customer2: {
+            id: match.id,
+            customerCode: match.customer_code,
+            name: match.name,
+            email: match.email,
+            phone: match.phone,
+            status: match.status,
+            lifetimeValue: Number(match.lifetime_value),
+            createdAt: match.created_at,
+          },
+          matchScore: match.name_similarity,
+          matchReasons: [`Name: ${Math.round(match.name_similarity * 100)}% similar`],
+          status: 'pending',
+        });
       }
     }
 

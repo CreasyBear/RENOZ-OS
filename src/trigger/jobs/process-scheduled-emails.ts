@@ -8,6 +8,7 @@
  * @see https://trigger.dev/docs/documentation/guides/scheduled-tasks
  */
 import { cronTrigger } from "@trigger.dev/sdk";
+import { Resend } from "resend";
 import { client } from "../client";
 import {
   getDueScheduledEmails,
@@ -15,12 +16,33 @@ import {
 } from "@/lib/server/scheduled-emails";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { emailHistory, type NewEmailHistory } from "drizzle/schema";
+import { emailHistory, scheduledEmails, type NewEmailHistory } from "drizzle/schema";
 import {
   prepareEmailForTracking,
   TRACKING_BASE_URL,
 } from "@/lib/server/email-tracking";
 import { createEmailSentActivity } from "@/lib/server/activity-bridge";
+import { isEmailSuppressedDirect } from "@/server/functions/communications/email-suppression";
+import { generateUnsubscribeUrl } from "@/lib/server/unsubscribe-tokens";
+import { createHash } from "crypto";
+
+// Initialize Resend client
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// ============================================================================
+// PRIVACY HELPERS (INT-RES-004)
+// ============================================================================
+
+/**
+ * Hash an email address for privacy-safe logging.
+ * Returns first 8 chars of SHA-256 hash.
+ */
+function hashEmail(email: string): string {
+  return createHash("sha256")
+    .update(email.toLowerCase().trim())
+    .digest("hex")
+    .slice(0, 8);
+}
 
 // ============================================================================
 // EMAIL TEMPLATES (simple template rendering)
@@ -133,23 +155,68 @@ export const processScheduledEmailsJob = client.defineJob({
     await io.logger.info(`Found ${dueEmails.length} scheduled emails to process`);
 
     if (dueEmails.length === 0) {
-      return { processed: 0, sent: 0, failed: 0 };
+      return { processed: 0, sent: 0, failed: 0, skipped: 0 };
     }
 
     let sent = 0;
     let failed = 0;
+    let skipped = 0; // INT-RES-004: Track suppressed emails
 
     // Process each email
     for (const scheduledEmail of dueEmails) {
       const taskId = `send-email-${scheduledEmail.id}`;
 
+      // INT-RES-004: Check if recipient is suppressed before sending
+      const suppression = await isEmailSuppressedDirect(
+        scheduledEmail.organizationId,
+        scheduledEmail.recipientEmail
+      );
+
+      if (suppression.suppressed) {
+        // INT-RES-004: Log with hashed email for privacy
+        await io.logger.info(`Skipping suppressed scheduled email: ${hashEmail(scheduledEmail.recipientEmail)} (reason: ${suppression.reason})`, {
+          scheduledEmailId: scheduledEmail.id,
+          reason: suppression.reason,
+          emailHash: hashEmail(scheduledEmail.recipientEmail),
+        });
+
+        // Mark scheduled email as skipped
+        await db
+          .update(scheduledEmails)
+          .set({
+            status: "cancelled",
+            cancelledAt: new Date(),
+            cancelReason: `Suppressed: ${suppression.reason}`,
+            updatedAt: new Date(),
+          })
+          .where(eq(scheduledEmails.id, scheduledEmail.id));
+
+        skipped++;
+        continue;
+      }
+
       try {
         await io.runTask(taskId, async () => {
           await io.logger.info(`Processing scheduled email ${scheduledEmail.id}`);
 
+          // INT-RES-007: Generate secure unsubscribe URL for this recipient
+          // Note: scheduledEmails table has customerId, not contactId
+          // We use customerId if available, otherwise fall back to email record ID
+          const unsubscribeUrl = generateUnsubscribeUrl({
+            contactId: scheduledEmail.customerId || scheduledEmail.id,
+            email: scheduledEmail.recipientEmail,
+            channel: "email",
+            organizationId: scheduledEmail.organizationId,
+          });
+
           // Get template content
           const template = getTemplateContent(scheduledEmail.templateType);
-          const variables = (scheduledEmail.templateData?.variables || {}) as Record<string, string | number | boolean>;
+          const baseVariables = (scheduledEmail.templateData?.variables || {}) as Record<string, string | number | boolean>;
+          // INT-RES-007: Add unsubscribe URL to template variables
+          const variables: Record<string, string | number | boolean> = {
+            ...baseVariables,
+            unsubscribe_url: unsubscribeUrl,
+          };
 
           // Check for subject/body override
           const templateData = scheduledEmail.templateData || {};
@@ -185,22 +252,58 @@ export const processScheduledEmailsJob = client.defineJob({
           // Convert Map to plain object for JSON storage
           const linkMapObject = Object.fromEntries(linkMap);
 
-          // TODO: Actually send the email via email provider (Resend, SendGrid, etc.)
-          // For now, we just log and mark as sent
-          // The trackedHtml would be sent as the email body when integrated with a provider
-          await io.logger.info(`Would send email to ${scheduledEmail.recipientEmail}`, {
+          // Get sender email from environment
+          const fromEmail = process.env.EMAIL_FROM || "noreply@resend.dev";
+          const fromName = process.env.EMAIL_FROM_NAME || "Renoz CRM";
+          const fromAddress = `${fromName} <${fromEmail}>`;
+
+          // Convert HTML to plain text for email
+          const textContent = trackedHtml
+            .replace(/<br\s*\/?>/gi, "\n")
+            .replace(/<\/p>/gi, "\n\n")
+            .replace(/<\/div>/gi, "\n")
+            .replace(/<\/li>/gi, "\n")
+            .replace(/<[^>]+>/g, "")
+            .replace(/&nbsp;/g, " ")
+            .replace(/&amp;/g, "&")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&quot;/g, '"')
+            .replace(/&#039;/g, "'")
+            .replace(/\n{3,}/g, "\n\n")
+            .trim();
+
+          // Send the email via Resend with List-Unsubscribe headers
+          const { data: sendResult, error: sendError } = await resend.emails.send({
+            from: fromAddress,
+            to: [scheduledEmail.recipientEmail],
             subject,
-            recipientName: scheduledEmail.recipientName,
-            bodyLength: trackedHtml.length,
+            html: trackedHtml,
+            text: textContent,
+            headers: {
+              // INT-RES-007: CAN-SPAM compliant unsubscribe headers
+              'List-Unsubscribe': `<${unsubscribeUrl}>`,
+              'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+            },
           });
 
-          // Update email history status to sent and store linkMap for validation
+          if (sendError) {
+            throw new Error(sendError.message || "Failed to send email via Resend");
+          }
+
+          await io.logger.info(`Sent scheduled email (emailHistoryId: ${emailRecord.id}, resendMessageId: ${sendResult?.id})`, {
+            subject,
+            recipientName: scheduledEmail.recipientName,
+          });
+
+          // Update email history status to sent with Resend message ID for webhook correlation
           await db
             .update(emailHistory)
             .set({
               status: "sent",
               sentAt: new Date(),
               bodyHtml: trackedHtml, // Save tracked version
+              resendMessageId: sendResult?.id, // Store for webhook correlation
               metadata: {
                 linkMap: linkMapObject, // Store linkMap for URL validation
               },
@@ -237,6 +340,7 @@ export const processScheduledEmailsJob = client.defineJob({
       processed: dueEmails.length,
       sent,
       failed,
+      skipped, // INT-RES-004: Include suppressed count
     };
   },
 });

@@ -106,7 +106,7 @@ export const QuickActionsBar = memo(function QuickActionsBar({
           if (action.href) {
             return (
               <Button key={action.id} variant="outline" size="sm" asChild>
-                <Link to={action.href}>
+                <Link to={action.href as any}>
                   <Icon className="h-4 w-4 mr-2" aria-hidden="true" />
                   {action.label}
                 </Link>
@@ -144,7 +144,7 @@ export const QuickActionsBar = memo(function QuickActionsBar({
               if (action.href) {
                 return (
                   <DropdownMenuItem key={action.id} asChild>
-                    <Link to={action.href} className="flex items-center">
+                    <Link to={action.href as any} className="flex items-center">
                       <Icon className="h-4 w-4 mr-2" aria-hidden="true" />
                       <div>
                         <div>{action.label}</div>
@@ -199,7 +199,7 @@ export const QuickActionsBar = memo(function QuickActionsBar({
               if (action.href) {
                 return (
                   <DropdownMenuItem key={action.id} asChild>
-                    <Link to={action.href} className="flex items-center">
+                    <Link to={action.href as any} className="flex items-center">
                       <Icon className="h-4 w-4 mr-2" aria-hidden="true" />
                       <div>
                         <div>{action.label}</div>
@@ -266,7 +266,7 @@ export const QuickActionsGrid = memo(function QuickActionsGrid({
                 className="h-auto py-4 flex flex-col items-center gap-2"
                 asChild
               >
-                <Link to={action.href}>
+                <Link to={action.href as any}>
                   <Icon className="h-6 w-6" aria-hidden="true" />
                   <span className="text-xs text-center">{action.label}</span>
                 </Link>

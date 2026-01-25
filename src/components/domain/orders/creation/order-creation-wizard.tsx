@@ -48,7 +48,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { CustomerSelector, type SelectedCustomer } from "./customer-selector";
+import { GST_RATE } from "@/lib/order-calculations";
+import { CustomerSelectorContainer } from "./customer-selector-container";
+import type { SelectedCustomer } from "./customer-selector";
 import { ProductSelector, type OrderLineItemDraft } from "./product-selector";
 
 // ============================================================================
@@ -148,8 +150,6 @@ const STEPS: Step[] = [
   { id: 5, name: "Review", description: "Review and confirm", icon: FileCheck },
 ];
 
-const GST_RATE = 0.1; // 10% GST for Australia
-
 // ============================================================================
 // HELPERS
 // ============================================================================
@@ -197,7 +197,7 @@ const StepCustomer = memo(function StepCustomer({ state, setState }: StepProps) 
           Choose the customer for this order
         </p>
       </div>
-      <CustomerSelector
+      <CustomerSelectorContainer
         selectedCustomerId={state.customer?.id ?? null}
         onSelect={(customer) => setState((s) => ({ ...s, customer }))}
       />

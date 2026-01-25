@@ -9,6 +9,7 @@
 
 import { eventTrigger } from "@trigger.dev/sdk";
 import { z } from "zod";
+import { Resend } from "resend";
 import { client } from "../client";
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -24,6 +25,27 @@ import {
   TRACKING_BASE_URL,
 } from "@/lib/server/email-tracking";
 import { createEmailActivitiesBatch, type EmailActivityInput } from "@/lib/server/activity-bridge";
+import { checkSuppressionBatchDirect } from "@/server/functions/communications/email-suppression";
+import { generateUnsubscribeUrl } from "@/lib/server/unsubscribe-tokens";
+import { createHash } from "crypto";
+
+// Initialize Resend client
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+// ============================================================================
+// PRIVACY HELPERS (INT-RES-004)
+// ============================================================================
+
+/**
+ * Hash an email address for privacy-safe logging.
+ * Returns first 8 chars of SHA-256 hash.
+ */
+function hashEmail(email: string): string {
+  return createHash("sha256")
+    .update(email.toLowerCase().trim())
+    .digest("hex")
+    .slice(0, 8);
+}
 
 // ============================================================================
 // CONFIGURATION
@@ -185,6 +207,7 @@ export const sendCampaignJob = client.defineJob({
     // Track stats
     let totalSent = 0;
     let totalFailed = 0;
+    let totalSkipped = 0; // INT-RES-004: Track suppressed emails
     let batchNumber = 0;
 
     // Process recipients in batches
@@ -213,6 +236,17 @@ export const sendCampaignJob = client.defineJob({
 
       await io.logger.info(`Processing batch ${batchNumber} with ${recipients.length} recipients`);
 
+      // INT-RES-004: Check suppression list for all recipients in batch
+      const suppressionResults = await checkSuppressionBatchDirect(
+        campaign.organizationId,
+        recipients.map((r) => r.email)
+      );
+
+      // Create a suppression lookup map
+      const suppressionMap = new Map(
+        suppressionResults.map((r) => [r.email.toLowerCase(), r])
+      );
+
       // Collect activity inputs for batch insert (PERF-001)
       const activityInputs: EmailActivityInput[] = [];
 
@@ -220,14 +254,46 @@ export const sendCampaignJob = client.defineJob({
       for (const recipient of recipients) {
         const taskId = `send-to-${recipient.id}`;
 
+        // INT-RES-004: Check if recipient is suppressed
+        const suppression = suppressionMap.get(recipient.email.toLowerCase());
+        if (suppression?.suppressed) {
+          // INT-RES-004: Log with hashed email for privacy
+          await io.logger.info(`Skipping suppressed email: ${hashEmail(recipient.email)} (reason: ${suppression.reason})`, {
+            recipientId: recipient.id,
+            reason: suppression.reason,
+            emailHash: hashEmail(recipient.email),
+          });
+
+          // Mark recipient as skipped
+          await db
+            .update(campaignRecipients)
+            .set({
+              status: "skipped",
+              errorMessage: `Suppressed: ${suppression.reason}`,
+            })
+            .where(eq(campaignRecipients.id, recipient.id));
+
+          totalSkipped++;
+          continue;
+        }
+
         try {
           await io.runTask(taskId, async () => {
+            // INT-RES-007: Generate secure unsubscribe URL for this recipient
+            const unsubscribeUrl = generateUnsubscribeUrl({
+              contactId: recipient.contactId || recipient.id, // Use contactId if available
+              email: recipient.email,
+              channel: "email",
+              organizationId: campaign.organizationId,
+            });
+
             // Merge recipient-specific data with campaign data
             const recipientData = (recipient.recipientData ?? {}) as Record<string, unknown>;
             const variables: Record<string, string | number | boolean> = {
               ...campaignVariables,
               first_name: recipient.name?.split(" ")[0] || "there",
               email: recipient.email,
+              unsubscribe_url: unsubscribeUrl, // INT-RES-007: Add unsubscribe URL to template variables
               ...Object.fromEntries(
                 Object.entries(recipientData).filter(([, v]) =>
                   typeof v === "string" || typeof v === "number" || typeof v === "boolean"
@@ -270,11 +336,29 @@ export const sendCampaignJob = client.defineJob({
               .set({ bodyHtml: trackedHtml })
               .where(eq(emailHistory.id, emailRecord.id));
 
-            // TODO: Actually send the email via Resend
-            // In production, this would call the Resend API
-            // For now, we'll simulate success
+            // Get sender email from environment
+            const fromEmail = process.env.EMAIL_FROM || "noreply@resend.dev";
+            const fromName = process.env.EMAIL_FROM_NAME || "Renoz CRM";
+            const fromAddress = `${fromName} <${fromEmail}>`;
 
-            await io.logger.info(`Sent email to ${recipient.email} (emailHistoryId: ${emailRecord.id})`);
+            // Send the email via Resend with List-Unsubscribe headers
+            const { data: sendResult, error: sendError } = await resend.emails.send({
+              from: fromAddress,
+              to: [recipient.email],
+              subject,
+              html: trackedHtml,
+              headers: {
+                // INT-RES-007: CAN-SPAM compliant unsubscribe headers
+                'List-Unsubscribe': `<${unsubscribeUrl}>`,
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+              },
+            });
+
+            if (sendError) {
+              throw new Error(sendError.message || "Failed to send email via Resend");
+            }
+
+            await io.logger.info(`Sent email to recipient (emailHistoryId: ${emailRecord.id}, resendMessageId: ${sendResult?.id})`);
 
             // Update recipient status to sent
             await db
@@ -286,10 +370,14 @@ export const sendCampaignJob = client.defineJob({
               })
               .where(eq(campaignRecipients.id, recipient.id));
 
-            // Update email history status
+            // Update email history status with Resend message ID for webhook correlation
             await db
               .update(emailHistory)
-              .set({ status: "sent", sentAt: new Date() })
+              .set({
+                status: "sent",
+                sentAt: new Date(),
+                resendMessageId: sendResult?.id,
+              })
               .where(eq(emailHistory.id, emailRecord.id));
 
             // Collect activity input for batch insert (PERF-001)
@@ -343,13 +431,15 @@ export const sendCampaignJob = client.defineJob({
         })
         .where(eq(emailCampaigns.id, campaignId));
 
-      // Reset batch counters
+      // Log batch stats (INT-RES-004: include skipped count)
       const batchSent = totalSent;
       const batchFailed = totalFailed;
+      const batchSkipped = totalSkipped;
       totalSent = 0;
       totalFailed = 0;
+      totalSkipped = 0;
 
-      await io.logger.info(`Batch ${batchNumber} complete: ${batchSent} sent, ${batchFailed} failed`);
+      await io.logger.info(`Batch ${batchNumber} complete: ${batchSent} sent, ${batchFailed} failed, ${batchSkipped} skipped (suppressed)`);
 
       // Delay between batches to respect rate limits
       if (hasMore && recipients.length === batchSize) {

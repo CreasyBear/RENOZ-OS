@@ -29,7 +29,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toastSuccess, toastError } from "@/hooks";
-import { generateQuotePdf } from "@/server/functions/quote-versions";
+import { generateQuotePdf } from "@/server/functions/pipeline/quote-versions";
 import { FormatAmount } from "@/components/shared/format";
 import type { QuoteVersion } from "@/lib/schemas/pipeline";
 

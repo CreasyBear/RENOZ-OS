@@ -18,7 +18,7 @@ import {
   pgPolicy,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
-import { emailStatusEnum } from "../_shared/enums";
+import { emailStatusEnum, bounceTypeEnum } from "../_shared/enums";
 import { organizations } from "../settings/organizations";
 import { emailCampaigns } from "./email-campaigns";
 import { emailTemplates } from "./email-templates";
@@ -119,6 +119,9 @@ export const emailHistory = pgTable(
     // Status tracking
     status: emailStatusEnum("status").notNull().default("pending"),
 
+    // Resend integration - message ID for webhook correlation (INT-RES-002)
+    resendMessageId: text("resend_message_id"),
+
     // Campaign tracking (FOUND-SCHEMA-004 enhancement)
     campaignId: uuid("campaign_id").references(() => emailCampaigns.id, {
       onDelete: "set null",
@@ -137,6 +140,8 @@ export const emailHistory = pgTable(
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
     bouncedAt: timestamp("bounced_at", { withTimezone: true }),
     bounceReason: text("bounce_reason"),
+    bounceType: bounceTypeEnum("bounce_type"), // hard or soft bounce (INT-RES-002)
+    complainedAt: timestamp("complained_at", { withTimezone: true }), // Spam complaint timestamp
 
     // Additional metadata
     metadata: jsonb("metadata").$type<EmailMetadata>().default({}),
@@ -170,6 +175,11 @@ export const emailHistory = pgTable(
 
     // Sender history
     senderIdx: index("idx_email_history_sender").on(table.senderId),
+
+    // Resend webhook correlation (INT-RES-002)
+    resendMessageIdx: index("idx_email_history_resend_message").on(
+      table.resendMessageId
+    ),
 
     // RLS Policies (append-only)
     selectPolicy: pgPolicy("email_history_select_policy", {

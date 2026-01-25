@@ -961,6 +961,37 @@ export const queryKeys = {
     // Customer Communications
     customerCommunications: (customerId: string) =>
       [...queryKeys.communications.all, 'customer', customerId] as const,
+
+    // Email Suppression (Resend Integration)
+    emailSuppression: {
+      all: () => [...queryKeys.communications.all, 'emailSuppression'] as const,
+      lists: () => [...queryKeys.communications.all, 'emailSuppression', 'list'] as const,
+      list: (filters?: Record<string, unknown>) =>
+        [...queryKeys.communications.all, 'emailSuppression', 'list', filters ?? {}] as const,
+      check: (email: string) =>
+        [...queryKeys.communications.all, 'emailSuppression', 'check', email] as const,
+    },
+
+    // Email Analytics (Resend Integration)
+    emailAnalytics: {
+      all: () => [...queryKeys.communications.all, 'emailAnalytics'] as const,
+      metrics: (filters?: Record<string, unknown>) =>
+        [...queryKeys.communications.all, 'emailAnalytics', 'metrics', filters ?? {}] as const,
+    },
+
+    // Domain Verification (Resend Integration)
+    domainVerification: {
+      all: () => [...queryKeys.communications.all, 'domainVerification'] as const,
+      status: () =>
+        [...queryKeys.communications.all, 'domainVerification', 'status'] as const,
+    },
+
+    // Email Preview (Resend Integration)
+    emailPreview: {
+      all: () => [...queryKeys.communications.all, 'emailPreview'] as const,
+      render: (templateId: string, data?: Record<string, unknown>) =>
+        [...queryKeys.communications.all, 'emailPreview', 'render', templateId, data ?? {}] as const,
+    },
   },
 
   // -------------------------------------------------------------------------

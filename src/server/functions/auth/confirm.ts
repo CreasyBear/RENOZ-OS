@@ -111,7 +111,7 @@ export const confirmEmailFn = createServerFn({ method: 'GET' })
     const next = _next?.startsWith('/') ? _next : '/';
 
     if (token_hash && type) {
-      const supabase = createClient();
+      const supabase = createServerSupabase(request);
 
       const { error } = await supabase.auth.verifyOtp({
         type,

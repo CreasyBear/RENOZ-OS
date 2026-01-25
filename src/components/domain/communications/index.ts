@@ -42,3 +42,9 @@ export type { ScheduleEmailDialogProps } from './emails/schedule-email-dialog';
 
 // --- Signatures ---
 export * from './signatures';
+
+// --- Templates (Resend Integration) ---
+export * from './templates';
+
+// --- Email Settings (Resend Integration) ---
+export * from './settings';

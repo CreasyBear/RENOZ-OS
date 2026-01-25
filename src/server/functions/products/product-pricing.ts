@@ -14,7 +14,7 @@ import { cache } from 'react';
 import { db } from '@/lib/db';
 import { products, productPriceTiers, customerProductPrices, priceHistory } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import {
   createPriceTierSchema,
@@ -211,7 +211,7 @@ export const listPriceTiers = createServerFn({ method: 'GET' })
 export const createPriceTier = createServerFn({ method: 'POST' })
   .inputValidator(createPriceTierSchema)
   .handler(async ({ data }): Promise<ProductPriceTier> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     // Verify product exists
     const [product] = await db
@@ -271,7 +271,7 @@ export const createPriceTier = createServerFn({ method: 'POST' })
 export const updatePriceTier = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }).merge(updatePriceTierSchema))
   .handler(async ({ data }): Promise<ProductPriceTier> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
     const { id, ...updateData } = data;
 
     const [existing] = await db
@@ -301,7 +301,7 @@ export const updatePriceTier = createServerFn({ method: 'POST' })
 export const deletePriceTier = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }): Promise<{ success: boolean }> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     const [existing] = await db
       .select({ id: productPriceTiers.id })
@@ -334,7 +334,7 @@ export const setPriceTiers = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }): Promise<ProductPriceTier[]> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     // Verify product exists
     const [product] = await db
@@ -421,7 +421,7 @@ export const listCustomerPrices = createServerFn({ method: 'GET' })
 export const setCustomerPrice = createServerFn({ method: 'POST' })
   .inputValidator(createCustomerPriceSchema)
   .handler(async ({ data }): Promise<CustomerProductPrice> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     // Verify product exists
     const [product] = await db
@@ -489,7 +489,7 @@ export const setCustomerPrice = createServerFn({ method: 'POST' })
 export const deleteCustomerPrice = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }): Promise<{ success: boolean }> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     const [existing] = await db
       .select({ id: customerProductPrices.id })
@@ -631,7 +631,7 @@ export const bulkUpdatePrices = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }): Promise<BulkPriceUpdateResult> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     // Validate batch size
     if (data.updates.length > MAX_BATCH_SIZE) {
@@ -741,7 +741,7 @@ export const applyPriceAdjustment = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }): Promise<BulkPriceUpdateResult> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     // Validate batch size
     if (data.productIds.length > MAX_BATCH_SIZE) {

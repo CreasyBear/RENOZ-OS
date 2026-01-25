@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { products, productImages } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
@@ -137,7 +137,7 @@ export const addProductImage = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }): Promise<ProductImage> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     // Verify product exists
     const [product] = await db
@@ -246,7 +246,7 @@ export const updateProductImage = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }): Promise<ProductImage> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
     const { id, ...updateData } = data;
 
     const [existing] = await db
@@ -276,7 +276,7 @@ export const updateProductImage = createServerFn({ method: 'POST' })
 export const deleteProductImage = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }): Promise<{ success: boolean; wassPrimary: boolean }> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     const [existing] = await db
       .select()
@@ -329,7 +329,7 @@ export const deleteProductImage = createServerFn({ method: 'POST' })
 export const setPrimaryImage = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }): Promise<ProductImage> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     const [image] = await db
       .select()
@@ -380,7 +380,7 @@ export const reorderProductImages = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }): Promise<{ success: boolean }> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     // Verify all images belong to this product
     const images = await db
@@ -425,7 +425,7 @@ export const bulkDeleteImages = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }): Promise<{ deleted: number; primaryReassigned: boolean }> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     // Get images to delete
     const images = await db
@@ -493,7 +493,7 @@ export const bulkUpdateAltText = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }): Promise<{ updated: number }> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     let updated = 0;
 

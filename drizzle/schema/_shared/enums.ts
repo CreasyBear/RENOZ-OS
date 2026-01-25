@@ -400,6 +400,7 @@ export const campaignRecipientStatusEnum = pgEnum("campaign_recipient_status", [
   "bounced",
   "failed",
   "unsubscribed",
+  "skipped", // INT-RES-004: Added for suppressed recipients
 ]);
 
 export const scheduledCallStatusEnum = pgEnum("scheduled_call_status", [
@@ -720,4 +721,20 @@ export const reportFormatEnum = pgEnum("report_format", [
   "csv",
   "xlsx",
   "html",
+]);
+
+// ============================================================================
+// EMAIL DELIVERY & SUPPRESSION ENUMS (Resend Integration)
+// ============================================================================
+
+export const suppressionReasonEnum = pgEnum("suppression_reason", [
+  "bounce",
+  "complaint",
+  "unsubscribe",
+  "manual",
+]);
+
+export const bounceTypeEnum = pgEnum("bounce_type", [
+  "hard",
+  "soft",
 ]);

@@ -744,14 +744,15 @@ export const assignCustomerTag = createServerFn({ method: 'POST' })
 
     const { customerId, tagId, notes } = data;
 
-    // Check if assignment already exists
+    // Check if assignment already exists (include org filter for tenant isolation)
     const existing = await db
       .select()
       .from(customerTagAssignments)
       .where(
         and(
           eq(customerTagAssignments.customerId, customerId),
-          eq(customerTagAssignments.tagId, tagId)
+          eq(customerTagAssignments.tagId, tagId),
+          eq(customerTagAssignments.organizationId, ctx.organizationId)
         )
       )
       .limit(1);
@@ -880,7 +881,7 @@ export const createCustomerHealthMetric = createServerFn({ method: 'POST' })
       })
       .returning();
 
-    // Update customer's current health score
+    // Update customer's current health score (include org filter for tenant isolation)
     if (data.overallScore !== undefined) {
       await db
         .update(customers)
@@ -888,7 +889,12 @@ export const createCustomerHealthMetric = createServerFn({ method: 'POST' })
           healthScore: Math.round(data.overallScore),
           healthScoreUpdatedAt: new Date().toISOString(),
         })
-        .where(eq(customers.id, data.customerId));
+        .where(
+          and(
+            eq(customers.id, data.customerId),
+            eq(customers.organizationId, ctx.organizationId)
+          )
+        );
     }
 
     return result[0];
@@ -1078,13 +1084,20 @@ export const bulkAssignTags = createServerFn({ method: 'POST' })
         {} as Record<string, number>
       );
 
-      for (const [tagId, count] of Object.entries(tagCounts)) {
-        await db
-          .update(customerTags)
-          .set({
-            usageCount: sql`${customerTags.usageCount} + ${count}`,
-          })
-          .where(eq(customerTags.id, tagId));
+      if (Object.keys(tagCounts).length > 0) {
+        const tagIds = Object.keys(tagCounts);
+        await db.execute(sql`
+          UPDATE customer_tags
+          SET usage_count = usage_count + CASE id
+            ${sql.join(
+              Object.entries(tagCounts).map(([tagId, count]) =>
+                sql`WHEN ${tagId}::uuid THEN ${count}`
+              ),
+              sql` `
+            )}
+          END
+          WHERE id = ANY(${tagIds}::uuid[])
+        `);
       }
     }
 
@@ -1157,16 +1170,18 @@ export const mergeCustomers = createServerFn({ method: 'POST' })
       .from(customerTagAssignments)
       .where(inArray(customerTagAssignments.customerId, duplicateCustomerIds));
 
-    for (const assignment of duplicateAssignments) {
+    if (duplicateAssignments.length > 0) {
       await db
         .insert(customerTagAssignments)
-        .values({
-          customerId: primaryCustomerId,
-          tagId: assignment.tagId,
-          organizationId: ctx.organizationId,
-          assignedBy: ctx.user.id,
-          notes: assignment.notes,
-        })
+        .values(
+          duplicateAssignments.map((assignment) => ({
+            customerId: primaryCustomerId,
+            tagId: assignment.tagId,
+            organizationId: ctx.organizationId,
+            assignedBy: ctx.user.id,
+            notes: assignment.notes,
+          }))
+        )
         .onConflictDoNothing();
     }
 

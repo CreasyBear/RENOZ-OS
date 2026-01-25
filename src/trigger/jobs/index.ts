@@ -71,6 +71,26 @@ export {
   cleanupSoftDeletedFilesJob,
 } from './cleanup-files'
 
+// Resend Webhook Processing
+export { processResendWebhookJob } from './process-resend-webhook'
+
+// Security: Scheduled Maintenance Jobs
+// These replace public server functions that were vulnerable to unauthorized calls
+export {
+  expireInvitationsTask,
+  expireInvitationsSchedule,
+} from './expire-invitations'
+
+export {
+  autoEscalateApprovalsTask,
+  autoEscalateApprovalsSchedule,
+} from './auto-escalate-approvals'
+
+export {
+  checkInventoryAlertsTask,
+  checkInventoryAlertsSchedule,
+} from './check-inventory-alerts'
+
 // ============================================================================
 // ALL JOBS ARRAY
 // ============================================================================
@@ -109,6 +129,19 @@ import {
   warmDashboardCacheJob,
   warmOrgCacheJob,
 } from './cache-warming';
+import { processResendWebhookJob } from './process-resend-webhook';
+import {
+  expireInvitationsTask,
+  expireInvitationsSchedule,
+} from './expire-invitations';
+import {
+  autoEscalateApprovalsTask,
+  autoEscalateApprovalsSchedule,
+} from './auto-escalate-approvals';
+import {
+  checkInventoryAlertsTask,
+  checkInventoryAlertsSchedule,
+} from './check-inventory-alerts';
 
 /**
  * All registered jobs for Trigger.dev
@@ -136,4 +169,10 @@ export const jobs = [
   cacheInvalidationJob,
   warmDashboardCacheJob,
   warmOrgCacheJob,
+  // Resend Integration
+  processResendWebhookJob,
+  // Security: Scheduled Maintenance Jobs
+  expireInvitationsTask,
+  autoEscalateApprovalsTask,
+  checkInventoryAlertsTask,
 ]

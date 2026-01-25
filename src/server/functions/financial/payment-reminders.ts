@@ -19,7 +19,7 @@ import {
   customers as customersTable,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import {
   idParamSchema,
@@ -114,7 +114,7 @@ function formatDate(date: Date): string {
 export const createReminderTemplate = createServerFn()
   .inputValidator(createReminderTemplateSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SETTINGS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
     const [template] = await db
       .insert(reminderTemplates)
@@ -139,7 +139,7 @@ export const createReminderTemplate = createServerFn()
 export const updateReminderTemplate = createServerFn()
   .inputValidator(updateReminderTemplateSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SETTINGS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
     const { id, ...updates } = data;
 
     // Filter out undefined values
@@ -173,7 +173,7 @@ export const updateReminderTemplate = createServerFn()
 export const deleteReminderTemplate = createServerFn()
   .inputValidator(idParamSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SETTINGS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.settings.update });
 
     const [deleted] = await db
       .delete(reminderTemplates)

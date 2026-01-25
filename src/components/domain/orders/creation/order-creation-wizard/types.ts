@@ -85,7 +85,7 @@ export type Step = {
   icon: typeof User;
 };
 
-export const GST_RATE = 0.1; // 10% GST for Australia
+export { GST_RATE } from '@/lib/order-calculations';
 
 export const formatPrice = (cents: number) =>
   new Intl.NumberFormat('en-AU', {

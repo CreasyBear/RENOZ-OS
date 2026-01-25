@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { toastSuccess, toastError } from "@/hooks";
-import { extendQuoteValidity } from "@/server/functions/quote-versions";
+import { extendQuoteValidity } from "@/server/functions/pipeline/quote-versions";
 
 // ============================================================================
 // TYPES

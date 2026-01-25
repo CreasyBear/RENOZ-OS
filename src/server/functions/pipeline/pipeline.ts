@@ -45,6 +45,7 @@ import {
   paginationSchema,
 } from '@/lib/schemas';
 import { withAuth } from '@/lib/server/protected';
+import { ConflictError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 
 // ============================================================================
@@ -399,17 +400,9 @@ export const updateOpportunity = createServerFn({ method: 'POST' })
       throw new Error('Opportunity not found');
     }
 
-    // Optimistic locking check
-    if (version !== undefined && current[0].version !== version) {
-      throw new Error(
-        'Opportunity has been modified by another user. Please refresh and try again.'
-      );
-    }
-
-    // Prepare update data
+    // Prepare update data (version will be incremented atomically in SQL)
     const updateData: Record<string, unknown> = {
       updatedBy: ctx.user.id,
-      version: current[0].version + 1,
     };
 
     if (updates.title !== undefined) updateData.title = updates.title;
@@ -436,11 +429,28 @@ export const updateOpportunity = createServerFn({ method: 'POST' })
     if (updates.tags !== undefined) updateData.tags = updates.tags;
 
     const updated = await db.transaction(async (tx) => {
+      // Atomic optimistic locking: version check in WHERE clause + increment in SET
       const result = await tx
         .update(opportunities)
-        .set(updateData)
-        .where(eq(opportunities.id, id))
+        .set({
+          ...updateData,
+          version: sql`${opportunities.version} + 1`,
+        })
+        .where(
+          and(
+            eq(opportunities.id, id),
+            // Only check version if provided (optimistic locking)
+            version !== undefined ? eq(opportunities.version, version) : sql`true`
+          )
+        )
         .returning();
+
+      // If no rows updated, another user modified the record
+      if (result.length === 0) {
+        throw new ConflictError(
+          'Opportunity has been modified by another user. Please refresh and try again.'
+        );
+      }
 
       await enqueueSearchIndexOutbox(
         {
@@ -496,13 +506,6 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
       throw new Error('Opportunity not found');
     }
 
-    // Optimistic locking check
-    if (version !== undefined && current[0].version !== version) {
-      throw new Error(
-        'Opportunity has been modified by another user. Please refresh and try again.'
-      );
-    }
-
     // Validate win/loss reason for closed stages
     if ((stage === 'won' || stage === 'lost') && !winLossReasonId) {
       // Allow closing without reason, but validate if provided
@@ -512,13 +515,12 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
     const actualProbability = probability ?? getDefaultProbability(stage);
     const weightedValue = calculateWeightedValue(current[0].value, actualProbability);
 
-    // Prepare update data
+    // Prepare update data (version will be incremented atomically in SQL)
     const updateData: Record<string, unknown> = {
       stage,
       probability: actualProbability,
       weightedValue,
       updatedBy: ctx.user.id,
-      version: current[0].version + 1,
     };
 
     // Set actual close date for won/lost
@@ -542,22 +544,44 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
       updateData.competitorName = competitorName;
     }
 
-    const result = await db
-      .update(opportunities)
-      .set(updateData)
-      .where(eq(opportunities.id, id))
-      .returning();
+    // Wrap update and activity log in transaction for atomicity
+    const result = await db.transaction(async (tx) => {
+      // Atomic optimistic locking: version check in WHERE clause + increment in SET
+      const updateResult = await tx
+        .update(opportunities)
+        .set({
+          ...updateData,
+          version: sql`${opportunities.version} + 1`,
+        })
+        .where(
+          and(
+            eq(opportunities.id, id),
+            // Only check version if provided (optimistic locking)
+            version !== undefined ? eq(opportunities.version, version) : sql`true`
+          )
+        )
+        .returning();
 
-    // Log stage change activity
-    await db.insert(opportunityActivities).values({
-      organizationId: ctx.organizationId,
-      opportunityId: id,
-      type: 'note',
-      description: `Stage changed from ${current[0].stage} to ${stage}`,
-      createdBy: ctx.user.id,
+      // If no rows updated, another user modified the record
+      if (updateResult.length === 0) {
+        throw new ConflictError(
+          'Opportunity has been modified by another user. Please refresh and try again.'
+        );
+      }
+
+      // Log stage change activity within same transaction
+      await tx.insert(opportunityActivities).values({
+        organizationId: ctx.organizationId,
+        opportunityId: id,
+        type: 'note',
+        description: `Stage changed from ${current[0].stage} to ${stage}`,
+        createdBy: ctx.user.id,
+      });
+
+      return updateResult[0];
     });
 
-    return { opportunity: result[0] };
+    return { opportunity: result };
   });
 
 // ============================================================================

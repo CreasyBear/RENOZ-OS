@@ -65,7 +65,7 @@ import {
   createWinLossReason,
   updateWinLossReason,
   deleteWinLossReason,
-} from "@/server/functions/win-loss-reasons";
+} from "@/server/functions/pipeline/win-loss-reasons";
 import type { WinLossReasonType } from "@/lib/schemas/pipeline";
 
 // ============================================================================

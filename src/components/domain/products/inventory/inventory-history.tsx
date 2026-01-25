@@ -69,7 +69,7 @@ interface Movement {
   };
   location: {
     id: string;
-    code: string;
+    locationCode: string;
     name: string;
   };
 }
@@ -143,15 +143,15 @@ export function InventoryHistory({ productId }: InventoryHistoryProps) {
   const loadMovements = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result = (await getProductMovements({
+      const result = await getProductMovements({
         data: {
           productId,
           page,
           limit,
           movementType: typeFilter === "all" ? undefined : typeFilter,
         },
-      })) as { movements: Movement[]; total: number };
-      setMovements(result.movements);
+      }) as any;
+      setMovements(result.movements as Movement[]);
       setTotal(result.total);
     } catch (error) {
       console.error("Failed to load movements:", error);
@@ -257,7 +257,7 @@ export function InventoryHistory({ productId }: InventoryHistoryProps) {
                       </TableCell>
                       <TableCell>
                         <span className="font-mono text-xs">
-                          {movement.location.code}
+                          {movement.location.locationCode}
                         </span>
                         <span className="text-muted-foreground ml-1">
                           {movement.location.name}

@@ -17,7 +17,7 @@ import {
   products,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/server/errors';
 import {
   createLocationSchema,
@@ -171,7 +171,7 @@ export const getLocation = createServerFn({ method: 'GET' })
 export const createLocation = createServerFn({ method: 'POST' })
   .inputValidator(createLocationSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.MANAGE });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
     // Check for duplicate code
     const [existing] = await db
@@ -232,7 +232,7 @@ export const updateLocation = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data: { id, data } }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.MANAGE });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
     const [existing] = await db
       .select()
@@ -321,7 +321,7 @@ export const updateLocation = createServerFn({ method: 'POST' })
 export const deleteLocation = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.MANAGE });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
     const [location] = await db
       .select()
@@ -458,7 +458,7 @@ export const getWarehouseLocationHierarchy = createServerFn({ method: 'GET' })
 export const createWarehouseLocation = createServerFn({ method: 'POST' })
   .inputValidator(createWarehouseLocationSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.MANAGE });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
     // Check for duplicate code
     const [existing] = await db
@@ -520,7 +520,7 @@ export const updateWarehouseLocation = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data: { id, data } }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.MANAGE });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
     const [existing] = await db
       .select()
@@ -600,7 +600,7 @@ export const updateWarehouseLocation = createServerFn({ method: 'POST' })
 export const deleteWarehouseLocation = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.MANAGE });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
     const [location] = await db
       .select()
@@ -686,7 +686,7 @@ export const bulkCreateLocations = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.MANAGE });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
     // Check for duplicate codes within the batch
     const codes = data.locations.map((l) => l.locationCode);

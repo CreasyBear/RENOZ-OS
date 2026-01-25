@@ -21,7 +21,7 @@ import {
 } from 'drizzle/schema/suppliers';
 import { users } from 'drizzle/schema/users';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import {
   approvalStatusEnum,
   approvalRejectionReasonEnum,
@@ -86,7 +86,7 @@ const evaluateRulesSchema = z.object({
 export const listPendingApprovals = createServerFn({ method: 'GET' })
   .inputValidator(listPendingApprovalsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.APPROVE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.approve });
 
     const {
       status,
@@ -172,7 +172,7 @@ export const listPendingApprovals = createServerFn({ method: 'GET' })
 export const getApprovalDetails = createServerFn({ method: 'GET' })
   .inputValidator(getApprovalDetailsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const result = await db
       .select({
@@ -226,7 +226,7 @@ export const getApprovalDetails = createServerFn({ method: 'GET' })
 export const getApprovalHistory = createServerFn({ method: 'GET' })
   .inputValidator(z.object({ purchaseOrderId: z.string().uuid() }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
     const history = await db
       .select({
@@ -259,7 +259,7 @@ export const getApprovalHistory = createServerFn({ method: 'GET' })
  * Get approval stats for the current user.
  */
 export const getApprovalStats = createServerFn({ method: 'GET' }).handler(async () => {
-  const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.READ });
+  const ctx = await withAuth({ permission: PERMISSIONS.suppliers.read });
 
   const stats = await db
     .select({
@@ -325,7 +325,7 @@ export const getApprovalStats = createServerFn({ method: 'GET' }).handler(async 
 export const approvePurchaseOrderAtLevel = createServerFn({ method: 'POST' })
   .inputValidator(approveRejectSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.APPROVE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.approve });
 
     // Get the approval record
     const approval = await db
@@ -397,7 +397,7 @@ export const approvePurchaseOrderAtLevel = createServerFn({ method: 'POST' })
 export const rejectPurchaseOrderAtLevel = createServerFn({ method: 'POST' })
   .inputValidator(rejectSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.APPROVE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.approve });
 
     // Get the approval record
     const approval = await db
@@ -454,7 +454,7 @@ export const rejectPurchaseOrderAtLevel = createServerFn({ method: 'POST' })
 export const bulkApproveApprovals = createServerFn({ method: 'POST' })
   .inputValidator(bulkApproveSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.APPROVE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.approve });
 
     const results = {
       approved: [] as string[],
@@ -535,7 +535,7 @@ export const bulkApproveApprovals = createServerFn({ method: 'POST' })
 export const escalateApproval = createServerFn({ method: 'POST' })
   .inputValidator(escalateSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.APPROVE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.approve });
 
     // Get the approval record
     const approval = await db
@@ -571,10 +571,16 @@ export const escalateApproval = createServerFn({ method: 'POST' })
   });
 
 /**
- * Auto-escalate overdue approvals (called by background job).
+ * Auto-escalate overdue approvals.
+ *
+ * @deprecated Use the Trigger.dev scheduled job instead: src/trigger/jobs/auto-escalate-approvals.ts
+ * This function is kept for backwards compatibility but should not be called directly.
+ * The Trigger.dev job runs automatically on a schedule and processes all organizations.
+ *
+ * @internal
  */
 export const autoEscalateOverdue = createServerFn({ method: 'POST' }).handler(async () => {
-  const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.APPROVE });
+  const ctx = await withAuth({ permission: PERMISSIONS.suppliers.approve });
 
   // Find overdue pending approvals
   const overdueApprovals = await db
@@ -639,7 +645,7 @@ export const autoEscalateOverdue = createServerFn({ method: 'POST' }).handler(as
 export const delegateApproval = createServerFn({ method: 'POST' })
   .inputValidator(delegateSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.APPROVE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.approve });
 
     // Get the approval record
     const approval = await db
@@ -683,7 +689,7 @@ export const delegateApproval = createServerFn({ method: 'POST' })
 export const evaluateApprovalRules = createServerFn({ method: 'POST' })
   .inputValidator(evaluateRulesSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.CREATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.suppliers.create });
 
     // Get the purchase order
     const po = await db

@@ -33,6 +33,7 @@ import {
   type OutstandingInvoicesResult,
   type OutstandingInvoiceEntry,
 } from '@/lib/schemas';
+import { GST_RATE } from '@/lib/order-calculations';
 
 // ============================================================================
 // CONSTANTS
@@ -40,9 +41,6 @@ import {
 
 /** Commercial account threshold in AUD */
 const COMMERCIAL_THRESHOLD = 50000;
-
-/** GST rate (10% for Australia) */
-const GST_RATE = 0.1;
 
 // ============================================================================
 // HELPER FUNCTIONS

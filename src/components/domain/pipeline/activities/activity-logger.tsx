@@ -38,7 +38,7 @@ import {
 } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toastSuccess, toastError } from "@/hooks";
-import { logActivity } from "@/server/functions/pipeline";
+import { logActivity } from "@/server/functions/pipeline/pipeline";
 import type { OpportunityActivityType } from "@/lib/schemas/pipeline";
 
 // ============================================================================

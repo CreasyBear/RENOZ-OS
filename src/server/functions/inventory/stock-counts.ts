@@ -19,7 +19,7 @@ import {
   products,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/server/errors';
 import {
   createStockCountSchema,
@@ -173,7 +173,7 @@ export const getStockCount = createServerFn({ method: 'GET' })
 export const createStockCount = createServerFn({ method: 'POST' })
   .inputValidator(createStockCountSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.COUNT });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.count });
 
     // Check for duplicate count code
     const [existing] = await db
@@ -240,7 +240,7 @@ export const updateStockCount = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data: { id, data } }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.COUNT });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.count });
 
     const [existing] = await db
       .select()
@@ -311,7 +311,7 @@ export const updateStockCount = createServerFn({ method: 'POST' })
 export const startStockCount = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.COUNT });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.count });
 
     const [count] = await db
       .select()
@@ -418,7 +418,7 @@ export const updateStockCountItem = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data: { countId, itemId, data } }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.COUNT });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.count });
 
     // Verify count exists and is in progress
     const [count] = await db
@@ -483,7 +483,7 @@ export const bulkUpdateCountItems = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.COUNT });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.count });
 
     // Verify count exists and is in progress
     const [count] = await db
@@ -549,7 +549,7 @@ export const completeStockCount = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.COUNT });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.count });
 
     const [count] = await db
       .select()
@@ -602,13 +602,13 @@ export const completeStockCount = createServerFn({ method: 'POST' })
           if (!inv) continue;
 
           // Update inventory
+          // Note: quantityAvailable is a generated column (quantityOnHand - quantityAllocated)
+          // so we don't set it directly
           const newQuantity = (inv.quantityOnHand ?? 0) + variance;
-          const newAvailable = newQuantity - (inv.quantityAllocated ?? 0);
           await tx
             .update(inventory)
             .set({
               quantityOnHand: newQuantity,
-              quantityAvailable: newAvailable,
               totalValue: sql`${newQuantity} * COALESCE(${inventory.unitCost}, 0)`,
               updatedAt: new Date(),
               updatedBy: ctx.user.id,
@@ -685,7 +685,7 @@ export const completeStockCount = createServerFn({ method: 'POST' })
 export const cancelStockCount = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.COUNT });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.count });
 
     const [count] = await db
       .select()

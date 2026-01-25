@@ -212,4 +212,24 @@ export const RATE_LIMITS = {
     windowMs: 15 * 60 * 1000, // 10 attempts per 15 minutes
     message: 'Too many login attempts. Please try again later.',
   },
+
+  /**
+   * For unsubscribe endpoint (INT-RES-007/SEC-003)
+   * @see src/routes/api/unsubscribe.$token.ts
+   */
+  unsubscribe: {
+    maxRequests: 10,
+    windowMs: 60 * 1000, // 10 requests per minute per IP
+    message: 'Too many unsubscribe requests. Please try again in a minute.',
+  },
+
+  /**
+   * For Resend webhook endpoint (INT-RES-001/SEC-003)
+   * @see src/routes/api/webhooks/resend.ts
+   */
+  resendWebhook: {
+    maxRequests: 100,
+    windowMs: 60 * 1000, // 100 requests per minute
+    message: 'Too many webhook requests.',
+  },
 } as const;
