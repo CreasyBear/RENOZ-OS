@@ -721,3 +721,19 @@ export const reportFormatEnum = pgEnum("report_format", [
   "xlsx",
   "html",
 ]);
+
+// ============================================================================
+// EMAIL DELIVERY & SUPPRESSION ENUMS (Resend Integration)
+// ============================================================================
+
+export const suppressionReasonEnum = pgEnum("suppression_reason", [
+  "bounce",
+  "complaint",
+  "unsubscribe",
+  "manual",
+]);
+
+export const bounceTypeEnum = pgEnum("bounce_type", [
+  "hard",
+  "soft",
+]);
