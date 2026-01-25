@@ -16,18 +16,20 @@
  */
 
 import { createFileRoute } from '@tanstack/react-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { CreditNotesList } from '@/components/domain/financial/credit-notes-list';
 import {
-  listCreditNotes,
-  createCreditNote,
   issueCreditNote,
-  applyCreditNoteToInvoice,
   voidCreditNote,
 } from '@/server/functions/financial/credit-notes';
+import {
+  useCreditNotes,
+  useCreateCreditNote,
+  useApplyCreditNote,
+} from '@/hooks/financial';
 import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================================
@@ -59,11 +61,8 @@ export const Route = createFileRoute('/_authenticated/financial/credit-notes')({
 function CreditNotesPage() {
   const queryClient = useQueryClient();
 
-  // Server functions
-  const listFn = useServerFn(listCreditNotes);
-  const createFn = useServerFn(createCreditNote);
+  // Server functions for mutations not yet in hooks
   const issueFn = useServerFn(issueCreditNote);
-  const applyFn = useServerFn(applyCreditNoteToInvoice);
   const voidFn = useServerFn(voidCreditNote);
 
   // Query for listing credit notes
@@ -71,25 +70,12 @@ function CreditNotesPage() {
     data,
     isLoading,
     error,
-  } = useQuery({
-    queryKey: queryKeys.financial.creditNotesList(),
-    queryFn: () => listFn({ data: { page: 1, pageSize: 50 } }),
-  });
+  } = useCreditNotes({ page: 1, pageSize: 50 });
 
   // Create mutation
-  const createMutation = useMutation({
-    mutationFn: (input: {
-      customerId: string;
-      orderId?: string;
-      amount: number;
-      reason: string;
-    }) => createFn({ data: input }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
-    },
-  });
+  const createMutation = useCreateCreditNote();
 
-  // Issue mutation
+  // Issue mutation (not yet in centralized hooks)
   const issueMutation = useMutation({
     mutationFn: (id: string) => issueFn({ data: { id } }),
     onSuccess: () => {
@@ -98,15 +84,9 @@ function CreditNotesPage() {
   });
 
   // Apply to invoice mutation
-  const applyMutation = useMutation({
-    mutationFn: ({ creditNoteId, orderId }: { creditNoteId: string; orderId: string }) =>
-      applyFn({ data: { creditNoteId, orderId } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
-    },
-  });
+  const applyMutation = useApplyCreditNote();
 
-  // Void mutation
+  // Void mutation (not yet in centralized hooks)
   const voidMutation = useMutation({
     mutationFn: (id: string) => voidFn({ data: { id, voidReason: 'Voided by user' } }),
     onSuccess: () => {

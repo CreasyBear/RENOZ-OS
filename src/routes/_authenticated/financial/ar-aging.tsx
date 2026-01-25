@@ -11,13 +11,10 @@
 
 import { useState, useCallback } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { ARAgingReport } from '@/components/domain/financial/ar-aging-report';
-import { getARAgingReport } from '@/server/functions/financial/ar-aging';
-import { queryKeys } from '@/lib/query-keys';
+import { useARAgingReport } from '@/hooks/financial';
 
 // ============================================================================
 // ROUTE
@@ -47,14 +44,10 @@ export const Route = createFileRoute('/_authenticated/financial/ar-aging')({
 
 function ARAgingReportPage() {
   const navigate = Route.useNavigate();
-  const getFn = useServerFn(getARAgingReport);
   const [commercialOnly, setCommercialOnly] = useState(false);
 
   // Fetch AR aging data
-  const { data, isLoading, error } = useQuery({
-    queryKey: queryKeys.financial.arAgingReport({ commercialOnly }),
-    queryFn: () => getFn({ data: { commercialOnly } }),
-  });
+  const { data, isLoading, error } = useARAgingReport({ commercialOnly });
 
   // Navigate to customer details
   const handleCustomerClick = useCallback(
