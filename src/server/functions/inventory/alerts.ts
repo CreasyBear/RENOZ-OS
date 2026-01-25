@@ -332,7 +332,13 @@ export const getTriggeredAlerts = createServerFn({ method: 'GET' }).handler(
 );
 
 /**
- * Check and trigger alerts (for scheduled job).
+ * Check and trigger alerts.
+ *
+ * @deprecated Use the Trigger.dev scheduled job instead: src/trigger/jobs/check-inventory-alerts.ts
+ * This function is kept for backwards compatibility but should not be called directly.
+ * The Trigger.dev job runs automatically on a schedule and processes all organizations.
+ *
+ * @internal
  */
 export const checkAndTriggerAlerts = createServerFn({ method: 'POST' }).handler(async () => {
   const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.MANAGE });

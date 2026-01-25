@@ -59,11 +59,11 @@ export const expireInvitationsJob = schedules.task({
 });
 ```
 
-- [ ] Create `src/trigger/jobs/expire-invitations.ts`
-- [ ] Create `src/trigger/jobs/auto-escalate-approvals.ts`
-- [ ] Create `src/trigger/jobs/check-inventory-alerts.ts`
-- [ ] Remove public server function exports
-- [ ] Register jobs in `trigger.config.ts`
+- [x] Create `src/trigger/jobs/expire-invitations.ts`
+- [x] Create `src/trigger/jobs/auto-escalate-approvals.ts`
+- [x] Create `src/trigger/jobs/check-inventory-alerts.ts`
+- [x] Mark public server functions as @deprecated (kept for backwards compatibility)
+- [x] Register jobs in `src/trigger/jobs/index.ts`
 
 ### 1.2 Add LIKE Character Escaping Utility
 

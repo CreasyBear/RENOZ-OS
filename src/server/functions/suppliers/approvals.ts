@@ -571,7 +571,13 @@ export const escalateApproval = createServerFn({ method: 'POST' })
   });
 
 /**
- * Auto-escalate overdue approvals (called by background job).
+ * Auto-escalate overdue approvals.
+ *
+ * @deprecated Use the Trigger.dev scheduled job instead: src/trigger/jobs/auto-escalate-approvals.ts
+ * This function is kept for backwards compatibility but should not be called directly.
+ * The Trigger.dev job runs automatically on a schedule and processes all organizations.
+ *
+ * @internal
  */
 export const autoEscalateOverdue = createServerFn({ method: 'POST' }).handler(async () => {
   const ctx = await withAuth({ permission: PERMISSIONS.SUPPLIERS.APPROVE });

@@ -454,7 +454,12 @@ export const resendInvitation = createServerFn({ method: 'POST' })
 
 /**
  * Mark expired invitations as expired.
- * Called by background job scheduler.
+ *
+ * @deprecated Use the Trigger.dev scheduled job instead: src/trigger/jobs/expire-invitations.ts
+ * This function is kept for backwards compatibility but should not be called directly.
+ * The Trigger.dev job runs automatically on a schedule.
+ *
+ * @internal
  */
 export const expireOldInvitations = createServerFn({ method: 'POST' }).handler(async () => {
   const result = await db
