@@ -4,11 +4,17 @@
  * Server functions for dashboard metrics, summaries, and comparisons.
  * Uses Drizzle ORM with Zod validation.
  *
+ * PERFORMANCE: Uses hybrid query strategy:
+ * - Materialized views for historical data (> 1 day old)
+ * - Live table queries for today's data (real-time accuracy)
+ * - Redis caching for frequently accessed ranges
+ *
  * SECURITY: All functions use withAuth for authentication and
  * filter by organizationId for multi-tenant isolation.
  *
  * @see src/lib/schemas/dashboard/metrics.ts for validation schemas
  * @see drizzle/schema/dashboard/ for database schemas
+ * @see dashboard.prd.json DASH-PERF-HYBRID
  */
 
 import { createServerFn } from '@tanstack/react-start';
@@ -21,8 +27,10 @@ import {
   customers,
   opportunities,
   activities,
-} from '@/../drizzle/schema';
-import { targets } from '@/../drizzle/schema/dashboard';
+} from 'drizzle/schema';
+import { jobAssignments } from 'drizzle/schema/jobs';
+import { warrantyClaims } from 'drizzle/schema/warranty/warranty-claims';
+import { targets } from 'drizzle/schema/dashboard';
 import {
   getDashboardMetricsSchema,
   getMetricsComparisonSchema,
@@ -32,6 +40,7 @@ import {
   type ActivityItem,
   type DateRangePreset,
 } from '@/lib/schemas/dashboard/metrics';
+import { DashboardCache } from '@/lib/cache/dashboard-cache';
 
 // ============================================================================
 // HELPERS
@@ -145,11 +154,266 @@ function buildMetricValue(
 }
 
 // ============================================================================
+// HYBRID QUERY STRATEGY
+// ============================================================================
+
+/**
+ * Check if the date range includes today.
+ * Used to determine if we need live data for current day accuracy.
+ */
+function includesToday(to: Date): boolean {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const toDate = new Date(to);
+  toDate.setHours(0, 0, 0, 0);
+  return toDate >= today;
+}
+
+/**
+ * Get yesterday's date string for MV boundary.
+ */
+function getYesterdayStr(): string {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  return yesterday.toISOString().split('T')[0];
+}
+
+/**
+ * Get today's date string.
+ */
+function getTodayStr(): string {
+  return new Date().toISOString().split('T')[0];
+}
+
+/**
+ * Query metrics from materialized views (for historical data).
+ * Fast because data is pre-aggregated.
+ */
+async function queryMetricsFromMV(
+  organizationId: string,
+  dateFrom: string,
+  dateTo: string
+): Promise<{
+  revenue: number;
+  ordersCount: number;
+  customerCount: number;
+  pipelineValue: number;
+  activeJobs: number;
+  openClaims: number;
+}> {
+  // Query mv_daily_metrics for orders/revenue
+  const [orderMetrics] = await db.execute<{
+    orders_count: string;
+    revenue: string;
+    customer_count: string;
+  }>(sql`
+    SELECT
+      COALESCE(SUM(orders_count), 0) as orders_count,
+      COALESCE(SUM(revenue), 0) as revenue,
+      COALESCE(SUM(customer_count), 0) as customer_count
+    FROM mv_daily_metrics
+    WHERE organization_id = ${organizationId}
+      AND metric_date >= ${dateFrom}::date
+      AND metric_date <= ${dateTo}::date
+  `);
+
+  // Query mv_daily_pipeline for pipeline value
+  const [pipelineMetrics] = await db.execute<{
+    total_value: string;
+  }>(sql`
+    SELECT COALESCE(SUM(total_value), 0) as total_value
+    FROM mv_daily_pipeline
+    WHERE organization_id = ${organizationId}
+      AND metric_date >= ${dateFrom}::date
+      AND metric_date <= ${dateTo}::date
+      AND stage NOT IN ('won', 'lost')
+  `);
+
+  // Query mv_daily_jobs for active jobs
+  const [jobMetrics] = await db.execute<{
+    active_count: string;
+  }>(sql`
+    SELECT COALESCE(SUM(job_count), 0) as active_count
+    FROM mv_daily_jobs
+    WHERE organization_id = ${organizationId}
+      AND metric_date >= ${dateFrom}::date
+      AND metric_date <= ${dateTo}::date
+      AND status IN ('scheduled', 'in_progress')
+  `);
+
+  // Query mv_daily_warranty for open claims
+  const [claimMetrics] = await db.execute<{
+    open_count: string;
+  }>(sql`
+    SELECT COALESCE(SUM(claim_count), 0) as open_count
+    FROM mv_daily_warranty
+    WHERE organization_id = ${organizationId}
+      AND metric_date >= ${dateFrom}::date
+      AND metric_date <= ${dateTo}::date
+      AND status IN ('submitted', 'under_review', 'approved')
+  `);
+
+  return {
+    revenue: Number(orderMetrics?.revenue ?? 0),
+    ordersCount: Number(orderMetrics?.orders_count ?? 0),
+    customerCount: Number(orderMetrics?.customer_count ?? 0),
+    pipelineValue: Number(pipelineMetrics?.total_value ?? 0),
+    activeJobs: Number(jobMetrics?.active_count ?? 0),
+    openClaims: Number(claimMetrics?.open_count ?? 0),
+  };
+}
+
+/**
+ * Query today's metrics from live tables (for real-time accuracy).
+ */
+async function queryTodayMetricsLive(
+  organizationId: string
+): Promise<{
+  revenue: number;
+  ordersCount: number;
+  customerCount: number;
+  pipelineValue: number;
+  activeJobs: number;
+  openClaims: number;
+}> {
+  const today = getTodayStr();
+
+  // Today's orders
+  const [todayOrders] = await db
+    .select({
+      total: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
+      orderCount: count(),
+    })
+    .from(orders)
+    .where(
+      and(
+        eq(orders.organizationId, organizationId),
+        sql`DATE(${orders.orderDate}) = ${today}::date`,
+        sql`${orders.deletedAt} IS NULL`
+      )
+    );
+
+  // Today's new customers
+  const [todayCustomers] = await db
+    .select({ count: count() })
+    .from(customers)
+    .where(
+      and(
+        eq(customers.organizationId, organizationId),
+        sql`DATE(${customers.createdAt}) = ${today}::date`,
+        sql`${customers.deletedAt} IS NULL`
+      )
+    );
+
+  // Current pipeline value (always live - it's current state)
+  const [pipelineData] = await db
+    .select({
+      total: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
+    })
+    .from(opportunities)
+    .where(
+      and(
+        eq(opportunities.organizationId, organizationId),
+        sql`${opportunities.stage} NOT IN ('won', 'lost')`,
+        sql`${opportunities.deletedAt} IS NULL`
+      )
+    );
+
+  // Active jobs (current state)
+  const [activeJobs] = await db
+    .select({ count: count() })
+    .from(jobAssignments)
+    .where(
+      and(
+        eq(jobAssignments.organizationId, organizationId),
+        sql`${jobAssignments.status} IN ('scheduled', 'in_progress')`
+      )
+    );
+
+  // Open claims (current state)
+  const [openClaims] = await db
+    .select({ count: count() })
+    .from(warrantyClaims)
+    .where(
+      and(
+        eq(warrantyClaims.organizationId, organizationId),
+        sql`${warrantyClaims.status} IN ('submitted', 'under_review', 'approved')`
+      )
+    );
+
+  return {
+    revenue: Number(todayOrders?.total ?? 0),
+    ordersCount: Number(todayOrders?.orderCount ?? 0),
+    customerCount: Number(todayCustomers?.count ?? 0),
+    pipelineValue: Number(pipelineData?.total ?? 0),
+    activeJobs: Number(activeJobs?.count ?? 0),
+    openClaims: Number(openClaims?.count ?? 0),
+  };
+}
+
+/**
+ * Hybrid query: combines MV data for historical + live data for today.
+ */
+async function getMetricsHybrid(
+  organizationId: string,
+  dateFrom: Date,
+  dateTo: Date
+): Promise<{
+  revenue: number;
+  ordersCount: number;
+  customerCount: number;
+  pipelineValue: number;
+  activeJobs: number;
+  openClaims: number;
+  dataSource: 'mv' | 'hybrid' | 'live';
+}> {
+  const dateFromStr = dateFrom.toISOString().split('T')[0];
+  const dateToStr = dateTo.toISOString().split('T')[0];
+  const needsToday = includesToday(dateTo);
+  const yesterdayStr = getYesterdayStr();
+  const todayStr = getTodayStr();
+
+  // If date range is entirely in the past, use MV only
+  if (!needsToday) {
+    const mvMetrics = await queryMetricsFromMV(organizationId, dateFromStr, dateToStr);
+    return { ...mvMetrics, dataSource: 'mv' };
+  }
+
+  // If date range is only today, use live only
+  if (dateFromStr === todayStr) {
+    const liveMetrics = await queryTodayMetricsLive(organizationId);
+    return { ...liveMetrics, dataSource: 'live' };
+  }
+
+  // Hybrid: MV for historical (up to yesterday) + live for today
+  const [mvMetrics, todayMetrics] = await Promise.all([
+    queryMetricsFromMV(organizationId, dateFromStr, yesterdayStr),
+    queryTodayMetricsLive(organizationId),
+  ]);
+
+  return {
+    revenue: mvMetrics.revenue + todayMetrics.revenue,
+    ordersCount: mvMetrics.ordersCount + todayMetrics.ordersCount,
+    customerCount: mvMetrics.customerCount + todayMetrics.customerCount,
+    // Pipeline and jobs/claims are current state, so use live values
+    pipelineValue: todayMetrics.pipelineValue,
+    activeJobs: todayMetrics.activeJobs,
+    openClaims: todayMetrics.openClaims,
+    dataSource: 'hybrid',
+  };
+}
+
+// ============================================================================
 // GET DASHBOARD METRICS
 // ============================================================================
 
 /**
  * Get comprehensive dashboard metrics including KPIs, charts, and activity.
+ *
+ * PERFORMANCE: Uses hybrid query strategy:
+ * 1. Check Redis cache first (5min TTL)
+ * 2. If cache miss, use MVs for historical data + live tables for today
+ * 3. Cache the result for future requests
  */
 export const getDashboardMetrics = createServerFn({ method: 'GET' })
   .inputValidator(getDashboardMetricsSchema)
@@ -157,61 +421,39 @@ export const getDashboardMetrics = createServerFn({ method: 'GET' })
     const ctx = await withAuth({ permission: PERMISSIONS.dashboard.read });
     const { from, to, preset } = calculateDateRange(data);
 
-    // Build date conditions for orders
-    const currentPeriod = and(
-      eq(orders.organizationId, ctx.organizationId),
-      gte(orders.orderDate, from.toISOString().split('T')[0]),
-      lte(orders.orderDate, to.toISOString().split('T')[0])
-    );
+    const dateFromStr = from.toISOString().split('T')[0];
+    const dateToStr = to.toISOString().split('T')[0];
 
-    // Previous period for comparison
+    // Try cache first (skip for ranges that include today - need fresh data)
+    const cacheKey = {
+      orgId: ctx.organizationId,
+      dateFrom: dateFromStr,
+      dateTo: dateToStr,
+      preset: preset ?? undefined,
+    };
+
+    // Only use cache for purely historical ranges (no today's data)
+    const needsFreshData = includesToday(to);
+    if (!needsFreshData) {
+      const cached = await DashboardCache.getMetrics<DashboardMetricsResponse>(cacheKey);
+      if (cached) {
+        return {
+          ...cached,
+          cacheHit: true,
+        };
+      }
+    }
+
+    // Get current period metrics using hybrid strategy
+    const currentMetrics = await getMetricsHybrid(ctx.organizationId, from, to);
+
+    // Previous period for comparison (always historical, so use MV)
     const comparison = calculateComparisonPeriod(from, to, data.comparePeriod || 'previous_period');
-    const previousPeriod = and(
-      eq(orders.organizationId, ctx.organizationId),
-      gte(orders.orderDate, comparison.from.toISOString().split('T')[0]),
-      lte(orders.orderDate, comparison.to.toISOString().split('T')[0])
+    const previousMetrics = await queryMetricsFromMV(
+      ctx.organizationId,
+      comparison.from.toISOString().split('T')[0],
+      comparison.to.toISOString().split('T')[0]
     );
-
-    // Get current period revenue (using total instead of grandTotal)
-    const [currentRevenue] = await db
-      .select({
-        total: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
-        orderCount: count(),
-      })
-      .from(orders)
-      .where(currentPeriod);
-
-    // Get previous period revenue
-    const [previousRevenue] = await db
-      .select({
-        total: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
-      })
-      .from(orders)
-      .where(previousPeriod);
-
-    // Get customer counts
-    const [currentCustomers] = await db
-      .select({ count: count() })
-      .from(customers)
-      .where(
-        and(
-          eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.deletedAt} IS NULL`
-        )
-      );
-
-    // Get pipeline value (opportunities not won or lost)
-    const [pipelineData] = await db
-      .select({
-        total: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
-      })
-      .from(opportunities)
-      .where(
-        and(
-          eq(opportunities.organizationId, ctx.organizationId),
-          sql`${opportunities.stage} NOT IN ('won', 'lost')`
-        )
-      );
 
     // Get targets for comparison
     const currentTargets = await db
@@ -220,42 +462,50 @@ export const getDashboardMetrics = createServerFn({ method: 'GET' })
       .where(
         and(
           eq(targets.organizationId, ctx.organizationId),
-          lte(targets.startDate, to.toISOString().split('T')[0]),
-          gte(targets.endDate, from.toISOString().split('T')[0])
+          lte(targets.startDate, dateToStr),
+          gte(targets.endDate, dateFromStr)
         )
       );
 
     const targetMap = new Map(currentTargets.map((t) => [t.metric, Number(t.targetValue)]));
 
-    // Build summary
+    // Build summary with hybrid metrics
     const summary: DashboardSummary = {
       revenue: buildMetricValue(
-        Number(currentRevenue?.total ?? 0),
-        Number(previousRevenue?.total ?? 0),
+        currentMetrics.revenue,
+        previousMetrics.revenue,
         targetMap.get('revenue') ?? null
       ),
       kwhDeployed: buildMetricValue(0, 0, targetMap.get('kwh_deployed') ?? null),
       quoteWinRate: buildMetricValue(0, 0, targetMap.get('quote_win_rate') ?? null),
-      activeInstallations: buildMetricValue(0, 0, targetMap.get('active_installations') ?? null),
-      warrantyClaims: buildMetricValue(0, 0, targetMap.get('warranty_claims') ?? null),
+      activeInstallations: buildMetricValue(
+        currentMetrics.activeJobs,
+        previousMetrics.activeJobs,
+        targetMap.get('active_installations') ?? null
+      ),
+      warrantyClaims: buildMetricValue(
+        currentMetrics.openClaims,
+        previousMetrics.openClaims,
+        targetMap.get('warranty_claims') ?? null
+      ),
       pipelineValue: buildMetricValue(
-        Number(pipelineData?.total ?? 0),
-        0,
+        currentMetrics.pipelineValue,
+        previousMetrics.pipelineValue,
         targetMap.get('pipeline_value') ?? null
       ),
       customerCount: buildMetricValue(
-        Number(currentCustomers?.count ?? 0),
-        0,
+        currentMetrics.customerCount,
+        previousMetrics.customerCount,
         targetMap.get('customer_count') ?? null
       ),
       ordersCount: buildMetricValue(
-        Number(currentRevenue?.orderCount ?? 0),
-        0,
+        currentMetrics.ordersCount,
+        previousMetrics.ordersCount,
         targetMap.get('orders_count') ?? null
       ),
     };
 
-    // Get recent activity
+    // Get recent activity (always live - it's a feed)
     const recentActivityData = await db
       .select({
         id: activities.id,
@@ -283,7 +533,7 @@ export const getDashboardMetrics = createServerFn({ method: 'GET' })
       createdAt: a.createdAt,
     }));
 
-    // Build placeholder charts
+    // Build placeholder charts (to be implemented with MV data)
     const charts = {
       revenueTrend: [] as ChartDataPoint[],
       kwhDeploymentTrend: [] as ChartDataPoint[],
@@ -292,7 +542,7 @@ export const getDashboardMetrics = createServerFn({ method: 'GET' })
       quoteConversionFunnel: [] as ChartDataPoint[],
     };
 
-    return {
+    const result = {
       summary,
       charts,
       recentActivity,
@@ -304,7 +554,37 @@ export const getDashboardMetrics = createServerFn({ method: 'GET' })
       comparisonEnabled: !!data.comparePeriod,
       lastUpdated: new Date(),
     };
+
+    // Cache the result (only for historical ranges)
+    if (!needsFreshData) {
+      await DashboardCache.setMetrics(cacheKey, result);
+    }
+
+    return result;
   });
+
+/**
+ * Response type for getDashboardMetrics (internal use for caching).
+ */
+interface DashboardMetricsResponse {
+  summary: DashboardSummary;
+  charts: {
+    revenueTrend: ChartDataPoint[];
+    kwhDeploymentTrend: ChartDataPoint[];
+    productMix: ChartDataPoint[];
+    pipelineByStage: ChartDataPoint[];
+    quoteConversionFunnel: ChartDataPoint[];
+  };
+  recentActivity: ActivityItem[];
+  dateRange: {
+    from: Date;
+    to: Date;
+    preset: DateRangePreset | null;
+  };
+  comparisonEnabled: boolean;
+  lastUpdated: Date;
+  dataSource?: 'mv' | 'hybrid' | 'live';
+}
 
 /**
  * Map activity type string to valid ActivityType enum value.

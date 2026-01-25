@@ -49,6 +49,20 @@ export {
   generateReportJob,
 } from './process-scheduled-reports';
 
+// Dashboard Performance
+export {
+  refreshDailyMetricsJob,
+  refreshCurrentStateJob,
+  refreshWarrantyMetricsJob,
+  onDemandMvRefreshJob,
+  cacheInvalidationJob,
+} from './dashboard-refresh';
+
+export {
+  warmDashboardCacheTask,
+  warmOrgCacheTask,
+} from './cache-warming';
+
 // File Cleanup Jobs
 export {
   cleanupPendingUploadsJob,
@@ -84,6 +98,17 @@ import {
   processScheduledReportsJob,
   generateReportJob,
 } from './process-scheduled-reports';
+import {
+  refreshDailyMetricsJob,
+  refreshCurrentStateJob,
+  refreshWarrantyMetricsJob,
+  onDemandMvRefreshJob,
+  cacheInvalidationJob,
+} from './dashboard-refresh';
+import {
+  warmDashboardCacheTask,
+  warmOrgCacheTask,
+} from './cache-warming';
 
 /**
  * All registered jobs for Trigger.dev
@@ -105,4 +130,12 @@ export const jobs = [
   cleanupSoftDeletedFilesJob,
   processScheduledReportsJob,
   generateReportJob,
+  // Dashboard Performance
+  refreshDailyMetricsJob,
+  refreshCurrentStateJob,
+  refreshWarrantyMetricsJob,
+  onDemandMvRefreshJob,
+  cacheInvalidationJob,
+  warmDashboardCacheTask,
+  warmOrgCacheTask,
 ]

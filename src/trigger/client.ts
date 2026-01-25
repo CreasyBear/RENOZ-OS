@@ -170,6 +170,48 @@ export interface ReportFailedPayload {
 }
 
 // ============================================================================
+// DASHBOARD EVENTS
+// ============================================================================
+
+/**
+ * Dashboard events triggered by background jobs
+ */
+export const dashboardEvents = {
+  mvRefreshed: 'dashboard.mv_refreshed',
+  cacheInvalidated: 'dashboard.cache_invalidated',
+  cacheWarmed: 'dashboard.cache_warmed',
+} as const
+
+/**
+ * Materialized view refresh event payload
+ */
+export interface DashboardMvRefreshedPayload {
+  views: string[]
+  organizationId?: string // Optional - null for all orgs
+  timestamp: string
+  durationMs: number
+}
+
+/**
+ * Cache invalidation event payload
+ */
+export interface DashboardCacheInvalidatedPayload {
+  organizationId: string
+  cacheTypes: string[]
+  timestamp: string
+}
+
+/**
+ * Cache warming event payload
+ */
+export interface DashboardCacheWarmedPayload {
+  organizationCount: number
+  dateRanges: string[]
+  timestamp: string
+  durationMs: number
+}
+
+// ============================================================================
 // WARRANTY EVENTS
 // ============================================================================
 
@@ -195,13 +237,18 @@ export interface WarrantyRegisteredPayload {
   customerId: string
   productId: string
   productName: string
+  productSerial?: string
   customerName: string
   customerEmail?: string
   startDate: string
   expiryDate: string
+  policyType: string
   policyName: string
+  durationMonths: number
+  cycleLimit?: number
   slaResponseHours?: number
   slaResolutionDays?: number
+  certificateUrl?: string
 }
 
 /**
@@ -216,8 +263,12 @@ export interface WarrantyExpiringSoonPayload {
   customerEmail?: string
   productId: string
   productName: string
+  policyType: string
   expiryDate: string
   daysUntilExpiry: number
+  currentCycleCount?: number
+  cycleLimit?: number
+  renewalUrl?: string
 }
 
 /**
