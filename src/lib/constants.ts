@@ -1,8 +1,10 @@
 /**
  * System Constants - Gold Standard Organization
  *
- * Centralized constants for cookies, localStorage, permissions, and other system-wide values.
+ * Centralized constants for cookies, localStorage, statuses, and other system-wide values.
  * Follows Midday's pattern of organized, typed constants.
+ *
+ * NOTE: Permissions are managed separately in @/lib/auth/permissions.ts
  */
 
 // ============================================================================
@@ -55,144 +57,6 @@ export const LocalStorageKeys = {
   // Cache
   CachedQueries: 'cached-queries',
   OfflineData: 'offline-data',
-} as const;
-
-// ============================================================================
-// PERMISSIONS
-// ============================================================================
-
-export const PERMISSIONS = {
-  // Authentication
-  AUTH: {
-    LOGIN: 'auth.login',
-    LOGOUT: 'auth.logout',
-    RESET_PASSWORD: 'auth.reset_password',
-  },
-
-  // Users & Teams
-  USERS: {
-    READ: 'users.read',
-    CREATE: 'users.create',
-    UPDATE: 'users.update',
-    DELETE: 'users.delete',
-    MANAGE_ROLES: 'users.manage_roles',
-  },
-
-  // Organizations
-  ORGANIZATIONS: {
-    READ: 'organizations.read',
-    UPDATE: 'organizations.update',
-    MANAGE_MEMBERS: 'organizations.manage_members',
-    MANAGE_SETTINGS: 'organizations.manage_settings',
-  },
-
-  // Suppliers
-  SUPPLIERS: {
-    READ: 'suppliers.read',
-    CREATE: 'suppliers.update', // Using update for create (consistent with existing)
-    UPDATE: 'suppliers.update',
-    DELETE: 'suppliers.update',
-    APPROVE: 'suppliers.approve',
-    IMPORT: 'suppliers.update',
-  },
-
-  // Customers
-  CUSTOMERS: {
-    READ: 'customers.read',
-    CREATE: 'customers.update',
-    UPDATE: 'customers.update',
-    DELETE: 'customers.update',
-  },
-
-  // Products
-  PRODUCTS: {
-    READ: 'products.read',
-    CREATE: 'product.create',
-    UPDATE: 'product.update',
-    DELETE: 'product.delete',
-  },
-
-  // Orders
-  ORDERS: {
-    READ: 'orders.read',
-    CREATE: 'orders.update',
-    UPDATE: 'orders.update',
-    DELETE: 'orders.update',
-    APPROVE: 'orders.approve',
-  },
-
-  // Purchase Orders
-  PURCHASE_ORDERS: {
-    READ: 'purchase-orders.read',
-    CREATE: 'purchase-orders.update',
-    UPDATE: 'purchase-orders.update',
-    DELETE: 'purchase-orders.update',
-    APPROVE: 'purchase-orders.approve',
-  },
-
-  // Jobs
-  JOBS: {
-    READ: 'jobs.read',
-    CREATE: 'jobs.update',
-    UPDATE: 'jobs.update',
-    DELETE: 'jobs.update',
-    ASSIGN: 'jobs.assign',
-  },
-
-  // Inventory
-  INVENTORY: {
-    READ: 'inventory.read',
-    MANAGE: 'inventory.manage',
-    ADJUST: 'inventory.adjust',
-    TRANSFER: 'inventory.transfer',
-    ALLOCATE: 'inventory.allocate',
-    RECEIVE: 'inventory.receive',
-    COUNT: 'inventory.count',
-    FORECAST: 'inventory.forecast',
-  },
-
-  // Financial
-  FINANCIAL: {
-    READ: 'financial.read',
-    CREATE: 'invoice.create',
-    UPDATE: 'invoice.update',
-    DELETE: 'invoice.delete',
-    EXPORT: 'financial.export',
-    APPROVE: 'financial.approve',
-  },
-
-  // Reports
-  REPORTS: {
-    READ: 'reports.read',
-    EXPORT: 'reports.export',
-    ADMIN: 'reports.admin',
-  },
-
-  // Settings
-  SETTINGS: {
-    READ: 'settings.read',
-    UPDATE: 'settings.update',
-    ADMIN: 'settings.admin',
-  },
-
-  // Support
-  SUPPORT: {
-    READ: 'support.read',
-    CREATE: 'support.create',
-    UPDATE: 'support.update',
-    DELETE: 'support.delete',
-  },
-
-  // Warranty
-  WARRANTY: {
-    READ: 'warranty.read',
-    CREATE: 'warranty.create',
-    UPDATE: 'warranty.update',
-    DELETE: 'warranty.delete',
-    APPROVE: 'warranty.approve',
-    RESOLVE: 'warranty.resolve',
-    ASSIGN: 'warranty.assign',
-  },
 } as const;
 
 // ============================================================================
