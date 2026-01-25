@@ -32,6 +32,7 @@
  */
 import { type ReactNode, createContext, useContext } from 'react'
 import { cn } from '@/lib/utils'
+import { Breadcrumbs } from './breadcrumbs'
 
 // ============================================================================
 // TYPES
@@ -54,6 +55,8 @@ interface PageHeaderProps {
   description?: ReactNode
   actions?: ReactNode
   className?: string
+  /** Show breadcrumbs above the title (default: true) */
+  showBreadcrumbs?: boolean
 }
 
 interface PageContentProps {
@@ -97,23 +100,36 @@ const containerStyles: Record<PageLayoutVariant, string> = {
 
 /**
  * Page header with title, optional description, and action buttons.
+ * Breadcrumbs are shown by default above the title.
  */
-function PageHeader({ title, description, actions, className }: PageHeaderProps) {
+function PageHeader({
+  title,
+  description,
+  actions,
+  className,
+  showBreadcrumbs = true,
+}: PageHeaderProps) {
   return (
     <div
       className={cn(
-        'flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between',
         'py-6 border-b border-gray-200',
         className
       )}
     >
-      <div>
-        <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
-        {description && (
-          <p className="mt-1 text-sm text-gray-500">{description}</p>
-        )}
+      {showBreadcrumbs && (
+        <div className="mb-3">
+          <Breadcrumbs />
+        </div>
+      )}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
+          {description && (
+            <p className="mt-1 text-sm text-gray-500">{description}</p>
+          )}
+        </div>
+        {actions && <div className="flex items-center gap-3">{actions}</div>}
       </div>
-      {actions && <div className="flex items-center gap-3">{actions}</div>}
     </div>
   )
 }

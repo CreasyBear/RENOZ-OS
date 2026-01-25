@@ -3,11 +3,18 @@
  *
  * Displays navigation breadcrumbs based on the current route.
  * Uses centralized ROUTE_METADATA for labels.
+ * Collapses middle segments on mobile with an ellipsis dropdown.
  */
 import { Link, useRouterState } from '@tanstack/react-router'
-import { ChevronRight, Home } from 'lucide-react'
+import { ChevronRight, Home, MoreHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getBreadcrumbLabel } from '@/lib/routing'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 interface BreadcrumbItem {
   label: string
@@ -34,6 +41,13 @@ export function Breadcrumbs() {
     return null
   }
 
+  // On mobile, collapse middle items when there are more than 2 breadcrumbs
+  // Show: Home > ... (dropdown) > Current
+  const shouldCollapse = breadcrumbs.length > 2
+  const firstItem = breadcrumbs[0]
+  const middleItems = breadcrumbs.slice(1, -1)
+  const lastItem = breadcrumbs[breadcrumbs.length - 1]
+
   return (
     <nav aria-label="Breadcrumb" className="flex items-center space-x-1 text-sm">
       <Link
@@ -46,29 +60,115 @@ export function Breadcrumbs() {
         <Home className="h-4 w-4" aria-label="Home" />
       </Link>
 
-      {breadcrumbs.map((item) => (
-        <div key={item.href} className="flex items-center">
-          <ChevronRight className="h-4 w-4 text-gray-400" aria-hidden="true" />
-          {item.current ? (
-            <span
-              className="ml-1 font-medium text-gray-900"
-              aria-current="page"
-            >
-              {item.label}
-            </span>
-          ) : (
+      {/* Desktop: show all breadcrumbs */}
+      <div className="hidden sm:flex sm:items-center">
+        {breadcrumbs.map((item) => (
+          <div key={item.href} className="flex items-center">
+            <ChevronRight className="h-4 w-4 text-gray-400" aria-hidden="true" />
+            {item.current ? (
+              <span
+                className="ml-1 font-medium text-gray-900 truncate max-w-[200px]"
+                aria-current="page"
+              >
+                {item.label}
+              </span>
+            ) : (
+              <Link
+                to={item.href}
+                className={cn(
+                  'ml-1 text-gray-500 hover:text-gray-700 transition-colors truncate max-w-[150px]',
+                  'focus:outline-none focus:ring-2 focus:ring-gray-200 rounded'
+                )}
+              >
+                {item.label}
+              </Link>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Mobile: collapse middle items into dropdown */}
+      <div className="flex sm:hidden items-center">
+        {/* First item (if not current) */}
+        {shouldCollapse && firstItem && !firstItem.current && (
+          <div className="flex items-center">
+            <ChevronRight className="h-4 w-4 text-gray-400" aria-hidden="true" />
             <Link
-              to={item.href}
+              to={firstItem.href}
               className={cn(
-                'ml-1 text-gray-500 hover:text-gray-700 transition-colors',
+                'ml-1 text-gray-500 hover:text-gray-700 transition-colors truncate max-w-[80px]',
                 'focus:outline-none focus:ring-2 focus:ring-gray-200 rounded'
               )}
             >
-              {item.label}
+              {firstItem.label}
             </Link>
-          )}
-        </div>
-      ))}
+          </div>
+        )}
+
+        {/* Collapsed middle items as dropdown */}
+        {shouldCollapse && middleItems.length > 0 && (
+          <div className="flex items-center">
+            <ChevronRight className="h-4 w-4 text-gray-400" aria-hidden="true" />
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                className={cn(
+                  'ml-1 p-1 text-gray-500 hover:text-gray-700 transition-colors',
+                  'focus:outline-none focus:ring-2 focus:ring-gray-200 rounded'
+                )}
+                aria-label="Show hidden breadcrumbs"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {middleItems.map((item) => (
+                  <DropdownMenuItem key={item.href} asChild>
+                    <Link to={item.href}>{item.label}</Link>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
+
+        {/* Last item (current page) */}
+        {shouldCollapse && lastItem && (
+          <div className="flex items-center">
+            <ChevronRight className="h-4 w-4 text-gray-400" aria-hidden="true" />
+            <span
+              className="ml-1 font-medium text-gray-900 truncate max-w-[120px]"
+              aria-current="page"
+            >
+              {lastItem.label}
+            </span>
+          </div>
+        )}
+
+        {/* When not collapsing (2 or fewer items), show all on mobile */}
+        {!shouldCollapse &&
+          breadcrumbs.map((item) => (
+            <div key={item.href} className="flex items-center">
+              <ChevronRight className="h-4 w-4 text-gray-400" aria-hidden="true" />
+              {item.current ? (
+                <span
+                  className="ml-1 font-medium text-gray-900 truncate max-w-[120px]"
+                  aria-current="page"
+                >
+                  {item.label}
+                </span>
+              ) : (
+                <Link
+                  to={item.href}
+                  className={cn(
+                    'ml-1 text-gray-500 hover:text-gray-700 transition-colors truncate max-w-[100px]',
+                    'focus:outline-none focus:ring-2 focus:ring-gray-200 rounded'
+                  )}
+                >
+                  {item.label}
+                </Link>
+              )}
+            </div>
+          ))}
+      </div>
     </nav>
   )
 }
