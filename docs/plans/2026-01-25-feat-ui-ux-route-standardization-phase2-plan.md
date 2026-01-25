@@ -260,6 +260,55 @@ Execute in this order for incremental value:
 
 ---
 
+## Phase 3: Antipattern Elimination (Completed 2026-01-25)
+
+### Navigation Antipatterns Fixed
+
+Replaced all `window.location.href` and `window.history.back()` with TanStack Router navigation:
+
+| Domain | Files Fixed | Changes |
+|--------|-------------|---------|
+| customers | 2 | `navigate()`, `Link` component |
+| admin/groups | 2 | `navigate()`, `router.invalidate()` |
+| admin/invitations | 1 | `navigate()`, `router.invalidate()` |
+| settings | 1 | `navigate()`, `router.invalidate()` |
+
+**Commits:**
+- `fix: replace window.location navigation with TanStack Router`
+
+### Direct useQuery Usage Fixed
+
+Replaced direct `useQuery` calls with centralized hooks from `@/hooks/*`:
+
+| Domain | Files Fixed | Hooks Used |
+|--------|-------------|------------|
+| financial/revenue.tsx | ✓ | `useRecognitions`, `useRecognitionSummary`, `useDeferredRevenueBalance`, `useRetryRecognitionSync` |
+| financial/reminders.tsx | ✓ | `useReminderTemplates`, `useReminderHistory`, mutations |
+| financial/ar-aging.tsx | ✓ | `useARAgingReport` |
+| financial/credit-notes.tsx | ✓ | `useCreditNotes`, `useCreateCreditNote`, `useApplyCreditNote` |
+| jobs/assignments/$assignmentId.tsx | ✓ | `useUnifiedJob` |
+
+**Commits:**
+- `refactor: replace direct useQuery with centralized hooks`
+
+### Remaining Direct useQuery (Hooks Need Creation)
+
+These routes still use direct `useQuery` because centralized hooks don't exist:
+
+- `financial/statements.tsx` - needs `useStatements`
+- `jobs/kanban.tsx` - needs `useJobAssignmentsForSelector`
+- `jobs/_components/job-documents-tab-container.tsx` - needs `useJobDocuments`
+- `jobs/_components/job-materials-tab-container.tsx` - needs `useProducts`
+- `settings/api-tokens.tsx` - needs `useApiTokens`
+- `settings/win-loss-reasons.tsx` - needs `useWinLossReasons`
+- `pipeline/index.tsx` - needs enhanced `useOpportunities` with filter options
+- `reports/pipeline-forecast.tsx` - existing hooks have different API signatures
+- `reports/procurement/index.tsx` - uses mock data
+- `reports/win-loss.tsx` - needs `useWinLossAnalysis`, `useCompetitors`
+- `approvals/index.tsx` - uses mock data
+
+---
+
 ## Success Metrics
 
 | Metric | Before | After |
