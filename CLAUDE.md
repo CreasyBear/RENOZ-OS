@@ -177,6 +177,31 @@ useEffect(() => {
 ### UI State
 Use Zustand for global UI state, useState for local component state. Never mix UI state with data fetching hooks.
 
+### Route Patterns
+All authenticated routes must use `PageLayout` with appropriate variant and include error/loading handling:
+
+```typescript
+import { createFileRoute } from '@tanstack/react-router';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
+import { AdminTableSkeleton } from '@/components/skeletons/admin';
+
+export const Route = createFileRoute('/_authenticated/domain/')({
+  component: DomainPage,
+  errorComponent: ({ error }) => (
+    <RouteErrorFallback error={error} parentRoute="/domain" />
+  ),
+  pendingComponent: () => <AdminTableSkeleton />,
+});
+```
+
+See [docs/ui-patterns.md](./docs/ui-patterns.md) for:
+- Layout variant selection (full-width, container, narrow, with-panel)
+- Detail view patterns (Sheet vs full page)
+- Bulk actions with `BulkActionsBar` and `useSelection`
+- Navigation patterns (never use window.location.href)
+
+Use [docs/templates/route-template.tsx](./docs/templates/route-template.tsx) as a starting point for new routes.
+
 ## Standards Reference
 
 See [STANDARDS.md](./STANDARDS.md) for authoritative patterns on:
