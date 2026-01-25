@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { inventoryAlerts, inventory, products, warehouseLocations } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError } from '@/lib/server/errors';
 import {
   createAlertSchema,
@@ -178,7 +178,7 @@ export const getAlert = createServerFn({ method: 'GET' })
 export const createAlert = createServerFn({ method: 'POST' })
   .inputValidator(createAlertSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.MANAGE });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
     // Validate product if specified
     if (data.productId) {
@@ -237,7 +237,7 @@ export const updateAlert = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data: { id, data } }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.MANAGE });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
     const [existing] = await db
       .select()
@@ -271,7 +271,7 @@ export const updateAlert = createServerFn({ method: 'POST' })
 export const deleteAlert = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.MANAGE });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
     const [alert] = await db
       .select()
@@ -341,7 +341,7 @@ export const getTriggeredAlerts = createServerFn({ method: 'GET' }).handler(
  * @internal
  */
 export const checkAndTriggerAlerts = createServerFn({ method: 'POST' }).handler(async () => {
-  const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.MANAGE });
+  const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
   // Get all active alerts
   const activeAlerts = await db

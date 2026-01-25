@@ -20,7 +20,7 @@ import {
   purchaseOrders,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import {
   inventoryListQuerySchema,
@@ -284,7 +284,7 @@ export const getInventoryItem = createServerFn({ method: 'GET' })
 export const adjustInventory = createServerFn({ method: 'POST' })
   .inputValidator(stockAdjustmentSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.ADJUST });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.adjust });
 
     // Find or create inventory record
     let [inventoryRecord] = await db
@@ -386,7 +386,7 @@ export const adjustInventory = createServerFn({ method: 'POST' })
 export const transferInventory = createServerFn({ method: 'POST' })
   .inputValidator(stockTransferSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.TRANSFER });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.transfer });
 
     if (data.fromLocationId === data.toLocationId) {
       throw new ValidationError('Cannot transfer to the same location', {
@@ -539,7 +539,7 @@ const allocateInventorySchema = z.object({
 export const allocateInventory = createServerFn({ method: 'POST' })
   .inputValidator(allocateInventorySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.ALLOCATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.allocate });
 
     // Get inventory item
     const [item] = await db
@@ -617,7 +617,7 @@ export const deallocateInventory = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.ALLOCATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.allocate });
 
     // Get inventory item
     const [item] = await db
@@ -705,7 +705,7 @@ const receiveInventorySchema = z.object({
 export const receiveInventory = createServerFn({ method: 'POST' })
   .inputValidator(receiveInventorySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.RECEIVE });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.receive });
 
     // Validate product exists
     const [product] = await db
@@ -1044,7 +1044,7 @@ const bulkUpdateStatusSchema = z.object({
 export const bulkUpdateStatus = createServerFn({ method: 'POST' })
   .inputValidator(bulkUpdateStatusSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.ADJUST });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.adjust });
 
     return await db.transaction(async (tx) => {
       // Update all items

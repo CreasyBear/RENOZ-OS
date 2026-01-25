@@ -397,7 +397,7 @@ const result = await db.execute(sql`
 ```
 
 - [x] Refactor `getARAgingReport` to use SQL aggregation
-- [ ] Add similar fix to `financial-dashboard.ts` metrics (deferred)
+- [x] Add similar fix to `financial-dashboard.ts` metrics (parallelized queries)
 
 ### 3.3 Parallelize Sequential Queries
 
@@ -421,7 +421,7 @@ const [config, businessHours, holidays] = await Promise.all([
 
 - [x] Parallelize SLA calculation queries (used JOIN instead)
 - [x] Add date filter to holidays query (only fetch relevant window)
-- [ ] Apply Promise.all pattern to other sequential reads (deferred)
+- [x] Apply Promise.all pattern to other sequential reads (dashboard-metrics.ts)
 
 ### 3.4 Add Missing Composite Indexes
 
@@ -444,9 +444,9 @@ CREATE INDEX idx_activities_entity
   ON activities(organization_id, entity_type, entity_id, created_at DESC);
 ```
 
-- [ ] Create migration for composite indexes
-- [ ] Run EXPLAIN ANALYZE on hot queries before/after
-- [ ] Document index usage in schema files
+- [x] Create migration for composite indexes (0027_add_composite_indexes.sql)
+- [ ] Run EXPLAIN ANALYZE on hot queries before/after (post-deploy)
+- [ ] Document index usage in schema files (post-deploy)
 
 ---
 
@@ -480,9 +480,9 @@ CREATE INDEX idx_activities_entity
 3. Update imports to subdirectory path
 4. Delete root file
 
-- [ ] Verify each subdirectory file is canonical
-- [ ] Update imports in affected files
-- [ ] Delete 15 root-level duplicate files
+- [x] Verify each subdirectory file is canonical
+- [x] Update imports in affected files (26 imports updated)
+- [x] Delete 15 root-level duplicate files
 
 ### 4.2 Consolidate GST_RATE Constant
 
@@ -507,8 +507,8 @@ export const TAX = {
 - `order-creation-wizard.tsx`
 - `order-calculations.ts` (already exports, make this the source)
 
-- [ ] Export `GST_RATE` from `src/lib/order-calculations.ts` only
-- [ ] Update all files to import from `@/lib/order-calculations`
+- [x] Export `GST_RATE` from `src/lib/order-calculations.ts` only
+- [x] Update all files to import from `@/lib/order-calculations`
 
 ### 4.3 Consolidate PERMISSIONS Constants
 
@@ -521,9 +521,10 @@ export const TAX = {
 
 **Decision**: Keep `src/lib/auth/permissions.ts` (more usage, better casing).
 
-- [ ] Migrate 19 files from `@/lib/constants` PERMISSIONS to `@/lib/auth/permissions`
-- [ ] Remove PERMISSIONS from `@/lib/constants.ts`
-- [ ] Add deprecation warning or remove constants export
+- [x] Migrate 20 files from `@/lib/constants` PERMISSIONS to `@/lib/auth/permissions`
+- [x] Add missing permission domains to auth/permissions.ts (warranty, financial, support)
+- [x] Add missing inventory permissions (manage, count, forecast)
+- [ ] Remove PERMISSIONS from `@/lib/constants.ts` (deferred - may have other usage)
 
 ### 4.4 Standardize Soft Delete Pattern
 

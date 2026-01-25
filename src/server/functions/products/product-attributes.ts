@@ -18,7 +18,7 @@ import {
   type AttributeOptions,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
@@ -243,7 +243,7 @@ export const createAttribute = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }): Promise<ProductAttribute> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     // Validate choices for select/multiselect
     if (
@@ -310,7 +310,7 @@ export const updateAttribute = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }): Promise<ProductAttribute> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
     const { id, ...updateData } = data;
 
     // Verify attribute exists
@@ -355,7 +355,7 @@ export const updateAttribute = createServerFn({ method: 'POST' })
 export const deleteAttribute = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }): Promise<{ success: boolean; valuesDeleted: number }> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     // Verify attribute exists
     const [existing] = await db
@@ -485,7 +485,7 @@ export const setProductAttribute = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }): Promise<{ success: boolean }> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     // Verify product exists
     const [product] = await db
@@ -588,7 +588,7 @@ export const setProductAttributes = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }): Promise<{ success: boolean; errors: Record<string, string> }> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     // Verify product exists
     const [product] = await db
@@ -719,7 +719,7 @@ export const deleteProductAttribute = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }): Promise<{ success: boolean }> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
 
     await db
       .delete(productAttributeValues)

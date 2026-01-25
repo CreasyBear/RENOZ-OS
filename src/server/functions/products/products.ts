@@ -20,7 +20,7 @@ import {
   productRelations,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/server/errors';
 import {
   createProductSchema,
@@ -223,7 +223,7 @@ export const getProduct = createServerFn({ method: 'GET' })
 export const createProduct = createServerFn({ method: 'POST' })
   .inputValidator(createProductSchema)
   .handler(async ({ data }): Promise<Product> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.CREATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.create });
 
     // Check for duplicate SKU
     const existingSku = await db
@@ -280,7 +280,7 @@ export const createProduct = createServerFn({ method: 'POST' })
 export const updateProduct = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }).merge(updateProductSchema))
   .handler(async ({ data }): Promise<Product> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
     const { id, ...updateData } = data;
 
     // Check product exists
@@ -395,7 +395,7 @@ export const updateProduct = createServerFn({ method: 'POST' })
 export const deleteProduct = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }): Promise<{ success: boolean }> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.DELETE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.delete });
 
     // Check product exists
     const [existing] = await db
@@ -563,7 +563,7 @@ export const getCategoryTree = createServerFn({ method: 'GET' }).handler(async (
 export const createCategory = createServerFn({ method: 'POST' })
   .inputValidator(createCategorySchema)
   .handler(async ({ data }): Promise<Category> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.CREATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.create });
 
     // Validate parent exists if provided
     if (data.parentId) {
@@ -599,7 +599,7 @@ export const createCategory = createServerFn({ method: 'POST' })
 export const updateCategory = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }).merge(updateCategorySchema))
   .handler(async ({ data }): Promise<Category> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.update });
     const { id, ...updateData } = data;
 
     // Check category exists
@@ -658,7 +658,7 @@ export const updateCategory = createServerFn({ method: 'POST' })
 export const deleteCategory = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }): Promise<{ success: boolean }> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.PRODUCTS.DELETE });
+    const ctx = await withAuth({ permission: PERMISSIONS.product.delete });
 
     // Check category exists
     const [existing] = await db

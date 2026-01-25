@@ -12,7 +12,7 @@ import { eq, and, sql, asc, isNull, lte, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { paymentSchedules, orders, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { formatAmount } from '@/lib/currency';
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/server/errors';
 import {
@@ -189,7 +189,7 @@ function generatePresetInstallments(
 export const createPaymentPlan = createServerFn({ method: 'POST' })
   .inputValidator(createPaymentPlanSchema)
   .handler(async ({ data }): Promise<PaymentPlanSummary> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.FINANCIAL.CREATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.create });
 
     // Get order (outside transaction - read-only)
     const order = await db
@@ -378,7 +378,7 @@ export const getPaymentSchedule = createServerFn({ method: 'GET' })
 export const recordInstallmentPayment = createServerFn({ method: 'POST' })
   .inputValidator(recordInstallmentPaymentSchema)
   .handler(async ({ data }): Promise<PaymentScheduleRecord> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.FINANCIAL.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.update });
 
     // Get installment
     const installment = await db
@@ -574,7 +574,7 @@ export const getOverdueInstallments = createServerFn({ method: 'GET' })
 export const updateInstallment = createServerFn({ method: 'POST' })
   .inputValidator(updateInstallmentSchema)
   .handler(async ({ data }): Promise<PaymentScheduleRecord> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.FINANCIAL.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.update });
     const { installmentId, ...updateData } = data;
 
     // Get existing
@@ -640,7 +640,7 @@ export const updateInstallment = createServerFn({ method: 'POST' })
 export const deletePaymentPlan = createServerFn({ method: 'POST' })
   .inputValidator(deletePaymentPlanSchema)
   .handler(async ({ data }): Promise<{ deleted: number }> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.FINANCIAL.DELETE });
+    const ctx = await withAuth({ permission: PERMISSIONS.financial.delete });
 
     // Check for any paid installments
     const paidInstallments = await db

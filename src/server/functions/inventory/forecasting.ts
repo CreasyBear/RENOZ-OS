@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { inventoryForecasts, inventory, products } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { createForecastSchema, forecastListQuerySchema } from '@/lib/schemas/inventory';
 
@@ -192,7 +192,7 @@ export const getProductForecast = createServerFn({ method: 'GET' })
 export const upsertForecast = createServerFn({ method: 'POST' })
   .inputValidator(createForecastSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.FORECAST });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.forecast });
 
     // Verify product exists
     const [product] = await db
@@ -270,7 +270,7 @@ export const bulkUpdateForecasts = createServerFn({ method: 'POST' })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.FORECAST });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.forecast });
 
     // Build all values upfront
     const forecastValues = data.forecasts.map((forecastData) => ({

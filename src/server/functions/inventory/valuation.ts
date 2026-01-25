@@ -17,7 +17,7 @@ import {
   warehouseLocations as locations,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { formatAmount } from '@/lib/currency';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import {
@@ -178,7 +178,7 @@ export const getInventoryCostLayers = createServerFn({ method: 'GET' })
 export const createCostLayer = createServerFn({ method: 'POST' })
   .inputValidator(createCostLayerSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth({ permission: PERMISSIONS.INVENTORY.MANAGE });
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
     // Verify inventory exists
     const [inv] = await db

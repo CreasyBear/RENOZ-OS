@@ -17,7 +17,7 @@ import { issues } from 'drizzle/schema/support/issues';
 import { users } from 'drizzle/schema/users';
 import { customers } from 'drizzle/schema/customers';
 import { withAuth } from '@/lib/server/protected';
-import { PERMISSIONS } from '@/lib/constants';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { nanoid } from 'nanoid';
 import {
   submitInternalFeedbackSchema,
@@ -101,7 +101,7 @@ function toCsatResponseResponse(row: {
 export const submitInternalFeedback = createServerFn({ method: 'POST' })
   .inputValidator(submitInternalFeedbackSchema)
   .handler(async ({ data }): Promise<CsatResponseResponse> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPORT.CREATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.support.create });
 
     // Verify issue exists and belongs to organization
     const [issue] = await db
@@ -170,7 +170,7 @@ export const submitInternalFeedback = createServerFn({ method: 'POST' })
 export const getIssueFeedback = createServerFn({ method: 'GET' })
   .inputValidator(getIssueFeedbackSchema)
   .handler(async ({ data }): Promise<CsatResponseResponse | null> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPORT.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.support.read });
 
     const [result] = await db
       .select({
@@ -220,7 +220,7 @@ export const getIssueFeedback = createServerFn({ method: 'GET' })
 export const listFeedback = createServerFn({ method: 'GET' })
   .inputValidator(listFeedbackSchema)
   .handler(async ({ data }): Promise<ListFeedbackResponse> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPORT.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.support.read });
 
     // Build conditions
     const conditions = [eq(csatResponses.organizationId, ctx.organizationId)];
@@ -321,7 +321,7 @@ export const listFeedback = createServerFn({ method: 'GET' })
 export const getCsatMetrics = createServerFn({ method: 'GET' })
   .inputValidator(getCsatMetricsSchema)
   .handler(async ({ data }): Promise<CsatMetricsResponse> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPORT.READ });
+    const ctx = await withAuth({ permission: PERMISSIONS.support.read });
 
     // Build date conditions
     const conditions = [eq(csatResponses.organizationId, ctx.organizationId)];
@@ -444,7 +444,7 @@ export const getCsatMetrics = createServerFn({ method: 'GET' })
 export const generateFeedbackToken = createServerFn({ method: 'POST' })
   .inputValidator(generateFeedbackTokenSchema)
   .handler(async ({ data }): Promise<GenerateFeedbackTokenResponse> => {
-    const ctx = await withAuth({ permission: PERMISSIONS.SUPPORT.UPDATE });
+    const ctx = await withAuth({ permission: PERMISSIONS.support.update });
 
     // Verify issue exists and belongs to organization
     const [issue] = await db

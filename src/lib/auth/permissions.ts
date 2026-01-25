@@ -88,6 +88,9 @@ export const PERMISSIONS = {
     transfer: 'inventory.transfer',
     receive: 'inventory.receive',
     allocate: 'inventory.allocate',
+    manage: 'inventory.manage',
+    count: 'inventory.count',
+    forecast: 'inventory.forecast',
   },
 
   // Pipeline/Opportunity domain
@@ -199,6 +202,32 @@ export const PERMISSIONS = {
     update: 'suppliers.update',
     delete: 'suppliers.delete',
     approve: 'suppliers.approve',
+  },
+
+  // Warranty domain
+  warranty: {
+    read: 'warranty.read',
+    create: 'warranty.create',
+    update: 'warranty.update',
+    approve: 'warranty.approve',
+    resolve: 'warranty.resolve',
+    assign: 'warranty.assign',
+  },
+
+  // Financial domain
+  financial: {
+    read: 'financial.read',
+    create: 'financial.create',
+    update: 'financial.update',
+    delete: 'financial.delete',
+  },
+
+  // Support domain
+  support: {
+    read: 'support.read',
+    create: 'support.create',
+    update: 'support.update',
+    delete: 'support.delete',
   },
 } as const
 
