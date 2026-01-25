@@ -28,7 +28,7 @@ import {
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: async ({ location }) => {
-    // Check if user is authenticated
+    // Check if user is authenticated with Supabase
     const { data: { session } } = await supabase.auth.getSession()
 
     if (!session) {
@@ -41,9 +41,47 @@ export const Route = createFileRoute('/_authenticated')({
       })
     }
 
+    // Verify user exists and is active in application database
+    // This catches: deactivated users, deleted users, users not in users table
+    const { data: appUser, error } = await supabase
+      .from('users')
+      .select('id, status, organization_id, role, deleted_at')
+      .eq('auth_id', session.user.id)
+      .is('deleted_at', null)
+      .single()
+
+    if (error || !appUser) {
+      // User not found in app database or has been deleted
+      // Sign them out and redirect to login
+      await supabase.auth.signOut()
+      throw redirect({
+        to: '/login',
+        search: {
+          redirect: undefined, // Clear any redirect
+        },
+      })
+    }
+
+    if (appUser.status !== 'active') {
+      // User exists but is not active (deactivated, suspended, etc.)
+      await supabase.auth.signOut()
+      throw redirect({
+        to: '/login',
+        search: {
+          redirect: undefined, // Clear any redirect
+        },
+      })
+    }
+
     // Return user context for child routes
     return {
       user: session.user,
+      appUser: {
+        id: appUser.id,
+        organizationId: appUser.organization_id,
+        role: appUser.role,
+        status: appUser.status,
+      },
     }
   },
   component: AuthenticatedLayout,

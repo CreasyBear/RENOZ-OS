@@ -56,10 +56,11 @@ export const userInvitations = pgTable(
     email: varchar("email", { length: 255 }).notNull(),
     role: userRoleEnum("role").notNull(), // Role to assign upon acceptance
 
-    // Invitation sender
+    // Invitation sender - cascade delete if inviter is removed
+    // Note: Changed from set null to cascade to match notNull constraint
     invitedBy: uuid("invited_by")
       .notNull()
-      .references(() => users.id, { onDelete: "set null" }),
+      .references(() => users.id, { onDelete: "cascade" }),
 
     // Timestamps
     invitedAt: timestamp("invited_at", { withTimezone: true })

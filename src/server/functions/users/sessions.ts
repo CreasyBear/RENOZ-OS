@@ -13,6 +13,7 @@ import { eq, and, gt, desc, ne, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { userSessions } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { idParamSchema } from '@/lib/schemas';
 import { getRequest } from '@tanstack/react-start/server';
 import { UAParser } from 'ua-parser-js';
@@ -99,7 +100,7 @@ function parseUserAgent(userAgent: string | null): {
 export const listMySessions = createServerFn({ method: 'GET' })
   .inputValidator(z.object({}))
   .handler(async (): Promise<SessionInfo[]> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.user.read });
 
     // Get current session token from request
     const request = getRequest();
@@ -162,7 +163,7 @@ export const listMySessions = createServerFn({ method: 'GET' })
 export const terminateSession = createServerFn({ method: 'POST' })
   .inputValidator(idParamSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.user.update });
 
     // Verify session belongs to user
     const [session] = await db
@@ -191,7 +192,7 @@ export const terminateSession = createServerFn({ method: 'POST' })
 export const terminateAllOtherSessions = createServerFn({ method: 'POST' })
   .inputValidator(z.object({}))
   .handler(async () => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.user.update });
 
     // Get current session token from request
     const request = getRequest();
@@ -242,7 +243,7 @@ export const terminateAllOtherSessions = createServerFn({ method: 'POST' })
 export const recordSessionActivity = createServerFn({ method: 'POST' })
   .inputValidator(z.object({}))
   .handler(async () => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.user.update });
 
     // Get current session token from request
     const request = getRequest();

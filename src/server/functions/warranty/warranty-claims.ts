@@ -238,7 +238,7 @@ async function startSlaTrackingForClaim(
 export const createWarrantyClaim = typedPostFn(
   createWarrantyClaimSchema,
   async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.warranty.create });
 
     // Get warranty with related data
     const [warranty] = await db
@@ -356,7 +356,7 @@ export const createWarrantyClaim = typedPostFn(
 export const updateClaimStatus = typedPostFn(
   updateClaimStatusSchema,
   async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.warranty.update });
 
     const [existingClaim] = await db
       .select()
@@ -734,7 +734,7 @@ export const resolveClaim = typedPostFn(
 export const listWarrantyClaims = typedGetFn(
   listWarrantyClaimsSchema,
   async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
 
     // Build conditions
     const conditions = [eq(warrantyClaims.organizationId, ctx.organizationId)];
@@ -840,7 +840,7 @@ export const listWarrantyClaims = typedGetFn(
 export const getWarrantyClaim = typedGetFn(
   getWarrantyClaimSchema,
   async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
 
     const [result] = await db
       .select({

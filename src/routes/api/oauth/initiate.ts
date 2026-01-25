@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import { withAuth } from '@/lib/server/protected';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { db } from '@/lib/db';
 import { initiateOAuthFlow } from '@/lib/oauth/flow';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS, RateLimitError } from '@/lib/server/rate-limit';
@@ -18,7 +19,7 @@ const requestSchema = z.object({
 
 export async function POST({ request }: { request: globalThis.Request }) {
   try {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.organization.manageIntegrations });
     const body = await request.json().catch(() => ({}));
     const parsed = requestSchema.safeParse(body);
 

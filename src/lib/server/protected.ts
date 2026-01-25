@@ -192,6 +192,135 @@ export async function withAuth(options: WithAuthOptions = {}): Promise<SessionCo
 }
 
 // ============================================================================
+// API TOKEN AUTH (Agent/Programmatic Access)
+// ============================================================================
+
+/**
+ * API token session context available after API token authentication.
+ */
+export interface ApiSessionContext {
+  /** Token ID for audit/tracking */
+  tokenId: string
+  /** User who owns the token */
+  userId: string
+  /** Organization the token belongs to */
+  organizationId: string
+  /** Scopes granted to this token */
+  scopes: import('@/lib/schemas/auth').ApiTokenScope[]
+  /** Check if token has a specific scope */
+  hasScope: (scope: import('@/lib/schemas/auth').ApiTokenScope) => boolean
+}
+
+/**
+ * Options for withApiAuth.
+ */
+export interface WithApiAuthOptions {
+  /** Required scope (e.g., 'read', 'write', 'admin') */
+  requiredScope?: import('@/lib/schemas/auth').ApiTokenScope
+}
+
+/**
+ * Validate API token authentication.
+ * Call this at the start of any API-accessible server function handler.
+ *
+ * Expects `Authorization: Bearer renoz_xxx...` header.
+ *
+ * @param options - Optional auth options including required scope
+ * @returns API session context with tokenId, userId, organizationId, and scopes
+ * @throws AuthError if token is invalid, expired, or revoked
+ * @throws PermissionDeniedError if required scope not granted
+ *
+ * @example
+ * ```ts
+ * // Basic API auth check
+ * const ctx = await withApiAuth()
+ *
+ * // With scope check
+ * const ctx = await withApiAuth({ requiredScope: 'write' })
+ *
+ * // Access context properties
+ * console.log(ctx.organizationId) // for multi-tenant queries
+ * console.log(ctx.hasScope('admin')) // check specific scope
+ * ```
+ */
+export async function withApiAuth(options: WithApiAuthOptions = {}): Promise<ApiSessionContext> {
+  const request = getRequest()
+  const authHeader = request.headers.get('Authorization')
+
+  if (!authHeader?.startsWith('Bearer ')) {
+    throw new AuthError('API token required. Use Authorization: Bearer renoz_xxx...')
+  }
+
+  const token = authHeader.slice(7) // Remove 'Bearer ' prefix
+
+  // Validate the token using the existing validateApiToken function
+  const { validateApiToken, scopeIncludesPermission } = await import('./api-tokens')
+  const tokenContext = await validateApiToken(token)
+
+  // Check required scope if specified
+  if (options.requiredScope && !scopeIncludesPermission(tokenContext.scopes, options.requiredScope)) {
+    throw new PermissionDeniedError(
+      `Insufficient token scope. Required: ${options.requiredScope}, granted: ${tokenContext.scopes.join(', ')}`,
+      options.requiredScope
+    )
+  }
+
+  // Set RLS context for Row-Level Security policies
+  await db.execute(
+    sql`SELECT set_config('app.organization_id', ${tokenContext.organizationId}, true)`
+  )
+
+  return {
+    tokenId: tokenContext.tokenId,
+    userId: tokenContext.userId,
+    organizationId: tokenContext.organizationId,
+    scopes: tokenContext.scopes,
+    hasScope: tokenContext.hasScope,
+  }
+}
+
+/**
+ * Validate authentication via either Supabase JWT or API token.
+ * Tries API token first (Bearer header), falls back to Supabase session.
+ *
+ * Useful for endpoints that should work for both humans and agents.
+ *
+ * @param options - Optional auth options
+ * @returns Either SessionContext or ApiSessionContext
+ *
+ * @example
+ * ```ts
+ * const ctx = await withAnyAuth()
+ * // ctx.organizationId works in both cases
+ * // Use 'user' in ctx to check if human vs agent
+ * if ('user' in ctx) {
+ *   console.log('Human user:', ctx.user.email)
+ * } else {
+ *   console.log('API token:', ctx.tokenId)
+ * }
+ * ```
+ */
+export async function withAnyAuth(options: WithAuthOptions = {}): Promise<SessionContext | ApiSessionContext> {
+  const request = getRequest()
+  const authHeader = request.headers.get('Authorization')
+
+  // Try API token first
+  if (authHeader?.startsWith('Bearer renoz_')) {
+    return withApiAuth({
+      // Map permission to scope (simplified mapping)
+      requiredScope: options.permission
+        ? (options.permission.includes('create') || options.permission.includes('update') || options.permission.includes('delete')
+          ? 'write' as const
+          : 'read' as const)
+        : undefined,
+    })
+  }
+
+  // Fall back to Supabase session
+  return withAuth(options)
+}
+
+// ============================================================================
 // INTERNAL AUTH (Server-to-Server)
 // ============================================================================
 

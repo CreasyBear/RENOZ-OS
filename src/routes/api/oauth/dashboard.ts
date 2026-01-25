@@ -5,12 +5,13 @@
  */
 
 import { withAuth } from '@/lib/server/protected';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { db } from '@/lib/db';
 import { oauthConnections, oauthSyncLogs } from 'drizzle/schema';
 import { and, eq, gte, sql, desc } from 'drizzle-orm';
 
 export async function GET() {
-  const ctx = await withAuth();
+  const ctx = await withAuth({ permission: PERMISSIONS.organization.manageIntegrations });
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 

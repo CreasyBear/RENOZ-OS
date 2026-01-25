@@ -25,6 +25,7 @@ import {
   userJobsSchema,
 } from '@/lib/schemas/automation-jobs';
 import { withAuth, withInternalAuth } from '@/lib/server/protected';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 
 // ============================================================================
 // INTERNAL FUNCTIONS (For Trigger.dev tasks - server-to-server only)
@@ -183,7 +184,7 @@ export const completeJobInternal = createServerFn({ method: 'POST' })
 export const getJobStatus = createServerFn({ method: 'GET' })
   .inputValidator(jobIdSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.job.read });
 
     const job = await db.query.jobs.findFirst({
       where: and(eq(jobs.id, data.jobId), eq(jobs.organizationId, ctx.organizationId)),
@@ -203,7 +204,7 @@ export const getJobStatus = createServerFn({ method: 'GET' })
 export const getUserJobs = createServerFn({ method: 'GET' })
   .inputValidator(userJobsSchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.job.read });
 
     const conditions = [eq(jobs.userId, ctx.user.id), eq(jobs.organizationId, ctx.organizationId)];
 
@@ -225,7 +226,7 @@ export const getUserJobs = createServerFn({ method: 'GET' })
  * Requires: Authentication
  */
 export const getActiveJobs = createServerFn({ method: 'GET' }).handler(async () => {
-  const ctx = await withAuth();
+  const ctx = await withAuth({ permission: PERMISSIONS.job.read });
 
   const activeJobs = await db.query.jobs.findMany({
     where: and(

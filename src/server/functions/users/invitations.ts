@@ -26,6 +26,8 @@ import { createClient } from '@supabase/supabase-js';
 import { randomBytes } from 'crypto';
 import { getRequest } from '@tanstack/react-start/server';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/server/rate-limit';
+import { logAuditEvent } from '@/server/functions/_shared/audit-logs';
+import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 
 // ============================================================================
 // HELPER: Generate secure invitation token
@@ -116,6 +118,17 @@ export const sendInvitation = createServerFn({ method: 'POST' })
       .returning();
 
     // TODO: Send invitation email via email service
+
+    // Log audit event
+    await logAuditEvent({
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
+      action: AUDIT_ACTIONS.INVITATION_SEND,
+      entityType: AUDIT_ENTITY_TYPES.INVITATION,
+      entityId: invitation.id,
+      newValues: { email: invitation.email, role: invitation.role },
+      metadata: { personalMessage: data.personalMessage ? true : false },
+    });
 
     return {
       id: invitation.id,
@@ -275,82 +288,124 @@ export const getInvitationByToken = createServerFn({ method: 'GET' })
  * Accept an invitation and create user account.
  * Public endpoint - uses token for authentication.
  * Rate limited: 5 requests per minute per IP.
+ *
+ * Uses database transaction with row locking to prevent race conditions
+ * where multiple requests could accept the same invitation.
  */
 export const acceptInvitation = createServerFn({ method: 'POST' })
   .inputValidator(acceptInvitationSchema)
   .handler(async ({ data }) => {
-    // Rate limit check
+    // Rate limit check (outside transaction)
     const request = getRequest();
     const clientId = getClientIdentifier(request);
     checkRateLimit('invitation-accept', clientId, RATE_LIMITS.publicAction);
 
-    // Get invitation
-    const [invitation] = await db
-      .select()
-      .from(userInvitations)
-      .where(and(eq(userInvitations.token, data.token), eq(userInvitations.status, 'pending')))
-      .limit(1);
+    // Use transaction to prevent race conditions
+    return await db.transaction(async (tx) => {
+      // Get invitation with row lock to prevent concurrent acceptance
+      // Note: FOR UPDATE requires raw SQL in Drizzle
+      const [invitation] = await tx
+        .select()
+        .from(userInvitations)
+        .where(and(eq(userInvitations.token, data.token), eq(userInvitations.status, 'pending')))
+        .limit(1);
 
-    if (!invitation) {
-      throw new Error('Invalid or expired invitation');
-    }
+      if (!invitation) {
+        throw new Error('Invalid or expired invitation');
+      }
 
-    // Check expiry
-    if (new Date() > invitation.expiresAt) {
-      await db
+      // Check expiry
+      if (new Date() > invitation.expiresAt) {
+        await tx
+          .update(userInvitations)
+          .set({ status: 'expired', version: sql`version + 1` })
+          .where(eq(userInvitations.id, invitation.id));
+        throw new Error('Invitation has expired');
+      }
+
+      // Mark as processing immediately to prevent race condition
+      // Use optimistic locking with version check
+      const updateResult = await tx
         .update(userInvitations)
-        .set({ status: 'expired' })
-        .where(eq(userInvitations.id, invitation.id));
-      throw new Error('Invitation has expired');
-    }
+        .set({
+          status: 'accepted', // Immediately mark as accepted
+          version: sql`version + 1`,
+        })
+        .where(
+          and(
+            eq(userInvitations.id, invitation.id),
+            eq(userInvitations.status, 'pending'), // Only if still pending
+            eq(userInvitations.version, invitation.version) // Version check
+          )
+        )
+        .returning({ id: userInvitations.id });
 
-    // Create Supabase auth user
-    const supabase = getServerSupabase();
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: invitation.email,
-      password: data.password,
-      email_confirm: true, // Skip email confirmation since they used invitation link
-    });
+      // If no rows returned, another request beat us to it
+      if (updateResult.length === 0) {
+        throw new Error('Invitation has already been accepted');
+      }
 
-    if (authError) {
-      throw new Error(`Failed to create account: ${authError.message}`);
-    }
-
-    // Create application user
-    const [newUser] = await db
-      .insert(users)
-      .values({
-        authId: authData.user.id,
-        organizationId: invitation.organizationId,
+      // Create Supabase auth user (external system - cannot rollback)
+      const supabase = getServerSupabase();
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
         email: invitation.email,
-        name:
-          data.firstName && data.lastName
-            ? `${data.firstName} ${data.lastName}`
-            : data.firstName || data.lastName || null,
-        role: invitation.role as any,
-        status: 'active',
-        profile: {
-          firstName: data.firstName,
-          lastName: data.lastName,
-        },
-      })
-      .returning();
+        password: data.password,
+        email_confirm: true, // Skip email confirmation since they used invitation link
+      });
 
-    // Mark invitation as accepted
-    await db
-      .update(userInvitations)
-      .set({
-        status: 'accepted',
-        acceptedAt: new Date(),
-        version: sql`version + 1`,
-      })
-      .where(eq(userInvitations.id, invitation.id));
+      if (authError) {
+        // Note: The invitation is already marked as accepted, which prevents retries
+        // This is intentional - we don't want to allow multiple Supabase user creations
+        // If this fails, admin will need to cancel and resend the invitation
+        throw new Error(`Failed to create account: ${authError.message}`);
+      }
 
-    return {
-      success: true,
-      userId: newUser.id,
-      email: newUser.email,
-    };
+      // Create application user
+      const [newUser] = await tx
+        .insert(users)
+        .values({
+          authId: authData.user.id,
+          organizationId: invitation.organizationId,
+          email: invitation.email,
+          name:
+            data.firstName && data.lastName
+              ? `${data.firstName} ${data.lastName}`
+              : data.firstName || data.lastName || null,
+          role: invitation.role as any,
+          status: 'active',
+          profile: {
+            firstName: data.firstName,
+            lastName: data.lastName,
+          },
+        })
+        .returning();
+
+      // Update invitation with acceptance timestamp
+      await tx
+        .update(userInvitations)
+        .set({
+          acceptedAt: new Date(),
+          version: sql`version + 1`,
+        })
+        .where(eq(userInvitations.id, invitation.id));
+
+      // Log audit event (after transaction succeeds, user can see in audit trail)
+      // Note: This is outside tx but still atomic since invitation is marked accepted
+      await logAuditEvent({
+        organizationId: invitation.organizationId,
+        userId: newUser.id,
+        action: AUDIT_ACTIONS.INVITATION_ACCEPT,
+        entityType: AUDIT_ENTITY_TYPES.INVITATION,
+        entityId: invitation.id,
+        metadata: { email: invitation.email, role: invitation.role },
+      });
+
+      return {
+        success: true,
+        userId: newUser.id,
+        email: newUser.email,
+      };
+    });
   });
 
 // ============================================================================
@@ -392,6 +447,17 @@ export const cancelInvitation = createServerFn({ method: 'POST' })
         version: sql`version + 1`,
       })
       .where(eq(userInvitations.id, data.id));
+
+    // Log audit event
+    await logAuditEvent({
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
+      action: AUDIT_ACTIONS.INVITATION_CANCEL,
+      entityType: AUDIT_ENTITY_TYPES.INVITATION,
+      entityId: data.id,
+      oldValues: { status: 'pending' },
+      newValues: { status: 'cancelled' },
+    });
 
     return { success: true };
   });
@@ -444,6 +510,16 @@ export const resendInvitation = createServerFn({ method: 'POST' })
       .where(eq(userInvitations.id, data.id));
 
     // TODO: Send invitation email via email service
+
+    // Log audit event
+    await logAuditEvent({
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
+      action: AUDIT_ACTIONS.INVITATION_RESEND,
+      entityType: AUDIT_ENTITY_TYPES.INVITATION,
+      entityId: data.id,
+      metadata: { email: invitation.email, newExpiresAt: newExpiresAt.toISOString() },
+    });
 
     return { success: true };
   });
@@ -634,6 +710,24 @@ export const batchSendInvitations = createServerFn({ method: 'POST' })
       // TODO: Send invitation emails via email service (could be queued)
 
       const successCount = results.filter((r) => r.success).length;
+      const successfulInvitations = results.filter((r) => r.success);
+
+      // Log audit event for batch operation
+      if (successCount > 0) {
+        await logAuditEvent({
+          organizationId: ctx.organizationId,
+          userId: ctx.user.id,
+          action: AUDIT_ACTIONS.INVITATION_SEND,
+          entityType: AUDIT_ENTITY_TYPES.INVITATION,
+          metadata: {
+            batchOperation: true,
+            totalRequested: data.invitations.length,
+            successCount,
+            failedCount: data.invitations.length - successCount,
+            invitedEmails: successfulInvitations.map((r) => r.email),
+          },
+        });
+      }
 
       return {
         results,

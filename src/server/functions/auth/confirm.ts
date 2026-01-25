@@ -48,36 +48,42 @@ export const completeSignup = createServerFn({ method: 'POST' })
       return { success: true, user: existingUser[0] };
     }
 
-    // Create organization
-    const [organization] = await db
-      .insert(organizations)
-      .values({
-        name: data.organizationName,
-        slug: data.organizationName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
-        isActive: true,
-        plan: 'free',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
+    // Use transaction to ensure atomicity - if user insert fails, org is rolled back
+    // This prevents orphaned organizations with no owner
+    const result = await db.transaction(async (tx) => {
+      // Create organization
+      const [organization] = await tx
+        .insert(organizations)
+        .values({
+          name: data.organizationName,
+          slug: data.organizationName.toLowerCase().replace(/[^a-z0-9]/g, '-'),
+          isActive: true,
+          plan: 'free',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
 
-    // Create user as owner
-    const [user] = await db
-      .insert(users)
-      .values({
-        authId: data.userId,
-        organizationId: organization.id,
-        email: data.email,
-        name: data.name,
-        role: 'owner',
-        status: 'active',
-        type: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning();
+      // Create user as owner
+      const [user] = await tx
+        .insert(users)
+        .values({
+          authId: data.userId,
+          organizationId: organization.id,
+          email: data.email,
+          name: data.name,
+          role: 'owner',
+          status: 'active',
+          type: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .returning();
 
-    return { success: true, user, organization };
+      return { user, organization };
+    });
+
+    return { success: true, ...result };
   });
 
 // ============================================================================

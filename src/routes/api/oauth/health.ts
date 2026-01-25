@@ -5,11 +5,12 @@
  */
 
 import { withAuth } from '@/lib/server/protected';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { db } from '@/lib/db';
 import { bulkHealthCheck } from '@/server/functions/oauth/health';
 
 export async function GET() {
-  const ctx = await withAuth();
+  const ctx = await withAuth({ permission: PERMISSIONS.organization.read });
   const result = await bulkHealthCheck(db, { organizationId: ctx.organizationId });
 
   if (!result.success) {

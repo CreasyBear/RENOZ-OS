@@ -5,11 +5,12 @@
  */
 
 import { withAuth } from '@/lib/server/protected';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { db } from '@/lib/db';
 import { listOAuthConnections } from '@/server/functions/oauth/connections';
 
 export async function GET({ request }: { request: Request }) {
-  const ctx = await withAuth();
+  const ctx = await withAuth({ permission: PERMISSIONS.organization.manageIntegrations });
   const url = new URL(request.url);
   const provider = url.searchParams.get('provider') || undefined;
   const serviceType = url.searchParams.get('serviceType') || undefined;

@@ -194,6 +194,25 @@ export const userSessions = pgTable(
 
     // Expiration cleanup queries
     expiresIdx: index("idx_sessions_expires").on(table.expiresAt),
+
+    // RLS Policies - users can only access sessions for users in their org
+    selectPolicy: pgPolicy("user_sessions_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`user_id IN (
+        SELECT id FROM users
+        WHERE organization_id = current_setting('app.organization_id', true)::uuid
+      )`,
+    }),
+    deletePolicy: pgPolicy("user_sessions_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`user_id IN (
+        SELECT id FROM users
+        WHERE organization_id = current_setting('app.organization_id', true)::uuid
+      )`,
+    }),
+    // Note: Insert/update handled by app logic, sessions created by auth system
   })
 );
 

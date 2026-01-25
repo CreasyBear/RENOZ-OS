@@ -12,6 +12,7 @@ import { eq, and, gte, lte, sql, desc, asc, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { warranties, warrantyPolicies, customers, products } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
+import { PERMISSIONS } from '@/lib/auth/permissions';
 import { typedGetFn, typedGetNoInput, typedPostFn } from '@/lib/server/typed-server-fn';
 import {
   getExpiringWarrantiesSchema,
@@ -106,7 +107,7 @@ function getUrgencyLevel(daysUntilExpiry: number): ExpiringWarrantyItem['urgency
 export const getExpiringWarranties = typedGetFn(
   getExpiringWarrantiesSchema,
   async ({ data }): Promise<GetExpiringWarrantiesResult> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
     const { days, limit, sortOrder } = data;
 
     // Calculate date window
@@ -197,7 +198,7 @@ export const getExpiringWarranties = typedGetFn(
 export const listWarranties = typedGetFn(
   warrantyFiltersSchema,
   async ({ data }): Promise<ListWarrantiesResult> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
     const {
       search,
       status,
@@ -340,7 +341,7 @@ export interface ExpiringWarrantiesReportResult {
 export const getExpiringWarrantiesReport = typedGetFn(
   getExpiringWarrantiesReportSchema,
   async ({ data }): Promise<ExpiringWarrantiesReportResult> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
     const { days, customerId, productId, status, sortBy, page, limit } = data;
 
     // Calculate date window
@@ -473,7 +474,7 @@ export const getExpiringWarrantiesReport = typedGetFn(
  * Returns lists of customers and products with active warranties.
  */
 export const getExpiringWarrantiesFilterOptions = typedGetNoInput(async () => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
 
     // Get customers with warranties
     const customerOptions = await db
@@ -542,7 +543,7 @@ export interface WarrantyDetail {
 export const getWarranty = typedGetFn(
   getWarrantySchema,
   async ({ data }): Promise<WarrantyDetail | null> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
     const { id } = data;
 
     const result = await db
@@ -622,7 +623,7 @@ export const getWarranty = typedGetFn(
 export const updateWarrantyOptOut = typedPostFn(
   updateWarrantyOptOutSchema,
   async ({ data }): Promise<{ success: boolean; optOut: boolean }> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.warranty.update });
     const { warrantyId, optOut } = data;
 
     // Verify the warranty belongs to this organization
@@ -660,7 +661,7 @@ export const updateWarrantyOptOut = typedPostFn(
 export const updateCustomerWarrantyOptOut = typedPostFn(
   updateCustomerWarrantyOptOutSchema,
   async ({ data }): Promise<{ success: boolean; optOut: boolean }> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.warranty.update });
     const { customerId, optOut } = data;
 
     // Verify the customer belongs to this organization

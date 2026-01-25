@@ -36,7 +36,7 @@ function Settings() {
         </PermissionGuard>
 
         {/* KPI Targets */}
-        <PermissionGuard permission="dashboard.view">
+        <PermissionGuard permission="dashboard.read">
           <Link
             to="/settings/targets"
             className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
@@ -54,7 +54,7 @@ function Settings() {
         </PermissionGuard>
 
         {/* Scheduled Reports */}
-        <PermissionGuard permission="scheduledReport.read">
+        <PermissionGuard permission="scheduled_report.read">
           <Link
             to="/settings/scheduled-reports"
             className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
