@@ -39,6 +39,11 @@ import {
   addSuppressionDirect,
   trackSoftBounce,
 } from '@/server/functions/communications/email-suppression';
+import {
+  createEmailDeliveredActivity,
+  createEmailOpenedActivity,
+  createEmailClickedActivity,
+} from '@/lib/server/activity-bridge';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -79,6 +84,35 @@ interface ProcessingResult {
 // Note: isValidTransition helper is documented here for reference but
 // validation is done directly in SQL WHERE clauses for atomicity.
 // See DI-002 in PROMPT.md for state machine rules.
+
+/**
+ * Email details needed for activity creation
+ */
+interface EmailDetails {
+  id: string;
+  organizationId: string;
+  customerId: string | null;
+  subject: string;
+  toAddress: string;
+}
+
+/**
+ * Fetch email details by email history ID for activity creation
+ */
+async function getEmailDetails(emailHistoryId: string): Promise<EmailDetails | null> {
+  const email = await db.query.emailHistory?.findFirst({
+    where: eq(emailHistory.id, emailHistoryId),
+    columns: {
+      id: true,
+      organizationId: true,
+      customerId: true,
+      subject: true,
+      toAddress: true,
+    },
+  });
+
+  return email ?? null;
+}
 
 /**
  * Check if event was already processed (idempotency)
@@ -432,6 +466,33 @@ export const processResendWebhookJob = client.defineJob({
               'email.delivered: No matching email found or invalid state transition',
               { emailId }
             );
+          } else if (deliveredResult.emailHistoryId) {
+            // INT-RES-002: Create activity record for delivery
+            try {
+              const emailDetails = await getEmailDetails(deliveredResult.emailHistoryId);
+              if (emailDetails) {
+                const activityResult = await createEmailDeliveredActivity({
+                  emailId: emailDetails.id,
+                  organizationId: emailDetails.organizationId,
+                  customerId: emailDetails.customerId,
+                  subject: emailDetails.subject,
+                  recipientEmail: emailDetails.toAddress,
+                  recipientName: null,
+                });
+                if (activityResult.success) {
+                  await io.logger.info('Created delivery activity', {
+                    emailId,
+                    activityId: activityResult.activityId,
+                  });
+                  (result as Record<string, unknown>).activityId = activityResult.activityId;
+                }
+              }
+            } catch (activityError) {
+              await io.logger.error('Failed to create delivery activity', {
+                emailId,
+                error: activityError instanceof Error ? activityError.message : 'Unknown error',
+              });
+            }
           }
           break;
         }
@@ -445,9 +506,34 @@ export const processResendWebhookJob = client.defineJob({
             emailHistoryId: openedResult.emailHistoryId,
           };
 
-          if (openedResult.wasFirstOpen) {
+          if (openedResult.wasFirstOpen && openedResult.emailHistoryId) {
             await io.logger.info('First open recorded', { emailId });
-            // TODO (INT-RES-002): Create activity record for first open
+            // INT-RES-002: Create activity record for first open
+            try {
+              const emailDetails = await getEmailDetails(openedResult.emailHistoryId);
+              if (emailDetails) {
+                const activityResult = await createEmailOpenedActivity({
+                  emailId: emailDetails.id,
+                  organizationId: emailDetails.organizationId,
+                  customerId: emailDetails.customerId,
+                  subject: emailDetails.subject,
+                  recipientEmail: emailDetails.toAddress,
+                  recipientName: null,
+                });
+                if (activityResult.success) {
+                  await io.logger.info('Created email opened activity', {
+                    emailId,
+                    activityId: activityResult.activityId,
+                  });
+                  (result as Record<string, unknown>).activityId = activityResult.activityId;
+                }
+              }
+            } catch (activityError) {
+              await io.logger.error('Failed to create email opened activity', {
+                emailId,
+                error: activityError instanceof Error ? activityError.message : 'Unknown error',
+              });
+            }
           }
           break;
         }
@@ -473,9 +559,37 @@ export const processResendWebhookJob = client.defineJob({
             link,
           };
 
-          if (clickedResult.wasFirstClick) {
+          if (clickedResult.wasFirstClick && clickedResult.emailHistoryId) {
             await io.logger.info('First click recorded', { emailId, link });
-            // TODO (INT-RES-002): Create activity record for first click
+            // INT-RES-002: Create activity record for first click
+            try {
+              const emailDetails = await getEmailDetails(clickedResult.emailHistoryId);
+              if (emailDetails) {
+                const activityResult = await createEmailClickedActivity({
+                  emailId: emailDetails.id,
+                  organizationId: emailDetails.organizationId,
+                  customerId: emailDetails.customerId,
+                  subject: emailDetails.subject,
+                  recipientEmail: emailDetails.toAddress,
+                  recipientName: null,
+                  clickedUrl: link ?? 'unknown',
+                  linkId: link ? Buffer.from(link).toString('base64').slice(0, 16) : 'unknown',
+                });
+                if (activityResult.success) {
+                  await io.logger.info('Created email clicked activity', {
+                    emailId,
+                    link,
+                    activityId: activityResult.activityId,
+                  });
+                  (result as Record<string, unknown>).activityId = activityResult.activityId;
+                }
+              }
+            } catch (activityError) {
+              await io.logger.error('Failed to create email clicked activity', {
+                emailId,
+                error: activityError instanceof Error ? activityError.message : 'Unknown error',
+              });
+            }
           }
           break;
         }

@@ -144,6 +144,69 @@ export async function createEmailSentActivity(
 }
 
 /**
+ * Create an activity record when an email is delivered.
+ *
+ * Note: Uses 'email_sent' action since the enum doesn't include 'email_delivered'.
+ * The metadata distinguishes this as a delivery notification.
+ *
+ * @param input - Email details
+ * @returns The created activity record
+ */
+export async function createEmailDeliveredActivity(
+  input: Pick<EmailActivityInput, "emailId" | "organizationId" | "customerId" | "subject" | "recipientEmail" | "recipientName">
+): Promise<{ success: boolean; activityId?: string; error?: string }> {
+  const {
+    emailId,
+    organizationId,
+    customerId,
+    subject,
+    recipientEmail,
+    recipientName,
+  } = input;
+
+  try {
+    const entityType = customerId ? "customer" : "email";
+    const entityId = customerId ?? emailId;
+
+    const recipientDisplay = recipientName || recipientEmail;
+    const description = `Email delivered to ${recipientDisplay}: ${subject}`;
+
+    const metadata: ActivityMetadata = {
+      emailId,
+      recipientEmail,
+      recipientName: recipientName ?? undefined,
+      subject,
+      eventType: "delivered", // Distinguish from regular email_sent
+    };
+
+    const [activity] = await db
+      .insert(activities)
+      .values({
+        organizationId,
+        userId: null, // System event, no user
+        entityType: entityType as "customer" | "email",
+        entityId,
+        action: "email_sent", // Using email_sent since email_delivered not in enum
+        description,
+        metadata,
+        source: "webhook" as ActivitySource, // From Resend webhook
+        sourceRef: emailId,
+      })
+      .returning({ id: activities.id });
+
+    console.log(`[activity-bridge] Created email_delivered activity: ${activity.id} for email ${emailId}`);
+
+    return { success: true, activityId: activity.id };
+  } catch (error) {
+    console.error("[activity-bridge] Failed to create email_delivered activity:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
  * Create an activity record when an email is opened.
  *
  * @param input - Email details
