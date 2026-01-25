@@ -9,3 +9,4 @@ export * from "./email-suppression";
 export * from "./email-templates";
 export * from "./scheduled-calls";
 export * from "./scheduled-emails";
+export * from "./webhook-events";
