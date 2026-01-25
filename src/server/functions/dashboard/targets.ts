@@ -14,6 +14,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, ilike, desc, asc, gte, lte, sql, count, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { containsPattern } from '@/lib/db/utils';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { targets } from 'drizzle/schema/dashboard';
@@ -177,7 +178,7 @@ export const listTargets = createServerFn({ method: 'GET' })
     const conditions = [eq(targets.organizationId, ctx.organizationId)];
 
     if (search) {
-      conditions.push(ilike(targets.name, `%${search}%`));
+      conditions.push(ilike(targets.name, containsPattern(search)));
     }
     if (metric) {
       conditions.push(eq(targets.metric, metric));

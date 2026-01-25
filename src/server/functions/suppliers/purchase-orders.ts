@@ -12,6 +12,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, ilike, desc, asc, sql, gte, lte, count, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { containsPattern } from '@/lib/db/utils';
 import { currencySchema, percentageSchema } from '@/lib/schemas/_shared/patterns';
 import { purchaseOrders, purchaseOrderItems, suppliers } from 'drizzle/schema/suppliers';
 import { withAuth } from '@/lib/server/protected';
@@ -153,7 +154,7 @@ export const listPurchaseOrders = createServerFn({ method: 'GET' })
     }
 
     if (search) {
-      conditions.push(ilike(purchaseOrders.poNumber, `%${search}%`));
+      conditions.push(ilike(purchaseOrders.poNumber, containsPattern(search)));
     }
 
     if (startDate) {

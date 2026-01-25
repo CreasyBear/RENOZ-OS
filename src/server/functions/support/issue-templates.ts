@@ -12,6 +12,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc, asc, sql, ilike, count, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { containsPattern } from '@/lib/db/utils';
 import { issueTemplates } from 'drizzle/schema/support/issue-templates';
 import { users } from 'drizzle/schema/users';
 import { withAuth } from '@/lib/server/protected';
@@ -202,7 +203,7 @@ export const listIssueTemplates = createServerFn({ method: 'GET' })
     }
 
     if (data.search) {
-      conditions.push(ilike(issueTemplates.name, `%${data.search}%`));
+      conditions.push(ilike(issueTemplates.name, containsPattern(data.search)));
     }
 
     // Get total count

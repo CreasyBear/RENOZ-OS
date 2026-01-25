@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { eq, and, desc, sql, ilike, or, isNull } from 'drizzle-orm';
 import { cache } from 'react';
 import { db } from '@/lib/db';
+import { containsPattern } from '@/lib/db/utils';
 import { users, userGroupMembers, userGroups } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -71,7 +72,7 @@ export const listUsers = createServerFn({ method: 'GET' })
       conditions.push(eq(users.type, type));
     }
     if (search) {
-      conditions.push(or(ilike(users.name, `%${search}%`), ilike(users.email, `%${search}%`))!);
+      conditions.push(or(ilike(users.name, containsPattern(search)), ilike(users.email, containsPattern(search)))!);
     }
 
     // Determine sort column

@@ -7,6 +7,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { containsPattern } from '@/lib/db/utils';
 import { products, categories, productAttributes, productAttributeValues } from 'drizzle/schema';
 import { eq, and, or, isNull, ilike, sql, desc, asc, inArray, gte, lte } from 'drizzle-orm';
 import { withAuth } from '@/lib/server/protected';
@@ -480,7 +481,7 @@ export const getSearchFacets = createServerFn({ method: 'GET' })
 
     if (data.query && data.query.length > 0) {
       conditions.push(
-        or(ilike(products.name, `%${data.query}%`), ilike(products.sku, `%${data.query}%`))!
+        or(ilike(products.name, containsPattern(data.query)), ilike(products.sku, containsPattern(data.query)))!
       );
     }
 

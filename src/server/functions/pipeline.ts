@@ -20,6 +20,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq, and, ilike, desc, asc, sql, inArray, gte, lte, isNull, ne, or } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { containsPattern } from "@/lib/db/utils";
 import {
   opportunities,
   opportunityActivities,
@@ -112,7 +113,7 @@ export const listOpportunities = createServerFn({ method: "GET" })
     }
 
     if (search) {
-      conditions.push(ilike(opportunities.title, `%${search}%`));
+      conditions.push(ilike(opportunities.title, containsPattern(search)));
     }
     if (stage) {
       conditions.push(eq(opportunities.stage, stage));
@@ -570,10 +571,10 @@ export const getPipelineMetrics = createServerFn({ method: "GET" })
     ];
 
     if (dateFrom) {
-      conditions.push(gte(opportunities.createdAt, dateFrom));
+      conditions.push(gte(opportunities.createdAt, new Date(dateFrom)));
     }
     if (dateTo) {
-      conditions.push(lte(opportunities.createdAt, dateTo));
+      conditions.push(lte(opportunities.createdAt, new Date(dateTo)));
     }
     if (assignedTo) {
       conditions.push(eq(opportunities.assignedTo, assignedTo));
@@ -724,10 +725,10 @@ export const listActivities = createServerFn({ method: "GET" })
       conditions.push(eq(opportunityActivities.type, type));
     }
     if (scheduledFrom) {
-      conditions.push(gte(opportunityActivities.scheduledAt, scheduledFrom));
+      conditions.push(gte(opportunityActivities.scheduledAt, new Date(scheduledFrom)));
     }
     if (scheduledTo) {
-      conditions.push(lte(opportunityActivities.scheduledAt, scheduledTo));
+      conditions.push(lte(opportunityActivities.scheduledAt, new Date(scheduledTo)));
     }
     if (completed === true) {
       conditions.push(sql`${opportunityActivities.completedAt} IS NOT NULL`);
@@ -1445,10 +1446,10 @@ export const getPipelineVelocity = createServerFn({ method: "GET" })
     ];
 
     if (dateFrom) {
-      conditions.push(gte(opportunities.createdAt, dateFrom));
+      conditions.push(gte(opportunities.createdAt, new Date(dateFrom)));
     }
     if (dateTo) {
-      conditions.push(lte(opportunities.createdAt, dateTo));
+      conditions.push(lte(opportunities.createdAt, new Date(dateTo)));
     }
 
     const whereClause = and(...conditions);

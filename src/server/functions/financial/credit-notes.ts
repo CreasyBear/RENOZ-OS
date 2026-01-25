@@ -10,6 +10,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, sql, desc, asc, isNull, or, ilike } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { containsPattern } from '@/lib/db/utils';
 import { creditNotes, customers, orders } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/constants';
@@ -280,8 +281,8 @@ export const listCreditNotes = createServerFn({ method: 'GET' })
     if (search) {
       conditions.push(
         or(
-          ilike(creditNotes.creditNoteNumber, `%${search}%`),
-          ilike(creditNotes.reason, `%${search}%`)
+          ilike(creditNotes.creditNoteNumber, containsPattern(search)),
+          ilike(creditNotes.reason, containsPattern(search))
         )!
       );
     }

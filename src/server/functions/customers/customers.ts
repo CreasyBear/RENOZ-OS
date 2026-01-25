@@ -14,6 +14,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, ilike, desc, asc, sql, inArray, gte, lte } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { containsPattern } from '@/lib/db/utils';
 import { enqueueSearchIndexOutbox } from '@/server/functions/_shared/search-index-outbox';
 import {
   customers,
@@ -94,7 +95,7 @@ export const getCustomers = createServerFn({ method: 'GET' })
     ];
 
     if (search) {
-      conditions.push(ilike(customers.name, `%${search}%`));
+      conditions.push(ilike(customers.name, containsPattern(search)));
     }
     if (status) {
       conditions.push(eq(customers.status, status));
@@ -106,7 +107,7 @@ export const getCustomers = createServerFn({ method: 'GET' })
       conditions.push(eq(customers.size, size));
     }
     if (industry) {
-      conditions.push(ilike(customers.industry, `%${industry}%`));
+      conditions.push(ilike(customers.industry, containsPattern(industry)));
     }
     if (healthScoreMin !== undefined) {
       conditions.push(gte(customers.healthScore, healthScoreMin));
@@ -178,7 +179,7 @@ export const getCustomersCursor = createServerFn({ method: 'GET' })
     ];
 
     if (search) {
-      conditions.push(ilike(customers.name, `%${search}%`));
+      conditions.push(ilike(customers.name, containsPattern(search)));
     }
     if (status) {
       conditions.push(eq(customers.status, status));
@@ -190,7 +191,7 @@ export const getCustomersCursor = createServerFn({ method: 'GET' })
       conditions.push(eq(customers.size, size));
     }
     if (industry) {
-      conditions.push(ilike(customers.industry, `%${industry}%`));
+      conditions.push(ilike(customers.industry, containsPattern(industry)));
     }
     if (healthScoreMin !== undefined) {
       conditions.push(gte(customers.healthScore, healthScoreMin));

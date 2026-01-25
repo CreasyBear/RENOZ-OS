@@ -11,6 +11,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc, ilike, or } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { containsPattern } from '@/lib/db/utils';
 import {
   issues,
   slaConfigurations,
@@ -252,7 +253,7 @@ export const getIssues = createServerFn({ method: 'GET' })
     }
     if (data.search) {
       conditions.push(
-        or(ilike(issues.title, `%${data.search}%`), ilike(issues.issueNumber, `%${data.search}%`))!
+        or(ilike(issues.title, containsPattern(data.search)), ilike(issues.issueNumber, containsPattern(data.search)))!
       );
     }
 
@@ -490,7 +491,7 @@ export const getIssuesWithSlaMetrics = createServerFn({ method: 'GET' })
     }
     if (data.search) {
       conditions.push(
-        or(ilike(issues.title, `%${data.search}%`), ilike(issues.issueNumber, `%${data.search}%`))!
+        or(ilike(issues.title, containsPattern(data.search)), ilike(issues.issueNumber, containsPattern(data.search)))!
       );
     }
 

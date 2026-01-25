@@ -11,6 +11,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { eq, and, ilike, desc, asc, sql, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { containsPattern } from "@/lib/db/utils";
 import { priceLists, priceAgreements } from "drizzle/schema/suppliers";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
@@ -61,7 +62,7 @@ export const listPriceLists = createServerFn({ method: "GET" })
     }
 
     if (search) {
-      conditions.push(ilike(priceLists.productName, `%${search}%`));
+      conditions.push(ilike(priceLists.productName, containsPattern(search)));
     }
 
     const whereClause = and(...conditions);
@@ -191,7 +192,7 @@ export const getPriceList = createServerFn({ method: "GET" })
 /**
  * Update a price list item
  */
-export const updatePriceList = createServerFn({ method: "PUT" })
+export const updatePriceList = createServerFn({ method: "POST" })
   .inputValidator(updatePriceListSchema)
   .handler(async ({ data }: { data: UpdatePriceListInput }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
@@ -260,7 +261,7 @@ export const updatePriceList = createServerFn({ method: "PUT" })
 /**
  * Delete a price list item
  */
-export const deletePriceList = createServerFn({ method: "DELETE" })
+export const deletePriceList = createServerFn({ method: "POST" })
   .inputValidator(z.object({ id: z.string() }))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.delete });
@@ -412,7 +413,7 @@ export const listPriceAgreements = createServerFn({ method: "GET" })
     }
 
     if (search) {
-      conditions.push(ilike(priceAgreements.title, `%${search}%`));
+      conditions.push(ilike(priceAgreements.title, containsPattern(search)));
     }
 
     const whereClause = and(...conditions);
@@ -517,7 +518,7 @@ export const getPriceAgreement = createServerFn({ method: "GET" })
 /**
  * Update a price agreement
  */
-export const updatePriceAgreement = createServerFn({ method: "PUT" })
+export const updatePriceAgreement = createServerFn({ method: "POST" })
   .inputValidator(updatePriceAgreementSchema)
   .handler(async ({ data }: { data: UpdatePriceAgreementInput }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
@@ -563,7 +564,7 @@ export const updatePriceAgreement = createServerFn({ method: "PUT" })
 /**
  * Delete a price agreement
  */
-export const deletePriceAgreement = createServerFn({ method: "DELETE" })
+export const deletePriceAgreement = createServerFn({ method: "POST" })
   .inputValidator(z.object({ id: z.string() }))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.delete });

@@ -18,6 +18,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, ilike, desc, asc, sql, inArray, gte, lte, isNull, ne, or } from 'drizzle-orm';
+import { containsPattern } from '@/lib/db/utils';
 import { z } from 'zod';
 import { db } from '@/lib/db';
 import { enqueueSearchIndexOutbox } from '@/server/functions/_shared/search-index-outbox';
@@ -108,7 +109,7 @@ export const listOpportunities = createServerFn({ method: 'GET' })
     }
 
     if (search) {
-      conditions.push(ilike(opportunities.title, `%${search}%`));
+      conditions.push(ilike(opportunities.title, containsPattern(search)));
     }
     if (stage) {
       conditions.push(eq(opportunities.stage, stage));

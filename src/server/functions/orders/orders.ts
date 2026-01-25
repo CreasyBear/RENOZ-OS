@@ -17,6 +17,7 @@ import { eq, and, sql, desc, asc, isNull, ilike } from 'drizzle-orm';
 import { cache } from 'react';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { containsPattern } from '@/lib/db/utils';
 import { enqueueSearchIndexOutbox } from '@/server/functions/_shared/search-index-outbox';
 import {
   orders,
@@ -389,7 +390,7 @@ export const listOrdersCursor = createServerFn({ method: 'GET' })
     const conditions = [eq(orders.organizationId, ctx.organizationId), isNull(orders.deletedAt)];
 
     if (search) {
-      conditions.push(ilike(orders.orderNumber, `%${search}%`));
+      conditions.push(ilike(orders.orderNumber, containsPattern(search)));
     }
     if (status) {
       conditions.push(eq(orders.status, status));

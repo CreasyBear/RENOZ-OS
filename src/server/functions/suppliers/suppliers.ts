@@ -11,6 +11,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { eq, and, ilike, desc, asc, sql, gte, lte, count, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
+import { containsPattern } from '@/lib/db/utils';
 import { currencySchema } from '@/lib/schemas/_shared/patterns';
 import { suppliers, supplierPerformanceMetrics } from 'drizzle/schema/suppliers';
 import { purchaseOrders } from 'drizzle/schema/suppliers';
@@ -124,7 +125,7 @@ export const listSuppliers = createServerFn({ method: 'GET' })
     ];
 
     if (search) {
-      conditions.push(ilike(suppliers.name, `%${search}%`));
+      conditions.push(ilike(suppliers.name, containsPattern(search)));
     }
 
     if (status) {

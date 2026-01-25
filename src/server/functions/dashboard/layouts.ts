@@ -14,6 +14,7 @@
 import { createServerFn } from '@tanstack/react-start';
 import { eq, and, sql, ilike, desc } from 'drizzle-orm';
 import { db } from '@/lib/db';
+import { containsPattern } from '@/lib/db/utils';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { dashboardLayouts } from 'drizzle/schema/dashboard';
@@ -157,7 +158,7 @@ export const listDashboardLayouts = createServerFn({ method: 'GET' })
     ];
 
     if (search) {
-      conditions.push(ilike(dashboardLayouts.name, `%${search}%`));
+      conditions.push(ilike(dashboardLayouts.name, containsPattern(search)));
     }
     if (isDefault !== undefined) {
       conditions.push(eq(dashboardLayouts.isDefault, isDefault));
