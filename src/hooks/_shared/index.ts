@@ -26,3 +26,6 @@ export * from './useMutation';
 
 // --- Selection ---
 export * from './use-selection';
+
+// --- Layout ---
+export * from './use-context-panel';

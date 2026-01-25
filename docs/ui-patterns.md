@@ -290,6 +290,65 @@ Both work identically. Use whichever reads better in your context.
 
 ---
 
+## Responsive Context Panel
+
+The `ContextPanel`/`Sidebar` component is responsive:
+- **Desktop (≥1024px)**: Fixed right panel (always visible)
+- **Mobile (<1024px)**: Bottom drawer controlled by `useContextPanel`
+
+### Usage Pattern
+
+```tsx
+import { PageLayout } from '@/components/layout';
+import { useContextPanel } from '@/hooks/_shared';
+import { Button } from '@/components/ui/button';
+import { PanelRight } from 'lucide-react';
+
+function CustomerDetailPage() {
+  const { isOpen, open, setIsOpen } = useContextPanel();
+
+  return (
+    <PageLayout variant="with-sidebar">
+      <PageLayout.Header
+        title="Customer Details"
+        actions={
+          <Button variant="outline" className="lg:hidden" onClick={open}>
+            <PanelRight className="mr-2 h-4 w-4" />
+            Activity
+          </Button>
+        }
+      />
+      <PageLayout.Content>
+        <CustomerForm />
+      </PageLayout.Content>
+      <PageLayout.Sidebar
+        title="Activity"
+        isOpen={isOpen}
+        onOpenChange={setIsOpen}
+      >
+        <ActivityTimeline />
+      </PageLayout.Sidebar>
+    </PageLayout>
+  );
+}
+```
+
+### Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | `"Details"` | Title shown in drawer header on mobile |
+| `isOpen` | `boolean` | `false` | Controls mobile drawer visibility |
+| `onOpenChange` | `(open: boolean) => void` | - | Callback when drawer state changes |
+
+### Notes
+
+- The trigger button should be hidden on desktop (`lg:hidden`) since the panel is always visible
+- Use `useContextPanel` hook for managing the open state
+- Drawer supports swipe-to-dismiss on mobile
+
+---
+
 ## Quick Reference
 
 | Need | Use |

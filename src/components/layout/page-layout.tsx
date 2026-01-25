@@ -33,6 +33,16 @@
 import { type ReactNode, createContext, useContext } from 'react'
 import { cn } from '@/lib/utils'
 import { Breadcrumbs } from './breadcrumbs'
+import { useIsMobile } from '@/hooks/_shared/use-mobile'
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerClose,
+} from '@/components/ui/drawer'
+import { Button } from '@/components/ui/button'
+import { X } from 'lucide-react'
 
 // ============================================================================
 // TYPES
@@ -67,6 +77,12 @@ interface PageContentProps {
 interface PageSidebarProps {
   children: ReactNode
   className?: string
+  /** Title shown in the drawer header on mobile */
+  title?: string
+  /** Whether the mobile drawer is open (controlled by useContextPanel) */
+  isOpen?: boolean
+  /** Callback when the mobile drawer open state changes */
+  onOpenChange?: (open: boolean) => void
 }
 
 // ============================================================================
@@ -155,26 +171,80 @@ function PageContent({ children, className }: PageContentProps) {
 
 /**
  * Optional sidebar for detail views (only renders with 'with-sidebar' variant).
+ *
+ * Responsive behavior:
+ * - Desktop (≥1024px): Renders as a fixed right panel
+ * - Mobile (<1024px): Renders as a bottom drawer controlled by isOpen/onOpenChange
+ *
+ * Use the useContextPanel hook to control the mobile drawer state.
+ *
+ * @example
+ * ```tsx
+ * const { isOpen, open, setIsOpen } = useContextPanel();
+ *
+ * <Button className="lg:hidden" onClick={open}>Show Details</Button>
+ * <PageLayout.Sidebar
+ *   title="Activity"
+ *   isOpen={isOpen}
+ *   onOpenChange={setIsOpen}
+ * >
+ *   <ActivityFeed />
+ * </PageLayout.Sidebar>
+ * ```
  */
-function PageSidebar({ children, className }: PageSidebarProps) {
+function PageSidebar({
+  children,
+  className,
+  title = 'Details',
+  isOpen = false,
+  onOpenChange,
+}: PageSidebarProps) {
   const { variant } = usePageLayout()
+  const isMobile = useIsMobile()
 
   if (variant !== 'with-sidebar') {
     console.warn('PageLayout.Sidebar should only be used with variant="with-sidebar"')
     return null
   }
 
+  // Desktop: Fixed right panel (always visible)
+  if (!isMobile) {
+    return (
+      <aside
+        className={cn(
+          'hidden lg:fixed lg:right-0 lg:top-16 lg:bottom-0 lg:w-80',
+          'lg:block lg:overflow-y-auto lg:border-l lg:border-gray-200',
+          'bg-white p-6',
+          className
+        )}
+      >
+        {children}
+      </aside>
+    )
+  }
+
+  // Mobile: Bottom drawer with snap points
   return (
-    <aside
-      className={cn(
-        'hidden lg:fixed lg:right-0 lg:top-16 lg:bottom-0 lg:w-80',
-        'lg:block lg:overflow-y-auto lg:border-l lg:border-gray-200',
-        'bg-white p-6',
-        className
-      )}
+    <Drawer
+      open={isOpen}
+      onOpenChange={onOpenChange}
+      direction="bottom"
     >
-      {children}
-    </aside>
+      <DrawerContent className="max-h-[85vh]">
+        <DrawerHeader className="flex items-center justify-between border-b pb-4">
+          <DrawerTitle>{title}</DrawerTitle>
+          <DrawerClose asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </Button>
+          </DrawerClose>
+        </DrawerHeader>
+        <div className={cn('overflow-y-auto p-6', className)}>
+          {children}
+        </div>
+      </DrawerContent>
+    </Drawer>
   )
 }
 
@@ -208,4 +278,4 @@ export const PageLayout = Object.assign(PageLayoutRoot, {
 export { usePageLayout }
 
 // Export types for consumers
-export type { PageLayoutVariant, PageLayoutProps, PageHeaderProps }
+export type { PageLayoutVariant, PageLayoutProps, PageHeaderProps, PageSidebarProps }

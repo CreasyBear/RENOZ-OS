@@ -18,13 +18,22 @@
  *   </RouteShell.Content>
  * </RouteShell>
  *
- * // Detail view with context panel
+ * // Detail view with responsive context panel
+ * const { isOpen, open, setIsOpen } = useContextPanel();
+ *
  * <RouteShell variant="with-panel">
- *   <RouteShell.Header title="Customer Details" />
+ *   <RouteShell.Header
+ *     title="Customer Details"
+ *     actions={<Button className="lg:hidden" onClick={open}>Show Activity</Button>}
+ *   />
  *   <RouteShell.Content>
  *     <CustomerForm />
  *   </RouteShell.Content>
- *   <RouteShell.ContextPanel>
+ *   <RouteShell.ContextPanel
+ *     title="Activity"
+ *     isOpen={isOpen}
+ *     onOpenChange={setIsOpen}
+ *   >
  *     <ActivityTimeline />
  *   </RouteShell.ContextPanel>
  * </RouteShell>
@@ -35,6 +44,7 @@ import type {
   PageLayoutVariant,
   PageLayoutProps,
   PageHeaderProps,
+  PageSidebarProps,
 } from './page-layout'
 
 // ============================================================================
@@ -53,6 +63,7 @@ export type RouteShellVariant = PageLayoutVariant
 
 export interface RouteShellProps extends PageLayoutProps {}
 export interface RouteShellHeaderProps extends PageHeaderProps {}
+export interface RouteShellContextPanelProps extends PageSidebarProps {}
 
 // ============================================================================
 // ROUTE SHELL COMPOUND COMPONENT
@@ -107,4 +118,4 @@ export { usePageLayout as useRouteShell } from './page-layout'
 // RE-EXPORTS FOR CONVENIENCE
 // ============================================================================
 
-export type { PageLayoutVariant, PageLayoutProps, PageHeaderProps }
+export type { PageLayoutVariant, PageLayoutProps, PageHeaderProps, PageSidebarProps }

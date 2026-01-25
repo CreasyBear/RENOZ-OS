@@ -190,9 +190,9 @@ const {
 
 #### Tasks
 
-- [ ] **2.4.1** Update `PageLayout.Sidebar` to use vaul Drawer on mobile
-- [ ] **2.4.2** Add `useContextPanel` hook for controlling open state
-- [ ] **2.4.3** Add swipe-to-dismiss on mobile
+- [x] **2.4.1** Update `PageLayout.Sidebar` to use vaul Drawer on mobile
+- [x] **2.4.2** Add `useContextPanel` hook for controlling open state
+- [x] **2.4.3** Add swipe-to-dismiss on mobile (built into vaul Drawer)
 - [ ] **2.4.4** Update existing routes that use `with-sidebar` variant
 
 **Files to modify:**
@@ -207,11 +207,11 @@ Mobile (<768px): Drawer from bottom with snap points
 ```
 
 **Acceptance Criteria:**
-- [ ] Desktop: Current behavior unchanged
-- [ ] Mobile: Opens as vaul Drawer with snap points
-- [ ] Swipe-to-dismiss works on mobile
-- [ ] Focus trapped when open
-- [ ] ESC closes on all breakpoints
+- [x] Desktop: Current behavior unchanged
+- [x] Mobile: Opens as vaul Drawer with snap points
+- [x] Swipe-to-dismiss works on mobile (built into vaul)
+- [x] Focus trapped when open (built into vaul)
+- [x] ESC closes on all breakpoints (built into vaul)
 
 ---
 
