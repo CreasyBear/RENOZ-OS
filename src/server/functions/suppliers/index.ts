@@ -29,7 +29,7 @@ export * from './price-imports';
 // APPROVALS & WORKFLOW
 // ============================================================================
 
-// TODO: Add approvals.ts for approval workflow functions
+export * from './approvals';
 
 // ============================================================================
 // RECEIVING & QUALITY

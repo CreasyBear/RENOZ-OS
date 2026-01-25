@@ -18,7 +18,7 @@ export type { UseSuppliersOptions } from './use-suppliers';
 
 export {
   usePurchaseOrders,
-  usePendingApprovals,
+  usePendingApprovals as usePendingPurchaseOrders, // Alias: POs pending approval
   usePurchaseOrder,
   useCreatePurchaseOrder,
   useUpdatePurchaseOrder,
@@ -33,3 +33,20 @@ export {
   useRemovePurchaseOrderItem,
 } from './use-purchase-orders';
 export type { UsePurchaseOrdersOptions } from './use-purchase-orders';
+
+// Approval workflow hooks
+export {
+  usePendingApprovals,
+  useApprovalDetails,
+  useApprovalHistory,
+  useMyApprovalStats,
+  useApproveItem,
+  useRejectItem,
+  useBulkApprove,
+  useBulkReject,
+  useEscalateApproval,
+  useDelegateApproval,
+  useRevokeDelegation,
+  useEvaluateApprovalRules,
+} from './use-approvals';
+export type { UsePendingApprovalsOptions, UseApprovalDetailsOptions } from './use-approvals';
