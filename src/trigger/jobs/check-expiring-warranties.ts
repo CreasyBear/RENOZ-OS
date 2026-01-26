@@ -9,7 +9,7 @@
  * @see src/trigger/jobs/warranty-notifications.ts for email sending
  */
 import { cronTrigger, eventTrigger } from '@trigger.dev/sdk';
-import { and, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { warranties, warrantyPolicies, customers, notifications } from 'drizzle/schema';
 import { client, warrantyEvents, type WarrantyExpiringSoonPayload } from '../client';
@@ -183,7 +183,7 @@ export const checkExpiringWarrantiesJob = client.defineJob({
       const productRecords = await db
         .select({ id: products.id, name: products.name })
         .from(products)
-        .where(sql`${products.id} IN (${sql.raw(productIds.map((id) => `'${id}'`).join(','))})`)
+        .where(inArray(products.id, productIds))
         .execute();
 
       // Return as plain object for JSON serialization
