@@ -118,6 +118,38 @@ export interface IssueFilters {
   includeSlaMetrics?: boolean
 }
 
+// ============================================================================
+// AI FILTER TYPES
+// ============================================================================
+
+export interface AIConversationFilters {
+  userId?: string
+  activeAgent?: string
+  limit?: number
+  offset?: number
+}
+
+export interface AIApprovalFilters {
+  status?: 'pending' | 'approved' | 'rejected' | 'expired'
+  action?: string
+  userId?: string
+  limit?: number
+}
+
+export interface AITaskFilters {
+  status?: 'queued' | 'running' | 'completed' | 'failed'
+  taskType?: string
+  agent?: string
+  limit?: number
+}
+
+export interface AICostFilters {
+  startDate?: string
+  endDate?: string
+  model?: string
+  operation?: string
+}
+
 export interface KbCategoryFilters {
   parentId?: string | null
   isActive?: boolean
@@ -1416,6 +1448,66 @@ export const queryKeys = {
     // Legacy alias for backward compatibility
     items: (status?: string, filters?: Record<string, unknown>) =>
       [...queryKeys.approvals.all, 'items', status ?? '', filters ?? {}] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // AI DOMAIN
+  // -------------------------------------------------------------------------
+  ai: {
+    all: ['ai'] as const,
+
+    // Conversations
+    conversations: {
+      all: () => [...queryKeys.ai.all, 'conversations'] as const,
+      lists: () => [...queryKeys.ai.conversations.all(), 'list'] as const,
+      list: (filters?: AIConversationFilters) =>
+        [...queryKeys.ai.conversations.lists(), filters ?? {}] as const,
+      details: () => [...queryKeys.ai.conversations.all(), 'detail'] as const,
+      detail: (id: string) => [...queryKeys.ai.conversations.details(), id] as const,
+      messages: (conversationId: string) =>
+        [...queryKeys.ai.conversations.all(), 'messages', conversationId] as const,
+    },
+
+    // Approvals (AI-drafted actions requiring human approval)
+    approvals: {
+      all: () => [...queryKeys.ai.all, 'approvals'] as const,
+      lists: () => [...queryKeys.ai.approvals.all(), 'list'] as const,
+      list: (filters?: AIApprovalFilters) =>
+        [...queryKeys.ai.approvals.lists(), filters ?? {}] as const,
+      pending: () =>
+        [...queryKeys.ai.approvals.lists(), { status: 'pending' }] as const,
+      details: () => [...queryKeys.ai.approvals.all(), 'detail'] as const,
+      detail: (id: string) => [...queryKeys.ai.approvals.details(), id] as const,
+      count: () => [...queryKeys.ai.approvals.all(), 'count'] as const,
+    },
+
+    // Tasks (background agent tasks)
+    tasks: {
+      all: () => [...queryKeys.ai.all, 'tasks'] as const,
+      lists: () => [...queryKeys.ai.tasks.all(), 'list'] as const,
+      list: (filters?: AITaskFilters) =>
+        [...queryKeys.ai.tasks.lists(), filters ?? {}] as const,
+      details: () => [...queryKeys.ai.tasks.all(), 'detail'] as const,
+      detail: (id: string) => [...queryKeys.ai.tasks.details(), id] as const,
+      status: (taskId: string) =>
+        [...queryKeys.ai.tasks.all(), 'status', taskId] as const,
+    },
+
+    // Cost tracking
+    cost: {
+      all: () => [...queryKeys.ai.all, 'cost'] as const,
+      summary: (filters?: AICostFilters) =>
+        [...queryKeys.ai.cost.all(), 'summary', filters ?? {}] as const,
+      budget: () => [...queryKeys.ai.cost.all(), 'budget'] as const,
+      usage: (filters?: AICostFilters) =>
+        [...queryKeys.ai.cost.all(), 'usage', filters ?? {}] as const,
+    },
+
+    // Artifacts
+    artifacts: {
+      all: () => [...queryKeys.ai.all, 'artifacts'] as const,
+      detail: (id: string) => [...queryKeys.ai.artifacts.all(), 'detail', id] as const,
+    },
   },
 } as const
 

@@ -28,6 +28,7 @@ import { getRequest } from '@tanstack/react-start/server';
 import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/server/rate-limit';
 import { logAuditEvent } from '@/server/functions/_shared/audit-logs';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
+import { client, userEvents, type InvitationSentPayload, type BatchInvitationSentPayload } from '@/trigger/client';
 
 // ============================================================================
 // HELPER: Generate secure invitation token
@@ -50,6 +51,60 @@ function getServerSupabase() {
   }
 
   return createClient(url, serviceKey);
+}
+
+// ============================================================================
+// HELPER: Get app URL
+// ============================================================================
+
+function getAppUrl(): string {
+  return process.env.VITE_APP_URL || process.env.APP_URL || 'http://localhost:3000';
+}
+
+// ============================================================================
+// HELPER: Generate invitation accept URL
+// ============================================================================
+
+function generateAcceptUrl(token: string): string {
+  return `${getAppUrl()}/accept-invitation?token=${token}`;
+}
+
+// ============================================================================
+// HELPER: Send invitation email via Trigger.dev (fire-and-forget)
+// ============================================================================
+
+async function sendInvitationEmail(params: {
+  invitationId: string;
+  email: string;
+  organizationId: string;
+  organizationName: string;
+  inviterName: string;
+  inviterEmail: string;
+  role: string;
+  personalMessage?: string | null;
+  token: string;
+  expiresAt: Date;
+}): Promise<void> {
+  try {
+    await client.sendEvent({
+      name: userEvents.invitationSent,
+      payload: {
+        invitationId: params.invitationId,
+        email: params.email,
+        organizationId: params.organizationId,
+        organizationName: params.organizationName,
+        inviterName: params.inviterName,
+        inviterEmail: params.inviterEmail,
+        role: params.role,
+        personalMessage: params.personalMessage || undefined,
+        acceptUrl: generateAcceptUrl(params.token),
+        expiresAt: params.expiresAt.toISOString(),
+      } satisfies InvitationSentPayload,
+    });
+  } catch (error) {
+    // Log error but don't throw - email sending should not block invitation creation
+    console.error('Failed to queue invitation email:', error);
+  }
 }
 
 // ============================================================================
@@ -102,6 +157,13 @@ export const sendInvitation = createServerFn({ method: 'POST' })
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
+    // Fetch organization name for the email
+    const [org] = await db
+      .select({ name: organizations.name })
+      .from(organizations)
+      .where(eq(organizations.id, ctx.organizationId))
+      .limit(1);
+
     // Create invitation
     const [invitation] = await db
       .insert(userInvitations)
@@ -117,7 +179,19 @@ export const sendInvitation = createServerFn({ method: 'POST' })
       })
       .returning();
 
-    // TODO: Send invitation email via email service
+    // Send invitation email via Trigger.dev (fire-and-forget)
+    void sendInvitationEmail({
+      invitationId: invitation.id,
+      email: invitation.email,
+      organizationId: ctx.organizationId,
+      organizationName: org?.name || 'Your Organization',
+      inviterName: ctx.user.name || 'A team member',
+      inviterEmail: ctx.user.email,
+      role: invitation.role,
+      personalMessage: data.personalMessage,
+      token,
+      expiresAt,
+    });
 
     // Log audit event
     await logAuditEvent({
@@ -497,6 +571,13 @@ export const resendInvitation = createServerFn({ method: 'POST' })
     const newExpiresAt = new Date();
     newExpiresAt.setDate(newExpiresAt.getDate() + 7);
 
+    // Fetch organization name for the email
+    const [org] = await db
+      .select({ name: organizations.name })
+      .from(organizations)
+      .where(eq(organizations.id, ctx.organizationId))
+      .limit(1);
+
     // Update invitation
     await db
       .update(userInvitations)
@@ -509,7 +590,19 @@ export const resendInvitation = createServerFn({ method: 'POST' })
       })
       .where(eq(userInvitations.id, data.id));
 
-    // TODO: Send invitation email via email service
+    // Send invitation email via Trigger.dev (fire-and-forget)
+    void sendInvitationEmail({
+      invitationId: invitation.id,
+      email: invitation.email,
+      organizationId: ctx.organizationId,
+      organizationName: org?.name || 'Your Organization',
+      inviterName: ctx.user.name || 'A team member',
+      inviterEmail: ctx.user.email,
+      role: invitation.role,
+      personalMessage: invitation.personalMessage,
+      token: newToken,
+      expiresAt: newExpiresAt,
+    });
 
     // Log audit event
     await logAuditEvent({
@@ -662,6 +755,25 @@ export const batchSendInvitations = createServerFn({ method: 'POST' })
         });
       }
 
+      // Fetch organization name for emails
+      const [org] = await db
+        .select({ name: organizations.name })
+        .from(organizations)
+        .where(eq(organizations.id, ctx.organizationId))
+        .limit(1);
+
+      const organizationName = org?.name || 'Your Organization';
+
+      // Track successful inserts for email sending
+      const emailInvitations: Array<{
+        invitationId: string;
+        email: string;
+        role: string;
+        personalMessage?: string;
+        token: string;
+        expiresAt: Date;
+      }> = [];
+
       // Batch insert valid invitations
       if (toInsert.length > 0) {
         const BATCH_SIZE = 10;
@@ -686,13 +798,26 @@ export const batchSendInvitations = createServerFn({ method: 'POST' })
               )
               .returning({ id: userInvitations.id, email: userInvitations.email });
 
-            // Mark all as successful
+            // Mark all as successful and track for email
             for (const inv of inserted) {
               results.push({
                 email: inv.email,
                 success: true,
                 invitationId: inv.id,
               });
+
+              // Find the original item to get token and other details
+              const originalItem = batch.find((b) => b.email === inv.email);
+              if (originalItem) {
+                emailInvitations.push({
+                  invitationId: inv.id,
+                  email: inv.email,
+                  role: originalItem.role,
+                  personalMessage: originalItem.personalMessage,
+                  token: originalItem.token,
+                  expiresAt: originalItem.expiresAt,
+                });
+              }
             }
           } catch (err) {
             // If batch fails, mark all in batch as failed
@@ -707,7 +832,31 @@ export const batchSendInvitations = createServerFn({ method: 'POST' })
         }
       }
 
-      // TODO: Send invitation emails via email service (could be queued)
+      // Send batch invitation emails via Trigger.dev (fire-and-forget)
+      if (emailInvitations.length > 0) {
+        try {
+          await client.sendEvent({
+            name: 'user.batch_invitation_sent',
+            payload: {
+              organizationId: ctx.organizationId,
+              organizationName,
+              inviterName: ctx.user.name || 'A team member',
+              inviterEmail: ctx.user.email,
+              invitations: emailInvitations.map((inv) => ({
+                invitationId: inv.invitationId,
+                email: inv.email,
+                role: inv.role,
+                personalMessage: inv.personalMessage,
+                acceptUrl: generateAcceptUrl(inv.token),
+                expiresAt: inv.expiresAt.toISOString(),
+              })),
+            } satisfies BatchInvitationSentPayload,
+          });
+        } catch (error) {
+          // Log error but don't throw - email sending should not block
+          console.error('Failed to queue batch invitation emails:', error);
+        }
+      }
 
       const successCount = results.filter((r) => r.success).length;
       const successfulInvitations = results.filter((r) => r.success);

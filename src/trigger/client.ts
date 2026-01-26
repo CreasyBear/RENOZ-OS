@@ -322,3 +322,50 @@ export interface WarrantyClaimResolvedPayload {
   resolvedAt: string
   resolutionNotes?: string
 }
+
+// ============================================================================
+// USER EVENTS
+// ============================================================================
+
+/**
+ * User events triggered from Edge Functions
+ */
+export const userEvents = {
+  invitationSent: 'user.invitation_sent',
+  invitationAccepted: 'user.invitation_accepted',
+  invitationExpired: 'user.invitation_expired',
+} as const
+
+/**
+ * User invitation sent event payload
+ */
+export interface InvitationSentPayload {
+  invitationId: string
+  email: string
+  organizationId: string
+  organizationName: string
+  inviterName: string
+  inviterEmail: string
+  role: string
+  personalMessage?: string
+  acceptUrl: string
+  expiresAt: string
+}
+
+/**
+ * Batch invitation sent event payload
+ */
+export interface BatchInvitationSentPayload {
+  organizationId: string
+  organizationName: string
+  inviterName: string
+  inviterEmail: string
+  invitations: Array<{
+    invitationId: string
+    email: string
+    role: string
+    personalMessage?: string
+    acceptUrl: string
+    expiresAt: string
+  }>
+}
