@@ -356,6 +356,15 @@ function UserDetailPage() {
                     </button>
                   </>
                 )}
+                {canTransferOwnership && (
+                  <button
+                    onClick={handleTransferOwnership}
+                    disabled={isLoading}
+                    className="inline-flex items-center rounded-md border border-purple-300 bg-white px-4 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 disabled:opacity-50"
+                  >
+                    Make Owner
+                  </button>
+                )}
                 {!isOwner && (
                   <button
                     onClick={handleDeactivate}

@@ -1,0 +1,94 @@
+# Document Generation System - Progress Tracker
+
+## Status: NOT STARTED
+
+## Story Progress
+
+### Phase 1: Foundation
+- [ ] INT-DOC-001-A: PDF Library Foundation and Schema
+
+### Phase 2: Financial Documents
+- [ ] INT-DOC-002-A: Quote PDF Template and Generation
+- [ ] INT-DOC-002-B: Invoice PDF Template and Generation
+- [ ] INT-DOC-002-C: Pro Forma Invoice PDF Template
+
+### Phase 3: Operational Documents
+- [ ] INT-DOC-003-A: Delivery Note PDF Template
+- [ ] INT-DOC-003-B: Packing Slip PDF Template
+- [ ] INT-DOC-003-C: Work Order PDF Template
+
+### Phase 4: Certificate Documents
+- [ ] INT-DOC-004-A: Warranty Certificate PDF Template
+- [ ] INT-DOC-004-B: Completion Certificate PDF Template
+
+### Phase 5: Customization & UX
+- [ ] INT-DOC-005-A: Document Template Customization
+- [ ] INT-DOC-006-A: Document Preview API
+- [ ] INT-DOC-006-B: Document History and Re-download
+- [ ] INT-DOC-007: Automatic PDF Generation on Order Events
+
+## Implementation Notes
+
+### 2026-01-26 - PRD Created
+- Created document-generation.prd.json with 13 stories
+- Created PROMPT.md with implementation patterns
+- Reference: Midday invoice package at _reference/.midday-reference/packages/invoice/
+- Existing placeholder: src/trigger/jobs/generate-quote-pdf.ts (100% TODO)
+
+## Blockers
+
+None currently.
+
+## Dependencies
+
+- @react-pdf/renderer (to be installed)
+- qrcode (to be installed)
+- Supabase Storage (EXISTS)
+- Organization branding context (EXISTS)
+
+## Files to Create
+
+### Schema
+- drizzle/schema/_documents.ts (document_templates, generated_documents)
+
+### Library
+- src/lib/documents/components/theme.ts
+- src/lib/documents/components/header.tsx
+- src/lib/documents/components/footer.tsx
+- src/lib/documents/components/address-block.tsx
+- src/lib/documents/components/line-items.tsx
+- src/lib/documents/components/summary.tsx
+- src/lib/documents/components/signature.tsx
+- src/lib/documents/components/qr-code.tsx
+- src/lib/documents/components/index.ts
+- src/lib/documents/templates/financial/quote.tsx
+- src/lib/documents/templates/financial/invoice.tsx
+- src/lib/documents/templates/financial/pro-forma.tsx
+- src/lib/documents/templates/operational/delivery-note.tsx
+- src/lib/documents/templates/operational/packing-slip.tsx
+- src/lib/documents/templates/operational/work-order.tsx
+- src/lib/documents/templates/certificates/warranty.tsx
+- src/lib/documents/templates/certificates/completion.tsx
+- src/lib/documents/types.ts
+- src/lib/documents/render.ts
+- src/lib/documents/fonts.ts
+- src/lib/documents/index.ts
+
+### Server Functions
+- src/server/functions/documents/generate-quote.ts
+- src/server/functions/documents/generate-invoice.ts
+- src/server/functions/documents/generate-delivery-note.ts
+- src/server/functions/documents/generate-work-order.ts
+- src/server/functions/documents/generate-warranty-certificate.ts
+- src/server/functions/documents/document-templates.ts
+- src/server/functions/documents/index.ts
+
+### Trigger Jobs
+- src/trigger/jobs/generate-quote-pdf.ts (UPDATE existing)
+- src/trigger/jobs/generate-invoice-pdf.ts (NEW)
+- src/trigger/jobs/generate-delivery-note-pdf.ts (NEW)
+
+### UI
+- src/routes/_authenticated/settings/documents.tsx
+- src/components/domain/documents/document-preview-modal.tsx
+- src/components/domain/documents/document-history-list.tsx

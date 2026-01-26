@@ -1,0 +1,519 @@
+{
+  "id": "INT-DOCGEN",
+  "name": "Document Generation System",
+  "description": "PDF generation infrastructure using @react-pdf/renderer for business documents including quotes, invoices, delivery notes, work orders, and certificates with organization branding.",
+  "created": "2026-01-26",
+  "atomized": "2026-01-26",
+  "priority": 2,
+  "phase": "integration",
+  "service": "React PDF",
+  "dependencies": {
+    "phase": "Integration",
+    "executionOrder": 3,
+    "schemaRequired": [
+      {
+        "table": "organizations",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "orders",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "customers",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "order_line_items",
+        "status": "EXISTS",
+        "createdBy": "schema-foundation"
+      },
+      {
+        "table": "warranties",
+        "status": "EXISTS",
+        "createdBy": "warranty-domain"
+      },
+      {
+        "table": "jobs",
+        "status": "EXISTS",
+        "createdBy": "jobs-domain"
+      }
+    ],
+    "schemaCreates": [
+      {
+        "table": "document_templates",
+        "story": "INT-DOC-001-A",
+        "description": "Customizable document template settings per organization"
+      },
+      {
+        "table": "generated_documents",
+        "story": "INT-DOC-001-A",
+        "description": "Audit log of generated documents with storage references"
+      }
+    ],
+    "schemaModifies": [
+      {
+        "table": "orders",
+        "story": "INT-DOC-002-A",
+        "changes": "Add quotePdfUrl, invoicePdfUrl columns"
+      },
+      {
+        "table": "warranties",
+        "story": "INT-DOC-004-A",
+        "changes": "Add certificatePdfUrl column"
+      }
+    ],
+    "serverFunctionsRequired": [
+      {
+        "function": "getOrderById",
+        "status": "EXISTS",
+        "reason": "Fetch order data for quote/invoice generation"
+      },
+      {
+        "function": "getCustomerById",
+        "status": "EXISTS",
+        "reason": "Customer data for document addresses"
+      },
+      {
+        "function": "getOrganization",
+        "status": "EXISTS",
+        "reason": "Organization branding and settings"
+      },
+      {
+        "function": "uploadFile",
+        "status": "EXISTS",
+        "reason": "Upload generated PDFs to Supabase Storage"
+      }
+    ],
+    "serverFunctionsCreates": [
+      {
+        "function": "generateQuotePdf",
+        "story": "INT-DOC-002-A",
+        "description": "Generate quote PDF from order data"
+      },
+      {
+        "function": "generateInvoicePdf",
+        "story": "INT-DOC-002-B",
+        "description": "Generate invoice PDF from order data"
+      },
+      {
+        "function": "generateProFormaPdf",
+        "story": "INT-DOC-002-C",
+        "description": "Generate pro forma invoice PDF"
+      },
+      {
+        "function": "generateDeliveryNotePdf",
+        "story": "INT-DOC-003-A",
+        "description": "Generate delivery note PDF"
+      },
+      {
+        "function": "generatePackingSlipPdf",
+        "story": "INT-DOC-003-B",
+        "description": "Generate packing slip PDF"
+      },
+      {
+        "function": "generateWorkOrderPdf",
+        "story": "INT-DOC-003-C",
+        "description": "Generate work order PDF for jobs"
+      },
+      {
+        "function": "generateWarrantyCertificatePdf",
+        "story": "INT-DOC-004-A",
+        "description": "Generate warranty certificate PDF"
+      },
+      {
+        "function": "generateCompletionCertificatePdf",
+        "story": "INT-DOC-004-B",
+        "description": "Generate job completion certificate PDF"
+      },
+      {
+        "function": "getDocumentTemplate",
+        "story": "INT-DOC-005-A",
+        "description": "Get organization document template settings"
+      },
+      {
+        "function": "updateDocumentTemplate",
+        "story": "INT-DOC-005-A",
+        "description": "Update document template settings"
+      },
+      {
+        "function": "previewDocument",
+        "story": "INT-DOC-006-A",
+        "description": "Preview document with sample data"
+      },
+      {
+        "function": "getGeneratedDocuments",
+        "story": "INT-DOC-006-B",
+        "description": "List generated documents for an entity"
+      }
+    ],
+    "prdDependencies": [
+      {
+        "prdId": "DOM-ORD",
+        "status": "REQUIRED",
+        "reason": "Orders domain provides quote/invoice data"
+      },
+      {
+        "prdId": "DOM-CUS",
+        "status": "REQUIRED",
+        "reason": "Customer data for document addresses"
+      },
+      {
+        "prdId": "DOM-WAR",
+        "status": "REQUIRED",
+        "reason": "Warranty data for certificate generation"
+      },
+      {
+        "prdId": "DOM-JOB",
+        "status": "REQUIRED",
+        "reason": "Job data for work orders and completion certificates"
+      },
+      {
+        "prdId": "FND-FILE",
+        "status": "REQUIRED",
+        "reason": "File storage for generated PDFs"
+      }
+    ],
+    "enables": [
+      {
+        "prdId": "WF-INV",
+        "reason": "Invoicing workflow needs PDF invoice generation"
+      },
+      {
+        "prdId": "WF-LEAD",
+        "reason": "Quote generation for lead-to-order workflow"
+      },
+      {
+        "prdId": "WF-JOB",
+        "reason": "Work order and completion certificate for job workflow"
+      }
+    ]
+  },
+  "references": {
+    "internal": [
+      "_reference/.midday-reference/packages/invoice/",
+      "src/lib/email/ (shared component patterns)",
+      "src/trigger/jobs/generate-quote-pdf.ts (placeholder)"
+    ],
+    "external": [
+      "React PDF renderer: https://react-pdf.org/",
+      "Midday invoice package patterns",
+      "Font registration for custom fonts"
+    ]
+  },
+  "current_state": {
+    "implemented": [
+      "Placeholder generate-quote-pdf.ts Trigger.dev job",
+      "Supabase Storage infrastructure",
+      "Organization branding context"
+    ],
+    "gaps": [
+      "@react-pdf/renderer not installed",
+      "No PDF templates exist",
+      "No shared PDF components",
+      "No document template customization",
+      "No document generation audit log",
+      "generate-quote-pdf.ts is 100% placeholder"
+    ]
+  },
+  "stories": [
+    {
+      "id": "INT-DOC-001-A",
+      "name": "PDF Library Foundation and Schema",
+      "description": "Install @react-pdf/renderer and create document generation infrastructure with schema",
+      "priority": 1,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "@react-pdf/renderer installed",
+        "src/lib/documents/ directory structure created",
+        "Shared PDF components: theme, header, footer, line-items, summary",
+        "document_templates table (id, organizationId, documentType, logoUrl, primaryColor, secondaryColor, fontFamily, paperSize, includeQr, footerText, termsText, createdAt, updatedAt)",
+        "generated_documents table (id, organizationId, documentType, entityType, entityId, filename, storageUrl, fileSize, generatedAt, generatedById)",
+        "Font registration utility for Inter font family",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": [],
+      "estimated_iterations": 3,
+      "layers": ["schema", "lib"],
+      "completion_promise": "INT_DOC_001_A_COMPLETE"
+    },
+    {
+      "id": "INT-DOC-002-A",
+      "name": "Quote PDF Template and Generation",
+      "description": "Create quote/estimate PDF template with line items and totals",
+      "priority": 2,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "QuotePdfTemplate component with organization branding",
+        "Header with logo, quote number, issue/expiry dates",
+        "From/To address blocks",
+        "Line items table with description, quantity, unit price, total",
+        "Summary with subtotal, tax, discount, total",
+        "Footer with terms and conditions",
+        "generateQuotePdf server function",
+        "Update generate-quote-pdf.ts Trigger.dev job to use real implementation",
+        "Upload to Supabase Storage at documents/quotes/{orgId}/{filename}",
+        "Update orders.quotePdfUrl with generated URL",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["INT-DOC-001-A"],
+      "estimated_iterations": 3,
+      "layers": ["lib", "server", "trigger"],
+      "completion_promise": "INT_DOC_002_A_COMPLETE"
+    },
+    {
+      "id": "INT-DOC-002-B",
+      "name": "Invoice PDF Template and Generation",
+      "description": "Create invoice PDF template extending quote template with payment details",
+      "priority": 3,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "InvoicePdfTemplate component extending QuotePdfTemplate patterns",
+        "Invoice-specific header with invoice number, due date",
+        "Payment details section (bank details, payment terms)",
+        "Optional QR code for payment link",
+        "PAID watermark for paid invoices",
+        "generateInvoicePdf server function",
+        "generate-invoice-pdf.ts Trigger.dev job",
+        "Upload to Supabase Storage at documents/invoices/{orgId}/{filename}",
+        "Update orders.invoicePdfUrl with generated URL",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["INT-DOC-002-A"],
+      "estimated_iterations": 3,
+      "layers": ["lib", "server", "trigger"],
+      "completion_promise": "INT_DOC_002_B_COMPLETE"
+    },
+    {
+      "id": "INT-DOC-002-C",
+      "name": "Pro Forma Invoice PDF Template",
+      "description": "Create pro forma invoice PDF for quotes that need invoice format",
+      "priority": 4,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "ProFormaPdfTemplate component",
+        "Clear PRO FORMA INVOICE header designation",
+        "Same structure as invoice but marked as not a tax invoice",
+        "generateProFormaPdf server function",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["INT-DOC-002-B"],
+      "estimated_iterations": 2,
+      "layers": ["lib", "server"],
+      "completion_promise": "INT_DOC_002_C_COMPLETE"
+    },
+    {
+      "id": "INT-DOC-003-A",
+      "name": "Delivery Note PDF Template",
+      "description": "Create delivery note PDF for order shipments",
+      "priority": 5,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "DeliveryNotePdfTemplate component",
+        "Header with delivery note number, date",
+        "Ship from/to addresses",
+        "Line items with quantities (no prices)",
+        "Signature capture area",
+        "generateDeliveryNotePdf server function",
+        "Upload to Supabase Storage at documents/delivery-notes/{orgId}/{filename}",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["INT-DOC-001-A"],
+      "estimated_iterations": 2,
+      "layers": ["lib", "server"],
+      "completion_promise": "INT_DOC_003_A_COMPLETE"
+    },
+    {
+      "id": "INT-DOC-003-B",
+      "name": "Packing Slip PDF Template",
+      "description": "Create packing slip PDF for warehouse fulfillment",
+      "priority": 6,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "PackingSlipPdfTemplate component",
+        "Compact format for warehouse use",
+        "Barcode/QR code for order lookup",
+        "Checkbox list for items",
+        "generatePackingSlipPdf server function",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["INT-DOC-003-A"],
+      "estimated_iterations": 2,
+      "layers": ["lib", "server"],
+      "completion_promise": "INT_DOC_003_B_COMPLETE"
+    },
+    {
+      "id": "INT-DOC-003-C",
+      "name": "Work Order PDF Template",
+      "description": "Create work order PDF for field technicians",
+      "priority": 7,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "WorkOrderPdfTemplate component",
+        "Job details section (title, description, priority)",
+        "Customer site address",
+        "Scheduled date/time",
+        "Task checklist from job tasks",
+        "Materials/parts list",
+        "Notes section",
+        "generateWorkOrderPdf server function",
+        "Upload to Supabase Storage at documents/work-orders/{orgId}/{filename}",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["INT-DOC-001-A"],
+      "estimated_iterations": 3,
+      "layers": ["lib", "server"],
+      "completion_promise": "INT_DOC_003_C_COMPLETE"
+    },
+    {
+      "id": "INT-DOC-004-A",
+      "name": "Warranty Certificate PDF Template",
+      "description": "Create warranty certificate PDF for completed installations",
+      "priority": 8,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "WarrantyCertificatePdfTemplate component",
+        "Certificate-style layout with border design",
+        "Warranty details (product, coverage period, terms)",
+        "Customer and installation details",
+        "Certificate number and QR code for verification",
+        "generateWarrantyCertificatePdf server function",
+        "Update warranties.certificatePdfUrl with generated URL",
+        "Upload to Supabase Storage at documents/certificates/{orgId}/{filename}",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["INT-DOC-001-A"],
+      "estimated_iterations": 3,
+      "layers": ["lib", "server"],
+      "completion_promise": "INT_DOC_004_A_COMPLETE"
+    },
+    {
+      "id": "INT-DOC-004-B",
+      "name": "Completion Certificate PDF Template",
+      "description": "Create job completion certificate PDF",
+      "priority": 9,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "CompletionCertificatePdfTemplate component",
+        "Certificate-style layout",
+        "Job details and completion date",
+        "Work performed summary",
+        "Sign-off section",
+        "generateCompletionCertificatePdf server function",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["INT-DOC-004-A"],
+      "estimated_iterations": 2,
+      "layers": ["lib", "server"],
+      "completion_promise": "INT_DOC_004_B_COMPLETE"
+    },
+    {
+      "id": "INT-DOC-005-A",
+      "name": "Document Template Customization",
+      "description": "Allow organizations to customize document appearance",
+      "priority": 10,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Settings page at /settings/documents",
+        "Logo upload for documents",
+        "Color scheme selection (primary, secondary)",
+        "Paper size selection (A4, Letter)",
+        "Footer text customization",
+        "Terms and conditions text editor",
+        "Include QR code toggle",
+        "getDocumentTemplate and updateDocumentTemplate server functions",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["INT-DOC-001-A"],
+      "estimated_iterations": 3,
+      "layers": ["server", "ui"],
+      "completion_promise": "INT_DOC_005_A_COMPLETE"
+    },
+    {
+      "id": "INT-DOC-006-A",
+      "name": "Document Preview API",
+      "description": "Preview documents before generation",
+      "priority": 11,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "previewDocument server function",
+        "Render PDF to base64 for preview",
+        "Support sample data for template preview",
+        "Preview modal component",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["INT-DOC-002-A"],
+      "estimated_iterations": 2,
+      "layers": ["server", "ui"],
+      "completion_promise": "INT_DOC_006_A_COMPLETE"
+    },
+    {
+      "id": "INT-DOC-006-B",
+      "name": "Document History and Re-download",
+      "description": "View and re-download previously generated documents",
+      "priority": 12,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Documents tab on order/job detail pages",
+        "List generated documents with type, date, size",
+        "Download button for each document",
+        "Regenerate button to create new version",
+        "getGeneratedDocuments server function",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["INT-DOC-001-A"],
+      "estimated_iterations": 2,
+      "layers": ["server", "ui"],
+      "completion_promise": "INT_DOC_006_B_COMPLETE"
+    },
+    {
+      "id": "INT-DOC-007",
+      "name": "Automatic PDF Generation on Order Events",
+      "description": "Auto-generate PDFs when order status changes",
+      "priority": 13,
+      "status": "pending",
+      "passes": false,
+      "acceptance_criteria": [
+        "Trigger quote PDF on order creation (already scaffolded)",
+        "Trigger invoice PDF on order marked as invoiced",
+        "Trigger delivery note on order marked as shipped",
+        "Email attachment support for generated PDFs",
+        "TypeScript compiles without errors"
+      ],
+      "dependencies": ["INT-DOC-002-A", "INT-DOC-002-B", "INT-DOC-003-A"],
+      "estimated_iterations": 3,
+      "layers": ["trigger"],
+      "completion_promise": "INT_DOC_007_COMPLETE"
+    }
+  ],
+  "success_criteria": [
+    "All 9 document types can be generated as PDFs",
+    "Documents include organization branding",
+    "PDFs stored in Supabase Storage",
+    "Document history tracked for audit",
+    "Organizations can customize document appearance",
+    "Automatic generation on relevant events"
+  ],
+  "out_of_scope": [
+    "Drag-and-drop document builder",
+    "HTML-to-PDF conversion (using React PDF instead)",
+    "Third-party document signing (e.g., DocuSign)",
+    "Batch bulk document generation UI",
+    "Document merge/combine functionality"
+  ]
+}
