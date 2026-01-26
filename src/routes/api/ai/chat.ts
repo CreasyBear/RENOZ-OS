@@ -3,12 +3,20 @@
  *
  * POST /api/ai/chat
  *
- * Streaming chat endpoint using Vercel AI SDK with triage-to-specialist handoffs.
- * Implements AI-INFRA-013 acceptance criteria.
+ * Streaming chat endpoint using AI SDK v6 with triage-to-specialist handoffs.
+ * Uses createUIMessageStream for proper protocol compliance.
  *
  * @see _Initiation/_prd/3-integrations/ai-infrastructure/ai-infrastructure.prd.json
+ * @see https://ai-sdk.dev/docs/ai-sdk-ui/stream-protocol
  */
 
+import {
+  createUIMessageStream,
+  createUIMessageStreamResponse,
+  convertToModelMessages,
+  generateId,
+  type UIMessage,
+} from 'ai';
 import { withAuth } from '@/lib/server/protected';
 import { checkRateLimit, createRateLimitResponse } from '@/lib/ai/ratelimit';
 import { checkBudget, createBudgetExceededResponse } from '@/lib/ai/utils/budget';
@@ -28,22 +36,20 @@ import {
   quoteTools,
 } from '@/lib/ai/tools';
 import type { UserContext } from '@/lib/ai/prompts/shared';
-import type { ModelMessage, ToolSet } from 'ai';
+import type { ToolSet } from 'ai';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
 interface ChatRequestBody {
-  messages: Array<{
-    role: 'user' | 'assistant' | 'system';
-    content: string;
-  }>;
+  messages: UIMessage[];
   context?: {
     currentView?: string;
     conversationId?: string;
-    orgId?: string;
-    userId?: string;
+    agentChoice?: string;
+    toolChoice?: string;
+    timezone?: string;
   };
 }
 
@@ -98,7 +104,14 @@ export async function POST({ request }: { request: Request }) {
 
     // Estimate cost (rough estimate based on message length)
     const estimatedInputTokens = messages.reduce(
-      (sum, msg) => sum + Math.ceil(msg.content.length / 4),
+      (sum, msg) => {
+        // Extract text from parts
+        const textContent = msg.parts
+          ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+          .map((p) => p.text)
+          .join('') ?? '';
+        return sum + Math.ceil(textContent.length / 4);
+      },
       0
     );
     const costEstimate = estimateCost('claude-sonnet-4-20250514', estimatedInputTokens, 500);
@@ -133,17 +146,17 @@ export async function POST({ request }: { request: Request }) {
       currentPage: context?.currentView,
     };
 
-    // Convert messages to ModelMessage format
-    const modelMessages: ModelMessage[] = messages.map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-    }));
+    // Convert UIMessages to model messages
+    const modelMessages = await convertToModelMessages(messages);
 
-    // Run triage agent to determine routing
-    const triageResult = await runTriageAgent({
-      messages: modelMessages,
-      userContext,
-    });
+    // Run triage agent to determine routing (or use forced agent choice)
+    const targetAgent = context?.agentChoice as keyof typeof specialistRunners | undefined;
+    const triageResult = targetAgent && specialistRunners[targetAgent]
+      ? { targetAgent, reason: 'User selected agent' }
+      : await runTriageAgent({
+          messages: modelMessages,
+          userContext,
+        });
 
     // Get the specialist runner
     const specialistRunner = specialistRunners[triageResult.targetAgent];
@@ -165,52 +178,67 @@ export async function POST({ request }: { request: Request }) {
     // Save user message to conversation
     const lastUserMessage = messages[messages.length - 1];
     if (lastUserMessage && lastUserMessage.role === 'user') {
+      const userTextContent = lastUserMessage.parts
+        ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+        .map((p) => p.text)
+        .join('') ?? '';
+
       await memoryProvider.saveMessage(conversation.id, {
         role: 'user',
-        content: lastUserMessage.content,
+        content: userTextContent,
         createdAt: new Date().toISOString(),
       });
     }
 
-    // Run the specialist agent with streaming and domain tools
-    const agentTools = specialistTools[triageResult.targetAgent];
-    const result = await specialistRunner({
-      messages: modelMessages,
-      userContext,
-      tools: agentTools,
-    });
+    // Create UI message stream with proper AI SDK v6 protocol
+    const stream = createUIMessageStream({
+      generateId,
+      originalMessages: messages,
+      execute: async ({ writer }) => {
+        // Write metadata as data part
+        writer.write({
+          type: 'data',
+          data: {
+            conversationId: conversation.id,
+            agent: triageResult.targetAgent,
+            triageReason: triageResult.reason,
+          },
+        });
 
-    // Create a transform stream to track usage and save response
-    let responseText = '';
-    const originalStream = result.textStream;
+        // Run the specialist agent with tools
+        const agentTools = specialistTools[triageResult.targetAgent];
+        const result = await specialistRunner({
+          messages: modelMessages,
+          userContext,
+          tools: agentTools,
+        });
 
-    // Convert AsyncIterable to ReadableStream
-    const stream = new ReadableStream({
-      async start(controller) {
-        const encoder = new TextEncoder();
-
+        // Merge the agent's stream into our stream
+        writer.merge(result.toUIMessageStream());
+      },
+      onFinish: async ({ responseMessage }) => {
         try {
-          for await (const chunk of originalStream) {
-            responseText += chunk;
-            controller.enqueue(encoder.encode(chunk));
-          }
+          // Extract text content from response message
+          const responseText = responseMessage.parts
+            ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+            .map((p) => p.text)
+            .join('') ?? '';
 
-          // After stream completes, track cost and save message
-          const usage = await result.usage;
-          if (usage) {
-            await trackCostFromSDK(
-              {
-                promptTokens: (usage as { inputTokens?: number }).inputTokens ?? 0,
-                completionTokens: (usage as { outputTokens?: number }).outputTokens ?? 0,
-              },
-              'claude-sonnet-4-20250514',
-              ctx.organizationId,
-              ctx.user.id,
-              conversation.id,
-              undefined,
-              `chat:${triageResult.targetAgent}`
-            );
-          }
+          // Track cost (we'll get actual usage from the result in a production scenario)
+          // For now, estimate based on response length
+          const outputTokens = Math.ceil(responseText.length / 4);
+          await trackCostFromSDK(
+            {
+              promptTokens: estimatedInputTokens,
+              completionTokens: outputTokens,
+            },
+            'claude-sonnet-4-20250514',
+            ctx.organizationId,
+            ctx.user.id,
+            conversation.id,
+            undefined,
+            `chat:${triageResult.targetAgent}`
+          );
 
           // Save assistant response
           await memoryProvider.saveMessage(conversation.id, {
@@ -220,23 +248,17 @@ export async function POST({ request }: { request: Request }) {
             createdAt: new Date().toISOString(),
           });
         } catch (error) {
-          console.error('[Chat API] Stream error:', error);
-          controller.error(error);
-        } finally {
-          controller.close();
+          console.error('[Chat API] onFinish error:', error);
         }
+      },
+      onError: (error) => {
+        console.error('[Chat API] Stream error:', error);
+        return 'An error occurred while processing your request.';
       },
     });
 
-    // Return streaming response with conversation metadata
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'X-Conversation-Id': conversation.id,
-        'X-Agent': triageResult.targetAgent,
-        'X-Triage-Reason': triageResult.reason,
-      },
-    });
+    // Return streaming response
+    return createUIMessageStreamResponse({ stream });
   } catch (error) {
     console.error('[API /ai/chat] Error:', error);
 
@@ -249,7 +271,6 @@ export async function POST({ request }: { request: Request }) {
     }
 
     // Sanitize error messages - never expose internal details to client
-    // Log full error server-side but return generic message to client
     return new Response(
       JSON.stringify({
         error: 'An error occurred processing your request',

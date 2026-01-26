@@ -10,7 +10,7 @@
 
 import { useChat as useAIChat, type UIMessage } from '@ai-sdk/react';
 import { DefaultChatTransport } from 'ai';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useMemo } from 'react';
 
 // ============================================================================
 // TYPES
@@ -19,12 +19,34 @@ import { useCallback, useState } from 'react';
 /** Re-export UIMessage type for convenience */
 export type Message = UIMessage;
 
+/** Metadata from AI chat response data parts */
+export interface ChatMetadata {
+  conversationId?: string;
+  agent?: string;
+  triageReason?: string;
+}
+
 /** Extract text content from message parts */
 export function getMessageText(message: Message): string {
   return message.parts
     .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
     .map((part) => part.text)
     .join('');
+}
+
+/** Extract data parts from messages for metadata */
+export function extractDataParts(messages: Message[]): ChatMetadata | null {
+  for (const message of [...messages].reverse()) {
+    for (const part of message.parts) {
+      if (part.type === 'data' && typeof part.data === 'object') {
+        const data = part.data as ChatMetadata;
+        if (data.conversationId || data.agent) {
+          return data;
+        }
+      }
+    }
+  }
+  return null;
 }
 
 export interface UseAIChatOptions {
@@ -38,6 +60,10 @@ export interface UseAIChatOptions {
   initialMessages?: Message[];
   /** API endpoint (default: /api/ai/chat) */
   api?: string;
+  /** Force a specific agent (bypasses triage) */
+  agentChoice?: 'customer' | 'order' | 'analytics' | 'quote';
+  /** Current view context for agent awareness */
+  currentView?: string;
 }
 
 export interface AIChatResult {
@@ -82,6 +108,7 @@ export interface AIChatResult {
  * - Conversation tracking via context
  * - Agent routing awareness
  * - Streaming responses with parts
+ * - Data part extraction for metadata
  * - Stop/reload functionality
  *
  * @example
@@ -110,6 +137,8 @@ export function useChat(options: UseAIChatOptions = {}): AIChatResult {
     onAgentChange,
     initialMessages,
     api = '/api/ai/chat',
+    agentChoice,
+    currentView,
   } = options;
 
   // Local state for conversation tracking
@@ -120,32 +149,47 @@ export function useChat(options: UseAIChatOptions = {}): AIChatResult {
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   const [triageReason, setTriageReason] = useState<string | null>(null);
 
+  // Create transport with prepareSendMessagesRequest for dynamic context
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api,
+        // Credentials included for cookie-based auth
+        credentials: 'include',
+        // Prepare request with dynamic context for each message
+        prepareSendMessagesRequest({ messages, id }) {
+          const lastMessage = messages[messages.length - 1];
+          return {
+            body: {
+              messages,
+              context: {
+                conversationId: conversationId ?? id,
+                agentChoice: lastMessage?.metadata?.agentChoice ?? agentChoice,
+                currentView,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              },
+            },
+          };
+        },
+      }),
+    [api, conversationId, agentChoice, currentView]
+  );
+
   // Use AI SDK v6 useChat hook
   const chat = useAIChat({
     messages: initialMessages,
-    transport: new DefaultChatTransport({
-      api,
-      // Pass conversation context in body
-      body: {
-        context: {
-          conversationId,
-        },
-      },
-    }),
-    onFinish: (event) => {
-      // Extract metadata from the response if available
-      const metadata = event.metadata as {
-        conversationId?: string;
-        agent?: string;
-        triageReason?: string;
-      } | undefined;
+    transport,
+    // Handle data parts for metadata extraction
+    onData: (data) => {
+      // Data parts contain metadata like conversationId, agent, etc.
+      const metadata = data as ChatMetadata;
 
-      if (metadata?.conversationId && metadata.conversationId !== conversationId) {
+      if (metadata.conversationId && metadata.conversationId !== conversationId) {
         setConversationId(metadata.conversationId);
         onConversationId?.(metadata.conversationId);
       }
 
-      if (metadata?.agent) {
+      if (metadata.agent && metadata.agent !== activeAgent) {
         setActiveAgent(metadata.agent);
         if (metadata.triageReason) {
           setTriageReason(metadata.triageReason);

@@ -18,6 +18,12 @@ import {
   RotateCcw,
   Sparkles,
   ChevronDown,
+  Wrench,
+  FileText,
+  ExternalLink,
+  Loader2,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -34,7 +40,6 @@ import {
 } from '@/components/ui/tooltip';
 import {
   useAIChat,
-  getMessageText,
   type UseAIChatOptions,
   type AIChatResult,
   type Message,
@@ -72,6 +77,94 @@ const AGENT_COLORS: Record<string, string> = {
 };
 
 // ============================================================================
+// MESSAGE PART RENDERERS
+// ============================================================================
+
+/** Render a tool invocation part */
+const ToolInvocationPart = memo(function ToolInvocationPart({
+  part,
+}: {
+  part: { type: string; toolInvocationId: string; toolName: string; args: unknown };
+}) {
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1 my-1">
+      <Loader2 className="h-3 w-3 animate-spin" />
+      <span>Calling {part.toolName}...</span>
+    </div>
+  );
+});
+
+/** Render a tool result part */
+const ToolResultPart = memo(function ToolResultPart({
+  part,
+}: {
+  part: { type: string; toolInvocationId: string; toolName: string; result: unknown; isError?: boolean };
+}) {
+  const isError = part.isError;
+  return (
+    <div
+      className={cn(
+        'flex items-start gap-2 text-xs rounded px-2 py-1 my-1',
+        isError
+          ? 'bg-destructive/10 text-destructive'
+          : 'bg-muted/50 text-muted-foreground'
+      )}
+    >
+      {isError ? (
+        <XCircle className="h-3 w-3 mt-0.5 flex-shrink-0" />
+      ) : (
+        <CheckCircle2 className="h-3 w-3 mt-0.5 flex-shrink-0" />
+      )}
+      <div className="flex-1 min-w-0">
+        <span className="font-medium">{part.toolName}</span>
+        {typeof part.result === 'string' && part.result.length < 200 && (
+          <p className="truncate opacity-75">{part.result}</p>
+        )}
+      </div>
+    </div>
+  );
+});
+
+/** Render a file part */
+const FilePart = memo(function FilePart({
+  part,
+}: {
+  part: { type: 'file'; name: string; url?: string; mimeType?: string };
+}) {
+  return (
+    <a
+      href={part.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-2 text-xs text-primary bg-primary/10 rounded px-2 py-1 my-1 hover:bg-primary/20"
+    >
+      <FileText className="h-3 w-3" />
+      <span className="truncate">{part.name}</span>
+      <ExternalLink className="h-3 w-3" />
+    </a>
+  );
+});
+
+/** Render a source URL part */
+const SourcePart = memo(function SourcePart({
+  part,
+}: {
+  part: { type: 'source-url'; url: string; title?: string };
+}) {
+  return (
+    <a
+      href={part.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+    >
+      <ExternalLink className="h-3 w-3" />
+      <span className="truncate">{part.title || part.url}</span>
+    </a>
+  );
+});
+
+// ============================================================================
 // MESSAGE COMPONENT
 // ============================================================================
 
@@ -88,6 +181,19 @@ const ChatMessage = memo(function ChatMessage({
 }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
+
+  // Separate text parts from other parts for rendering
+  const textParts = message.parts.filter(
+    (p): p is { type: 'text'; text: string } => p.type === 'text'
+  );
+  const toolParts = message.parts.filter(
+    (p) => p.type === 'tool-invocation' || (p.type as string).startsWith('tool-')
+  );
+  const fileParts = message.parts.filter((p) => p.type === 'file');
+  const sourceParts = message.parts.filter((p) => p.type === 'source-url');
+
+  // Get combined text content
+  const textContent = textParts.map((p) => p.text).join('');
 
   return (
     <div
@@ -124,20 +230,73 @@ const ChatMessage = memo(function ChatMessage({
           </Badge>
         )}
 
-        {/* Message bubble */}
-        <div
-          className={cn(
-            'rounded-lg px-4 py-2 text-sm inline-block',
-            isUser
-              ? 'bg-primary text-primary-foreground ml-auto'
-              : 'bg-muted text-foreground'
-          )}
-        >
-          {getMessageText(message)}
-          {isStreaming && (
-            <span className="inline-block ml-1 animate-pulse">|</span>
-          )}
-        </div>
+        {/* Tool invocations/results (shown above text for assistant) */}
+        {isAssistant && toolParts.length > 0 && (
+          <div className="space-y-0.5">
+            {toolParts.map((part, i) => {
+              const typedPart = part as {
+                type: string;
+                toolInvocationId?: string;
+                toolName?: string;
+                args?: unknown;
+                result?: unknown;
+                isError?: boolean;
+              };
+              if (typedPart.type === 'tool-invocation' && typedPart.toolName) {
+                return (
+                  <ToolInvocationPart
+                    key={typedPart.toolInvocationId || i}
+                    part={typedPart as Parameters<typeof ToolInvocationPart>[0]['part']}
+                  />
+                );
+              }
+              if (typedPart.type === 'tool-result' && typedPart.toolName) {
+                return (
+                  <ToolResultPart
+                    key={typedPart.toolInvocationId || i}
+                    part={typedPart as Parameters<typeof ToolResultPart>[0]['part']}
+                  />
+                );
+              }
+              return null;
+            })}
+          </div>
+        )}
+
+        {/* Main text bubble */}
+        {textContent && (
+          <div
+            className={cn(
+              'rounded-lg px-4 py-2 text-sm inline-block whitespace-pre-wrap',
+              isUser
+                ? 'bg-primary text-primary-foreground ml-auto'
+                : 'bg-muted text-foreground'
+            )}
+          >
+            {textContent}
+            {isStreaming && (
+              <span className="inline-block ml-1 animate-pulse">|</span>
+            )}
+          </div>
+        )}
+
+        {/* File attachments */}
+        {fileParts.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {fileParts.map((part, i) => (
+              <FilePart key={i} part={part as Parameters<typeof FilePart>[0]['part']} />
+            ))}
+          </div>
+        )}
+
+        {/* Source citations */}
+        {sourceParts.length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-1">
+            {sourceParts.map((part, i) => (
+              <SourcePart key={i} part={part as Parameters<typeof SourcePart>[0]['part']} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
