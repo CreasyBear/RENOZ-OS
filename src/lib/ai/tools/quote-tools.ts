@@ -19,16 +19,7 @@ import {
   filterSensitiveFields,
   createErrorResult,
 } from './types';
-
-// ============================================================================
-// SHARED CONTEXT SCHEMA
-// ============================================================================
-
-const contextSchema = z.object({
-  userId: z.string().uuid().describe('Current user ID (injected by API)'),
-  organizationId: z.string().uuid().describe('Current organization ID (injected by API)'),
-  conversationId: z.string().uuid().optional().describe('Current conversation ID (if any)'),
-});
+import { type ToolExecutionContext } from '@/lib/ai/context/types';
 
 // ============================================================================
 // COMPATIBILITY RULES
@@ -83,11 +74,21 @@ export const configureSystemTool = tool({
       .min(1)
       .max(20)
       .describe('Components to include in the system'),
-    _context: contextSchema.describe('Execution context (auto-injected by API)'),
   }),
-  execute: async ({ systemType, components, _context }): Promise<
-    SystemConfiguration | ReturnType<typeof createErrorResult>
-  > => {
+  execute: async (
+    { systemType, components },
+    { experimental_context }
+  ): Promise<SystemConfiguration | ReturnType<typeof createErrorResult>> => {
+    const ctx = experimental_context as ToolExecutionContext | undefined;
+
+    if (!ctx?.organizationId) {
+      return createErrorResult(
+        'Organization context missing',
+        'Unable to process request without organization context',
+        'CONTEXT_ERROR'
+      );
+    }
+
     try {
       // Fetch product details
       const productIds = components.map((c) => c.productId);
@@ -103,7 +104,7 @@ export const configureSystemTool = tool({
         .where(
           and(
             inArray(products.id, productIds),
-            eq(products.organizationId, _context.organizationId),
+            eq(products.organizationId, ctx.organizationId),
             isNull(products.deletedAt)
           )
         );
@@ -238,11 +239,21 @@ export const calculatePriceTool = tool({
       .boolean()
       .default(true)
       .describe('Whether to include GST (10%) in the total'),
-    _context: contextSchema.describe('Execution context (auto-injected by API)'),
   }),
-  execute: async ({ lineItems, overallDiscountPercent, includeTax, _context }): Promise<
-    PriceCalculation | ReturnType<typeof createErrorResult>
-  > => {
+  execute: async (
+    { lineItems, overallDiscountPercent, includeTax },
+    { experimental_context }
+  ): Promise<PriceCalculation | ReturnType<typeof createErrorResult>> => {
+    const ctx = experimental_context as ToolExecutionContext | undefined;
+
+    if (!ctx?.organizationId) {
+      return createErrorResult(
+        'Organization context missing',
+        'Unable to process request without organization context',
+        'CONTEXT_ERROR'
+      );
+    }
+
     try {
       // Fetch product details
       const productIds = lineItems.map((l) => l.productId);
@@ -257,7 +268,7 @@ export const calculatePriceTool = tool({
         .where(
           and(
             inArray(products.id, productIds),
-            eq(products.organizationId, _context.organizationId),
+            eq(products.organizationId, ctx.organizationId),
             isNull(products.deletedAt)
           )
         );
@@ -354,11 +365,21 @@ export const checkCompatibilityTool = tool({
       .min(2)
       .max(20)
       .describe('Product IDs to check for compatibility'),
-    _context: contextSchema.describe('Execution context (auto-injected by API)'),
   }),
-  execute: async ({ productIds, _context }): Promise<
-    CompatibilityResult | ReturnType<typeof createErrorResult>
-  > => {
+  execute: async (
+    { productIds },
+    { experimental_context }
+  ): Promise<CompatibilityResult | ReturnType<typeof createErrorResult>> => {
+    const ctx = experimental_context as ToolExecutionContext | undefined;
+
+    if (!ctx?.organizationId) {
+      return createErrorResult(
+        'Organization context missing',
+        'Unable to process request without organization context',
+        'CONTEXT_ERROR'
+      );
+    }
+
     try {
       // Fetch product details
       // Note: categoryId is a UUID reference; we'd need to join categories table for category name
@@ -372,7 +393,7 @@ export const checkCompatibilityTool = tool({
         .where(
           and(
             inArray(products.id, productIds),
-            eq(products.organizationId, _context.organizationId),
+            eq(products.organizationId, ctx.organizationId),
             isNull(products.deletedAt)
           )
         );

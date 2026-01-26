@@ -4,6 +4,12 @@
  * Routes user requests to specialist agents using Claude Haiku
  * with forced tool choice. Never responds directly - always hands off.
  *
+ * Note: Triage does NOT use the standard createAgent factory because
+ * it has special requirements:
+ * - Uses forced tool choice (not streaming text)
+ * - Uses Haiku (faster, cheaper) instead of Sonnet
+ * - Doesn't need working memory (stateless routing decisions)
+ *
  * @see _Initiation/_prd/3-integrations/ai-infrastructure/ai-infrastructure.prd.json
  */
 
@@ -16,6 +22,8 @@ import {
   formatContextForLLM,
   type UserContext,
 } from '../prompts/shared';
+import { createAgentConfig, TRIAGE_DEFAULTS } from './config';
+import type { AgentMemoryConfig } from './factory';
 
 // ============================================================================
 // CONFIGURATION
@@ -24,17 +32,22 @@ import {
 /**
  * Triage agent model configuration.
  * Uses Haiku for fast, cheap routing decisions.
+ *
+ * @see ./config.ts for shared configuration factory
  */
-export const TRIAGE_CONFIG = {
-  /** Claude 3.5 Haiku for fast, cheap routing */
-  model: 'claude-3-5-haiku-20241022',
-  /** Low temperature for deterministic routing */
-  temperature: 0.1,
-  /** Only one turn - route and done */
-  maxTurns: 1,
-  /** Maximum tokens for the routing decision */
-  maxTokens: 256,
-} as const;
+export const TRIAGE_CONFIG = createAgentConfig({}, TRIAGE_DEFAULTS);
+
+/**
+ * Triage memory configuration.
+ * Triage doesn't use working memory - routing is stateless.
+ */
+export const TRIAGE_MEMORY_CONFIG: AgentMemoryConfig = {
+  history: {
+    enabled: false, // Triage doesn't need history
+    limit: 0,
+  },
+  // No working memory for triage
+};
 
 // ============================================================================
 // SYSTEM PROMPT
@@ -117,6 +130,10 @@ ${formatContextForLLM(userContext)}
     },
     temperature: TRIAGE_CONFIG.temperature,
     abortSignal,
+    experimental_context: {
+      userId: userContext.userId,
+      organizationId: userContext.organizationId,
+    },
   });
 
   // Find the handoff tool call in the response stream
@@ -155,5 +172,6 @@ ${formatContextForLLM(userContext)}
 export const triageAgent = {
   name: 'triage' as const,
   config: TRIAGE_CONFIG,
+  memoryConfig: TRIAGE_MEMORY_CONFIG,
   run: runTriageAgent,
 };

@@ -18,15 +18,7 @@ import {
   type TrendsResult,
   createErrorResult,
 } from './types';
-
-// ============================================================================
-// SHARED CONTEXT SCHEMA
-// ============================================================================
-
-const contextSchema = z.object({
-  userId: z.string().uuid().describe('Current user ID (injected by API)'),
-  organizationId: z.string().uuid().describe('Current organization ID (injected by API)'),
-});
+import { type ToolExecutionContext } from '@/lib/ai/context/types';
 
 // ============================================================================
 // PERIOD HELPERS
@@ -124,11 +116,21 @@ export const runReportTool = tool({
       .max(100)
       .default(20)
       .describe('Maximum rows to return'),
-    _context: contextSchema.describe('Execution context (auto-injected by API)'),
   }),
-  execute: async ({ reportType, period, customStartDate, customEndDate, limit, _context }): Promise<
-    ReportResult | ReturnType<typeof createErrorResult>
-  > => {
+  execute: async (
+    { reportType, period, customStartDate, customEndDate, limit },
+    { experimental_context }
+  ): Promise<ReportResult | ReturnType<typeof createErrorResult>> => {
+    const ctx = experimental_context as ToolExecutionContext | undefined;
+
+    if (!ctx?.organizationId) {
+      return createErrorResult(
+        'Organization context missing',
+        'Unable to process request without organization context',
+        'CONTEXT_ERROR'
+      );
+    }
+
     try {
       const dateRange = getDateRange(period, customStartDate, customEndDate);
 
@@ -146,7 +148,7 @@ export const runReportTool = tool({
             .leftJoin(customers, eq(orders.customerId, customers.id))
             .where(
               and(
-                eq(orders.organizationId, _context.organizationId),
+                eq(orders.organizationId, ctx.organizationId),
                 isNull(orders.deletedAt),
                 sql`${orders.status} NOT IN ('draft', 'cancelled')`,
                 gte(orders.orderDate, dateRange.start.toISOString().slice(0, 10)),
@@ -189,7 +191,7 @@ export const runReportTool = tool({
             .from(orders)
             .where(
               and(
-                eq(orders.organizationId, _context.organizationId),
+                eq(orders.organizationId, ctx.organizationId),
                 isNull(orders.deletedAt),
                 gte(orders.orderDate, dateRange.start.toISOString().slice(0, 10)),
                 lte(orders.orderDate, dateRange.end.toISOString().slice(0, 10))
@@ -230,7 +232,7 @@ export const runReportTool = tool({
             .from(orders)
             .where(
               and(
-                eq(orders.organizationId, _context.organizationId),
+                eq(orders.organizationId, ctx.organizationId),
                 isNull(orders.deletedAt),
                 sql`${orders.status} IN ('draft', 'confirmed', 'picking')`,
                 gte(orders.orderDate, dateRange.start.toISOString().slice(0, 10)),
@@ -299,9 +301,21 @@ export const getMetricsTool = tool({
       .enum(['mtd', 'qtd', 'ytd', 'rolling30', 'rolling60', 'rolling90'])
       .default('mtd')
       .describe('Time period for the metric'),
-    _context: contextSchema.describe('Execution context (auto-injected by API)'),
   }),
-  execute: async ({ metric, period, _context }): Promise<MetricsResult | ReturnType<typeof createErrorResult>> => {
+  execute: async (
+    { metric, period },
+    { experimental_context }
+  ): Promise<MetricsResult | ReturnType<typeof createErrorResult>> => {
+    const ctx = experimental_context as ToolExecutionContext | undefined;
+
+    if (!ctx?.organizationId) {
+      return createErrorResult(
+        'Organization context missing',
+        'Unable to process request without organization context',
+        'CONTEXT_ERROR'
+      );
+    }
+
     try {
       const currentRange = getDateRange(period);
       const periodLength = currentRange.end.getTime() - currentRange.start.getTime();
@@ -309,7 +323,7 @@ export const getMetricsTool = tool({
       const prevEnd = new Date(currentRange.end.getTime() - periodLength);
 
       const baseConditions = [
-        eq(orders.organizationId, _context.organizationId),
+        eq(orders.organizationId, ctx.organizationId),
         isNull(orders.deletedAt),
         sql`${orders.status} NOT IN ('draft', 'cancelled')`,
       ];
@@ -424,15 +438,27 @@ export const getTrendsTool = tool({
       .enum(['daily', 'weekly'])
       .default('daily')
       .describe('Data point granularity'),
-    _context: contextSchema.describe('Execution context (auto-injected by API)'),
   }),
-  execute: async ({ metric, period, granularity, _context }): Promise<TrendsResult | ReturnType<typeof createErrorResult>> => {
+  execute: async (
+    { metric, period, granularity },
+    { experimental_context }
+  ): Promise<TrendsResult | ReturnType<typeof createErrorResult>> => {
+    const ctx = experimental_context as ToolExecutionContext | undefined;
+
+    if (!ctx?.organizationId) {
+      return createErrorResult(
+        'Organization context missing',
+        'Unable to process request without organization context',
+        'CONTEXT_ERROR'
+      );
+    }
+
     try {
       const dateRange = getDateRange(period);
       const isWeekly = granularity === 'weekly';
 
       const baseConditions = [
-        eq(orders.organizationId, _context.organizationId),
+        eq(orders.organizationId, ctx.organizationId),
         isNull(orders.deletedAt),
         sql`${orders.status} NOT IN ('draft', 'cancelled')`,
         gte(orders.orderDate, dateRange.start.toISOString().slice(0, 10)),

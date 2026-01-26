@@ -20,16 +20,7 @@ import {
   createApprovalResult,
   createErrorResult,
 } from './types';
-
-// ============================================================================
-// SHARED CONTEXT SCHEMA
-// ============================================================================
-
-const contextSchema = z.object({
-  userId: z.string().uuid().describe('Current user ID (injected by API)'),
-  organizationId: z.string().uuid().describe('Current organization ID (injected by API)'),
-  conversationId: z.string().uuid().optional().describe('Current conversation ID (if any)'),
-});
+import { type ToolExecutionContext } from '@/lib/ai/context/types';
 
 // ============================================================================
 // GET CUSTOMER TOOL
@@ -48,9 +39,21 @@ export const getCustomerTool = tool({
       .string()
       .uuid()
       .describe('The unique identifier (UUID) of the customer to retrieve'),
-    _context: contextSchema.describe('Execution context (auto-injected by API)'),
   }),
-  execute: async ({ customerId, _context }): Promise<CustomerWithMeta | ReturnType<typeof createErrorResult>> => {
+  execute: async (
+    { customerId },
+    { experimental_context }
+  ): Promise<CustomerWithMeta | ReturnType<typeof createErrorResult>> => {
+    const ctx = experimental_context as ToolExecutionContext | undefined;
+
+    if (!ctx?.organizationId || !ctx?.userId) {
+      return createErrorResult(
+        'Organization context missing',
+        'Unable to process request without organization context',
+        'CONTEXT_ERROR'
+      );
+    }
+
     try {
       // Execute all three queries in parallel for better performance
       const [customerResult, activityResult, overdueResult] = await Promise.all([
@@ -61,7 +64,7 @@ export const getCustomerTool = tool({
           .where(
             and(
               eq(customers.id, customerId),
-              eq(customers.organizationId, _context.organizationId),
+              eq(customers.organizationId, ctx.organizationId),
               isNull(customers.deletedAt)
             )
           )
@@ -197,15 +200,27 @@ export const searchCustomersTool = tool({
       .max(20)
       .default(10)
       .describe('Maximum number of results to return'),
-    _context: contextSchema.describe('Execution context (auto-injected by API)'),
   }),
-  execute: async ({ query, status, limit, _context }): Promise<
+  execute: async (
+    { query, status, limit },
+    { experimental_context }
+  ): Promise<
     { data: CustomerSearchResult[]; _meta: { count: number } } | ReturnType<typeof createErrorResult>
   > => {
+    const ctx = experimental_context as ToolExecutionContext | undefined;
+
+    if (!ctx?.organizationId) {
+      return createErrorResult(
+        'Organization context missing',
+        'Unable to process request without organization context',
+        'CONTEXT_ERROR'
+      );
+    }
+
     try {
       // Build conditions
       const conditions = [
-        eq(customers.organizationId, _context.organizationId),
+        eq(customers.organizationId, ctx.organizationId),
         isNull(customers.deletedAt),
         // Fuzzy search on name and email using ILIKE
         sql`(
@@ -294,9 +309,21 @@ export const updateCustomerNotesTool = tool({
       .boolean()
       .default(false)
       .describe('If true, append to existing notes instead of replacing'),
-    _context: contextSchema.describe('Execution context (auto-injected by API)'),
   }),
-  execute: async ({ customerId, notes, appendMode, _context }) => {
+  execute: async (
+    { customerId, notes, appendMode },
+    { experimental_context }
+  ) => {
+    const ctx = experimental_context as ToolExecutionContext | undefined;
+
+    if (!ctx?.organizationId || !ctx?.userId) {
+      return createErrorResult(
+        'Organization context missing',
+        'Unable to process request without organization context',
+        'CONTEXT_ERROR'
+      );
+    }
+
     try {
       // Verify customer exists and belongs to org
       const [customer] = await db
@@ -309,7 +336,7 @@ export const updateCustomerNotesTool = tool({
         .where(
           and(
             eq(customers.id, customerId),
-            eq(customers.organizationId, _context.organizationId),
+            eq(customers.organizationId, ctx.organizationId),
             isNull(customers.deletedAt)
           )
         )
@@ -335,9 +362,9 @@ export const updateCustomerNotesTool = tool({
       const [approval] = await db
         .insert(aiApprovals)
         .values({
-          userId: _context.userId,
-          organizationId: _context.organizationId,
-          conversationId: _context.conversationId || null,
+          userId: ctx.userId,
+          organizationId: ctx.organizationId,
+          conversationId: ctx.conversationId || null,
           action: 'update_customer_notes',
           agent: 'customer',
           actionData: {

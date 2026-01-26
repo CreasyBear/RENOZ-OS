@@ -19,16 +19,7 @@ import {
   createApprovalResult,
   createErrorResult,
 } from './types';
-
-// ============================================================================
-// SHARED CONTEXT SCHEMA
-// ============================================================================
-
-const contextSchema = z.object({
-  userId: z.string().uuid().describe('Current user ID (injected by API)'),
-  organizationId: z.string().uuid().describe('Current organization ID (injected by API)'),
-  conversationId: z.string().uuid().optional().describe('Current conversation ID (if any)'),
-});
+import { type ToolExecutionContext } from '@/lib/ai/context/types';
 
 // ============================================================================
 // GET ORDERS TOOL
@@ -79,16 +70,28 @@ export const getOrdersTool = tool({
       .max(50)
       .default(20)
       .describe('Maximum number of orders to return'),
-    _context: contextSchema.describe('Execution context (auto-injected by API)'),
   }),
-  execute: async ({ customerId, status, paymentStatus, startDate, endDate, limit, _context }): Promise<
+  execute: async (
+    { customerId, status, paymentStatus, startDate, endDate, limit },
+    { experimental_context }
+  ): Promise<
     | { data: OrderSummary[]; _meta: { count: number; hasMore: boolean } }
     | ReturnType<typeof createErrorResult>
   > => {
+    const ctx = experimental_context as ToolExecutionContext | undefined;
+
+    if (!ctx?.organizationId) {
+      return createErrorResult(
+        'Organization context missing',
+        'Unable to process request without organization context',
+        'CONTEXT_ERROR'
+      );
+    }
+
     try {
       // Build conditions
       const conditions = [
-        eq(orders.organizationId, _context.organizationId),
+        eq(orders.organizationId, ctx.organizationId),
         isNull(orders.deletedAt),
       ];
 
@@ -192,16 +195,28 @@ export const getInvoicesTool = tool({
       .max(50)
       .default(20)
       .describe('Maximum number of invoices to return'),
-    _context: contextSchema.describe('Execution context (auto-injected by API)'),
   }),
-  execute: async ({ customerId, status, overdueOnly, limit, _context }): Promise<
+  execute: async (
+    { customerId, status, overdueOnly, limit },
+    { experimental_context }
+  ): Promise<
     | { data: InvoiceSummary[]; _meta: { count: number; totalOverdue: number } }
     | ReturnType<typeof createErrorResult>
   > => {
+    const ctx = experimental_context as ToolExecutionContext | undefined;
+
+    if (!ctx?.organizationId) {
+      return createErrorResult(
+        'Organization context missing',
+        'Unable to process request without organization context',
+        'CONTEXT_ERROR'
+      );
+    }
+
     try {
       // Build conditions
       const conditions = [
-        eq(orders.organizationId, _context.organizationId),
+        eq(orders.organizationId, ctx.organizationId),
         isNull(orders.deletedAt),
         // Only include orders that have been confirmed (invoiced)
         sql`${orders.status} NOT IN ('draft', 'cancelled')`,
@@ -326,9 +341,21 @@ export const createOrderDraftTool = tool({
       .max(2000)
       .optional()
       .describe('Notes visible to customer'),
-    _context: contextSchema.describe('Execution context (auto-injected by API)'),
   }),
-  execute: async ({ customerId, lineItems, notes, customerNotes, _context }) => {
+  execute: async (
+    { customerId, lineItems, notes, customerNotes },
+    { experimental_context }
+  ) => {
+    const ctx = experimental_context as ToolExecutionContext | undefined;
+
+    if (!ctx?.organizationId || !ctx?.userId) {
+      return createErrorResult(
+        'Organization context missing',
+        'Unable to process request without organization context',
+        'CONTEXT_ERROR'
+      );
+    }
+
     try {
       // Verify customer exists
       const [customer] = await db
@@ -337,7 +364,7 @@ export const createOrderDraftTool = tool({
         .where(
           and(
             eq(customers.id, customerId),
-            eq(customers.organizationId, _context.organizationId),
+            eq(customers.organizationId, ctx.organizationId),
             isNull(customers.deletedAt)
           )
         )
@@ -366,9 +393,9 @@ export const createOrderDraftTool = tool({
       const [approval] = await db
         .insert(aiApprovals)
         .values({
-          userId: _context.userId,
-          organizationId: _context.organizationId,
-          conversationId: _context.conversationId || null,
+          userId: ctx.userId,
+          organizationId: ctx.organizationId,
+          conversationId: ctx.conversationId || null,
           action: 'create_order',
           agent: 'order',
           actionData: {
@@ -445,9 +472,21 @@ export const createQuoteDraftTool = tool({
       .max(2000)
       .optional()
       .describe('Notes visible to customer'),
-    _context: contextSchema.describe('Execution context (auto-injected by API)'),
   }),
-  execute: async ({ customerId, title, lineItems, validUntil, notes, customerNotes, _context }) => {
+  execute: async (
+    { customerId, title, lineItems, validUntil, notes, customerNotes },
+    { experimental_context }
+  ) => {
+    const ctx = experimental_context as ToolExecutionContext | undefined;
+
+    if (!ctx?.organizationId || !ctx?.userId) {
+      return createErrorResult(
+        'Organization context missing',
+        'Unable to process request without organization context',
+        'CONTEXT_ERROR'
+      );
+    }
+
     try {
       // Verify customer exists
       const [customer] = await db
@@ -456,7 +495,7 @@ export const createQuoteDraftTool = tool({
         .where(
           and(
             eq(customers.id, customerId),
-            eq(customers.organizationId, _context.organizationId),
+            eq(customers.organizationId, ctx.organizationId),
             isNull(customers.deletedAt)
           )
         )
@@ -487,9 +526,9 @@ export const createQuoteDraftTool = tool({
       const [approval] = await db
         .insert(aiApprovals)
         .values({
-          userId: _context.userId,
-          organizationId: _context.organizationId,
-          conversationId: _context.conversationId || null,
+          userId: ctx.userId,
+          organizationId: ctx.organizationId,
+          conversationId: ctx.conversationId || null,
           action: 'create_quote',
           agent: 'order',
           actionData: {

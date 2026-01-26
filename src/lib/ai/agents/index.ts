@@ -8,10 +8,38 @@
  */
 
 // ============================================================================
+// FACTORY EXPORTS
+// ============================================================================
+
+export {
+  createAgent,
+  createAgentConfigWithMemory,
+  getMemoryTemplate,
+  DEFAULT_MEMORY_CONFIG,
+  SPECIALIST_DEFAULTS,
+  TRIAGE_DEFAULTS,
+  MODELS,
+  type Agent,
+  type AgentConfig,
+  type AgentConfigOptions,
+  type AgentMemoryConfig,
+  type AgentMemoryOptions,
+  type CreateAgentOptions,
+  type RunAgentOptions,
+  type ModelId,
+} from './factory';
+
+// ============================================================================
+// SHARED CONFIGURATION (deprecated, use factory)
+// ============================================================================
+
+export { createAgentConfig } from './config';
+
+// ============================================================================
 // AGENT EXPORTS
 // ============================================================================
 
-export { triageAgent, runTriageAgent, TRIAGE_CONFIG } from './triage';
+export { triageAgent, runTriageAgent, TRIAGE_CONFIG, TRIAGE_MEMORY_CONFIG } from './triage';
 export type { TriageAgentOptions, TriageAgentResult } from './triage';
 
 export { customerAgent, runCustomerAgent, CUSTOMER_AGENT_CONFIG } from './customer';
@@ -85,6 +113,7 @@ import type { UserContext } from '../prompts/shared';
 type AgentRunner = (options: {
   messages: import('ai').ModelMessage[];
   userContext: UserContext;
+  conversationId?: string;
   tools?: import('ai').ToolSet;
   abortSignal?: AbortSignal;
 }) => ReturnType<typeof runCustomerAgent>;
@@ -129,6 +158,7 @@ export interface ExecuteAgentTaskInput {
     currentPage?: string;
     entityId?: string;
     entityType?: string;
+    conversationId?: string;
   };
   /** Progress callback */
   onProgress?: (progress: number, step: string) => Promise<void>;
@@ -199,10 +229,11 @@ export async function executeAgentTask(
       } : undefined,
     };
 
-    // Run the agent with messages and userContext
+    // Run the agent with messages, userContext, and conversationId for memory
     const result = await runner({
       messages: [{ role: 'user', content: userMessage }],
       userContext,
+      conversationId: context.conversationId,
     });
 
     // Update progress: Completing

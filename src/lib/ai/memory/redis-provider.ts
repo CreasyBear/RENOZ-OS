@@ -116,6 +116,7 @@ export class RedisMemoryProvider implements MemoryProvider {
 
   /**
    * Check if Redis is available.
+   * Implements circuit breaker pattern with automatic retry after timeout.
    */
   async isAvailable(): Promise<boolean> {
     // Rate limit availability checks
@@ -125,6 +126,12 @@ export class RedisMemoryProvider implements MemoryProvider {
     }
     this.lastAvailabilityCheck = now;
 
+    // If Redis was unavailable, try to reinitialize (circuit breaker recovery)
+    if (!this.redisAvailable || !this.redis) {
+      console.info('[RedisMemoryProvider] Attempting to reconnect to Redis...');
+      this.initializeRedis();
+    }
+
     if (!this.redis) {
       this.redisAvailable = false;
       return false;
@@ -132,11 +139,15 @@ export class RedisMemoryProvider implements MemoryProvider {
 
     try {
       await this.redis.ping();
+      if (!this.redisAvailable) {
+        console.info('[RedisMemoryProvider] Redis connection restored.');
+      }
       this.redisAvailable = true;
       return true;
     } catch {
       console.warn('[RedisMemoryProvider] Redis ping failed. Using in-memory fallback.');
       this.redisAvailable = false;
+      this.redis = null; // Reset client for next retry
       return false;
     }
   }
@@ -152,6 +163,7 @@ export class RedisMemoryProvider implements MemoryProvider {
       } catch (error) {
         console.error('[RedisMemoryProvider] Get failed, using fallback:', error);
         this.redisAvailable = false;
+        this.redis = null; // Reset for next reconnection attempt
       }
     }
 
@@ -171,6 +183,7 @@ export class RedisMemoryProvider implements MemoryProvider {
       } catch (error) {
         console.error('[RedisMemoryProvider] Set failed, using fallback:', error);
         this.redisAvailable = false;
+        this.redis = null; // Reset for next reconnection attempt
       }
     }
 
@@ -188,6 +201,7 @@ export class RedisMemoryProvider implements MemoryProvider {
       } catch (error) {
         console.error('[RedisMemoryProvider] Delete failed, using fallback:', error);
         this.redisAvailable = false;
+        this.redis = null; // Reset for next reconnection attempt
       }
     }
 

@@ -7,34 +7,9 @@
  * @see _Initiation/_prd/3-integrations/ai-infrastructure/ai-infrastructure.prd.json
  */
 
-import { anthropic } from '@ai-sdk/anthropic';
-import { streamText } from 'ai';
 import type { ModelMessage, ToolSet } from 'ai';
-import {
-  SECURITY_INSTRUCTIONS,
-  COMMON_AGENT_RULES,
-  formatContextForLLM,
-  type UserContext,
-} from '../prompts/shared';
-
-// ============================================================================
-// CONFIGURATION
-// ============================================================================
-
-/**
- * Analytics agent model configuration.
- * Uses Sonnet for data analysis and insights.
- */
-export const ANALYTICS_AGENT_CONFIG = {
-  /** Claude Sonnet 4 for high-quality analysis */
-  model: 'claude-sonnet-4-20250514',
-  /** Moderate temperature for balanced responses */
-  temperature: 0.3,
-  /** Allow multi-turn conversations */
-  maxTurns: 10,
-  /** Maximum tokens per response */
-  maxTokens: 2048,
-} as const;
+import type { UserContext } from '../prompts/shared';
+import { createAgent } from './factory';
 
 // ============================================================================
 // SYSTEM PROMPT
@@ -84,21 +59,43 @@ You are the Analytics specialist agent for Renoz CRM. You help users with report
 - Include relevant comparisons (vs previous period, vs target)
 - Highlight significant changes (+/- 10% or more)
 - Lead with the key insight, then provide supporting data
-
-${COMMON_AGENT_RULES}
-
-${SECURITY_INSTRUCTIONS}
 `.trim();
 
 // ============================================================================
-// AGENT FUNCTION
+// AGENT INSTANCE
 // ============================================================================
+
+/**
+ * Analytics agent instance created with the factory.
+ * Includes memory integration for conversation persistence.
+ */
+const analyticsAgentInstance = createAgent({
+  name: 'analytics',
+  systemPrompt: ANALYTICS_SYSTEM_PROMPT,
+  memory: {
+    historyEnabled: true,
+    historyLimit: 10,
+    workingMemoryEnabled: true,
+    workingMemoryScope: 'user',
+  },
+});
+
+// ============================================================================
+// EXPORTS
+// ============================================================================
+
+/**
+ * Analytics agent model configuration.
+ */
+export const ANALYTICS_AGENT_CONFIG = analyticsAgentInstance.config;
 
 export interface AnalyticsAgentOptions {
   /** Conversation messages */
   messages: ModelMessage[];
   /** User context */
   userContext: UserContext;
+  /** Conversation ID for memory persistence */
+  conversationId?: string;
   /** Tools available to this agent */
   tools?: ToolSet;
   /** Optional abort signal */
@@ -111,28 +108,15 @@ export interface AnalyticsAgentOptions {
  * Returns a streaming response for real-time display.
  */
 export async function runAnalyticsAgent(options: AnalyticsAgentOptions) {
-  const { messages, userContext, tools = {}, abortSignal } = options;
+  const { messages, userContext, conversationId, tools = {}, abortSignal } = options;
 
-  // Build system prompt with user context
-  const systemPrompt = `
-${ANALYTICS_SYSTEM_PROMPT}
-
-## Current Context
-
-${formatContextForLLM(userContext)}
-`.trim();
-
-  // Stream the response
-  const result = await streamText({
-    model: anthropic(ANALYTICS_AGENT_CONFIG.model),
-    system: systemPrompt,
+  return analyticsAgentInstance.run({
     messages,
+    userContext,
+    conversationId,
     tools,
-    temperature: ANALYTICS_AGENT_CONFIG.temperature,
     abortSignal,
   });
-
-  return result;
 }
 
 /**
@@ -141,5 +125,6 @@ ${formatContextForLLM(userContext)}
 export const analyticsAgent = {
   name: 'analytics' as const,
   config: ANALYTICS_AGENT_CONFIG,
+  memoryConfig: analyticsAgentInstance.memoryConfig,
   run: runAnalyticsAgent,
 };

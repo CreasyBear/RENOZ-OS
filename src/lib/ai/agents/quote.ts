@@ -7,34 +7,9 @@
  * @see _Initiation/_prd/3-integrations/ai-infrastructure/ai-infrastructure.prd.json
  */
 
-import { anthropic } from '@ai-sdk/anthropic';
-import { streamText } from 'ai';
 import type { ModelMessage, ToolSet } from 'ai';
-import {
-  SECURITY_INSTRUCTIONS,
-  COMMON_AGENT_RULES,
-  formatContextForLLM,
-  type UserContext,
-} from '../prompts/shared';
-
-// ============================================================================
-// CONFIGURATION
-// ============================================================================
-
-/**
- * Quote agent model configuration.
- * Uses Sonnet for technical product configuration.
- */
-export const QUOTE_AGENT_CONFIG = {
-  /** Claude Sonnet 4 for high-quality responses */
-  model: 'claude-sonnet-4-20250514',
-  /** Moderate temperature for balanced responses */
-  temperature: 0.3,
-  /** Allow multi-turn conversations */
-  maxTurns: 10,
-  /** Maximum tokens per response */
-  maxTokens: 2048,
-} as const;
+import type { UserContext } from '../prompts/shared';
+import { createAgent } from './factory';
 
 // ============================================================================
 // SYSTEM PROMPT
@@ -89,21 +64,43 @@ You are the Quote specialist agent for Renoz CRM. You help users with product co
 - Recommend appropriate sizing
 - Verify all component compatibility
 - Show itemized pricing breakdown
-
-${COMMON_AGENT_RULES}
-
-${SECURITY_INSTRUCTIONS}
 `.trim();
 
 // ============================================================================
-// AGENT FUNCTION
+// AGENT INSTANCE
 // ============================================================================
+
+/**
+ * Quote agent instance created with the factory.
+ * Includes memory integration for conversation persistence.
+ */
+const quoteAgentInstance = createAgent({
+  name: 'quote',
+  systemPrompt: QUOTE_SYSTEM_PROMPT,
+  memory: {
+    historyEnabled: true,
+    historyLimit: 10,
+    workingMemoryEnabled: true,
+    workingMemoryScope: 'user',
+  },
+});
+
+// ============================================================================
+// EXPORTS
+// ============================================================================
+
+/**
+ * Quote agent model configuration.
+ */
+export const QUOTE_AGENT_CONFIG = quoteAgentInstance.config;
 
 export interface QuoteAgentOptions {
   /** Conversation messages */
   messages: ModelMessage[];
   /** User context */
   userContext: UserContext;
+  /** Conversation ID for memory persistence */
+  conversationId?: string;
   /** Tools available to this agent */
   tools?: ToolSet;
   /** Optional abort signal */
@@ -116,28 +113,15 @@ export interface QuoteAgentOptions {
  * Returns a streaming response for real-time display.
  */
 export async function runQuoteAgent(options: QuoteAgentOptions) {
-  const { messages, userContext, tools = {}, abortSignal } = options;
+  const { messages, userContext, conversationId, tools = {}, abortSignal } = options;
 
-  // Build system prompt with user context
-  const systemPrompt = `
-${QUOTE_SYSTEM_PROMPT}
-
-## Current Context
-
-${formatContextForLLM(userContext)}
-`.trim();
-
-  // Stream the response
-  const result = await streamText({
-    model: anthropic(QUOTE_AGENT_CONFIG.model),
-    system: systemPrompt,
+  return quoteAgentInstance.run({
     messages,
+    userContext,
+    conversationId,
     tools,
-    temperature: QUOTE_AGENT_CONFIG.temperature,
     abortSignal,
   });
-
-  return result;
 }
 
 /**
@@ -146,5 +130,6 @@ ${formatContextForLLM(userContext)}
 export const quoteAgent = {
   name: 'quote' as const,
   config: QUOTE_AGENT_CONFIG,
+  memoryConfig: quoteAgentInstance.memoryConfig,
   run: runQuoteAgent,
 };

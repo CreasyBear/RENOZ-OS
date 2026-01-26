@@ -1,9 +1,10 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "ARCH-004"
 tags: [helicopter-review, architecture, ai-infrastructure, context, group-1]
 dependencies: []
+completed_at: 2026-01-26
 ---
 
 # ARCH-004: Context via executionOptions Instead of Schema
@@ -118,17 +119,18 @@ const result = await streamText({
 
 ## Acceptance Criteria
 
-- [ ] All tools use `executionOptions.experimental_context` instead of `_context` schema
-- [ ] Tool schemas only contain user-facing parameters
-- [ ] Chat API passes context via `experimental_context`
-- [ ] TypeScript compiles without errors
-- [ ] Existing functionality preserved
+- [x] All tools use `executionOptions.experimental_context` instead of `_context` schema
+- [x] Tool schemas only contain user-facing parameters
+- [x] Chat API passes context via `experimental_context` (via agent files)
+- [x] TypeScript compiles without errors (AI files compile cleanly; unrelated errors exist elsewhere)
+- [x] Existing functionality preserved
 
 ## Work Log
 
 | Date | Action | Learnings |
 |------|--------|-----------|
 | 2026-01-26 | Created from helicopter review | SDK provides executionOptions for exactly this purpose |
+| 2026-01-26 | Verified migration complete | All 13 tools already use executionOptions.experimental_context pattern. All 4 agents pass context in streamText calls. |
 
 ## Resources
 
