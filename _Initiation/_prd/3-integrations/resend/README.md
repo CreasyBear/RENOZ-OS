@@ -122,6 +122,10 @@ await sendOrderConfirmationJob.trigger({ orderId, organizationId });
 // Warranty emails
 import { sendWarrantyRegistrationEmail } from '@/trigger/jobs/warranty-notifications';
 await sendWarrantyRegistrationEmail.trigger({ warrantyId, ... });
+
+// User invitation emails (auto-triggered)
+// Fires automatically when sendInvitation() or resendInvitation() is called
+// See: src/trigger/jobs/send-invitation-email.tsx
 ```
 
 ### Suppression Management
@@ -358,6 +362,7 @@ const isValid = await resend.webhooks.verify({
 - `src/trigger/jobs/process-scheduled-emails.ts`
 - `src/trigger/jobs/send-email.ts`
 - `src/trigger/jobs/warranty-notifications.ts`
+- `src/trigger/jobs/send-invitation-email.tsx` - User invitation emails
 
 ### Routes
 - `src/routes/api/webhooks/resend.ts`
@@ -374,3 +379,7 @@ const isValid = await resend.webhooks.verify({
 - `src/hooks/communications/use-email-preview.ts`
 - `src/hooks/communications/use-email-analytics.ts`
 - `src/hooks/communications/use-domain-verification.ts`
+
+### Email Templates
+- `src/lib/email/templates/users/invitation-email.tsx` - User invitation template
+- `src/lib/email/render.ts` - Email rendering utility
