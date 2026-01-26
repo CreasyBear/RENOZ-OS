@@ -200,6 +200,38 @@ function UserDetailPage() {
     }
   };
 
+  const handleTransferOwnership = async () => {
+    const result = await confirm.confirm({
+      title: 'Transfer Ownership',
+      description: `Are you sure you want to transfer ownership to ${user.name ?? user.email}? You will become an admin and lose owner privileges. This action cannot be undone without the new owner's consent.`,
+      confirmLabel: 'Transfer Ownership',
+      cancelLabel: 'Cancel',
+      variant: 'destructive',
+    });
+    if (!result.confirmed) return;
+
+    setIsLoading(true);
+    try {
+      await transferOwnershipFn({ data: { newOwnerId: userId } });
+      setMessage({ type: 'success', text: 'Ownership transferred successfully. You are now an admin.' });
+      navigate({ to: '/admin/users' });
+    } catch (err) {
+      setMessage({
+        type: 'error',
+        text: err instanceof Error ? err.message : 'Failed to transfer ownership',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Can transfer ownership if: current user is owner, viewing a non-owner, active user, and not self
+  const canTransferOwnership =
+    currentUserIsOwner &&
+    !isOwner &&
+    user.status === 'active' &&
+    appUser?.id !== userId;
+
   return (
     <div className="space-y-6 p-6">
       {/* Breadcrumb */}
