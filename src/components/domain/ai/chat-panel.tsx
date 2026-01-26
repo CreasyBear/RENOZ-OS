@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/tooltip';
 import {
   useAIChat,
+  getMessageText,
   type UseAIChatOptions,
   type AIChatResult,
   type Message,
@@ -132,7 +133,7 @@ const ChatMessage = memo(function ChatMessage({
               : 'bg-muted text-foreground'
           )}
         >
-          {message.content}
+          {getMessageText(message)}
           {isStreaming && (
             <span className="inline-block ml-1 animate-pulse">|</span>
           )}

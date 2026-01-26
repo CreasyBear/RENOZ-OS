@@ -1,21 +1,31 @@
 /**
  * AI Chat Hook
  *
- * Wrapper around Vercel AI SDK useChat with Renoz-specific configuration.
+ * Wrapper around AI SDK v6 useChat with Renoz-specific configuration.
  * Handles streaming, conversation tracking, and agent routing.
  *
  * @see src/routes/api/ai/chat.ts
+ * @see https://ai-sdk.dev/docs/ai-sdk-ui/chatbot
  */
 
-import { useChat as useVercelChat, type UIMessage } from '@ai-sdk/react';
+import { useChat as useAIChat, type UIMessage } from '@ai-sdk/react';
+import { DefaultChatTransport } from 'ai';
 import { useCallback, useState } from 'react';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-/** Re-export Message type for convenience */
+/** Re-export UIMessage type for convenience */
 export type Message = UIMessage;
+
+/** Extract text content from message parts */
+export function getMessageText(message: Message): string {
+  return message.parts
+    .filter((part): part is { type: 'text'; text: string } => part.type === 'text')
+    .map((part) => part.text)
+    .join('');
+}
 
 export interface UseAIChatOptions {
   /** Initial conversation ID to resume */
@@ -26,6 +36,8 @@ export interface UseAIChatOptions {
   onAgentChange?: (agent: string, reason: string) => void;
   /** Initial messages to pre-populate */
   initialMessages?: Message[];
+  /** API endpoint (default: /api/ai/chat) */
+  api?: string;
 }
 
 export interface AIChatResult {
@@ -41,6 +53,8 @@ export interface AIChatResult {
   handleSubmit: (e?: React.FormEvent) => void;
   /** Whether a response is currently streaming */
   isLoading: boolean;
+  /** Chat status: 'submitted' | 'streaming' | 'ready' | 'error' */
+  status: 'submitted' | 'streaming' | 'ready' | 'error';
   /** Any error that occurred */
   error: Error | undefined;
   /** Stop the current generation */
@@ -54,7 +68,7 @@ export interface AIChatResult {
   /** Last triage reason */
   triageReason: string | null;
   /** Append a message programmatically */
-  append: (message: Message | { role: 'user'; content: string }) => void;
+  append: (content: string) => void;
 }
 
 // ============================================================================
@@ -62,35 +76,43 @@ export interface AIChatResult {
 // ============================================================================
 
 /**
- * AI Chat hook with streaming support.
+ * AI Chat hook with streaming support (AI SDK v6).
  *
- * Wraps Vercel AI SDK useChat with:
- * - Conversation tracking via X-Conversation-Id header
- * - Agent routing via X-Agent header
- * - Context passing for current view
+ * Features:
+ * - Conversation tracking via context
+ * - Agent routing awareness
+ * - Streaming responses with parts
+ * - Stop/reload functionality
  *
  * @example
  * ```tsx
- * const { messages, input, handleInputChange, handleSubmit, isLoading } = useAIChat();
+ * const { messages, input, setInput, handleSubmit, isLoading } = useChat();
  *
  * return (
  *   <form onSubmit={handleSubmit}>
- *     {messages.map(m => <div key={m.id}>{m.content}</div>)}
- *     <textarea value={input} onChange={handleInputChange} />
+ *     {messages.map(m => (
+ *       <div key={m.id}>
+ *         {m.parts.map((part, i) =>
+ *           part.type === 'text' ? <span key={i}>{part.text}</span> : null
+ *         )}
+ *       </div>
+ *     ))}
+ *     <input value={input} onChange={e => setInput(e.target.value)} />
  *     <button type="submit" disabled={isLoading}>Send</button>
  *   </form>
  * );
  * ```
  */
-export function useAIChat(options: UseAIChatOptions = {}): AIChatResult {
+export function useChat(options: UseAIChatOptions = {}): AIChatResult {
   const {
     conversationId: initialConversationId,
     onConversationId,
     onAgentChange,
     initialMessages,
+    api = '/api/ai/chat',
   } = options;
 
-  // Local state for input and conversation tracking
+  // Local state for conversation tracking
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | null>(
     initialConversationId ?? null
@@ -98,18 +120,38 @@ export function useAIChat(options: UseAIChatOptions = {}): AIChatResult {
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   const [triageReason, setTriageReason] = useState<string | null>(null);
 
-  // Use the new AI SDK chat hook
-  const chat = useVercelChat({
-    api: '/api/ai/chat',
-    initialMessages,
-    body: {
-      context: {
-        conversationId,
+  // Use AI SDK v6 useChat hook
+  const chat = useAIChat({
+    messages: initialMessages,
+    transport: new DefaultChatTransport({
+      api,
+      // Pass conversation context in body
+      body: {
+        context: {
+          conversationId,
+        },
       },
-    },
-    onFinish: (message, _options) => {
-      // Note: In SDK 3.0, response metadata handling is different
-      // For now, we'll handle this through the message itself or separate API calls
+    }),
+    onFinish: (event) => {
+      // Extract metadata from the response if available
+      const metadata = event.metadata as {
+        conversationId?: string;
+        agent?: string;
+        triageReason?: string;
+      } | undefined;
+
+      if (metadata?.conversationId && metadata.conversationId !== conversationId) {
+        setConversationId(metadata.conversationId);
+        onConversationId?.(metadata.conversationId);
+      }
+
+      if (metadata?.agent) {
+        setActiveAgent(metadata.agent);
+        if (metadata.triageReason) {
+          setTriageReason(metadata.triageReason);
+          onAgentChange?.(metadata.agent, metadata.triageReason);
+        }
+      }
     },
     onError: (error) => {
       console.error('[AI Chat] Error:', error);
@@ -147,13 +189,8 @@ export function useAIChat(options: UseAIChatOptions = {}): AIChatResult {
         return;
       }
 
-      // Send the message
-      sendMessage({
-        role: 'user',
-        content: input,
-      });
-
-      // Clear input
+      // Send message using AI SDK v6 format
+      sendMessage({ text: input });
       setInput('');
     },
     [sendMessage, isLoading, input]
@@ -161,14 +198,9 @@ export function useAIChat(options: UseAIChatOptions = {}): AIChatResult {
 
   // Append a message programmatically
   const append = useCallback(
-    (message: Message | { role: 'user'; content: string }) => {
-      if ('id' in message) {
-        sendMessage(message);
-      } else {
-        sendMessage({
-          role: message.role,
-          content: message.content,
-        });
+    (content: string) => {
+      if (content.trim()) {
+        sendMessage({ text: content });
       }
     },
     [sendMessage]
@@ -186,6 +218,7 @@ export function useAIChat(options: UseAIChatOptions = {}): AIChatResult {
     handleInputChange,
     handleSubmit,
     isLoading,
+    status,
     error,
     stop,
     reload,
@@ -195,3 +228,6 @@ export function useAIChat(options: UseAIChatOptions = {}): AIChatResult {
     append,
   };
 }
+
+// Re-export for backwards compatibility
+export { useChat as useAIChat };

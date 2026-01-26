@@ -33,9 +33,11 @@ export {
   type UseAIUsageOptions,
 } from './use-ai-cost';
 
-// Chat hook
+// Chat hook (AI SDK v6)
 export {
   useAIChat,
+  useChat,
+  getMessageText,
   type UseAIChatOptions,
   type AIChatResult,
   type Message,
