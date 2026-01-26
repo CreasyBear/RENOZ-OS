@@ -15,11 +15,16 @@ import { customers, customerActivities, orders } from 'drizzle/schema';
 import { aiApprovals } from 'drizzle/schema/_ai';
 import {
   type CustomerWithMeta,
-  type CustomerSearchResult,
   filterSensitiveFields,
   createApprovalResult,
   createErrorResult,
 } from './types';
+import {
+  formatAsTable,
+  formatStatus,
+  truncateId,
+  formatResultSummary,
+} from './formatters';
 import { type ToolExecutionContext } from '@/lib/ai/context/types';
 
 // ============================================================================
@@ -177,6 +182,7 @@ export const getCustomerTool = tool({
 
 /**
  * Search customers using fuzzy matching.
+ * Yields formatted markdown table for better UX.
  */
 export const searchCustomersTool = tool({
   description:
@@ -201,20 +207,17 @@ export const searchCustomersTool = tool({
       .default(10)
       .describe('Maximum number of results to return'),
   }),
-  execute: async (
+  execute: async function* (
     { query, status, limit },
     { experimental_context }
-  ): Promise<
-    { data: CustomerSearchResult[]; _meta: { count: number } } | ReturnType<typeof createErrorResult>
-  > => {
+  ) {
     const ctx = experimental_context as ToolExecutionContext | undefined;
 
     if (!ctx?.organizationId) {
-      return createErrorResult(
-        'Organization context missing',
-        'Unable to process request without organization context',
-        'CONTEXT_ERROR'
-      );
+      yield {
+        text: 'Organization context missing. Unable to process request.',
+      };
+      return;
     }
 
     try {
@@ -256,29 +259,38 @@ export const searchCustomersTool = tool({
         )
         .limit(limit);
 
-      // Add similarity scores and filter sensitive fields
-      const searchResultsWithScores: CustomerSearchResult[] = results.map(
-        (r, index) => {
-          // Filter out PII (email, phone) from each result
-          const filtered = filterSensitiveFields(r);
-          return {
-            ...filtered,
-            similarity: Math.max(0.5, 1 - index * 0.1), // Approximate scoring
-          };
-        }
+      if (results.length === 0) {
+        yield {
+          text: `No customers found matching "${query}".`,
+        };
+        return;
+      }
+
+      // Filter sensitive fields before display
+      const filteredResults = results.map((r) => filterSensitiveFields(r));
+
+      // Format as markdown table
+      const table = formatAsTable(filteredResults, [
+        { key: 'id', header: 'ID', format: (v) => truncateId(v as string) },
+        { key: 'name', header: 'Name' },
+        { key: 'status', header: 'Status', format: (v) => formatStatus(v as string) },
+        { key: 'type', header: 'Type' },
+      ]);
+
+      const summary = formatResultSummary(
+        results.length,
+        'customer',
+        `matching "${query}"`
       );
 
-      return {
-        data: searchResultsWithScores,
-        _meta: { count: results.length },
+      yield {
+        text: `${table}\n\n${summary}`,
       };
     } catch (error) {
       console.error('Error in searchCustomersTool:', error);
-      return createErrorResult(
-        'Search failed',
-        'Try a different search query or check the spelling',
-        'SEARCH_ERROR'
-      );
+      yield {
+        text: `Search failed: ${error instanceof Error ? error.message : 'Unknown error'}. Try a different search query.`,
+      };
     }
   },
 });

@@ -13,11 +13,17 @@ import { db } from '@/lib/db';
 import { sql, and, gte, lte, eq, isNull, desc } from 'drizzle-orm';
 import { orders, customers } from 'drizzle/schema';
 import {
-  type ReportResult,
   type MetricsResult,
   type TrendsResult,
   createErrorResult,
 } from './types';
+import {
+  formatAsTable,
+  formatCurrency as formatCurrencyHelper,
+  formatNumber,
+  formatPercent,
+  formatStatus,
+} from './formatters';
 import { type ToolExecutionContext } from '@/lib/ai/context/types';
 
 // ============================================================================
@@ -87,6 +93,7 @@ function formatCurrency(value: number): string {
 
 /**
  * Run a predefined report.
+ * Yields formatted markdown table for better UX.
  */
 export const runReportTool = tool({
   description:
@@ -117,22 +124,22 @@ export const runReportTool = tool({
       .default(20)
       .describe('Maximum rows to return'),
   }),
-  execute: async (
+  execute: async function* (
     { reportType, period, customStartDate, customEndDate, limit },
     { experimental_context }
-  ): Promise<ReportResult | ReturnType<typeof createErrorResult>> => {
+  ) {
     const ctx = experimental_context as ToolExecutionContext | undefined;
 
     if (!ctx?.organizationId) {
-      return createErrorResult(
-        'Organization context missing',
-        'Unable to process request without organization context',
-        'CONTEXT_ERROR'
-      );
+      yield {
+        text: 'Organization context missing. Unable to process request.',
+      };
+      return;
     }
 
     try {
       const dateRange = getDateRange(period, customStartDate, customEndDate);
+      const periodHeader = `**${dateRange.label}** (${dateRange.start.toISOString().slice(0, 10)} to ${dateRange.end.toISOString().slice(0, 10)})`;
 
       switch (reportType) {
         case 'revenue_by_customer': {
@@ -159,26 +166,34 @@ export const runReportTool = tool({
             .orderBy(desc(sql`sum(${orders.total})`))
             .limit(limit);
 
+          if (results.length === 0) {
+            yield {
+              text: `## Revenue by Customer\n\n${periodHeader}\n\nNo revenue data found for this period.`,
+            };
+            return;
+          }
+
           const totalRevenue = results.reduce((sum, r) => sum + (Number(r.totalRevenue) || 0), 0);
 
-          return {
-            name: 'Revenue by Customer',
-            period: {
-              start: dateRange.start.toISOString().slice(0, 10),
-              end: dateRange.end.toISOString().slice(0, 10),
-              label: dateRange.label,
-            },
-            data: results.map((r) => ({
-              customerName: r.customerName || 'Unknown',
-              orderCount: r.orderCount,
-              totalRevenue: Number(r.totalRevenue) || 0,
-              avgOrderValue: Number(r.avgOrderValue) || 0,
-            })),
-            summary: {
-              totalRevenue: formatCurrency(totalRevenue),
-              customerCount: results.length,
-            },
+          // Format as table
+          const tableData = results.map((r) => ({
+            customerName: r.customerName || 'Unknown',
+            orderCount: r.orderCount,
+            totalRevenue: Number(r.totalRevenue) || 0,
+            avgOrderValue: Number(r.avgOrderValue) || 0,
+          }));
+
+          const table = formatAsTable(tableData, [
+            { key: 'customerName', header: 'Customer' },
+            { key: 'orderCount', header: 'Orders', format: (v) => formatNumber(v as number) },
+            { key: 'totalRevenue', header: 'Revenue', format: (v) => formatCurrencyHelper(v as number) },
+            { key: 'avgOrderValue', header: 'Avg Order', format: (v) => formatCurrencyHelper(v as number) },
+          ]);
+
+          yield {
+            text: `## Revenue by Customer\n\n${periodHeader}\n\n${table}\n\n**Total Revenue:** ${formatCurrency(totalRevenue)} | **${results.length} customers**`,
           };
+          return;
         }
 
         case 'orders_by_status': {
@@ -199,27 +214,35 @@ export const runReportTool = tool({
             )
             .groupBy(orders.status);
 
+          if (results.length === 0) {
+            yield {
+              text: `## Orders by Status\n\n${periodHeader}\n\nNo orders found for this period.`,
+            };
+            return;
+          }
+
           const totalOrders = results.reduce((sum, r) => sum + r.count, 0);
           const totalValue = results.reduce((sum, r) => sum + (Number(r.totalValue) || 0), 0);
 
-          return {
-            name: 'Orders by Status',
-            period: {
-              start: dateRange.start.toISOString().slice(0, 10),
-              end: dateRange.end.toISOString().slice(0, 10),
-              label: dateRange.label,
-            },
-            data: results.map((r) => ({
-              status: r.status,
-              count: r.count,
-              totalValue: Number(r.totalValue) || 0,
-              percentage: totalOrders > 0 ? ((r.count / totalOrders) * 100).toFixed(1) + '%' : '0%',
-            })),
-            summary: {
-              totalOrders,
-              totalValue: formatCurrency(totalValue),
-            },
+          // Format as table
+          const tableData = results.map((r) => ({
+            status: r.status,
+            count: r.count,
+            totalValue: Number(r.totalValue) || 0,
+            percentage: totalOrders > 0 ? (r.count / totalOrders) * 100 : 0,
+          }));
+
+          const table = formatAsTable(tableData, [
+            { key: 'status', header: 'Status', format: (v) => formatStatus(v as string) },
+            { key: 'count', header: 'Count', format: (v) => formatNumber(v as number) },
+            { key: 'totalValue', header: 'Value', format: (v) => formatCurrencyHelper(v as number) },
+            { key: 'percentage', header: '%', format: (v) => formatPercent(v as number) },
+          ]);
+
+          yield {
+            text: `## Orders by Status\n\n${periodHeader}\n\n${table}\n\n**Total Orders:** ${formatNumber(totalOrders)} | **Total Value:** ${formatCurrency(totalValue)}`,
           };
+          return;
         }
 
         case 'pipeline_summary': {
@@ -241,42 +264,46 @@ export const runReportTool = tool({
             )
             .groupBy(orders.status);
 
+          if (results.length === 0) {
+            yield {
+              text: `## Pipeline Summary\n\n${periodHeader}\n\nNo orders in pipeline for this period.`,
+            };
+            return;
+          }
+
           const pipelineValue = results.reduce((sum, r) => sum + (Number(r.totalValue) || 0), 0);
           const pipelineCount = results.reduce((sum, r) => sum + r.count, 0);
 
-          return {
-            name: 'Pipeline Summary',
-            period: {
-              start: dateRange.start.toISOString().slice(0, 10),
-              end: dateRange.end.toISOString().slice(0, 10),
-              label: dateRange.label,
-            },
-            data: results.map((r) => ({
-              stage: r.status,
-              count: r.count,
-              value: Number(r.totalValue) || 0,
-            })),
-            summary: {
-              pipelineValue: formatCurrency(pipelineValue),
-              pipelineCount,
-            },
+          // Format as table
+          const tableData = results.map((r) => ({
+            stage: r.status,
+            count: r.count,
+            value: Number(r.totalValue) || 0,
+          }));
+
+          const table = formatAsTable(tableData, [
+            { key: 'stage', header: 'Stage', format: (v) => formatStatus(v as string) },
+            { key: 'count', header: 'Orders', format: (v) => formatNumber(v as number) },
+            { key: 'value', header: 'Value', format: (v) => formatCurrencyHelper(v as number) },
+          ]);
+
+          yield {
+            text: `## Pipeline Summary\n\n${periodHeader}\n\n${table}\n\n**Pipeline Total:** ${formatCurrency(pipelineValue)} | **${formatNumber(pipelineCount)} orders**`,
           };
+          return;
         }
 
         default:
-          return createErrorResult(
-            `Report type "${reportType}" is not yet implemented`,
-            'Try one of: revenue_by_customer, orders_by_status, pipeline_summary',
-            'NOT_IMPLEMENTED'
-          );
+          yield {
+            text: `Report type "${reportType}" is not yet implemented. Try one of: revenue_by_customer, orders_by_status, pipeline_summary`,
+          };
+          return;
       }
     } catch (error) {
       console.error('Error in runReportTool:', error);
-      return createErrorResult(
-        'Failed to run report',
-        'Check the parameters and try again',
-        'INTERNAL_ERROR'
-      );
+      yield {
+        text: `Failed to run report: ${error instanceof Error ? error.message : 'Unknown error'}. Check the parameters and try again.`,
+      };
     }
   },
 });

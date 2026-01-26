@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "ARCH-008"
 tags: [helicopter-review, architecture, ai-infrastructure, tools, formatting, group-2]
@@ -71,141 +71,71 @@ ${results.map(c => `| ${c.name} | ${c.email} | ${c.status} | ${formatDate(c.crea
 
 Option A - Convert tools to streaming generators with markdown table formatting.
 
-## Technical Details
+## Implementation
 
-**Files to modify:**
-- `src/lib/ai/tools/customer-tools.ts`
-- `src/lib/ai/tools/order-tools.ts`
-- `src/lib/ai/tools/analytics-tools.ts`
+**Files created:**
+- `src/lib/ai/tools/formatters.ts` - Utility functions for formatting
 
-**Helper functions:**
-```typescript
-// src/lib/ai/tools/formatters.ts
+**Files modified:**
+- `src/lib/ai/tools/customer-tools.ts` - `searchCustomersTool` now yields markdown tables
+- `src/lib/ai/tools/order-tools.ts` - `getOrdersTool` and `getInvoicesTool` now yield markdown tables
+- `src/lib/ai/tools/analytics-tools.ts` - `runReportTool` now yields markdown tables
+- `src/lib/ai/tools/index.ts` - Exports formatters
 
-/**
- * Format data as a markdown table.
- */
-export function formatAsTable<T extends Record<string, unknown>>(
-  data: T[],
-  columns: { key: keyof T; header: string; format?: (v: unknown) => string }[]
-): string {
-  if (data.length === 0) return 'No data found.';
+**Formatter functions implemented:**
+- `formatAsTable<T>()` - Generic markdown table formatter with column definitions
+- `formatCurrency()` - AUD currency formatting
+- `formatDate()` - Australian date format (DD Mon YYYY)
+- `truncateId()` - Truncate UUIDs for display
+- `formatPercent()` - Percentage formatting
+- `formatStatus()` - Status with emoji indicators
+- `formatDaysOverdue()` - Days overdue with severity indicators
+- `formatNumber()` - Number with thousand separators
+- `formatResultSummary()` - Summary line for results
 
-  const headers = columns.map(c => c.header);
-  const headerRow = `| ${headers.join(' | ')} |`;
-  const separator = `|${columns.map(() => '------').join('|')}|`;
+**Example output:**
 
-  const rows = data.map(item =>
-    `| ${columns.map(c => {
-      const value = item[c.key];
-      return c.format ? c.format(value) : String(value ?? 'N/A');
-    }).join(' | ')} |`
-  ).join('\n');
+Customer search:
+```
+| ID | Name | Status | Type |
+|------|------|------|------|
+| abc12345 | John Smith | Active | residential |
+| def67890 | Jane Doe | Prospect | commercial |
 
-  return `${headerRow}\n${separator}\n${rows}`;
-}
-
-/**
- * Format currency value.
- */
-export function formatCurrency(cents: number | null, currency = 'AUD'): string {
-  if (cents === null) return 'N/A';
-  return new Intl.NumberFormat('en-AU', {
-    style: 'currency',
-    currency,
-  }).format(cents / 100);
-}
-
-/**
- * Format date value.
- */
-export function formatDate(date: Date | string | null): string {
-  if (!date) return 'N/A';
-  return new Date(date).toLocaleDateString('en-AU', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
-
-/**
- * Truncate ID for display.
- */
-export function truncateId(id: string, length = 8): string {
-  return id.slice(0, length);
-}
+**2 customers** matching "John"
 ```
 
-**Converted tool example:**
-```typescript
-// src/lib/ai/tools/customer-tools.ts
-export const searchCustomersTool = tool({
-  description: 'Search for customers by name or email.',
-  inputSchema: z.object({
-    query: z.string().min(2).describe('Search query'),
-    limit: z.number().default(10).describe('Max results'),
-  }),
-  execute: async function* ({ query, limit }, executionOptions) {
-    const ctx = executionOptions.experimental_context as ToolExecutionContext;
+Invoice list with overdue summary:
+```
+| Invoice # | Customer | Status | Total | Balance | Due | Overdue |
+|------|------|------|------|------|------|------|
+| INV-001 | Acme Corp | Pending | $5,000 | $5,000 | 15 Jan 2026 | 11d |
 
-    if (!ctx?.organizationId) {
-      yield { text: 'Organization context missing.' };
-      return;
-    }
+**1 invoice**
 
-    try {
-      const results = await db.query.customers.findMany({
-        where: and(
-          eq(customers.organizationId, ctx.organizationId),
-          sql`${customers.name} ILIKE ${`%${query}%`}`,
-        ),
-        limit,
-      });
-
-      if (results.length === 0) {
-        yield { text: `No customers found matching "${query}".` };
-        return;
-      }
-
-      const table = formatAsTable(results, [
-        { key: 'id', header: 'ID', format: truncateId },
-        { key: 'name', header: 'Name' },
-        { key: 'status', header: 'Status' },
-        { key: 'healthScore', header: 'Health', format: v => `${v ?? 'N/A'}%` },
-        { key: 'createdAt', header: 'Created', format: formatDate },
-      ]);
-
-      yield {
-        text: `${table}\n\n**${results.length} customers** matching "${query}"`,
-        link: {
-          text: 'View all customers',
-          url: `${getAppUrl()}/customers?q=${encodeURIComponent(query)}`,
-        },
-      };
-    } catch (error) {
-      yield {
-        text: `Search failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      };
-    }
-  },
-});
+**Total overdue:** $5,000
 ```
 
 ## Acceptance Criteria
 
-- [ ] Formatter utilities created (table, currency, date, id)
-- [ ] Customer tools converted to streaming generators
-- [ ] Order tools converted to streaming generators
-- [ ] Analytics tools converted to streaming generators
-- [ ] All multi-row data uses markdown tables
-- [ ] Links included for drill-down navigation
-- [ ] TypeScript compiles without errors
+- [x] Formatter utilities created (table, currency, date, id, percent, status, number)
+- [x] Customer tools converted to streaming generators (`searchCustomersTool`)
+- [x] Order tools converted to streaming generators (`getOrdersTool`, `getInvoicesTool`)
+- [x] Analytics tools converted to streaming generators (`runReportTool`)
+- [x] All multi-row data uses markdown tables
+- [ ] Links included for drill-down navigation (deferred - requires app URL configuration)
+- [x] TypeScript compiles without errors
 
 ## Work Log
 
 | Date | Action | Learnings |
 |------|--------|-----------|
 | 2026-01-26 | Created from helicopter review | Markdown tables significantly improve data readability |
+| 2026-01-26 | Implemented formatters.ts with all utility functions | Generic table formatter works well with column definitions |
+| 2026-01-26 | Converted searchCustomersTool to yield markdown | Streaming generators work seamlessly with AI SDK |
+| 2026-01-26 | Converted getOrdersTool and getInvoicesTool | Added filter summaries and overdue totals |
+| 2026-01-26 | Converted runReportTool for all report types | Each report type has custom formatting with period headers |
+| 2026-01-26 | Marked complete | All acceptance criteria met except drill-down links |
 
 ## Resources
 

@@ -14,11 +14,17 @@ import { eq, and, sql, desc, isNull, gte, lte } from 'drizzle-orm';
 import { orders, customers } from 'drizzle/schema';
 import { aiApprovals } from 'drizzle/schema/_ai';
 import {
-  type OrderSummary,
-  type InvoiceSummary,
   createApprovalResult,
   createErrorResult,
 } from './types';
+import {
+  formatAsTable,
+  formatCurrency,
+  formatDate,
+  formatStatus,
+  formatDaysOverdue,
+  formatResultSummary,
+} from './formatters';
 import { type ToolExecutionContext } from '@/lib/ai/context/types';
 
 // ============================================================================
@@ -27,6 +33,7 @@ import { type ToolExecutionContext } from '@/lib/ai/context/types';
 
 /**
  * Get orders with filtering and pagination.
+ * Yields formatted markdown table for better UX.
  */
 export const getOrdersTool = tool({
   description:
@@ -71,21 +78,17 @@ export const getOrdersTool = tool({
       .default(20)
       .describe('Maximum number of orders to return'),
   }),
-  execute: async (
+  execute: async function* (
     { customerId, status, paymentStatus, startDate, endDate, limit },
     { experimental_context }
-  ): Promise<
-    | { data: OrderSummary[]; _meta: { count: number; hasMore: boolean } }
-    | ReturnType<typeof createErrorResult>
-  > => {
+  ) {
     const ctx = experimental_context as ToolExecutionContext | undefined;
 
     if (!ctx?.organizationId) {
-      return createErrorResult(
-        'Organization context missing',
-        'Unable to process request without organization context',
-        'CONTEXT_ERROR'
-      );
+      yield {
+        text: 'Organization context missing. Unable to process request.',
+      };
+      return;
     }
 
     try {
@@ -133,31 +136,54 @@ export const getOrdersTool = tool({
       const hasMore = results.length > limit;
       const items = results.slice(0, limit);
 
-      const orderSummaries: OrderSummary[] = items.map((r) => ({
-        id: r.id,
+      if (items.length === 0) {
+        yield {
+          text: 'No orders found matching the specified criteria.',
+        };
+        return;
+      }
+
+      // Prepare data for table
+      const tableData = items.map((r) => ({
         orderNumber: r.orderNumber,
-        customerName: r.customerName || 'Unknown Customer',
+        customerName: r.customerName || 'Unknown',
         status: r.status,
         paymentStatus: r.paymentStatus,
-        total: r.total ? Number(r.total) : null,
+        total: r.total,
         orderDate: r.orderDate,
-        dueDate: r.dueDate,
       }));
 
-      return {
-        data: orderSummaries,
-        _meta: {
-          count: items.length,
-          hasMore,
-        },
+      // Format as markdown table
+      const table = formatAsTable(tableData, [
+        { key: 'orderNumber', header: 'Order #' },
+        { key: 'customerName', header: 'Customer' },
+        { key: 'status', header: 'Status', format: (v) => formatStatus(v as string) },
+        { key: 'paymentStatus', header: 'Payment', format: (v) => formatStatus(v as string) },
+        { key: 'total', header: 'Total', format: (v) => formatCurrency(v as number | null) },
+        { key: 'orderDate', header: 'Date', format: (v) => formatDate(v as string | null) },
+      ]);
+
+      // Build summary with filters applied
+      const filterParts: string[] = [];
+      if (status) filterParts.push(`status: ${status}`);
+      if (paymentStatus) filterParts.push(`payment: ${paymentStatus}`);
+      if (startDate || endDate) filterParts.push(`date range: ${startDate || 'start'} to ${endDate || 'now'}`);
+
+      const summary = formatResultSummary(
+        items.length,
+        'order',
+        filterParts.length > 0 ? `(${filterParts.join(', ')})` : undefined
+      );
+      const moreText = hasMore ? ' _More results available._' : '';
+
+      yield {
+        text: `${table}\n\n${summary}${moreText}`,
       };
     } catch (error) {
       console.error('Error in getOrdersTool:', error);
-      return createErrorResult(
-        'Failed to retrieve orders',
-        'Try narrowing your search criteria or contact support',
-        'INTERNAL_ERROR'
-      );
+      yield {
+        text: `Failed to retrieve orders: ${error instanceof Error ? error.message : 'Unknown error'}. Try narrowing your search criteria.`,
+      };
     }
   },
 });
@@ -168,6 +194,7 @@ export const getOrdersTool = tool({
 
 /**
  * Get invoices (orders with payment focus) with filtering.
+ * Yields formatted markdown table for better UX.
  */
 export const getInvoicesTool = tool({
   description:
@@ -196,21 +223,17 @@ export const getInvoicesTool = tool({
       .default(20)
       .describe('Maximum number of invoices to return'),
   }),
-  execute: async (
+  execute: async function* (
     { customerId, status, overdueOnly, limit },
     { experimental_context }
-  ): Promise<
-    | { data: InvoiceSummary[]; _meta: { count: number; totalOverdue: number } }
-    | ReturnType<typeof createErrorResult>
-  > => {
+  ) {
     const ctx = experimental_context as ToolExecutionContext | undefined;
 
     if (!ctx?.organizationId) {
-      return createErrorResult(
-        'Organization context missing',
-        'Unable to process request without organization context',
-        'CONTEXT_ERROR'
-      );
+      yield {
+        text: 'Organization context missing. Unable to process request.',
+      };
+      return;
     }
 
     try {
@@ -253,9 +276,17 @@ export const getInvoicesTool = tool({
         .orderBy(desc(orders.dueDate))
         .limit(limit);
 
+      if (results.length === 0) {
+        const qualifier = overdueOnly ? 'overdue ' : '';
+        yield {
+          text: `No ${qualifier}invoices found matching the specified criteria.`,
+        };
+        return;
+      }
+
       // Calculate days overdue and total overdue amount
       let totalOverdue = 0;
-      const invoiceSummaries: InvoiceSummary[] = results.map((r) => {
+      const tableData = results.map((r) => {
         const daysOverdue =
           r.dueDate && r.paymentStatus !== 'paid'
             ? Math.max(
@@ -272,32 +303,42 @@ export const getInvoicesTool = tool({
         }
 
         return {
-          id: r.id,
-          invoiceNumber: r.orderNumber, // Using order number as invoice number
-          customerName: r.customerName || 'Unknown Customer',
-          status: r.paymentStatus,
-          total: r.total ? Number(r.total) : null,
-          paidAmount: r.paidAmount ? Number(r.paidAmount) : null,
-          balanceDue: r.balanceDue ? Number(r.balanceDue) : null,
+          invoiceNumber: r.orderNumber,
+          customerName: r.customerName || 'Unknown',
+          paymentStatus: r.paymentStatus,
+          total: r.total,
+          balanceDue: r.balanceDue,
           dueDate: r.dueDate,
           daysOverdue,
         };
       });
 
-      return {
-        data: invoiceSummaries,
-        _meta: {
-          count: results.length,
-          totalOverdue,
-        },
+      // Format as markdown table
+      const table = formatAsTable(tableData, [
+        { key: 'invoiceNumber', header: 'Invoice #' },
+        { key: 'customerName', header: 'Customer' },
+        { key: 'paymentStatus', header: 'Status', format: (v) => formatStatus(v as string) },
+        { key: 'total', header: 'Total', format: (v) => formatCurrency(v as number | null) },
+        { key: 'balanceDue', header: 'Balance', format: (v) => formatCurrency(v as number | null) },
+        { key: 'dueDate', header: 'Due', format: (v) => formatDate(v as string | null) },
+        { key: 'daysOverdue', header: 'Overdue', format: (v) => formatDaysOverdue(v as number) },
+      ]);
+
+      // Build summary
+      const qualifier = overdueOnly ? 'overdue ' : '';
+      const summary = formatResultSummary(results.length, `${qualifier}invoice`);
+      const overdueNote = totalOverdue > 0
+        ? `\n\n**Total overdue:** ${formatCurrency(totalOverdue)}`
+        : '';
+
+      yield {
+        text: `${table}\n\n${summary}${overdueNote}`,
       };
     } catch (error) {
       console.error('Error in getInvoicesTool:', error);
-      return createErrorResult(
-        'Failed to retrieve invoices',
-        'Try narrowing your search criteria or contact support',
-        'INTERNAL_ERROR'
-      );
+      yield {
+        text: `Failed to retrieve invoices: ${error instanceof Error ? error.message : 'Unknown error'}. Try narrowing your search criteria.`,
+      };
     }
   },
 });
