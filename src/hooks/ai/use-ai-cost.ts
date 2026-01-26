@@ -149,7 +149,7 @@ export interface UseAIUsageOptions {
 export function useAIUsage(options: UseAIUsageOptions = {}) {
   const { startDate, endDate, groupBy = 'day', enabled = true } = options;
 
-  const filters: AICostFilters & { groupBy?: string } = {
+  const filters: AICostFilters & { groupBy?: 'day' | 'model' | 'feature' } = {
     startDate,
     endDate,
     groupBy,

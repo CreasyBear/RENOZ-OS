@@ -71,18 +71,41 @@ function Settings() {
           </Link>
         </PermissionGuard>
 
-        {/* Placeholder for future settings sections */}
-        <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl text-gray-400">⚙️</span>
-            <div>
-              <h3 className="text-lg font-medium text-gray-400">
-                More Settings
-              </h3>
-              <p className="text-sm text-gray-400">Coming soon...</p>
+        {/* Organization Settings - only visible to admins/owners */}
+        <PermissionGuard permission="organization.update">
+          <Link
+            to="/settings/organization"
+            className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🏢</span>
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">Organization</h3>
+                <p className="text-sm text-gray-600">
+                  Manage organization details, branding, and preferences
+                </p>
+              </div>
             </div>
-          </div>
-        </div>
+          </Link>
+        </PermissionGuard>
+
+        {/* Win/Loss Reasons */}
+        <PermissionGuard permission="organization.read">
+          <Link
+            to="/settings/win-loss-reasons"
+            className="block p-4 bg-white border border-gray-200 rounded-lg hover:border-blue-500 hover:shadow-sm transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">📈</span>
+              <div>
+                <h3 className="text-lg font-medium text-gray-900">Win/Loss Reasons</h3>
+                <p className="text-sm text-gray-600">
+                  Configure reasons for won and lost deals
+                </p>
+              </div>
+            </div>
+          </Link>
+        </PermissionGuard>
       </div>
     </div>
   )

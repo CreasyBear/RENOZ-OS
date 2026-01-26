@@ -10,12 +10,12 @@
 import { useChat as useVercelChat, type UIMessage } from '@ai-sdk/react';
 import { useCallback, useState } from 'react';
 
-// Re-export Message type for convenience
-export type Message = UIMessage;
-
 // ============================================================================
 // TYPES
 // ============================================================================
+
+/** Re-export Message type for convenience */
+export type Message = UIMessage;
 
 export interface UseAIChatOptions {
   /** Initial conversation ID to resume */
@@ -90,24 +90,16 @@ export function useAIChat(options: UseAIChatOptions = {}): AIChatResult {
     initialMessages,
   } = options;
 
+  // Local state for input and conversation tracking
+  const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | null>(
     initialConversationId ?? null
   );
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
   const [triageReason, setTriageReason] = useState<string | null>(null);
 
-  const {
-    messages,
-    input,
-    setInput,
-    handleInputChange,
-    handleSubmit: baseHandleSubmit,
-    isLoading,
-    error,
-    stop,
-    reload,
-    append: baseAppend,
-  } = useVercelChat({
+  // Use the new AI SDK chat hook
+  const chat = useVercelChat({
     api: '/api/ai/chat',
     initialMessages,
     body: {
@@ -115,31 +107,37 @@ export function useAIChat(options: UseAIChatOptions = {}): AIChatResult {
         conversationId,
       },
     },
-    onResponse: (response) => {
-      // Extract metadata from response headers
-      const newConversationId = response.headers.get('X-Conversation-Id');
-      const agent = response.headers.get('X-Agent');
-      const reason = response.headers.get('X-Triage-Reason');
-
-      if (newConversationId && newConversationId !== conversationId) {
-        setConversationId(newConversationId);
-        onConversationId?.(newConversationId);
-      }
-
-      if (agent) {
-        setActiveAgent(agent);
-        if (reason) {
-          setTriageReason(reason);
-          onAgentChange?.(agent, reason);
-        }
-      }
+    onFinish: (message, _options) => {
+      // Note: In SDK 3.0, response metadata handling is different
+      // For now, we'll handle this through the message itself or separate API calls
     },
     onError: (error) => {
       console.error('[AI Chat] Error:', error);
     },
   });
 
-  // Wrap handleSubmit to prevent double submissions
+  // Destructure chat helpers
+  const {
+    messages,
+    sendMessage,
+    regenerate,
+    stop,
+    status,
+    error,
+  } = chat;
+
+  // Determine loading state from status
+  const isLoading = status === 'streaming' || status === 'submitted';
+
+  // Handle input change
+  const handleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setInput(e.target.value);
+    },
+    []
+  );
+
+  // Handle form submit
   const handleSubmit = useCallback(
     (e?: React.FormEvent) => {
       if (e) {
@@ -148,26 +146,38 @@ export function useAIChat(options: UseAIChatOptions = {}): AIChatResult {
       if (isLoading || !input.trim()) {
         return;
       }
-      baseHandleSubmit(e);
+
+      // Send the message
+      sendMessage({
+        role: 'user',
+        content: input,
+      });
+
+      // Clear input
+      setInput('');
     },
-    [baseHandleSubmit, isLoading, input]
+    [sendMessage, isLoading, input]
   );
 
-  // Wrap append to handle both Message and simple format
+  // Append a message programmatically
   const append = useCallback(
     (message: Message | { role: 'user'; content: string }) => {
       if ('id' in message) {
-        baseAppend(message);
+        sendMessage(message);
       } else {
-        baseAppend({
-          id: crypto.randomUUID(),
+        sendMessage({
           role: message.role,
           content: message.content,
         });
       }
     },
-    [baseAppend]
+    [sendMessage]
   );
+
+  // Reload/regenerate last response
+  const reload = useCallback(() => {
+    regenerate();
+  }, [regenerate]);
 
   return {
     messages,

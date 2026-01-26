@@ -32,14 +32,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { useAIChat, type UseAIChatOptions, type AIChatResult } from '@/hooks/ai';
-
-// Message type from Vercel AI SDK
-interface Message {
-  id: string;
-  role: 'user' | 'assistant' | 'system' | 'tool';
-  content: string;
-}
+import {
+  useAIChat,
+  type UseAIChatOptions,
+  type AIChatResult,
+  type Message,
+} from '@/hooks/ai';
 
 // ============================================================================
 // TYPES
