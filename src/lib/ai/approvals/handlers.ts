@@ -3,6 +3,7 @@
  *
  * Registry of handlers for approved AI actions.
  * Each handler executes the drafted action within a transaction.
+ * Uses Zod validation for runtime type safety on action data.
  *
  * @see _Initiation/_prd/3-integrations/ai-infrastructure/ai-infrastructure.prd.json
  */
@@ -10,6 +11,53 @@
 import { db } from '@/lib/db';
 import { orders, quotes, customers } from 'drizzle/schema';
 import { eq, and } from 'drizzle-orm';
+import { z } from 'zod';
+
+// ============================================================================
+// VALIDATION SCHEMAS
+// ============================================================================
+
+/** Schema for order draft data */
+const orderDraftSchema = z.object({
+  customerId: z.string().uuid(),
+  orderDate: z.string().or(z.date()).optional(),
+  notes: z.string().optional(),
+  lineItems: z.array(z.object({
+    productId: z.string().uuid(),
+    quantity: z.number().positive(),
+    unitPrice: z.number().or(z.string()),
+  })).optional(),
+}).passthrough(); // Allow additional fields for flexibility
+
+/** Schema for quote draft data */
+const quoteDraftSchema = z.object({
+  customerId: z.string().uuid(),
+  validUntil: z.string().or(z.date()).optional(),
+  notes: z.string().optional(),
+}).passthrough();
+
+/** Schema for email draft data */
+const emailDraftSchema = z.object({
+  to: z.string().email(),
+  subject: z.string().min(1).max(200),
+  body: z.string().min(1),
+  customerId: z.string().uuid().optional(),
+});
+
+/** Schema for delete action data */
+const deleteActionSchema = z.object({
+  entityType: z.enum(['customer', 'order', 'quote']),
+  entityId: z.string().uuid(),
+});
+
+/** Schema for update customer notes data */
+const updateNotesSchema = z.object({
+  customerId: z.string().uuid(),
+  notes: z.string().optional(),
+  customFields: z.object({
+    internalNotes: z.string().optional(),
+  }).optional(),
+});
 
 // ============================================================================
 // TYPES
@@ -31,6 +79,10 @@ export interface HandlerResult {
   success: boolean;
   /** Result data (e.g., created record ID) */
   data?: unknown;
+  /** Entity ID affected by this action (for audit trail) */
+  entityId?: string;
+  /** Entity type affected by this action (for audit trail) */
+  entityType?: string;
   /** Error message if failed */
   error?: string;
 }
@@ -53,10 +105,16 @@ async function createOrderHandler(
   context: HandlerContext
 ): Promise<HandlerResult> {
   try {
-    const draft = actionData.draft as Record<string, unknown>;
-    if (!draft) {
-      return { success: false, error: 'Missing draft data' };
+    // Validate draft data with Zod
+    const parseResult = orderDraftSchema.safeParse(actionData.draft);
+    if (!parseResult.success) {
+      return {
+        success: false,
+        error: `Invalid order draft: ${parseResult.error.issues.map(i => i.message).join(', ')}`,
+      };
     }
+
+    const draft = parseResult.data;
 
     const [order] = await context.tx
       .insert(orders)
@@ -68,7 +126,12 @@ async function createOrderHandler(
       } as typeof orders.$inferInsert)
       .returning({ id: orders.id });
 
-    return { success: true, data: { orderId: order.id } };
+    return {
+      success: true,
+      data: { orderId: order.id },
+      entityId: order.id,
+      entityType: 'order',
+    };
   } catch (error) {
     return {
       success: false,
@@ -86,10 +149,16 @@ async function createQuoteHandler(
   context: HandlerContext
 ): Promise<HandlerResult> {
   try {
-    const draft = actionData.draft as Record<string, unknown>;
-    if (!draft) {
-      return { success: false, error: 'Missing draft data' };
+    // Validate draft data with Zod
+    const parseResult = quoteDraftSchema.safeParse(actionData.draft);
+    if (!parseResult.success) {
+      return {
+        success: false,
+        error: `Invalid quote draft: ${parseResult.error.issues.map(i => i.message).join(', ')}`,
+      };
     }
+
+    const draft = parseResult.data;
 
     const [quote] = await context.tx
       .insert(quotes)
@@ -101,7 +170,12 @@ async function createQuoteHandler(
       } as typeof quotes.$inferInsert)
       .returning({ id: quotes.id });
 
-    return { success: true, data: { quoteId: quote.id } };
+    return {
+      success: true,
+      data: { quoteId: quote.id },
+      entityId: quote.id,
+      entityType: 'quote',
+    };
   } catch (error) {
     return {
       success: false,
@@ -119,29 +193,33 @@ async function sendEmailHandler(
   _context: HandlerContext
 ): Promise<HandlerResult> {
   try {
-    const draft = actionData.draft as {
-      to: string;
-      subject: string;
-      body: string;
-      customerId?: string;
-    };
-
-    if (!draft) {
-      return { success: false, error: 'Missing email draft data' };
+    // Validate draft data with Zod
+    const parseResult = emailDraftSchema.safeParse(actionData.draft);
+    if (!parseResult.success) {
+      return {
+        success: false,
+        error: `Invalid email draft: ${parseResult.error.issues.map(i => i.message).join(', ')}`,
+      };
     }
+
+    const draft = parseResult.data;
 
     // TODO: Integrate with Resend email service
     // For now, return success with a mock result
     // The actual implementation will use the email library in src/lib/email/
 
+    const emailId = `email_${Date.now()}`;
     return {
       success: true,
       data: {
-        emailId: `email_${Date.now()}`,
+        emailId,
         status: 'queued',
         to: draft.to,
         subject: draft.subject,
       },
+      // Email doesn't create a database entity, but we track the ID for reference
+      entityId: draft.customerId,
+      entityType: draft.customerId ? 'customer' : undefined,
     };
   } catch (error) {
     return {
@@ -164,14 +242,16 @@ async function deleteRecordHandler(
   context: HandlerContext
 ): Promise<HandlerResult> {
   try {
-    const { entityType, entityId } = actionData as {
-      entityType: string;
-      entityId: string;
-    };
-
-    if (!entityType || !entityId) {
-      return { success: false, error: 'Missing entityType or entityId' };
+    // Validate action data with Zod
+    const parseResult = deleteActionSchema.safeParse(actionData);
+    if (!parseResult.success) {
+      return {
+        success: false,
+        error: `Invalid delete action: ${parseResult.error.issues.map(i => i.message).join(', ')}`,
+      };
     }
+
+    const { entityType, entityId } = parseResult.data;
 
     const now = new Date();
 
@@ -219,7 +299,12 @@ async function deleteRecordHandler(
         return { success: false, error: `Unknown entity type: ${entityType}` };
     }
 
-    return { success: true, data: { entityType, entityId, deleted: true } };
+    return {
+      success: true,
+      data: { entityType, entityId, deleted: true },
+      entityId,
+      entityType,
+    };
   } catch (error) {
     return {
       success: false,
@@ -241,14 +326,18 @@ async function updateCustomerNotesHandler(
   context: HandlerContext
 ): Promise<HandlerResult> {
   try {
-    const { customerId, notes } = actionData as {
-      customerId: string;
-      notes: string;
-    };
-
-    if (!customerId) {
-      return { success: false, error: 'Missing customerId' };
+    // Validate action data with Zod
+    const parseResult = updateNotesSchema.safeParse(actionData);
+    if (!parseResult.success) {
+      return {
+        success: false,
+        error: `Invalid update notes action: ${parseResult.error.issues.map(i => i.message).join(', ')}`,
+      };
     }
+
+    const { customerId, notes, customFields } = parseResult.data;
+    // Support both direct notes and customFields.internalNotes
+    const notesValue = notes ?? customFields?.internalNotes;
 
     // First fetch the current customer to merge customFields
     const [customer] = await context.tx
@@ -271,7 +360,7 @@ async function updateCustomerNotesHandler(
     // Merge notes into customFields under ai_notes key
     const updatedCustomFields = {
       ...(customer.customFields ?? {}),
-      ai_notes: notes ?? null,
+      ai_notes: notesValue ?? null,
     };
 
     // Type-safe update with organization scoping for multi-tenant security
@@ -297,7 +386,12 @@ async function updateCustomerNotesHandler(
       };
     }
 
-    return { success: true, data: { customerId, updated: true } };
+    return {
+      success: true,
+      data: { customerId, updated: true },
+      entityId: customerId,
+      entityType: 'customer',
+    };
   } catch (error) {
     return {
       success: false,

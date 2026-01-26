@@ -11,6 +11,9 @@ export {
   executeAction,
   rejectAction,
   getPendingApprovals,
+  getStuckApprovals,
+  getApprovalsForEntity,
+  getEntitiesForApproval,
   type ExecuteActionResult,
   type RejectActionResult,
 } from './executor';

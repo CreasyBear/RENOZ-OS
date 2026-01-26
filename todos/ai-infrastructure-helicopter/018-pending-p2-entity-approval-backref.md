@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "DATA-004"
 tags: [helicopter-review, data-integrity, ai-infrastructure, references, group-4]
@@ -160,18 +160,19 @@ export async function getEntitiesForApproval(
 
 ## Acceptance Criteria
 
-- [ ] `ai_approval_entities` table created
-- [ ] Migration file generated
-- [ ] Indexes on approvalId and (entityType, entityId)
-- [ ] Executor records entity links on execution
-- [ ] Query helpers for bidirectional lookup
-- [ ] TypeScript compiles without errors
+- [x] `ai_approval_entities` table created
+- [ ] Migration file generated (run `npm run db:generate` to create)
+- [x] Indexes on approvalId and (entityType, entityId)
+- [x] Executor records entity links on execution
+- [x] Query helpers for bidirectional lookup
+- [x] TypeScript compiles without errors
 
 ## Work Log
 
 | Date | Action | Learnings |
 |------|--------|-----------|
 | 2026-01-26 | Created from helicopter review | Junction table provides flexibility for audit trails |
+| 2026-01-26 | Implemented junction table and executor integration | Handlers now return entityId/entityType for audit trail; RLS policies inherit from parent approval's organization |
 
 ## Resources
 

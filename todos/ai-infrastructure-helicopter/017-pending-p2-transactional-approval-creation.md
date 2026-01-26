@@ -1,5 +1,5 @@
 ---
-status: pending
+status: complete
 priority: p2
 issue_id: "DATA-003"
 tags: [helicopter-review, data-integrity, ai-infrastructure, transactions, group-4]
@@ -140,19 +140,20 @@ execute: async ({ customerId, notes, appendMode, _context }) => {
 
 ## Acceptance Criteria
 
-- [ ] updateCustomerNotesTool uses transaction
-- [ ] createOrderDraftTool uses transaction
-- [ ] createQuoteDraftTool uses transaction
-- [ ] All approval-creating tools wrapped in transactions
-- [ ] Rollback on any failure
-- [ ] No orphaned approval records possible
-- [ ] TypeScript compiles without errors
+- [x] updateCustomerNotesTool uses transaction
+- [x] createOrderDraftTool uses transaction
+- [x] createQuoteDraftTool uses transaction
+- [x] All approval-creating tools wrapped in transactions
+- [x] Rollback on any failure
+- [x] No orphaned approval records possible
+- [x] TypeScript compiles without errors
 
 ## Work Log
 
 | Date | Action | Learnings |
 |------|--------|-----------|
 | 2026-01-26 | Created from helicopter review | Transactions essential for multi-table consistency |
+| 2026-01-26 | Implemented transaction wrapping for all 3 tools | Drizzle ORM transaction syntax is clean: `db.transaction(async (tx) => {...})` |
 
 ## Resources
 

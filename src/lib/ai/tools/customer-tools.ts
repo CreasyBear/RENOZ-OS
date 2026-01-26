@@ -368,32 +368,36 @@ export const updateCustomerNotesTool = tool({
         ? `${existingNotes}\n\n---\n\n${notes}`
         : notes;
 
-      // Create approval record
+      // Create approval record in transaction to prevent orphaned records
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-      const [approval] = await db
-        .insert(aiApprovals)
-        .values({
-          userId: ctx.userId,
-          organizationId: ctx.organizationId,
-          conversationId: ctx.conversationId || null,
-          action: 'update_customer_notes',
-          agent: 'customer',
-          actionData: {
-            actionType: 'update_customer_notes',
-            draft: {
-              customerId,
-              customFields: { internalNotes: newNotes },
+      const approval = await db.transaction(async (tx) => {
+        const [approvalRecord] = await tx
+          .insert(aiApprovals)
+          .values({
+            userId: ctx.userId,
+            organizationId: ctx.organizationId,
+            conversationId: ctx.conversationId || null,
+            action: 'update_customer_notes',
+            agent: 'customer',
+            actionData: {
+              actionType: 'update_customer_notes',
+              draft: {
+                customerId,
+                customFields: { internalNotes: newNotes },
+              },
+              availableActions: ['approve', 'edit', 'discard'],
+              diff: {
+                before: { internalNotes: existingNotes },
+                after: { internalNotes: newNotes },
+              },
             },
-            availableActions: ['approve', 'edit', 'discard'],
-            diff: {
-              before: { internalNotes: existingNotes },
-              after: { internalNotes: newNotes },
-            },
-          },
-          expiresAt,
-        })
-        .returning({ id: aiApprovals.id });
+            expiresAt,
+          })
+          .returning({ id: aiApprovals.id });
+
+        return approvalRecord;
+      });
 
       return createApprovalResult(
         'update_customer_notes',

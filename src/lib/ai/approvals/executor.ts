@@ -8,8 +8,8 @@
  */
 
 import { db } from '@/lib/db';
-import { aiApprovals, type ExecutionResult } from 'drizzle/schema/_ai';
-import { eq, and, sql } from 'drizzle-orm';
+import { aiApprovals, aiApprovalEntities, type ExecutionResult } from 'drizzle/schema/_ai';
+import { eq, and, sql, desc } from 'drizzle-orm';
 import { getActionHandler } from './handlers';
 
 // ============================================================================
@@ -33,6 +33,13 @@ export interface RejectActionResult {
   /** Error message if failed */
   error?: string;
 }
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
+
+/** Maximum number of retry attempts before giving up */
+const MAX_RETRIES = 3;
 
 // ============================================================================
 // EXECUTOR
@@ -93,6 +100,15 @@ export async function executeAction(
         };
       }
 
+      // Check if max retries exceeded
+      if (approval.retryCount >= MAX_RETRIES) {
+        return {
+          success: false,
+          error: `Maximum retries (${MAX_RETRIES}) exceeded`,
+          code: 'MAX_RETRIES_EXCEEDED',
+        };
+      }
+
       // Optimistic locking: verify version matches if provided
       if (expectedVersion !== undefined && approval.version !== expectedVersion) {
         return {
@@ -148,6 +164,8 @@ export async function executeAction(
       if (handlerResult.success) {
         const successResult: ExecutionResult = {
           success: true,
+          entityId: handlerResult.entityId,
+          entityType: handlerResult.entityType,
           details: handlerResult.data as Record<string, unknown> | undefined,
         };
 
@@ -164,12 +182,26 @@ export async function executeAction(
           })
           .where(eq(aiApprovals.id, approvalId));
 
+        // Record entity link for audit trail (if handler returned entity info)
+        if (handlerResult.entityId && handlerResult.entityType) {
+          await tx.insert(aiApprovalEntities).values({
+            approvalId,
+            entityType: handlerResult.entityType,
+            entityId: handlerResult.entityId,
+            action: approval.action.startsWith('create')
+              ? 'created'
+              : approval.action.startsWith('delete')
+                ? 'deleted'
+                : 'updated',
+          });
+        }
+
         return {
           success: true,
           result: handlerResult.data,
         };
       } else {
-        // Handler failed - record error but keep status as pending for retry
+        // Handler failed - record error, increment retry count, keep status as pending for retry
         // Still increment version to track the attempt
         const failureResult: ExecutionResult = {
           success: false,
@@ -177,6 +209,7 @@ export async function executeAction(
           details: {
             attemptedAt: new Date().toISOString(),
             attemptedBy: userId,
+            retryCount: approval.retryCount + 1,
           },
         };
 
@@ -184,6 +217,9 @@ export async function executeAction(
           .update(aiApprovals)
           .set({
             executionResult: failureResult,
+            retryCount: sql`${aiApprovals.retryCount} + 1`,
+            lastError: handlerResult.error ?? 'Unknown handler error',
+            lastAttemptAt: new Date(),
             version: sql`${aiApprovals.version} + 1`,
           })
           .where(eq(aiApprovals.id, approvalId));
@@ -340,4 +376,107 @@ export async function getPendingApprovals(
     approvals,
     total: countResult?.count ?? 0,
   };
+}
+
+/**
+ * Get approvals that have failed multiple times (stuck approvals).
+ *
+ * Useful for monitoring and alerting on repeatedly failing approvals.
+ *
+ * @param organizationId - Organization ID
+ * @param options - Query options
+ * @returns List of stuck approvals ordered by retry count (highest first)
+ */
+export async function getStuckApprovals(
+  organizationId: string,
+  options: {
+    minRetries?: number;
+    limit?: number;
+  } = {}
+): Promise<{
+  approvals: Array<typeof aiApprovals.$inferSelect>;
+  total: number;
+}> {
+  const { minRetries = 2, limit = 50 } = options;
+
+  // Build conditions for stuck approvals
+  const conditions = [
+    eq(aiApprovals.organizationId, organizationId),
+    eq(aiApprovals.status, 'pending'),
+    sql`${aiApprovals.retryCount} >= ${minRetries}`,
+  ];
+
+  // Get stuck approvals ordered by retry count (most retries first)
+  const approvals = await db
+    .select()
+    .from(aiApprovals)
+    .where(and(...conditions))
+    .orderBy(sql`${aiApprovals.retryCount} DESC`, aiApprovals.createdAt)
+    .limit(limit);
+
+  // Get total count
+  const [countResult] = await db
+    .select({ count: sql<number>`COUNT(*)::integer` })
+    .from(aiApprovals)
+    .where(and(...conditions));
+
+  return {
+    approvals,
+    total: countResult?.count ?? 0,
+  };
+}
+
+// ============================================================================
+// ENTITY QUERY HELPERS
+// ============================================================================
+
+/**
+ * Get all approvals that affected a specific entity.
+ *
+ * Useful for auditing what AI actions have been performed on an entity.
+ *
+ * @param entityType - The type of entity (e.g., 'customer', 'order', 'quote')
+ * @param entityId - The entity's UUID
+ * @returns List of approvals with the action taken on the entity
+ */
+export async function getApprovalsForEntity(
+  entityType: string,
+  entityId: string
+): Promise<
+  Array<{
+    approval: typeof aiApprovals.$inferSelect;
+    entityLink: typeof aiApprovalEntities.$inferSelect;
+  }>
+> {
+  const results = await db
+    .select({
+      approval: aiApprovals,
+      entityLink: aiApprovalEntities,
+    })
+    .from(aiApprovalEntities)
+    .innerJoin(aiApprovals, eq(aiApprovalEntities.approvalId, aiApprovals.id))
+    .where(
+      and(
+        eq(aiApprovalEntities.entityType, entityType),
+        eq(aiApprovalEntities.entityId, entityId)
+      )
+    )
+    .orderBy(desc(aiApprovalEntities.createdAt));
+
+  return results;
+}
+
+/**
+ * Get all entities affected by a specific approval.
+ *
+ * @param approvalId - The approval's UUID
+ * @returns List of entity links
+ */
+export async function getEntitiesForApproval(
+  approvalId: string
+): Promise<Array<typeof aiApprovalEntities.$inferSelect>> {
+  return db
+    .select()
+    .from(aiApprovalEntities)
+    .where(eq(aiApprovalEntities.approvalId, approvalId));
 }

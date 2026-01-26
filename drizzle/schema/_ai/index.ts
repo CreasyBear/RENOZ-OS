@@ -26,6 +26,7 @@ export * from "./enums";
 export * from "./ai-conversations";
 export * from "./ai-conversation-messages";
 export * from "./ai-approvals";
+export * from "./ai-approval-entities";
 export * from "./ai-agent-tasks";
 export * from "./ai-cost-tracking";
 

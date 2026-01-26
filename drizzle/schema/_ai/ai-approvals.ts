@@ -101,6 +101,11 @@ export const aiApprovals = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+
+    // Retry tracking for failed execution attempts
+    retryCount: integer("retry_count").notNull().default(0),
+    lastError: text("last_error"),
+    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
   },
   (table) => ({
     // Multi-tenant queries
@@ -123,6 +128,12 @@ export const aiApprovals = pgTable(
     orgStatusIdx: index("idx_ai_approvals_org_status").on(
       table.organizationId,
       table.status
+    ),
+
+    // Retry tracking: find stuck approvals with multiple failed attempts
+    retryStatusIdx: index("idx_ai_approvals_retry_status").on(
+      table.status,
+      table.retryCount
     ),
 
     // RLS Policies

@@ -89,3 +89,9 @@ export * from "./portal";
 
 // AI Infrastructure domain
 export * from "./_ai";
+
+// Generated documents (document generation audit trail)
+export * from "./generated-documents";
+
+// Document templates (customization settings for document generation)
+export * from "./document-templates";

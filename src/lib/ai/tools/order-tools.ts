@@ -428,25 +428,29 @@ export const createOrderDraftTool = tool({
         status: 'draft',
       };
 
-      // Create approval record
+      // Create approval record in transaction to prevent orphaned records
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-      const [approval] = await db
-        .insert(aiApprovals)
-        .values({
-          userId: ctx.userId,
-          organizationId: ctx.organizationId,
-          conversationId: ctx.conversationId || null,
-          action: 'create_order',
-          agent: 'order',
-          actionData: {
-            actionType: 'create_order',
-            draft,
-            availableActions: ['approve', 'edit', 'discard'],
-          },
-          expiresAt,
-        })
-        .returning({ id: aiApprovals.id });
+      const approval = await db.transaction(async (tx) => {
+        const [approvalRecord] = await tx
+          .insert(aiApprovals)
+          .values({
+            userId: ctx.userId,
+            organizationId: ctx.organizationId,
+            conversationId: ctx.conversationId || null,
+            action: 'create_order',
+            agent: 'order',
+            actionData: {
+              actionType: 'create_order',
+              draft,
+              availableActions: ['approve', 'edit', 'discard'],
+            },
+            expiresAt,
+          })
+          .returning({ id: aiApprovals.id });
+
+        return approvalRecord;
+      });
 
       return createApprovalResult(
         'create_order',
@@ -561,25 +565,29 @@ export const createQuoteDraftTool = tool({
         status: 'draft',
       };
 
-      // Create approval record
+      // Create approval record in transaction to prevent orphaned records
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
-      const [approval] = await db
-        .insert(aiApprovals)
-        .values({
-          userId: ctx.userId,
-          organizationId: ctx.organizationId,
-          conversationId: ctx.conversationId || null,
-          action: 'create_quote',
-          agent: 'order',
-          actionData: {
-            actionType: 'create_quote',
-            draft,
-            availableActions: ['approve', 'edit', 'discard'],
-          },
-          expiresAt,
-        })
-        .returning({ id: aiApprovals.id });
+      const approval = await db.transaction(async (tx) => {
+        const [approvalRecord] = await tx
+          .insert(aiApprovals)
+          .values({
+            userId: ctx.userId,
+            organizationId: ctx.organizationId,
+            conversationId: ctx.conversationId || null,
+            action: 'create_quote',
+            agent: 'order',
+            actionData: {
+              actionType: 'create_quote',
+              draft,
+              availableActions: ['approve', 'edit', 'discard'],
+            },
+            expiresAt,
+          })
+          .returning({ id: aiApprovals.id });
+
+        return approvalRecord;
+      });
 
       return createApprovalResult(
         'create_quote',

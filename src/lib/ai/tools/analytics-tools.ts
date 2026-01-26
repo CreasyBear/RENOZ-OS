@@ -360,15 +360,16 @@ export const getMetricsTool = tool({
 
       switch (metric) {
         case 'total_revenue': {
-          const [current] = await db
-            .select({ value: sql<number>`coalesce(sum(${orders.total}), 0)::numeric` })
-            .from(orders)
-            .where(and(...baseConditions, gte(orders.orderDate, currentRange.start.toISOString().slice(0, 10)), lte(orders.orderDate, currentRange.end.toISOString().slice(0, 10))));
-
-          const [previous] = await db
-            .select({ value: sql<number>`coalesce(sum(${orders.total}), 0)::numeric` })
-            .from(orders)
-            .where(and(...baseConditions, gte(orders.orderDate, prevStart.toISOString().slice(0, 10)), lte(orders.orderDate, prevEnd.toISOString().slice(0, 10))));
+          const [[current], [previous]] = await Promise.all([
+            db
+              .select({ value: sql<number>`coalesce(sum(${orders.total}), 0)::numeric` })
+              .from(orders)
+              .where(and(...baseConditions, gte(orders.orderDate, currentRange.start.toISOString().slice(0, 10)), lte(orders.orderDate, currentRange.end.toISOString().slice(0, 10)))),
+            db
+              .select({ value: sql<number>`coalesce(sum(${orders.total}), 0)::numeric` })
+              .from(orders)
+              .where(and(...baseConditions, gte(orders.orderDate, prevStart.toISOString().slice(0, 10)), lte(orders.orderDate, prevEnd.toISOString().slice(0, 10)))),
+          ]);
 
           currentValue = Number(current?.value) || 0;
           previousValue = Number(previous?.value) || 0;
@@ -376,15 +377,16 @@ export const getMetricsTool = tool({
         }
 
         case 'order_count': {
-          const [current] = await db
-            .select({ value: sql<number>`count(*)::int` })
-            .from(orders)
-            .where(and(...baseConditions, gte(orders.orderDate, currentRange.start.toISOString().slice(0, 10)), lte(orders.orderDate, currentRange.end.toISOString().slice(0, 10))));
-
-          const [previous] = await db
-            .select({ value: sql<number>`count(*)::int` })
-            .from(orders)
-            .where(and(...baseConditions, gte(orders.orderDate, prevStart.toISOString().slice(0, 10)), lte(orders.orderDate, prevEnd.toISOString().slice(0, 10))));
+          const [[current], [previous]] = await Promise.all([
+            db
+              .select({ value: sql<number>`count(*)::int` })
+              .from(orders)
+              .where(and(...baseConditions, gte(orders.orderDate, currentRange.start.toISOString().slice(0, 10)), lte(orders.orderDate, currentRange.end.toISOString().slice(0, 10)))),
+            db
+              .select({ value: sql<number>`count(*)::int` })
+              .from(orders)
+              .where(and(...baseConditions, gte(orders.orderDate, prevStart.toISOString().slice(0, 10)), lte(orders.orderDate, prevEnd.toISOString().slice(0, 10)))),
+          ]);
 
           currentValue = current?.value || 0;
           previousValue = previous?.value || 0;
@@ -392,15 +394,16 @@ export const getMetricsTool = tool({
         }
 
         case 'average_order_value': {
-          const [current] = await db
-            .select({ value: sql<number>`coalesce(avg(${orders.total}), 0)::numeric` })
-            .from(orders)
-            .where(and(...baseConditions, gte(orders.orderDate, currentRange.start.toISOString().slice(0, 10)), lte(orders.orderDate, currentRange.end.toISOString().slice(0, 10))));
-
-          const [previous] = await db
-            .select({ value: sql<number>`coalesce(avg(${orders.total}), 0)::numeric` })
-            .from(orders)
-            .where(and(...baseConditions, gte(orders.orderDate, prevStart.toISOString().slice(0, 10)), lte(orders.orderDate, prevEnd.toISOString().slice(0, 10))));
+          const [[current], [previous]] = await Promise.all([
+            db
+              .select({ value: sql<number>`coalesce(avg(${orders.total}), 0)::numeric` })
+              .from(orders)
+              .where(and(...baseConditions, gte(orders.orderDate, currentRange.start.toISOString().slice(0, 10)), lte(orders.orderDate, currentRange.end.toISOString().slice(0, 10)))),
+            db
+              .select({ value: sql<number>`coalesce(avg(${orders.total}), 0)::numeric` })
+              .from(orders)
+              .where(and(...baseConditions, gte(orders.orderDate, prevStart.toISOString().slice(0, 10)), lte(orders.orderDate, prevEnd.toISOString().slice(0, 10)))),
+          ]);
 
           currentValue = Number(current?.value) || 0;
           previousValue = Number(previous?.value) || 0;
@@ -408,15 +411,16 @@ export const getMetricsTool = tool({
         }
 
         case 'customer_count': {
-          const [current] = await db
-            .select({ value: sql<number>`count(distinct ${orders.customerId})::int` })
-            .from(orders)
-            .where(and(...baseConditions, gte(orders.orderDate, currentRange.start.toISOString().slice(0, 10)), lte(orders.orderDate, currentRange.end.toISOString().slice(0, 10))));
-
-          const [previous] = await db
-            .select({ value: sql<number>`count(distinct ${orders.customerId})::int` })
-            .from(orders)
-            .where(and(...baseConditions, gte(orders.orderDate, prevStart.toISOString().slice(0, 10)), lte(orders.orderDate, prevEnd.toISOString().slice(0, 10))));
+          const [[current], [previous]] = await Promise.all([
+            db
+              .select({ value: sql<number>`count(distinct ${orders.customerId})::int` })
+              .from(orders)
+              .where(and(...baseConditions, gte(orders.orderDate, currentRange.start.toISOString().slice(0, 10)), lte(orders.orderDate, currentRange.end.toISOString().slice(0, 10)))),
+            db
+              .select({ value: sql<number>`count(distinct ${orders.customerId})::int` })
+              .from(orders)
+              .where(and(...baseConditions, gte(orders.orderDate, prevStart.toISOString().slice(0, 10)), lte(orders.orderDate, prevEnd.toISOString().slice(0, 10)))),
+          ]);
 
           currentValue = current?.value || 0;
           previousValue = previous?.value || 0;
