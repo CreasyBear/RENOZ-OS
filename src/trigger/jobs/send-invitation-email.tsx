@@ -6,22 +6,22 @@
  *
  * @see https://trigger.dev/docs/documentation/guides/create-a-job
  */
-import { eventTrigger } from '@trigger.dev/sdk'
-import { Resend } from 'resend'
-import { eq } from 'drizzle-orm'
-import { db } from '@/lib/db'
-import { emailHistory, type NewEmailHistory } from 'drizzle/schema'
-import { renderEmail } from '@/lib/email/render'
-import { InvitationEmail } from '@/lib/email/templates/users'
+import { eventTrigger } from "@trigger.dev/sdk";
+import { Resend } from "resend";
+import { eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { emailHistory, type NewEmailHistory } from "drizzle/schema";
+import { renderEmail } from "@/lib/email/render";
+import { InvitationEmail } from "@/lib/email/templates/users";
 import {
   client,
   userEvents,
   type InvitationSentPayload,
   type BatchInvitationSentPayload,
-} from '../client'
+} from "../client";
 
 // Initialize Resend client
-const resend = new Resend(process.env.RESEND_API_KEY)
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ============================================================================
 // EMAIL CONFIGURATION
@@ -31,13 +31,13 @@ const resend = new Resend(process.env.RESEND_API_KEY)
  * Get sender email configuration from environment.
  */
 function getSenderConfig() {
-  const fromEmail = process.env.EMAIL_FROM || 'noreply@resend.dev'
-  const fromName = process.env.EMAIL_FROM_NAME || 'Renoz'
+  const fromEmail = process.env.EMAIL_FROM || "noreply@resend.dev";
+  const fromName = process.env.EMAIL_FROM_NAME || "Renoz";
   return {
     fromEmail,
     fromName,
     fromAddress: `${fromName} <${fromEmail}>`,
-  }
+  };
 }
 
 // ============================================================================
@@ -45,9 +45,9 @@ function getSenderConfig() {
 // ============================================================================
 
 export const sendInvitationEmailJob = client.defineJob({
-  id: 'send-invitation-email',
-  name: 'Send Invitation Email',
-  version: '1.0.0',
+  id: "send-invitation-email",
+  name: "Send Invitation Email",
+  version: "1.0.0",
   trigger: eventTrigger({
     name: userEvents.invitationSent,
   }),
@@ -63,17 +63,17 @@ export const sendInvitationEmailJob = client.defineJob({
       personalMessage,
       acceptUrl,
       expiresAt,
-    } = payload
+    } = payload;
 
-    await io.logger.info('Sending invitation email', {
+    await io.logger.info("Sending invitation email", {
       invitationId,
       email,
       organizationName,
       role,
-    })
+    });
 
     // Step 1: Render email template
-    const emailContent = await io.runTask('render-email', async () => {
+    const emailContent = await io.runTask("render-email", async () => {
       const { html, text } = await renderEmail(
         <InvitationEmail
           email={email}
@@ -85,14 +85,14 @@ export const sendInvitationEmailJob = client.defineJob({
           personalMessage={personalMessage}
           expiresAt={new Date(expiresAt)}
         />
-      )
-      return { html, text }
-    })
+      );
+      return { html, text };
+    });
 
     // Step 2: Create email history, send via Resend, and update status
-    const emailResult = await io.runTask('send-email', async () => {
-      const senderConfig = getSenderConfig()
-      const subject = `You're invited to join ${organizationName}`
+    const emailResult = await io.runTask("send-email", async () => {
+      const senderConfig = getSenderConfig();
+      const subject = `You're invited to join ${organizationName}`;
 
       // Create email history record
       const [emailRecord] = await db
@@ -104,9 +104,9 @@ export const sendInvitationEmailJob = client.defineJob({
           subject,
           bodyHtml: emailContent.html,
           bodyText: emailContent.text,
-          status: 'pending',
+          status: "pending",
         } as NewEmailHistory)
-        .returning()
+        .returning();
 
       // Send email via Resend
       const { data: sendResult, error } = await resend.emails.send({
@@ -115,39 +115,42 @@ export const sendInvitationEmailJob = client.defineJob({
         subject,
         html: emailContent.html,
         text: emailContent.text,
-      })
+      });
 
       if (error) {
         // Update email history with failure
         await db
           .update(emailHistory)
-          .set({ status: 'failed' })
-          .where(eq(emailHistory.id, emailRecord.id))
+          .set({ status: "failed" })
+          .where(eq(emailHistory.id, emailRecord.id));
 
-        throw new Error(`Failed to send invitation email: ${error.message}`)
+        throw new Error(`Failed to send invitation email: ${error.message}`);
       }
 
       // Update email history with success and Resend message ID
       await db
         .update(emailHistory)
         .set({
-          status: 'sent',
+          status: "sent",
           sentAt: new Date(),
           resendMessageId: sendResult?.id,
         })
-        .where(eq(emailHistory.id, emailRecord.id))
+        .where(eq(emailHistory.id, emailRecord.id));
 
       return {
         success: true,
         messageId: sendResult?.id || null,
         emailHistoryId: emailRecord.id,
-      }
-    })
+      };
+    });
 
-    await io.logger.info(`Invitation email sent (resendMessageId: ${emailResult.messageId})`, {
-      to: email,
-      emailHistoryId: emailResult.emailHistoryId,
-    })
+    await io.logger.info(
+      `Invitation email sent (resendMessageId: ${emailResult.messageId})`,
+      {
+        to: email,
+        emailHistoryId: emailResult.emailHistoryId,
+      }
+    );
 
     return {
       success: true,
@@ -156,20 +159,20 @@ export const sendInvitationEmailJob = client.defineJob({
       emailSent: emailResult.success,
       messageId: emailResult.messageId,
       emailHistoryId: emailResult.emailHistoryId,
-    }
+    };
   },
-})
+});
 
 // ============================================================================
 // SEND BATCH INVITATION EMAILS JOB
 // ============================================================================
 
 export const sendBatchInvitationEmailsJob = client.defineJob({
-  id: 'send-batch-invitation-emails',
-  name: 'Send Batch Invitation Emails',
-  version: '1.0.0',
+  id: "send-batch-invitation-emails",
+  name: "Send Batch Invitation Emails",
+  version: "1.0.0",
   trigger: eventTrigger({
-    name: 'user.batch_invitation_sent',
+    name: "user.batch_invitation_sent",
   }),
   run: async (payload: BatchInvitationSentPayload, io) => {
     const {
@@ -178,20 +181,20 @@ export const sendBatchInvitationEmailsJob = client.defineJob({
       inviterName,
       inviterEmail,
       invitations,
-    } = payload
+    } = payload;
 
-    await io.logger.info('Sending batch invitation emails', {
+    await io.logger.info("Sending batch invitation emails", {
       organizationName,
       count: invitations.length,
-    })
+    });
 
     const results: Array<{
-      email: string
-      invitationId: string
-      success: boolean
-      messageId?: string | null
-      error?: string
-    }> = []
+      email: string;
+      invitationId: string;
+      success: boolean;
+      messageId?: string | null;
+      error?: string;
+    }> = [];
 
     // Process each invitation
     for (const invitation of invitations) {
@@ -208,10 +211,10 @@ export const sendBatchInvitationEmailsJob = client.defineJob({
             personalMessage={invitation.personalMessage}
             expiresAt={new Date(invitation.expiresAt)}
           />
-        )
+        );
 
-        const senderConfig = getSenderConfig()
-        const subject = `You're invited to join ${organizationName}`
+        const senderConfig = getSenderConfig();
+        const subject = `You're invited to join ${organizationName}`;
 
         // Create email history record
         const [emailRecord] = await db
@@ -223,9 +226,9 @@ export const sendBatchInvitationEmailsJob = client.defineJob({
             subject,
             bodyHtml: html,
             bodyText: text,
-            status: 'pending',
+            status: "pending",
           } as NewEmailHistory)
-          .returning()
+          .returning();
 
         // Send email via Resend
         const { data: sendResult, error } = await resend.emails.send({
@@ -234,42 +237,46 @@ export const sendBatchInvitationEmailsJob = client.defineJob({
           subject,
           html,
           text,
-        })
+        });
 
         if (error) {
           // Update email history with failure
           await db
             .update(emailHistory)
-            .set({ status: 'failed' })
-            .where(eq(emailHistory.id, emailRecord.id))
+            .set({ status: "failed" })
+            .where(eq(emailHistory.id, emailRecord.id));
 
           results.push({
             email: invitation.email,
             invitationId: invitation.invitationId,
             success: false,
             error: error.message,
-          })
+          });
 
-          await io.logger.warn(`Failed to send invitation to ${invitation.email}: ${error.message}`)
+          await io.logger.warn(
+            `Failed to send invitation to ${invitation.email}: ${error.message}`
+          );
         } else {
           // Update email history with success
           await db
             .update(emailHistory)
             .set({
-              status: 'sent',
+              status: "sent",
               sentAt: new Date(),
               resendMessageId: sendResult?.id,
             })
-            .where(eq(emailHistory.id, emailRecord.id))
+            .where(eq(emailHistory.id, emailRecord.id));
 
           results.push({
             email: invitation.email,
             invitationId: invitation.invitationId,
             success: true,
             messageId: sendResult?.id,
-          })
+          });
 
-          await io.logger.info(`Invitation sent to ${invitation.email} (resendMessageId: ${sendResult?.id})`)
+          await io.logger.info(
+            `Invitation sent to ${invitation.email} (resendMessageId: ${sendResult?.id})`
+          );
         }
       } catch (err) {
         results.push({
@@ -277,22 +284,26 @@ export const sendBatchInvitationEmailsJob = client.defineJob({
           invitationId: invitation.invitationId,
           success: false,
           error: err instanceof Error ? err.message : String(err),
-        })
+        });
 
-        await io.logger.error(`Error sending invitation to ${invitation.email}: ${err}`)
+        await io.logger.error(
+          `Error sending invitation to ${invitation.email}: ${err}`
+        );
       }
     }
 
-    const successCount = results.filter((r) => r.success).length
-    const failedCount = results.filter((r) => !r.success).length
+    const successCount = results.filter((r) => r.success).length;
+    const failedCount = results.filter((r) => !r.success).length;
 
-    await io.logger.info(`Batch invitation complete: ${successCount} sent, ${failedCount} failed`)
+    await io.logger.info(
+      `Batch invitation complete: ${successCount} sent, ${failedCount} failed`
+    );
 
     return {
       success: successCount > 0,
       totalSent: successCount,
       totalFailed: failedCount,
       results,
-    }
+    };
   },
-})
+});

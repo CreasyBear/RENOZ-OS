@@ -9,7 +9,7 @@
  * @see _Initiation/_prd/3-integrations/ai-infrastructure/ai-infrastructure.prd.json (AI-INFRA-009)
  */
 
-import { memo, Suspense, lazy, useCallback } from 'react';
+import { memo, useCallback } from 'react';
 import {
   BarChart3,
   FileText,

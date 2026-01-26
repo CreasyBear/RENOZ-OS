@@ -10,10 +10,8 @@
  */
 
 import { memo, useRef, useEffect, useCallback, useState } from 'react';
-import type { Message } from 'ai/react';
 import {
   Send,
-  Loader2,
   Bot,
   User,
   StopCircle,
@@ -28,7 +26,6 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   Tooltip,
   TooltipContent,
@@ -36,6 +33,13 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { useAIChat, type UseAIChatOptions, type AIChatResult } from '@/hooks/ai';
+
+// Message type from Vercel AI SDK
+interface Message {
+  id: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string;
+}
 
 // ============================================================================
 // TYPES
@@ -354,7 +358,6 @@ export const AIChatPanel = memo(function AIChatPanel({
   const {
     messages,
     input,
-    setInput,
     handleInputChange,
     handleSubmit,
     isLoading,
