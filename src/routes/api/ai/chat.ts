@@ -35,6 +35,7 @@ import {
   analyticsTools,
   quoteTools,
 } from '@/lib/ai/tools';
+import { setContext } from '@/lib/ai/artifacts';
 import type { UserContext } from '@/lib/ai/prompts/shared';
 import type { ToolSet } from 'ai';
 
@@ -195,15 +196,21 @@ export async function POST({ request }: { request: Request }) {
       generateId,
       originalMessages: messages,
       execute: async ({ writer }) => {
-        // Write metadata as data part
-        writer.write({
-          type: 'data',
-          data: {
-            conversationId: conversation.id,
-            agent: triageResult.targetAgent,
-            triageReason: triageResult.reason,
-          },
+        // Set up artifact context for streaming artifacts
+        // This enables tools to stream structured data via artifacts
+        setContext({
+          writer,
+          userId: ctx.user.id,
+          organizationId: ctx.organizationId,
+          userName: ctx.user.name ?? undefined,
+          userRole: ctx.role,
+          currentView: context?.currentView,
+          timezone: context?.timezone,
         });
+
+        // Note: Metadata (conversationId, agent, triageReason) is tracked server-side
+        // and can be retrieved via the conversation API if needed.
+        // The client-side onData callback handles incoming data parts from the model.
 
         // Run the specialist agent with tools
         const agentTools = specialistTools[triageResult.targetAgent];

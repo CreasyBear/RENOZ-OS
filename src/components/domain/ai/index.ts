@@ -39,3 +39,7 @@ export type {
   ArtifactType,
   ArtifactStage,
 } from './artifact-renderer';
+
+// Streaming artifact canvas (@ai-sdk-tools/artifacts)
+export { ArtifactCanvas } from './artifact-canvas';
+export type { ArtifactCanvasProps } from './artifact-canvas';

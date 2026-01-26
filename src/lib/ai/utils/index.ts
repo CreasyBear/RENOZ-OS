@@ -26,3 +26,15 @@ export {
   type TrackCostInput,
   type CostEstimate,
 } from './cost';
+
+export {
+  createSmoothStream,
+  getSmoothStreamForContent,
+  DEFAULT_SMOOTH_STREAM,
+  FAST_SMOOTH_STREAM,
+  SLOW_SMOOTH_STREAM,
+  LINE_SMOOTH_STREAM,
+  NO_SMOOTH_STREAM,
+  type SmoothStreamOptions,
+  type ChunkingMode,
+} from './smooth-stream';

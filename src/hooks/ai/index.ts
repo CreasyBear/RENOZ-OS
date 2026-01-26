@@ -42,3 +42,36 @@ export {
   type AIChatResult,
   type Message,
 } from './use-ai-chat';
+
+// Chat status hook
+export {
+  useChatStatus,
+  useChatStatusMessage,
+  type SimplifiedChatStatus,
+  type ChatStatusInfo,
+} from './use-chat-status';
+
+// Artifact hooks (AI SDK v6)
+export {
+  // Individual artifact hooks
+  useRevenueChartArtifact,
+  useOrdersPipelineArtifact,
+  useCustomerSummaryArtifact,
+  useMetricsCardArtifact,
+  useTopCustomersArtifact,
+  // All artifacts hook
+  useAllArtifacts,
+  // Utility hooks
+  useHasArtifacts,
+  useCurrentArtifact,
+  // Types
+  type ArtifactStatus,
+  type ArtifactData,
+  type ArtifactCallbacks,
+  type UseArtifactReturn,
+  type UseArtifactActions,
+  type UseArtifactsReturn,
+  type UseArtifactsActions,
+  type AllArtifactsResult,
+  type UseAllArtifactsOptions,
+} from './use-artifacts';

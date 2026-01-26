@@ -18,7 +18,6 @@ import {
   RotateCcw,
   Sparkles,
   ChevronDown,
-  Wrench,
   FileText,
   ExternalLink,
   Loader2,
@@ -129,18 +128,27 @@ const ToolResultPart = memo(function ToolResultPart({
 const FilePart = memo(function FilePart({
   part,
 }: {
-  part: { type: 'file'; name: string; url?: string; mimeType?: string };
+  part: { type: 'file'; data?: string; mediaType?: string; filename?: string };
 }) {
+  // AI SDK v6 FileUIPart has data (base64), mediaType, and optional filename
+  const displayName = part.filename ?? part.mediaType ?? 'Attachment';
+
+  // If data is a base64 string, we could create a download link
+  const href = part.data?.startsWith('data:')
+    ? part.data
+    : part.data
+      ? `data:${part.mediaType ?? 'application/octet-stream'};base64,${part.data}`
+      : undefined;
+
   return (
     <a
-      href={part.url}
-      target="_blank"
-      rel="noopener noreferrer"
+      href={href}
+      download={part.filename}
       className="flex items-center gap-2 text-xs text-primary bg-primary/10 rounded px-2 py-1 my-1 hover:bg-primary/20"
     >
       <FileText className="h-3 w-3" />
-      <span className="truncate">{part.name}</span>
-      <ExternalLink className="h-3 w-3" />
+      <span className="truncate">{displayName}</span>
+      {href && <ExternalLink className="h-3 w-3" />}
     </a>
   );
 });
@@ -551,7 +559,7 @@ export const AIChatPanel = memo(function AIChatPanel({
   // Handle suggestion click
   const handleSuggestion = useCallback(
     (suggestion: string) => {
-      append({ role: 'user', content: suggestion });
+      append(suggestion);
     },
     [append]
   );
@@ -723,7 +731,7 @@ export const ControlledAIChatPanel = memo(function ControlledAIChatPanel({
   // Handle suggestion click
   const handleSuggestion = useCallback(
     (suggestion: string) => {
-      append({ role: 'user', content: suggestion });
+      append(suggestion);
     },
     [append]
   );

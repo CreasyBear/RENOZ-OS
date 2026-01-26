@@ -38,10 +38,14 @@ export function getMessageText(message: Message): string {
 export function extractDataParts(messages: Message[]): ChatMetadata | null {
   for (const message of [...messages].reverse()) {
     for (const part of message.parts) {
-      if (part.type === 'data' && typeof part.data === 'object') {
-        const data = part.data as ChatMetadata;
-        if (data.conversationId || data.agent) {
-          return data;
+      // AI SDK v6 uses data-${string} pattern for data parts
+      if (part.type.startsWith('data-')) {
+        const dataPart = part as { type: string; value: unknown };
+        if (typeof dataPart.value === 'object' && dataPart.value !== null) {
+          const data = dataPart.value as ChatMetadata;
+          if (data.conversationId || data.agent) {
+            return data;
+          }
         }
       }
     }
@@ -158,13 +162,17 @@ export function useChat(options: UseAIChatOptions = {}): AIChatResult {
         credentials: 'include',
         // Prepare request with dynamic context for each message
         prepareSendMessagesRequest({ messages, id }) {
+          // Get agentChoice from message metadata if available (custom metadata)
           const lastMessage = messages[messages.length - 1];
+          const messageAgentChoice = (lastMessage?.metadata as Record<string, unknown> | undefined)
+            ?.agentChoice as string | undefined;
+
           return {
             body: {
               messages,
               context: {
                 conversationId: conversationId ?? id,
-                agentChoice: lastMessage?.metadata?.agentChoice ?? agentChoice,
+                agentChoice: messageAgentChoice ?? agentChoice,
                 currentView,
                 timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
               },
