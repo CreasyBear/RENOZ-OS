@@ -25,6 +25,7 @@ import { createEmailSentActivity } from "@/lib/server/activity-bridge";
 import { isEmailSuppressedDirect } from "@/server/functions/communications/email-suppression";
 import { generateUnsubscribeUrl } from "@/lib/server/unsubscribe-tokens";
 import { createHash } from "crypto";
+import { substituteTemplateVariables } from "@/lib/email/sanitize";
 
 // Initialize Resend client
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -45,21 +46,8 @@ function hashEmail(email: string): string {
 }
 
 // ============================================================================
-// EMAIL TEMPLATES (simple template rendering)
+// EMAIL TEMPLATES
 // ============================================================================
-
-/**
- * Simple template variable substitution
- */
-function renderTemplate(
-  template: string,
-  variables: Record<string, string | number | boolean>
-): string {
-  return Object.entries(variables).reduce((result, [key, value]) => {
-    const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "g");
-    return result.replace(regex, String(value));
-  }, template);
-}
 
 /**
  * Get template content based on template type
@@ -222,10 +210,10 @@ export const processScheduledEmailsJob = client.defineJob({
           const templateData = scheduledEmail.templateData || {};
           const subject = templateData.subjectOverride
             ? String(templateData.subjectOverride)
-            : renderTemplate(template.subject, variables);
+            : substituteTemplateVariables(template.subject, variables);
           const bodyHtml = templateData.bodyOverride
             ? String(templateData.bodyOverride)
-            : renderTemplate(template.body, variables);
+            : substituteTemplateVariables(template.body, variables);
 
           // Create email history record
           const [emailRecord] = await db

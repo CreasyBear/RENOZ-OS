@@ -480,7 +480,26 @@ export const TEMPLATE_VARIABLES: Record<string, TemplateVariable[]> = {
 };
 
 /**
- * Substitute variables in template content
+ * HTML-escape a string to prevent XSS in template variables.
+ * @internal
+ */
+function escapeHtml(value: unknown): string {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  const str = String(value);
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+/**
+ * Substitute variables in template content.
+ * Supports nested paths like {{customer.name}}.
+ * All string values are HTML-escaped to prevent XSS.
  */
 export function substituteTemplateVariables(
   content: string,
@@ -498,7 +517,11 @@ export function substituteTemplateVariables(
       }
     }
 
-    return String(value ?? match);
+    // Numbers and booleans are safe, strings need sanitization
+    if (typeof value === "number" || typeof value === "boolean") {
+      return String(value);
+    }
+    return escapeHtml(value);
   });
 }
 

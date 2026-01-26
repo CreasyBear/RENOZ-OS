@@ -29,7 +29,7 @@ import {
   getEmailInlineStyles,
   getEmailThemeClasses,
 } from "../../components";
-import { formatDate, formatNumber, formatPercent } from "../../format";
+import { formatDate, formatNumber, formatDecimalAsPercent } from "../../format";
 import type { BaseEmailProps } from "../../render";
 
 // ============================================================================
@@ -344,7 +344,7 @@ export function WarrantyExpiring(props: WarrantyExpiringProps) {
                 >
                   {formatNumber(cycleRemaining)} cycles remaining
                   {cyclePercentUsed !== null &&
-                    ` (${formatPercent(cyclePercentUsed)} of ${formatNumber(cycleLimit)} used)`}
+                    ` (${formatDecimalAsPercent(cyclePercentUsed)} of ${formatNumber(cycleLimit)} used)`}
                 </Text>
               </Section>
             )}

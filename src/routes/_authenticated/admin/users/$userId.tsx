@@ -6,7 +6,7 @@
  *
  * @see src/server/functions/users.ts for server functions
  */
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useServerFn } from '@tanstack/react-start';
 import {
@@ -14,6 +14,7 @@ import {
   updateUser,
   deactivateUser,
   reactivateUser,
+  transferOwnership,
 } from '@/server/functions/users/users';
 import { getUserActivity } from '@/server/functions/_shared/audit-logs';
 import { useConfirmation } from '@/hooks';
@@ -110,8 +111,15 @@ function UserDetailPage() {
   const updateFn = useServerFn(updateUser);
   const deactivateFn = useServerFn(deactivateUser);
   const reactivateFn = useServerFn(reactivateUser);
+  const transferOwnershipFn = useServerFn(transferOwnership);
 
   const confirm = useConfirmation();
+
+  // Get current user's role from route context
+  const { appUser } = useRouteContext({ from: '/_authenticated' }) as {
+    appUser: { id: string; role: string; organizationId: string; status: string };
+  };
+  const currentUserIsOwner = appUser?.role === 'owner';
 
   const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [isEditing, setIsEditing] = useState(false);

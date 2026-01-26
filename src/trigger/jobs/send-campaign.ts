@@ -28,6 +28,7 @@ import { createEmailActivitiesBatch, type EmailActivityInput } from "@/lib/serve
 import { checkSuppressionBatchDirect } from "@/server/functions/communications/email-suppression";
 import { generateUnsubscribeUrl } from "@/lib/server/unsubscribe-tokens";
 import { createHash } from "crypto";
+import { substituteTemplateVariables } from "@/lib/email/sanitize";
 
 // Initialize Resend client
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -67,19 +68,6 @@ const DEFAULT_BATCH_DELAY_MS = 5000; // 5 seconds between batches
 // ============================================================================
 // EMAIL TEMPLATES
 // ============================================================================
-
-/**
- * Simple template variable substitution
- */
-function renderTemplate(
-  template: string,
-  variables: Record<string, string | number | boolean>
-): string {
-  return Object.entries(variables).reduce((result, [key, value]) => {
-    const regex = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "g");
-    return result.replace(regex, String(value));
-  }, template);
-}
 
 /**
  * Get template content based on template type
@@ -303,11 +291,11 @@ export const sendCampaignJob = client.defineJob({
 
             // Check for subject/body override
             const subject = campaignData.subjectOverride
-              ? renderTemplate(String(campaignData.subjectOverride), variables)
-              : renderTemplate(template.subject, variables);
+              ? substituteTemplateVariables(String(campaignData.subjectOverride), variables)
+              : substituteTemplateVariables(template.subject, variables);
             const bodyHtml = campaignData.bodyOverride
-              ? renderTemplate(String(campaignData.bodyOverride), variables)
-              : renderTemplate(template.body, variables);
+              ? substituteTemplateVariables(String(campaignData.bodyOverride), variables)
+              : substituteTemplateVariables(template.body, variables);
 
             // Create email history record
             const [emailRecord] = await db

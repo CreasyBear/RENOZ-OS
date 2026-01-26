@@ -30,43 +30,6 @@ import {
 // ============================================================================
 
 /**
- * HTML-escape a string to prevent XSS in template variables.
- */
-function escapeHtml(unsafe: unknown): string {
-  if (unsafe === null || unsafe === undefined) {
-    return "";
-  }
-  const str = String(unsafe);
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-/**
- * Sanitize all string values in a variables object.
- */
-function sanitizeVariables(
-  variables: Record<string, unknown>
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(variables)) {
-    if (typeof value === "object" && value !== null) {
-      result[key] = sanitizeVariables(value as Record<string, unknown>);
-    } else if (typeof value === "string") {
-      result[key] = escapeHtml(value);
-    } else {
-      result[key] = value;
-    }
-  }
-
-  return result;
-}
-
-/**
  * Convert HTML to plain text for email.
  */
 function htmlToText(html: string): string {
@@ -161,28 +124,26 @@ export const renderEmailPreview = createServerFn({ method: "POST" })
       variables = { ...variables, ...data.variables };
     }
 
-    // Sanitize all variables to prevent XSS
-    const sanitizedVariables = sanitizeVariables(variables);
-
     // Render subject and body with variable substitution
+    // Note: substituteTemplateVariables now sanitizes values to prevent XSS
     const renderedSubject = substituteTemplateVariables(
       template.subject,
-      sanitizedVariables
+      variables
     );
     const renderedHtml = substituteTemplateVariables(
       template.bodyHtml,
-      sanitizedVariables
+      variables
     );
     const renderedText = htmlToText(renderedHtml);
 
     // Find any missing variables in the rendered content
     const missingInSubject = findMissingVariables(
       template.subject,
-      sanitizedVariables
+      variables
     );
     const missingInBody = findMissingVariables(
       template.bodyHtml,
-      sanitizedVariables
+      variables
     );
     const missingVariables = [...new Set([...missingInSubject, ...missingInBody])];
 
@@ -234,15 +195,13 @@ export const sendTestEmail = createServerFn({ method: "POST" })
       variables = { ...variables, ...data.variables };
     }
 
-    // Sanitize variables
-    const sanitizedVariables = sanitizeVariables(variables);
-
     // Render subject and body
+    // Note: substituteTemplateVariables now sanitizes values to prevent XSS
     const baseSubject = data.subject || template.subject;
-    const renderedSubject = `[TEST] ${substituteTemplateVariables(baseSubject, sanitizedVariables)}`;
+    const renderedSubject = `[TEST] ${substituteTemplateVariables(baseSubject, variables)}`;
     const renderedHtml = substituteTemplateVariables(
       template.bodyHtml,
-      sanitizedVariables
+      variables
     );
     const renderedText = htmlToText(renderedHtml);
 

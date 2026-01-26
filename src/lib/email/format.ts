@@ -299,22 +299,49 @@ export function formatNumber(
   return new Intl.NumberFormat("en-US").format(value);
 }
 
+export interface FormatPercentOptions {
+  /** If true, value is treated as decimal (0.75 → 75%). Default: false */
+  isDecimal?: boolean;
+  /** Placeholder when value is null/NaN. Default: "0%" */
+  placeholder?: string;
+}
+
 /**
  * Format a percentage.
  *
  * @example
- * formatPercent(0.756)     // "76%"
- * formatPercent(75.6)      // "76%" (assumes already percentage)
+ * formatPercent(75.6)                              // "76%"
+ * formatPercent(0.756, { isDecimal: true })        // "76%"
+ * formatPercent(null)                              // "0%"
  */
 export function formatPercent(
   value: number | null | undefined,
-  placeholder = "0%"
+  options: FormatPercentOptions | string = {}
 ): string {
+  // Handle legacy usage: formatPercent(value, "N/A")
+  const opts: FormatPercentOptions =
+    typeof options === "string" ? { placeholder: options } : options;
+  const { isDecimal = false, placeholder = "0%" } = opts;
+
   if (value == null || isNaN(value)) return placeholder;
 
-  // If value is between 0 and 1, treat as decimal
-  const percent = value <= 1 && value >= 0 ? value * 100 : value;
+  const percent = isDecimal ? value * 100 : value;
   return `${Math.round(percent)}%`;
+}
+
+/**
+ * Format a decimal (0-1) as percentage.
+ * Explicit alternative to formatPercent with isDecimal: true.
+ *
+ * @example
+ * formatDecimalAsPercent(0.756)   // "76%"
+ * formatDecimalAsPercent(1.0)     // "100%"
+ */
+export function formatDecimalAsPercent(
+  value: number | null | undefined,
+  placeholder = "0%"
+): string {
+  return formatPercent(value, { isDecimal: true, placeholder });
 }
 
 // ============================================================================

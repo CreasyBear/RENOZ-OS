@@ -62,3 +62,80 @@ export function containsHtml(value: string | null | undefined): boolean {
   if (!value) return false;
   return /<[a-z][\s\S]*>/i.test(value);
 }
+
+/**
+ * Validate and sanitize a URL for use in email links.
+ * Only allows HTTPS URLs to prevent:
+ * - javascript: execution
+ * - data: exfiltration
+ * - http: downgrade attacks
+ *
+ * @param url - The URL to validate
+ * @param fallback - Value to return if URL is invalid (default: null)
+ * @returns Valid HTTPS URL or fallback value
+ *
+ * @example
+ * validateEmailUrl("https://app.example.com/order/123")  // "https://app.example.com/order/123"
+ * validateEmailUrl("javascript:alert(1)")                 // null
+ * validateEmailUrl("http://example.com")                  // null (not HTTPS)
+ * validateEmailUrl(null, "#")                             // "#"
+ */
+export function validateEmailUrl(
+  url: string | null | undefined,
+  fallback: string | null = null
+): string | null {
+  if (!url) return fallback;
+
+  try {
+    const parsed = new URL(url);
+    // Only allow HTTPS protocol
+    if (parsed.protocol !== "https:") {
+      return fallback;
+    }
+    return url;
+  } catch {
+    // Invalid URL format
+    return fallback;
+  }
+}
+
+/**
+ * Validate URL with a list of allowed domains.
+ * More restrictive - only allows URLs from specified domains.
+ *
+ * @param url - The URL to validate
+ * @param allowedDomains - List of allowed domain suffixes (e.g., ["renoz.com", "renoz.energy"])
+ * @param fallback - Value to return if URL is invalid
+ * @returns Valid URL on allowed domain, or fallback
+ *
+ * @example
+ * validateEmailUrlDomain("https://app.renoz.com/orders", ["renoz.com"]) // "https://app.renoz.com/orders"
+ * validateEmailUrlDomain("https://evil.com/phish", ["renoz.com"])       // null
+ */
+export function validateEmailUrlDomain(
+  url: string | null | undefined,
+  allowedDomains: string[],
+  fallback: string | null = null
+): string | null {
+  if (!url) return fallback;
+
+  try {
+    const parsed = new URL(url);
+
+    // Must be HTTPS
+    if (parsed.protocol !== "https:") {
+      return fallback;
+    }
+
+    // Check against allowed domains
+    const hostname = parsed.hostname.toLowerCase();
+    const isAllowed = allowedDomains.some((domain) => {
+      const d = domain.toLowerCase();
+      return hostname === d || hostname.endsWith(`.${d}`);
+    });
+
+    return isAllowed ? url : fallback;
+  } catch {
+    return fallback;
+  }
+}

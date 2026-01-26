@@ -14,6 +14,7 @@ import { db } from '@/lib/db';
 import { notifications, type NotificationData } from 'drizzle/schema';
 import { type WarrantyRegisteredPayload, type WarrantyExpiringSoonPayload } from '../client';
 import { isEmailSuppressedDirect } from '@/server/functions/communications/email-suppression';
+import { renderEmail, WarrantyExpiring } from '@/lib/email';
 
 // Initialize Resend client
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -235,180 +236,6 @@ SERVICE LEVEL AGREEMENT
 Response Time: Within ${slaResponseHours} hours
 Resolution Time: Within ${slaResolutionDays} business days
 ${certificateUrl ? `\nView your certificate: ${certificateUrl}` : ''}
-
----
-This email was sent by Renoz. If you have any questions, please contact support.
-  `.trim();
-}
-
-/**
- * Generate HTML email for warranty expiry reminder
- */
-function generateWarrantyExpiryHtml(params: {
-  productName: string;
-  policyTypeDisplay: string;
-  expiryDate: string;
-  daysUntilExpiry: number;
-  urgencyLevel: 'critical' | 'warning' | 'info';
-  cycleStatusDisplay: string | null;
-  renewalUrl: string | null;
-}): string {
-  const {
-    productName,
-    policyTypeDisplay,
-    expiryDate,
-    daysUntilExpiry,
-    urgencyLevel,
-    cycleStatusDisplay,
-    renewalUrl,
-  } = params;
-
-  const expiryDateFormatted = new Date(expiryDate).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-
-  // Color schemes based on urgency
-  const urgencyColors = {
-    critical: { bg: '#fef2f2', border: '#fecaca', text: '#991b1b', badge: '#dc2626' },
-    warning: { bg: '#fffbeb', border: '#fde68a', text: '#92400e', badge: '#f59e0b' },
-    info: { bg: '#eff6ff', border: '#bfdbfe', text: '#1e40af', badge: '#3b82f6' },
-  };
-
-  const colors = urgencyColors[urgencyLevel];
-
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Warranty Expiring Soon</title>
-</head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f4f4f5;">
-  <table role="presentation" style="width: 100%; border-collapse: collapse;">
-    <tr>
-      <td align="center" style="padding: 40px 20px;">
-        <table role="presentation" style="width: 100%; max-width: 600px; border-collapse: collapse; background-color: #ffffff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
-          <!-- Header -->
-          <tr>
-            <td style="padding: 32px 32px 24px; text-align: center; border-bottom: 1px solid #e4e4e7;">
-              <h1 style="margin: 0; font-size: 24px; font-weight: 600; color: #18181b;">Warranty Expiring Soon</h1>
-            </td>
-          </tr>
-          <!-- Content -->
-          <tr>
-            <td style="padding: 32px;">
-              <!-- Urgency Banner -->
-              <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: ${colors.bg}; border: 1px solid ${colors.border}; border-radius: 8px; margin-bottom: 24px;">
-                <tr>
-                  <td style="padding: 20px; text-align: center;">
-                    <span style="display: inline-block; padding: 6px 12px; background-color: ${colors.badge}; color: #ffffff; font-size: 14px; font-weight: 600; border-radius: 4px; margin-bottom: 12px;">
-                      ${daysUntilExpiry} days remaining
-                    </span>
-                    <p style="margin: 0; font-size: 16px; color: ${colors.text}; font-weight: 500;">
-                      Your warranty for ${productName} expires on ${expiryDateFormatted}
-                    </p>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Warranty Details -->
-              <table role="presentation" style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
-                <tr>
-                  <td style="padding: 12px 0; border-bottom: 1px solid #e4e4e7;">
-                    <span style="font-size: 14px; color: #71717a;">Product</span>
-                    <p style="margin: 4px 0 0; font-size: 16px; color: #18181b; font-weight: 500;">${productName}</p>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 12px 0; border-bottom: 1px solid #e4e4e7;">
-                    <span style="font-size: 14px; color: #71717a;">Policy Type</span>
-                    <p style="margin: 4px 0 0; font-size: 16px; color: #18181b; font-weight: 500;">${policyTypeDisplay}</p>
-                  </td>
-                </tr>
-                ${cycleStatusDisplay ? `
-                <tr>
-                  <td style="padding: 12px 0; border-bottom: 1px solid #e4e4e7;">
-                    <span style="font-size: 14px; color: #71717a;">Cycle Status</span>
-                    <p style="margin: 4px 0 0; font-size: 16px; color: #18181b; font-weight: 500;">${cycleStatusDisplay}</p>
-                  </td>
-                </tr>
-                ` : ''}
-              </table>
-
-              ${renewalUrl ? `
-              <!-- Renewal Button -->
-              <table role="presentation" style="width: 100%; border-collapse: collapse;">
-                <tr>
-                  <td align="center" style="padding: 16px 0;">
-                    <a href="${renewalUrl}" style="display: inline-block; padding: 14px 32px; background-color: #18181b; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: 500; border-radius: 8px;">Renew Warranty</a>
-                  </td>
-                </tr>
-              </table>
-              ` : `
-              <p style="margin: 0; font-size: 16px; color: #3f3f46; line-height: 1.5; text-align: center;">
-                Contact us to learn about renewal options.
-              </p>
-              `}
-            </td>
-          </tr>
-          <!-- Footer -->
-          <tr>
-            <td style="padding: 24px 32px; background-color: #f4f4f5; border-radius: 0 0 8px 8px;">
-              <p style="margin: 0; font-size: 14px; color: #71717a; text-align: center;">
-                This email was sent by Renoz. If you have any questions, please contact support.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-  `.trim();
-}
-
-/**
- * Generate plain text email for warranty expiry reminder
- */
-function generateWarrantyExpiryText(params: {
-  productName: string;
-  policyTypeDisplay: string;
-  expiryDate: string;
-  daysUntilExpiry: number;
-  cycleStatusDisplay: string | null;
-  renewalUrl: string | null;
-}): string {
-  const {
-    productName,
-    policyTypeDisplay,
-    expiryDate,
-    daysUntilExpiry,
-    cycleStatusDisplay,
-    renewalUrl,
-  } = params;
-
-  const expiryDateFormatted = new Date(expiryDate).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-
-  return `
-WARRANTY EXPIRING SOON
-
-Your warranty for ${productName} expires in ${daysUntilExpiry} days.
-
-EXPIRY DATE: ${expiryDateFormatted}
-
-DETAILS
-Product: ${productName}
-Policy Type: ${policyTypeDisplay}
-${cycleStatusDisplay ? `Cycle Status: ${cycleStatusDisplay}\n` : ''}
-${renewalUrl ? `Renew your warranty: ${renewalUrl}` : 'Contact us to learn about renewal options.'}
 
 ---
 This email was sent by Renoz. If you have any questions, please contact support.
@@ -691,44 +518,28 @@ export const sendWarrantyExpiryReminder = task({
       customerEmail,
     });
 
-    // Determine urgency level
+    // Determine urgency level for logging and metadata
     const urgencyLevel =
       daysUntilExpiry <= 7 ? 'critical' : daysUntilExpiry <= 30 ? 'warning' : 'info';
-
-    // Format cycle status for battery warranties
-    let cycleStatusDisplay: string | null = null;
-    if (policyType === 'battery_performance' && cycleLimit) {
-      if (currentCycleCount) {
-        const remaining = cycleLimit - currentCycleCount;
-        const percentUsed = Math.round((currentCycleCount / cycleLimit) * 100);
-        cycleStatusDisplay = `${remaining.toLocaleString()} cycles remaining (${percentUsed}% used)`;
-      } else {
-        cycleStatusDisplay = `${cycleLimit.toLocaleString()} cycles remaining`;
-      }
-    }
 
     // Get policy type display
     const policyTypeDisplay = getPolicyTypeLabel(policyType);
 
-    // Generate email content (coerce undefined to null for template)
-    const emailHtml = generateWarrantyExpiryHtml({
-      productName,
-      policyTypeDisplay,
-      expiryDate,
-      daysUntilExpiry,
-      urgencyLevel,
-      cycleStatusDisplay,
-      renewalUrl: renewalUrl ?? null,
-    });
-
-    const emailText = generateWarrantyExpiryText({
-      productName,
-      policyTypeDisplay,
-      expiryDate,
-      daysUntilExpiry,
-      cycleStatusDisplay,
-      renewalUrl: renewalUrl ?? null,
-    });
+    // Generate email content using React Email template (EMAIL-TPL-002)
+    const { html: emailHtml, text: emailText } = await renderEmail(
+      WarrantyExpiring({
+        customerName: customerEmail.split('@')[0], // Extract name from email as fallback
+        productName,
+        warrantyNumber: warrantyNumber ?? undefined,
+        policyTypeDisplay,
+        daysUntilExpiry,
+        expiryDate,
+        currentCycleCount: currentCycleCount ?? undefined,
+        cycleLimit: cycleLimit ?? undefined,
+        renewalUrl: renewalUrl ?? undefined,
+        warrantyDetailsUrl: `${process.env.APP_URL ?? 'https://app.renoz.energy'}/warranty/${warrantyId}`,
+      })
+    );
 
     // Step 1: Send email via Resend
     console.log('Sending expiry reminder email', {
@@ -794,7 +605,7 @@ export const sendWarrantyExpiryReminder = task({
           userId: customerId,
           type: 'warranty',
           title: `Warranty Expiring Soon: ${productName}`,
-          message: `Your warranty for ${productName} expires in ${daysUntilExpiry} days (${new Date(expiryDate).toLocaleDateString()}).${cycleStatusDisplay ? ` ${cycleStatusDisplay}` : ''}`,
+          message: `Your warranty for ${productName} expires in ${daysUntilExpiry} days (${new Date(expiryDate).toLocaleDateString()}).`,
           data: metadata,
           status: 'pending',
         })

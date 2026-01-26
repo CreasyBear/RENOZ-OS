@@ -156,9 +156,11 @@ export {
   getFirstName,
   formatNumber,
   formatPercent,
+  formatDecimalAsPercent,
   formatOrderNumber,
   type FormatCurrencyOptions,
   type FormatDateOptions,
+  type FormatPercentOptions,
   type Address,
 } from "./format";
 
@@ -167,4 +169,6 @@ export {
   sanitizeForHtml,
   substituteTemplateVariables,
   containsHtml,
+  validateEmailUrl,
+  validateEmailUrlDomain,
 } from "./sanitize";
