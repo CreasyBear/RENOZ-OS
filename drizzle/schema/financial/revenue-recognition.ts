@@ -26,8 +26,9 @@ import {
   integer,
   index,
   timestamp,
+  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   recognitionTypeEnum,
   recognitionStateEnum,
@@ -111,6 +112,29 @@ export const revenueRecognition = pgTable(
       table.state,
       table.xeroSyncAttempts
     ),
+
+    // Standard CRUD RLS policies for org isolation
+    selectPolicy: pgPolicy("revenue_recognition_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("revenue_recognition_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("revenue_recognition_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("revenue_recognition_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 
@@ -174,6 +198,29 @@ export const deferredRevenue = pgTable(
       table.organizationId,
       table.deferralDate
     ),
+
+    // Standard CRUD RLS policies for org isolation
+    selectPolicy: pgPolicy("deferred_revenue_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("deferred_revenue_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("deferred_revenue_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("deferred_revenue_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 

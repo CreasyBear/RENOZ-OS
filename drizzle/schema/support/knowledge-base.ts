@@ -16,8 +16,9 @@ import {
   boolean,
   jsonb,
   index,
+  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   timestampColumns,
   auditColumns,
@@ -66,6 +67,29 @@ export const kbCategories = pgTable(
     index("kb_categories_organization_idx").on(table.organizationId),
     index("kb_categories_parent_idx").on(table.parentId),
     index("kb_categories_slug_idx").on(table.organizationId, table.slug),
+
+    // Standard CRUD RLS policies for org isolation
+    pgPolicy("kb_categories_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("kb_categories_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("kb_categories_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("kb_categories_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   ]
 );
 
@@ -117,6 +141,29 @@ export const kbArticles = pgTable(
     index("kb_articles_status_idx").on(table.status),
     index("kb_articles_slug_idx").on(table.organizationId, table.slug),
     index("kb_articles_search_idx").on(table.title, table.content),
+
+    // Standard CRUD RLS policies for org isolation
+    pgPolicy("kb_articles_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("kb_articles_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("kb_articles_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("kb_articles_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   ]
 );
 

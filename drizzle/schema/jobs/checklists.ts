@@ -22,8 +22,9 @@ import {
   integer,
   index,
   timestamp,
+  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   timestampColumns,
   auditColumns,
@@ -106,6 +107,29 @@ export const checklistTemplates = pgTable(
       table.organizationId,
       table.isActive
     ),
+
+    // Standard CRUD RLS policies for org isolation
+    selectPolicy: pgPolicy("checklist_templates_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("checklist_templates_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("checklist_templates_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("checklist_templates_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 
@@ -174,6 +198,29 @@ export const jobChecklists = pgTable(
     //   table.organizationId,
     //   table.jobId
     // ),
+
+    // Standard CRUD RLS policies for org isolation
+    selectPolicy: pgPolicy("job_checklists_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("job_checklists_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("job_checklists_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("job_checklists_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 
@@ -237,6 +284,29 @@ export const jobChecklistItems = pgTable(
       table.organizationId,
       table.isCompleted
     ),
+
+    // Standard CRUD RLS policies for org isolation
+    selectPolicy: pgPolicy("job_checklist_items_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("job_checklist_items_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("job_checklist_items_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("job_checklist_items_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 

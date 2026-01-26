@@ -10,6 +10,7 @@
 
 import {
   pgTable,
+  pgPolicy,
   pgEnum,
   uuid,
   text,
@@ -191,6 +192,29 @@ export const priceAgreements = pgTable(
       "price_agreements_total_items_non_negative",
       sql`${table.totalItems} >= 0`
     ),
+
+    // RLS Policies
+    selectPolicy: pgPolicy("price_agreements_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("price_agreements_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("price_agreements_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("price_agreements_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 

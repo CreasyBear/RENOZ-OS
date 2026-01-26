@@ -17,6 +17,7 @@ import {
   index,
   uniqueIndex,
   check,
+  pgPolicy,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { currencyColumn, percentageColumn, auditColumns } from "../_shared/patterns";
@@ -98,6 +99,29 @@ export const productPriceTiers = pgTable(
       "price_tier_discount_range",
       sql`${table.discountPercent} IS NULL OR (${table.discountPercent} >= 0 AND ${table.discountPercent} <= 100)`
     ),
+
+    // Standard CRUD RLS policies for org isolation
+    selectPolicy: pgPolicy("product_price_tiers_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("product_price_tiers_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("product_price_tiers_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("product_price_tiers_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 
@@ -178,6 +202,29 @@ export const customerProductPrices = pgTable(
       "customer_price_discount_range",
       sql`${table.discountPercent} IS NULL OR (${table.discountPercent} >= 0 AND ${table.discountPercent} <= 100)`
     ),
+
+    // Standard CRUD RLS policies for org isolation
+    selectPolicy: pgPolicy("customer_product_prices_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("customer_product_prices_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("customer_product_prices_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("customer_product_prices_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 
@@ -264,6 +311,29 @@ export const priceHistory = pgTable(
       table.organizationId,
       table.customerId
     ),
+
+    // Standard CRUD RLS policies for org isolation
+    selectPolicy: pgPolicy("price_history_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("price_history_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("price_history_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("price_history_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 

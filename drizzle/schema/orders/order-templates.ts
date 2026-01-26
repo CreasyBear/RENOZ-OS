@@ -9,13 +9,14 @@
 
 import {
   pgTable,
+  pgPolicy,
   uuid,
   text,
   boolean,
   jsonb,
   index,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import { taxTypeEnum } from "../_shared/enums";
 import {
   timestampColumns,
@@ -100,6 +101,28 @@ export const orderTemplates = pgTable(
       table.id.desc()
     ),
     index("order_templates_name_idx").on(table.name),
+    // RLS Policies
+    pgPolicy("order_templates_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("order_templates_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("order_templates_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("order_templates_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   ]
 );
 
@@ -161,6 +184,28 @@ export const orderTemplateItems = pgTable(
       table.createdAt.desc(),
       table.id.desc()
     ),
+    // RLS Policies
+    pgPolicy("order_template_items_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("order_template_items_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("order_template_items_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("order_template_items_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   ]
 );
 

@@ -17,6 +17,7 @@ import {
   index,
   uniqueIndex,
   check,
+  pgPolicy,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { timestampColumns } from "../_shared/patterns";
@@ -90,6 +91,29 @@ export const categories = pgTable(
       "category_parent_not_self",
       sql`${table.parentId} IS NULL OR ${table.parentId} != ${table.id}`
     ),
+
+    // Standard CRUD RLS policies for org isolation
+    selectPolicy: pgPolicy("categories_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("categories_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("categories_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("categories_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 

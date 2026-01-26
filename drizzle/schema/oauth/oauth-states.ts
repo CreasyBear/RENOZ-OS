@@ -7,6 +7,7 @@
 
 import {
   pgTable,
+  pgPolicy,
   uuid,
   text,
   jsonb,
@@ -14,6 +15,7 @@ import {
   boolean,
   index,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { organizations } from '../settings/organizations';
 import { users } from '../users/users';
 import { timestampColumns } from '../_shared/patterns';
@@ -57,6 +59,28 @@ export const oauthStates = pgTable(
     ),
     stateIdx: index('idx_oauth_states_state').on(table.state),
     expiresIdx: index('idx_oauth_states_expires').on(table.expiresAt),
+    // RLS Policies
+    selectPolicy: pgPolicy("oauth_states_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("oauth_states_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("oauth_states_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("oauth_states_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 

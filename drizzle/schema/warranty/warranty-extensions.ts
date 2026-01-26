@@ -15,8 +15,9 @@ import {
   timestamp,
   index,
   pgEnum,
+  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   timestampColumns,
   currencyColumnNullable,
@@ -99,6 +100,29 @@ export const warrantyExtensions = pgTable(
       table.organizationId,
       table.createdAt
     ),
+
+    // Standard CRUD RLS policies for org isolation
+    pgPolicy("warranty_extensions_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("warranty_extensions_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("warranty_extensions_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("warranty_extensions_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   ]
 );
 

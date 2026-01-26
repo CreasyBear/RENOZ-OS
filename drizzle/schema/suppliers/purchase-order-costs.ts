@@ -10,6 +10,7 @@
 
 import {
   pgTable,
+  pgPolicy,
   uuid,
   text,
   boolean,
@@ -106,6 +107,29 @@ export const purchaseOrderCosts = pgTable(
       "purchase_order_costs_amount_non_negative",
       sql`${table.amount} >= 0`
     ),
+
+    // RLS Policies
+    selectPolicy: pgPolicy("purchase_order_costs_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("purchase_order_costs_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("purchase_order_costs_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("purchase_order_costs_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 

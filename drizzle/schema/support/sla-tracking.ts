@@ -17,6 +17,7 @@ import {
   uniqueIndex,
   index,
   check,
+  pgPolicy,
 } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
 import { timestampColumns } from "../_shared/patterns";
@@ -98,6 +99,29 @@ export const slaTracking = pgTable(
     index("idx_sla_tracking_status").on(table.organizationId, table.status),
     // By configuration
     index("idx_sla_tracking_config").on(table.slaConfigurationId),
+
+    // Standard CRUD RLS policies for org isolation
+    pgPolicy("sla_tracking_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("sla_tracking_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("sla_tracking_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("sla_tracking_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   ]
 );
 

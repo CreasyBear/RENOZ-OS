@@ -15,8 +15,9 @@ import {
   boolean,
   jsonb,
   index,
+  pgPolicy,
 } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   timestampColumns,
   auditColumns,
@@ -103,6 +104,29 @@ export const issueTemplates = pgTable(
     index("issue_templates_type_idx").on(table.type),
     index("issue_templates_usage_idx").on(table.usageCount),
     index("issue_templates_active_idx").on(table.isActive),
+
+    // Standard CRUD RLS policies for org isolation
+    pgPolicy("issue_templates_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("issue_templates_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("issue_templates_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    pgPolicy("issue_templates_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   ]
 );
 

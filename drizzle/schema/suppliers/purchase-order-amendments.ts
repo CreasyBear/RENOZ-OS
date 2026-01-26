@@ -10,6 +10,7 @@
 
 import {
   pgTable,
+  pgPolicy,
   uuid,
   text,
   jsonb,
@@ -178,6 +179,29 @@ export const purchaseOrderAmendments = pgTable(
       sql`(${table.status} = 'applied' AND ${table.appliedAt} IS NOT NULL AND ${table.appliedBy} IS NOT NULL) OR
           (${table.status} != 'applied' AND ${table.appliedAt} IS NULL AND ${table.appliedBy} IS NULL)`
     ),
+
+    // RLS Policies
+    selectPolicy: pgPolicy("purchase_order_amendments_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("purchase_order_amendments_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("purchase_order_amendments_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("purchase_order_amendments_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 

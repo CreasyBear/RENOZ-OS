@@ -10,6 +10,7 @@
 
 import {
   pgTable,
+  pgPolicy,
   uuid,
   text,
   integer,
@@ -153,6 +154,29 @@ export const purchaseOrderApprovals = pgTable(
       sql`(${table.escalatedTo} IS NULL AND ${table.escalatedAt} IS NULL) OR
           (${table.escalatedTo} IS NOT NULL AND ${table.escalatedAt} IS NOT NULL)`
     ),
+
+    // RLS Policies
+    selectPolicy: pgPolicy("purchase_order_approvals_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("purchase_order_approvals_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("purchase_order_approvals_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("purchase_order_approvals_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 
@@ -250,6 +274,29 @@ export const purchaseOrderApprovalRules = pgTable(
       "purchase_order_approval_rules_priority_non_negative",
       sql`${table.priority} >= 0`
     ),
+
+    // RLS Policies
+    selectPolicy: pgPolicy("purchase_order_approval_rules_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("purchase_order_approval_rules_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("purchase_order_approval_rules_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("purchase_order_approval_rules_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 

@@ -10,6 +10,7 @@
 
 import {
   pgTable,
+  pgPolicy,
   uuid,
   text,
   integer,
@@ -170,6 +171,29 @@ export const purchaseOrderReceipts = pgTable(
       sql`(${table.inspectionCompletedAt} IS NULL AND ${table.inspectionCompletedBy} IS NULL) OR
           (${table.inspectionCompletedAt} IS NOT NULL AND ${table.inspectionCompletedBy} IS NOT NULL)`
     ),
+
+    // RLS Policies
+    selectPolicy: pgPolicy("purchase_order_receipts_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("purchase_order_receipts_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("purchase_order_receipts_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("purchase_order_receipts_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 
@@ -297,6 +321,29 @@ export const purchaseOrderReceiptItems = pgTable(
       "purchase_order_receipt_items_rejection_reason",
       sql`${table.quantityRejected} = 0 OR ${table.rejectionReason} IS NOT NULL`
     ),
+
+    // RLS Policies
+    selectPolicy: pgPolicy("purchase_order_receipt_items_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("purchase_order_receipt_items_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("purchase_order_receipt_items_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("purchase_order_receipt_items_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 

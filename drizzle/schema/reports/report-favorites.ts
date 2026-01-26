@@ -4,8 +4,8 @@
  * User favorites for scheduled/custom reports.
  */
 
-import { pgTable, uuid, text, index, uniqueIndex } from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm";
+import { pgTable, pgPolicy, uuid, text, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { relations, sql } from "drizzle-orm";
 import { timestampColumns } from "../_shared/patterns";
 import { users } from "../users/users";
 import { organizations } from "../settings/organizations";
@@ -38,6 +38,28 @@ export const reportFavorites = pgTable(
       table.reportType,
       table.reportId
     ),
+    // RLS Policies
+    selectPolicy: pgPolicy("report_favorites_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("report_favorites_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("report_favorites_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("report_favorites_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 

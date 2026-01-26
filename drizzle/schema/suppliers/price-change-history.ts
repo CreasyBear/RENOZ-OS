@@ -10,6 +10,7 @@
 
 import {
   pgTable,
+  pgPolicy,
   pgEnum,
   uuid,
   text,
@@ -174,6 +175,29 @@ export const priceChangeHistory = pgTable(
       sql`(${table.appliedAt} IS NULL AND ${table.appliedBy} IS NULL) OR
           (${table.appliedAt} IS NOT NULL AND ${table.appliedBy} IS NOT NULL)`
     ),
+
+    // RLS Policies
+    selectPolicy: pgPolicy("price_change_history_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("price_change_history_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("price_change_history_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("price_change_history_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 

@@ -9,13 +9,13 @@
 
 import {
   pgTable,
+  pgPolicy,
   uuid,
   text,
   boolean,
   jsonb,
   index,
   uniqueIndex,
-  pgPolicy,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { timestampColumns, softDeleteColumn } from "../_shared/patterns";
@@ -125,21 +125,28 @@ export const organizations = pgTable(
 
     // Active organizations
     activeIdx: index("idx_organizations_active").on(table.isActive),
-
-    // RLS Policies - users can only access their own organization
+    // RLS Policies - organizations table uses `id` instead of `organization_id`
     selectPolicy: pgPolicy("organizations_select_policy", {
       for: "select",
       to: "authenticated",
-      using: sql`id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("organizations_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
     updatePolicy: pgPolicy("organizations_update_policy", {
       for: "update",
       to: "authenticated",
-      using: sql`id = current_setting('app.organization_id', true)::uuid`,
-      withCheck: sql`id = current_setting('app.organization_id', true)::uuid`,
+      using: sql`id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`id = (SELECT current_setting('app.organization_id', true)::uuid)`,
     }),
-    // Note: No insert/delete policies - organizations are created during signup
-    // and should not be deleted by regular users
+    deletePolicy: pgPolicy("organizations_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 

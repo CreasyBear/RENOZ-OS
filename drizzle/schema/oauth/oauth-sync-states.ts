@@ -4,7 +4,8 @@
  * Stores provider sync tokens for incremental sync.
  */
 
-import { pgTable, uuid, text, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { pgTable, pgPolicy, uuid, text, timestamp, index, uniqueIndex } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { organizations } from '../settings/organizations';
 import { oauthConnections } from './oauth-connections';
 import { timestampColumns } from '../_shared/patterns';
@@ -38,6 +39,28 @@ export const oauthSyncStates = pgTable(
       table.connectionId,
       table.serviceType
     ),
+    // RLS Policies
+    selectPolicy: pgPolicy("oauth_sync_states_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("oauth_sync_states_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("oauth_sync_states_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("oauth_sync_states_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 

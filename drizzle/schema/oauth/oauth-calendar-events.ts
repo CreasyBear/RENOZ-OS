@@ -4,7 +4,8 @@
  * Stores external calendar events synced via OAuth providers.
  */
 
-import { pgTable, uuid, text, jsonb, timestamp, boolean, index } from 'drizzle-orm/pg-core';
+import { pgTable, pgPolicy, uuid, text, jsonb, timestamp, boolean, index } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 import { organizations } from '../settings/organizations';
 import { oauthConnections } from './oauth-connections';
 import { timestampColumns } from '../_shared/patterns';
@@ -44,6 +45,28 @@ export const oauthCalendarEvents = pgTable(
       table.connectionId,
       table.externalId
     ),
+    // RLS Policies
+    selectPolicy: pgPolicy("oauth_calendar_events_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("oauth_calendar_events_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    updatePolicy: pgPolicy("oauth_calendar_events_update_policy", {
+      for: "update",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("oauth_calendar_events_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
   })
 );
 
