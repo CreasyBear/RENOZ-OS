@@ -81,8 +81,8 @@ const settingsSchema = z.object({
   locale: z.string().max(20).optional(),
   currency: z.string().length(3).optional(),
   dateFormat: z.string().max(50).optional(),
-  fiscalYearStart: z.coerce.number().int().min(1).max(12).optional(),
-  defaultPaymentTerms: z.coerce.number().int().min(0).max(365).optional(),
+  fiscalYearStart: z.number().int().min(1).max(12).optional(),
+  defaultPaymentTerms: z.number().int().min(0).max(365).optional(),
 });
 
 type GeneralFormValues = z.infer<typeof generalSchema>;

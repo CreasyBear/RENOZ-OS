@@ -38,4 +38,5 @@ export {
   useAIChat,
   type UseAIChatOptions,
   type AIChatResult,
+  type Message,
 } from './use-ai-chat';

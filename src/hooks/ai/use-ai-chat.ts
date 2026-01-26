@@ -7,8 +7,11 @@
  * @see src/routes/api/ai/chat.ts
  */
 
-import { useChat as useVercelChat, type Message } from 'ai/react';
+import { useChat as useVercelChat, type UIMessage } from '@ai-sdk/react';
 import { useCallback, useState } from 'react';
+
+// Re-export Message type for convenience
+export type Message = UIMessage;
 
 // ============================================================================
 // TYPES
