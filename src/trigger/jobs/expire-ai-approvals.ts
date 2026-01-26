@@ -11,7 +11,7 @@ import { cronTrigger, invokeTrigger } from '@trigger.dev/sdk';
 import { client } from '../client';
 import { db } from '@/lib/db';
 import { aiApprovals } from 'drizzle/schema/_ai';
-import { eq, and, lt, inArray } from 'drizzle-orm';
+import { eq, and, lt, sql } from 'drizzle-orm';
 
 // ============================================================================
 // TYPES
@@ -40,7 +40,7 @@ interface ExpiredApprovalInfo {
 export const expireAiApprovalsSchedule = client.defineJob({
   id: 'expire-ai-approvals-schedule',
   name: 'Expire AI Approvals (Scheduled)',
-  version: '1.0.0',
+  version: '1.0.1', // Bumped for atomic update fix
   trigger: cronTrigger({
     // Run every hour at minute 0
     cron: '0 * * * *',
@@ -48,25 +48,33 @@ export const expireAiApprovalsSchedule = client.defineJob({
   run: async (_payload, io) => {
     await io.logger.info('Starting AI approvals expiry check');
 
-    // Find all pending approvals that have expired
-    const expiredResult = await io.runTask('find-expired', async () => {
+    // ATOMIC UPDATE: Use UPDATE...WHERE...RETURNING to prevent race conditions
+    // This ensures only pending approvals are expired, even if concurrent approval happens
+    const expiredResult = await io.runTask('expire-atomically', async () => {
       const now = new Date();
 
+      // Atomic update - only expires approvals that are STILL pending
+      // If an approval was approved between check and update, it won't be affected
       const expired = await db
-        .select({
+        .update(aiApprovals)
+        .set({
+          status: 'expired',
+          // Increment version for optimistic locking consistency
+          version: sql`${aiApprovals.version} + 1`,
+        })
+        .where(
+          and(
+            eq(aiApprovals.status, 'pending'), // Critical: status check in WHERE clause
+            lt(aiApprovals.expiresAt, now)
+          )
+        )
+        .returning({
           id: aiApprovals.id,
           userId: aiApprovals.userId,
           organizationId: aiApprovals.organizationId,
           action: aiApprovals.action,
           agent: aiApprovals.agent,
-        })
-        .from(aiApprovals)
-        .where(
-          and(
-            eq(aiApprovals.status, 'pending'),
-            lt(aiApprovals.expiresAt, now)
-          )
-        );
+        });
 
       return { approvals: expired, count: expired.length };
     }) as { approvals: ExpiredApprovalInfo[]; count: number };
@@ -74,25 +82,11 @@ export const expireAiApprovalsSchedule = client.defineJob({
     const expiredApprovals = expiredResult?.approvals ?? [];
     const expiredCount = expiredResult?.count ?? 0;
 
-    await io.logger.info(`Found ${expiredCount} expired approvals`);
+    await io.logger.info(`Expired ${expiredCount} approvals atomically`);
 
     if (expiredCount === 0) {
       return { expiredCount: 0, notificationsSent: 0 };
     }
-
-    // Update all expired approvals
-    const updateResult = await io.runTask('update-expired', async () => {
-      const expiredIds = expiredApprovals.map((a: ExpiredApprovalInfo) => a.id);
-
-      await db
-        .update(aiApprovals)
-        .set({ status: 'expired' })
-        .where(inArray(aiApprovals.id, expiredIds));
-
-      return { updated: expiredIds.length };
-    }) as { updated: number };
-
-    await io.logger.info(`Updated ${updateResult?.updated ?? 0} approvals to expired status`);
 
     // Create notifications for each affected user
     let notificationsSent = 0;
@@ -144,43 +138,41 @@ export const expireAiApprovalsSchedule = client.defineJob({
 export const expireAiApprovalsTask = client.defineJob({
   id: 'expire-ai-approvals-task',
   name: 'Expire AI Approvals (Manual)',
-  version: '1.0.0',
+  version: '1.0.1', // Bumped for atomic update fix
   trigger: invokeTrigger(),
   run: async (_payload, io) => {
     await io.logger.info('Manual AI approvals expiry triggered');
 
-    // Find all pending approvals that have expired
     const now = new Date();
 
+    // ATOMIC UPDATE: Use UPDATE...WHERE...RETURNING to prevent race conditions
     const expiredApprovals = await db
-      .select({
+      .update(aiApprovals)
+      .set({
+        status: 'expired',
+        version: sql`${aiApprovals.version} + 1`,
+      })
+      .where(
+        and(
+          eq(aiApprovals.status, 'pending'), // Critical: status check in WHERE clause
+          lt(aiApprovals.expiresAt, now)
+        )
+      )
+      .returning({
         id: aiApprovals.id,
         userId: aiApprovals.userId,
         organizationId: aiApprovals.organizationId,
         action: aiApprovals.action,
         agent: aiApprovals.agent,
-      })
-      .from(aiApprovals)
-      .where(
-        and(
-          eq(aiApprovals.status, 'pending'),
-          lt(aiApprovals.expiresAt, now)
-        )
-      );
+      });
 
     if (expiredApprovals.length === 0) {
       await io.logger.info('No expired approvals found');
       return { expiredCount: 0 };
     }
 
-    // Update all expired approvals
     const expiredIds = expiredApprovals.map((a) => a.id);
-    await db
-      .update(aiApprovals)
-      .set({ status: 'expired' })
-      .where(inArray(aiApprovals.id, expiredIds));
-
-    await io.logger.info(`Expired ${expiredApprovals.length} approvals`);
+    await io.logger.info(`Expired ${expiredApprovals.length} approvals atomically`);
 
     return {
       expiredCount: expiredApprovals.length,

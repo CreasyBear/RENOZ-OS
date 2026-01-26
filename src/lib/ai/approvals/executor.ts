@@ -44,18 +44,21 @@ export interface RejectActionResult {
  * This function:
  * 1. Fetches and validates the approval record
  * 2. Uses SELECT FOR UPDATE to prevent race conditions
- * 3. Executes the action handler in a transaction
- * 4. Updates the approval record with the result
+ * 3. Uses optimistic locking (version column) as additional safety
+ * 4. Executes the action handler in a transaction
+ * 5. Updates the approval record with the result
  *
  * @param approvalId - The approval ID to execute
  * @param userId - The user executing the action
  * @param organizationId - The organization ID for validation
+ * @param expectedVersion - Expected version for optimistic locking (optional)
  * @returns Execution result
  */
 export async function executeAction(
   approvalId: string,
   userId: string,
-  organizationId: string
+  organizationId: string,
+  expectedVersion?: number
 ): Promise<ExecuteActionResult> {
   try {
     // Use transaction for atomicity
@@ -90,12 +93,24 @@ export async function executeAction(
         };
       }
 
+      // Optimistic locking: verify version matches if provided
+      if (expectedVersion !== undefined && approval.version !== expectedVersion) {
+        return {
+          success: false,
+          error: 'Approval was modified by another request (version mismatch)',
+          code: 'VERSION_CONFLICT',
+        };
+      }
+
       // Check if expired
       if (approval.expiresAt < new Date()) {
-        // Mark as expired
+        // Mark as expired with version increment
         await tx
           .update(aiApprovals)
-          .set({ status: 'expired' })
+          .set({
+            status: 'expired',
+            version: sql`${aiApprovals.version} + 1`,
+          })
           .where(eq(aiApprovals.id, approvalId));
 
         return {
@@ -136,6 +151,7 @@ export async function executeAction(
           details: handlerResult.data as Record<string, unknown> | undefined,
         };
 
+        // Increment version on successful status change
         await tx
           .update(aiApprovals)
           .set({
@@ -144,6 +160,7 @@ export async function executeAction(
             approvedAt: new Date(),
             executedAt: new Date(),
             executionResult: successResult,
+            version: sql`${aiApprovals.version} + 1`,
           })
           .where(eq(aiApprovals.id, approvalId));
 
@@ -153,6 +170,7 @@ export async function executeAction(
         };
       } else {
         // Handler failed - record error but keep status as pending for retry
+        // Still increment version to track the attempt
         const failureResult: ExecutionResult = {
           success: false,
           error: handlerResult.error,
@@ -166,6 +184,7 @@ export async function executeAction(
           .update(aiApprovals)
           .set({
             executionResult: failureResult,
+            version: sql`${aiApprovals.version} + 1`,
           })
           .where(eq(aiApprovals.id, approvalId));
 
@@ -193,18 +212,21 @@ export async function executeAction(
  *
  * Uses a transaction with SELECT FOR UPDATE to prevent race conditions
  * where the same approval could be approved and rejected simultaneously.
+ * Also uses optimistic locking (version column) as additional safety.
  *
  * @param approvalId - The approval ID to reject
  * @param userId - The user rejecting the action
  * @param organizationId - The organization ID for validation
  * @param reason - Reason for rejection
+ * @param expectedVersion - Expected version for optimistic locking (optional)
  * @returns Rejection result
  */
 export async function rejectAction(
   approvalId: string,
   userId: string,
   organizationId: string,
-  reason?: string
+  reason?: string,
+  expectedVersion?: number
 ): Promise<RejectActionResult> {
   try {
     // Use transaction with SELECT FOR UPDATE to prevent race conditions
@@ -237,7 +259,15 @@ export async function rejectAction(
         };
       }
 
-      // Update approval as rejected
+      // Optimistic locking: verify version matches if provided
+      if (expectedVersion !== undefined && approval.version !== expectedVersion) {
+        return {
+          success: false,
+          error: 'Approval was modified by another request (version mismatch)',
+        };
+      }
+
+      // Update approval as rejected with version increment
       await tx
         .update(aiApprovals)
         .set({
@@ -245,6 +275,7 @@ export async function rejectAction(
           approvedBy: userId, // Using approvedBy to track who acted
           approvedAt: new Date(),
           rejectionReason: reason ?? 'User rejected',
+          version: sql`${aiApprovals.version} + 1`,
         })
         .where(eq(aiApprovals.id, approvalId));
 

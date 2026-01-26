@@ -1,7 +1,7 @@
 /**
  * AI Utilities
  *
- * Budget enforcement and cost tracking utilities.
+ * Budget enforcement, cost tracking, and parameter resolution utilities.
  */
 
 export {
@@ -38,3 +38,12 @@ export {
   type SmoothStreamOptions,
   type ChunkingMode,
 } from './smooth-stream';
+
+export {
+  resolveToolParams,
+  resolveToolParamsSafe,
+  getPeriodDates,
+  formatDateString,
+  mapMetricsFilterToParams,
+  getSchemaDefaults,
+} from './resolve-params';

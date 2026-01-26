@@ -52,18 +52,45 @@ export const getCustomerTool = tool({
   }),
   execute: async ({ customerId, _context }): Promise<CustomerWithMeta | ReturnType<typeof createErrorResult>> => {
     try {
-      // Get customer with org scoping
-      const [customer] = await db
-        .select()
-        .from(customers)
-        .where(
-          and(
-            eq(customers.id, customerId),
-            eq(customers.organizationId, _context.organizationId),
-            isNull(customers.deletedAt)
+      // Execute all three queries in parallel for better performance
+      const [customerResult, activityResult, overdueResult] = await Promise.all([
+        // Get customer with org scoping
+        db
+          .select()
+          .from(customers)
+          .where(
+            and(
+              eq(customers.id, customerId),
+              eq(customers.organizationId, _context.organizationId),
+              isNull(customers.deletedAt)
+            )
           )
-        )
-        .limit(1);
+          .limit(1),
+
+        // Get last activity date
+        db
+          .select({ createdAt: customerActivities.createdAt })
+          .from(customerActivities)
+          .where(eq(customerActivities.customerId, customerId))
+          .orderBy(desc(customerActivities.createdAt))
+          .limit(1),
+
+        // Get overdue invoices count
+        db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(orders)
+          .where(
+            and(
+              eq(orders.customerId, customerId),
+              sql`${orders.paymentStatus} = 'pending'`,
+              sql`${orders.dueDate} < CURRENT_DATE`,
+              isNull(orders.deletedAt)
+            )
+          ),
+      ]);
+
+      const [customer] = customerResult;
+      const [lastActivity] = activityResult;
 
       if (!customer) {
         return createErrorResult(
@@ -72,27 +99,6 @@ export const getCustomerTool = tool({
           'NOT_FOUND'
         );
       }
-
-      // Get last activity date
-      const [lastActivity] = await db
-        .select({ createdAt: customerActivities.createdAt })
-        .from(customerActivities)
-        .where(eq(customerActivities.customerId, customerId))
-        .orderBy(desc(customerActivities.createdAt))
-        .limit(1);
-
-      // Get overdue invoices count
-      const [overdueResult] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(orders)
-        .where(
-          and(
-            eq(orders.customerId, customerId),
-            sql`${orders.paymentStatus} = 'pending'`,
-            sql`${orders.dueDate} < CURRENT_DATE`,
-            isNull(orders.deletedAt)
-          )
-        );
 
       // Calculate days since last contact
       const daysSinceLastContact = lastActivity?.createdAt
@@ -116,7 +122,8 @@ export const getCustomerTool = tool({
 
       // Generate suggested actions
       const suggestedActions: string[] = [];
-      const hasOverdueInvoices = (overdueResult?.count ?? 0) > 0;
+      const [overdueCount] = overdueResult;
+      const hasOverdueInvoices = (overdueCount?.count ?? 0) > 0;
 
       if (hasOverdueInvoices) {
         suggestedActions.push('Follow up on overdue invoices');
@@ -234,12 +241,16 @@ export const searchCustomersTool = tool({
         )
         .limit(limit);
 
-      // Add similarity scores (approximate since we're not using pg_trgm)
+      // Add similarity scores and filter sensitive fields
       const searchResultsWithScores: CustomerSearchResult[] = results.map(
-        (r, index) => ({
-          ...r,
-          similarity: Math.max(0.5, 1 - index * 0.1), // Approximate scoring
-        })
+        (r, index) => {
+          // Filter out PII (email, phone) from each result
+          const filtered = filterSensitiveFields(r);
+          return {
+            ...filtered,
+            similarity: Math.max(0.5, 1 - index * 0.1), // Approximate scoring
+          };
+        }
       );
 
       return {

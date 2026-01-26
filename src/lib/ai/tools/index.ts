@@ -92,3 +92,19 @@ export {
   createApprovalResult,
   createErrorResult,
 } from './types';
+
+// ============================================================================
+// STREAMING UTILITIES
+// ============================================================================
+
+export {
+  createLoadingState,
+  createProgressState,
+  createCompleteState,
+  createErrorState,
+  collectStreamingResults,
+  getFinalResult,
+  type ToolStreamStatus,
+  type StreamingToolResult,
+  type StreamingToolExecute,
+} from './streaming';

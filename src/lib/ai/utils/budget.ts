@@ -224,11 +224,23 @@ export async function checkBudget(
     };
   } catch (error) {
     console.error('[AI Budget] Failed to check budget:', error);
-    // On error, allow request but log warning
-    // This prevents budget system failures from blocking all AI usage
+
+    // CRITICAL SECURITY: Fail closed in production to prevent unbounded AI costs
+    // In production, deny requests if we can't verify budget
+    // In development, allow for easier testing
+    if (process.env.NODE_ENV === 'production') {
+      return {
+        allowed: false,
+        reason: 'Budget system temporarily unavailable',
+        suggestion: 'Please try again in a few minutes. If the issue persists, contact support.',
+      };
+    }
+
+    // Development only: allow request but warn
+    console.warn('[AI Budget] Allowing request in development despite budget check failure');
     return {
       allowed: true,
-      reason: 'Budget check failed (allowing request)',
+      reason: 'Budget check failed (allowing in development only)',
     };
   }
 }

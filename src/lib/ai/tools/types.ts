@@ -78,14 +78,15 @@ export type AnyToolResult<T = unknown> =
 
 /**
  * Extended customer data with AI-generated metadata.
+ * Note: email and phone are intentionally omitted - they are filtered
+ * by filterSensitiveFields() to prevent PII exposure to AI.
  */
 export interface CustomerWithMeta {
-  /** Customer record */
+  /** Customer record (PII filtered) */
   customer: {
     id: string;
     name: string;
-    email: string | null;
-    phone: string | null;
+    // email and phone are filtered out for AI safety
     status: string;
     type: string;
     healthScore: number | null;
@@ -107,12 +108,13 @@ export interface CustomerWithMeta {
 
 /**
  * Customer search result.
+ * Note: email and phone are intentionally omitted - they are filtered
+ * by filterSensitiveFields() to prevent PII exposure to AI.
  */
 export interface CustomerSearchResult {
   id: string;
   name: string;
-  email: string | null;
-  phone: string | null;
+  // email and phone are filtered out for AI safety
   status: string;
   type: string;
   /** Similarity score from pg_trgm (0-1) */
@@ -310,6 +312,16 @@ export interface ToolContext {
 export function filterSensitiveFields<T extends Record<string, unknown>>(
   data: T,
   sensitiveKeys: string[] = [
+    // PII that should not be returned to AI
+    'email',
+    'phone',
+    'mobilePhone',
+    'mobile_phone',
+    'homePhone',
+    'home_phone',
+    'workPhone',
+    'work_phone',
+    // Financial identifiers
     'ssn',
     'taxId',
     'tax_id',
@@ -319,6 +331,7 @@ export function filterSensitiveFields<T extends Record<string, unknown>>(
     'bank_routing_number',
     'creditCard',
     'credit_card',
+    // Secrets
     'password',
     'passwordHash',
     'password_hash',

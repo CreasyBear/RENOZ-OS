@@ -82,14 +82,15 @@ const specialistTools: Record<keyof typeof specialistRunners, ToolSet> = {
 
 export async function POST({ request }: { request: Request }) {
   try {
-    // Authenticate user
-    const ctx = await withAuth();
+    // PERFORMANCE: Parallelize auth and body parsing (both are independent)
+    const [ctx, body] = await Promise.all([
+      withAuth(),
+      request.json() as Promise<ChatRequestBody>,
+    ]);
 
-    // Parse request body
-    const body = (await request.json()) as ChatRequestBody;
     const { messages, context } = body;
 
-    // Validate messages
+    // Validate messages (fast, no I/O)
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return new Response(
         JSON.stringify({ error: 'Messages array is required', code: 'INVALID_INPUT' }),
@@ -97,13 +98,7 @@ export async function POST({ request }: { request: Request }) {
       );
     }
 
-    // Rate limit check
-    const rateLimitResult = await checkRateLimit('chat', ctx.user.id);
-    if (!rateLimitResult.allowed) {
-      return createRateLimitResponse(rateLimitResult.retryAfter!);
-    }
-
-    // Estimate cost (rough estimate based on message length)
+    // Estimate cost (fast, no I/O - needed for budget check)
     const estimatedInputTokens = messages.reduce(
       (sum, msg) => {
         // Extract text from parts
@@ -117,26 +112,31 @@ export async function POST({ request }: { request: Request }) {
     );
     const costEstimate = estimateCost('claude-sonnet-4-20250514', estimatedInputTokens, 500);
 
-    // Budget check
-    const budgetResult = await checkBudget(
-      ctx.organizationId,
-      ctx.user.id,
-      costEstimate.costCents
-    );
+    // PERFORMANCE: Parallelize rate limit, budget check, and conversation fetch
+    // These are independent operations that can run concurrently
+    const memoryProvider = getDrizzleMemoryProvider();
+    const [rateLimitResult, budgetResult, conversation] = await Promise.all([
+      checkRateLimit('chat', ctx.user.id),
+      checkBudget(ctx.organizationId, ctx.user.id, costEstimate.costCents),
+      memoryProvider.getOrCreateConversation(
+        ctx.user.id,
+        ctx.organizationId,
+        context?.conversationId
+      ),
+    ]);
+
+    // Check rate limit result
+    if (!rateLimitResult.allowed) {
+      return createRateLimitResponse(rateLimitResult.retryAfter!);
+    }
+
+    // Check budget result
     if (!budgetResult.allowed) {
       return createBudgetExceededResponse(
         budgetResult.reason!,
         budgetResult.suggestion
       );
     }
-
-    // Get or create conversation
-    const memoryProvider = getDrizzleMemoryProvider();
-    const conversation = await memoryProvider.getOrCreateConversation(
-      ctx.user.id,
-      ctx.organizationId,
-      context?.conversationId
-    );
 
     // Build user context
     const userContext: UserContext = {
