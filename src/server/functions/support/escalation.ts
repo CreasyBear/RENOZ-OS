@@ -18,6 +18,7 @@ import type {
   EscalationAction,
 } from 'drizzle/schema/support/escalation-rules';
 import { withAuth } from '@/lib/server/protected';
+import { NotFoundError, ValidationError, ServerError } from '@/lib/server/errors';
 
 // ============================================================================
 // SCHEMAS
@@ -100,7 +101,7 @@ export const escalateIssue = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!issue) {
-      throw new Error('Issue not found');
+      throw new NotFoundError('Issue not found', 'issue');
     }
 
     const now = new Date();
@@ -157,11 +158,11 @@ export const deEscalateIssue = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!issue) {
-      throw new Error('Issue not found');
+      throw new NotFoundError('Issue not found', 'issue');
     }
 
     if (issue.status !== 'escalated') {
-      throw new Error('Issue is not currently escalated');
+      throw new ValidationError('Issue is not currently escalated');
     }
 
     // Update issue status back to in_progress
@@ -215,7 +216,7 @@ export const getEscalationHistory = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!issue) {
-      throw new Error('Issue not found');
+      throw new NotFoundError('Issue not found', 'issue');
     }
 
     // Get history with user details
@@ -302,7 +303,7 @@ export const updateEscalationRule = createServerFn({ method: 'POST' })
       .returning();
 
     if (!rule) {
-      throw new Error('Escalation rule not found');
+      throw new NotFoundError('Escalation rule not found', 'escalationRule');
     }
 
     return rule;
@@ -420,7 +421,7 @@ async function applyEscalationAction(
   // For auto-escalation, we need a valid performer for audit trail
   const performedBy = systemUserId ?? rule.escalateToUserId ?? issue.createdBy;
   if (!performedBy) {
-    throw new Error('Cannot apply escalation: no valid performer user ID available');
+    throw new ServerError('Cannot apply escalation: no valid performer user ID available');
   }
 
   switch (action.type) {

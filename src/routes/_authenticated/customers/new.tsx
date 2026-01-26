@@ -123,6 +123,7 @@ function NewCustomerPage() {
         industry: wizardData.customer.industry,
         taxId: wizardData.customer.taxId,
         registrationNumber: wizardData.customer.registrationNumber,
+        warrantyExpiryAlertOptOut: false,
       })
 
       // Create contacts

@@ -26,7 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { FormatAmount } from "@/components/shared/format";
 import { TruncateTooltip } from "@/components/shared/truncate-tooltip";
-import { listProducts } from "@/lib/server/functions/products";
+import { listProducts } from "@/server/functions/products/products";
 
 // ============================================================================
 // TYPES

@@ -50,11 +50,11 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { toastSuccess, toastError } from "@/hooks";
-import { getOrderWithCustomer } from "@/lib/server/functions/orders";
+import { getOrderWithCustomer } from "@/server/functions/orders/orders";
 import {
   createShipment,
   markShipped,
-} from "@/lib/server/functions/order-shipments";
+} from "@/server/functions/orders/order-shipments";
 
 // ============================================================================
 // TYPES

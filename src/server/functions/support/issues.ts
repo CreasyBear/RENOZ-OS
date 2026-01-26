@@ -42,6 +42,7 @@ import type {
   SlaConfiguration,
   BusinessHoursConfig as BusinessHoursConfigType,
 } from '@/lib/sla/types';
+import { NotFoundError } from '@/lib/server/errors';
 
 // ============================================================================
 // CREATE ISSUE
@@ -142,7 +143,7 @@ async function startSlaTrackingForIssue(
     .limit(1);
 
   if (!config) {
-    throw new Error('SLA configuration not found');
+    throw new NotFoundError('SLA configuration not found', 'slaConfiguration');
   }
 
   // Fetch business hours and holidays in parallel
@@ -303,7 +304,7 @@ export const getIssueById = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!issue) {
-      throw new Error('Issue not found');
+      throw new NotFoundError('Issue not found', 'issue');
     }
 
     // Get SLA state if tracking exists - use a single JOIN query instead of sequential queries
@@ -358,7 +359,7 @@ export const updateIssue = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing) {
-      throw new Error('Issue not found');
+      throw new NotFoundError('Issue not found', 'issue');
     }
 
     // Handle SLA pause/resume on status change

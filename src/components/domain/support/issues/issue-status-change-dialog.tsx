@@ -40,7 +40,9 @@ interface StatusConfig {
 const statusConfig: Record<IssueStatus, StatusConfig> = {
   open: { label: 'Open', color: 'bg-blue-500' },
   in_progress: { label: 'In Progress', color: 'bg-yellow-500' },
+  pending: { label: 'Pending', color: 'bg-orange-500' },
   on_hold: { label: 'On Hold', color: 'bg-gray-500' },
+  escalated: { label: 'Escalated', color: 'bg-red-500' },
   resolved: { label: 'Resolved', color: 'bg-green-500' },
   closed: { label: 'Closed', color: 'bg-slate-500' },
 };

@@ -45,7 +45,7 @@ import {
   parseImportFile,
   importProducts,
   getImportTemplate,
-} from "@/lib/server/functions/product-bulk-ops";
+} from "@/server/functions/products/product-bulk-ops";
 
 interface ProductBulkImportProps {
   open: boolean;

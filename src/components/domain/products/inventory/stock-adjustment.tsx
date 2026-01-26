@@ -27,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { adjustStock, receiveStock, listLocations } from "@/lib/server/functions/product-inventory";
+import { adjustStock, receiveStock, listLocations } from "@/server/functions/products/product-inventory";
 
 interface StockAdjustmentProps {
   productId: string;

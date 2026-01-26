@@ -145,7 +145,7 @@ function SignaturesContainer() {
   // ============================================================================
   // RENDER
   // ============================================================================
-  const signatures = signaturesData?.items ?? [];
+  const signatures = signaturesData ?? [];
 
   return (
     <div className="container py-6 max-w-4xl">

@@ -24,6 +24,7 @@ import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { logAuditEvent } from '../_shared/audit-logs';
 import { idParamSchema } from '@/lib/schemas';
+import { NotFoundError, ConflictError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -197,7 +198,7 @@ export const getCustomField = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!field) {
-      throw new Error('Custom field not found');
+      throw new NotFoundError('Custom field not found', 'customField');
     }
 
     return field as unknown as typeof field;
@@ -229,7 +230,7 @@ export const createCustomField = createServerFn({ method: 'POST' })
       );
 
     if (count >= MAX_CUSTOM_FIELDS_PER_ENTITY) {
-      throw new Error(`Maximum of ${MAX_CUSTOM_FIELDS_PER_ENTITY} custom fields per entity type`);
+      throw new ValidationError(`Maximum of ${MAX_CUSTOM_FIELDS_PER_ENTITY} custom fields per entity type`);
     }
 
     // Check for duplicate name
@@ -246,7 +247,7 @@ export const createCustomField = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (existing) {
-      throw new Error('A custom field with this name already exists');
+      throw new ConflictError('A custom field with this name already exists');
     }
 
     // Get next sort order if not specified
@@ -323,7 +324,7 @@ export const updateCustomField = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!current) {
-      throw new Error('Custom field not found');
+      throw new NotFoundError('Custom field not found', 'customField');
     }
 
     const updateData: Partial<typeof current> = { updatedBy: ctx.user.id };
@@ -377,7 +378,7 @@ export const deleteCustomField = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!field) {
-      throw new Error('Custom field not found');
+      throw new NotFoundError('Custom field not found', 'customField');
     }
 
     // Delete values first (cascade should handle this, but explicit is safer)
@@ -514,7 +515,7 @@ export const setCustomFieldValue = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!field || field.organizationId !== ctx.organizationId) {
-      throw new Error('Custom field not found');
+      throw new NotFoundError('Custom field not found', 'customField');
     }
 
     // Upsert value

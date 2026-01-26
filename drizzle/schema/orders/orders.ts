@@ -126,6 +126,10 @@ export const orders = pgTable(
     internalNotes: text("internal_notes"),
     customerNotes: text("customer_notes"),
 
+    // Generated document URLs
+    quotePdfUrl: text("quote_pdf_url"), // URL to generated quote PDF
+    invoicePdfUrl: text("invoice_pdf_url"), // URL to generated invoice PDF
+
     // Xero integration
     xeroInvoiceId: text("xero_invoice_id"), // Xero invoice ID after sync
     xeroSyncStatus: xeroSyncStatusEnum("xero_sync_status").default("pending"),

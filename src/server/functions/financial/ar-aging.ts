@@ -15,10 +15,11 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, isNull, gt, or, ne } from 'drizzle-orm';
+import { eq, and, sql, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { orders, customers as customersTable } from 'drizzle/schema';
+import { customers as customersTable } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
+import { NotFoundError } from '@/lib/server/errors';
 import {
   arAgingReportQuerySchema,
   arAgingCustomerDetailQuerySchema,
@@ -29,7 +30,6 @@ import {
   type ARAgingReportResult,
   type CustomerAgingDetailResult,
 } from '@/lib/schemas';
-import { calculateDaysOverdue as calcDaysOverdue } from '@/lib/utils/financial';
 
 // ============================================================================
 // CONSTANTS
@@ -41,43 +41,6 @@ const COMMERCIAL_THRESHOLD = 50000;
 /** Payment terms in days (standard 30-day terms) */
 const PAYMENT_TERMS_DAYS = 30;
 
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-/**
- * Calculate the aging bucket for an invoice based on days overdue.
- */
-function getAgingBucket(daysOverdue: number): AgingBucket {
-  if (daysOverdue <= 0) return 'current';
-  if (daysOverdue <= 30) return '1-30';
-  if (daysOverdue <= 60) return '31-60';
-  if (daysOverdue <= 90) return '61-90';
-  return '90+';
-}
-
-/**
- * Calculate days overdue from due date.
- * Negative values mean the invoice is not yet due.
- * Uses shared utility with proper timezone handling.
- */
-function calculateDaysOverdue(dueDate: Date, asOfDate: Date): number {
-  return calcDaysOverdue(dueDate, asOfDate);
-}
-
-/**
- * Get due date from order date (order date + payment terms).
- * If dueDate is explicitly set, use that instead.
- */
-function getEffectiveDueDate(orderDate: string | Date, dueDate: string | Date | null): Date {
-  if (dueDate) {
-    return new Date(dueDate);
-  }
-  // Default: order date + 30 days payment terms
-  const effectiveDate = new Date(orderDate);
-  effectiveDate.setDate(effectiveDate.getDate() + PAYMENT_TERMS_DAYS);
-  return effectiveDate;
-}
 
 // ============================================================================
 // GET AR AGING REPORT
@@ -314,12 +277,16 @@ export const getARAgingReport = createServerFn()
  * - Customer info and summary
  * - List of outstanding invoices with aging details
  * - Supports pagination and bucket filtering
+ *
+ * Uses SQL aggregation for efficient summary calculation instead of
+ * in-memory processing.
  */
 export const getARAgingCustomerDetail = createServerFn()
   .inputValidator(arAgingCustomerDetailQuerySchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
     const asOfDate = data.asOfDate ? new Date(data.asOfDate) : new Date();
+    const asOfDateStr = asOfDate.toISOString().split('T')[0]; // YYYY-MM-DD format
     const { page, pageSize } = data;
     const offset = (page - 1) * pageSize;
 
@@ -341,124 +308,173 @@ export const getARAgingCustomerDetail = createServerFn()
       .limit(1);
 
     if (customerResult.length === 0) {
-      throw new Error('Customer not found');
+      throw new NotFoundError('Customer not found', 'customer');
     }
 
     const customer = customerResult[0];
 
-    // Get all outstanding orders for this customer
-    const outstandingOrders = await db
-      .select({
-        orderId: orders.id,
-        orderNumber: orders.orderNumber,
-        orderDate: orders.orderDate,
-        dueDate: orders.dueDate,
-        total: orders.total,
-        paidAmount: orders.paidAmount,
-        balanceDue: orders.balanceDue,
-      })
-      .from(orders)
-      .where(
-        and(
-          eq(orders.organizationId, ctx.organizationId),
-          eq(orders.customerId, data.customerId),
-          isNull(orders.deletedAt),
-          ne(orders.status, 'draft'),
-          ne(orders.status, 'cancelled'),
-          or(
-            gt(orders.balanceDue, sql`0`),
-            and(
-              isNull(orders.balanceDue),
-              sql`COALESCE(${orders.total}, 0) > COALESCE(${orders.paidAmount}, 0)`
-            )
-          )
-        )
-      );
+    // Build bucket filter for SQL
+    const bucketFilter = data.bucket
+      ? data.bucket === 'current'
+        ? sql`AND age <= 0`
+        : data.bucket === '1-30'
+          ? sql`AND age BETWEEN 1 AND 30`
+          : data.bucket === '31-60'
+            ? sql`AND age BETWEEN 31 AND 60`
+            : data.bucket === '61-90'
+              ? sql`AND age BETWEEN 61 AND 90`
+              : sql`AND age > 90`
+      : sql``;
 
-    // Process into invoice details with aging
-    const allInvoices: AgingInvoiceDetail[] = [];
+    // Query 1: Get summary using SQL aggregation
+    const summaryResult = await db.execute<{
+      total_outstanding: string;
+      current_amount: string;
+      days_1_30_amount: string;
+      days_31_60_amount: string;
+      days_61_90_amount: string;
+      days_over_90_amount: string;
+      oldest_order_date: string | null;
+      invoice_count: string;
+    }>(sql`
+      SELECT
+        COALESCE(SUM(balance), 0)::text as total_outstanding,
+        COALESCE(SUM(CASE WHEN age <= 0 THEN balance ELSE 0 END), 0)::text as current_amount,
+        COALESCE(SUM(CASE WHEN age BETWEEN 1 AND 30 THEN balance ELSE 0 END), 0)::text as days_1_30_amount,
+        COALESCE(SUM(CASE WHEN age BETWEEN 31 AND 60 THEN balance ELSE 0 END), 0)::text as days_31_60_amount,
+        COALESCE(SUM(CASE WHEN age BETWEEN 61 AND 90 THEN balance ELSE 0 END), 0)::text as days_61_90_amount,
+        COALESCE(SUM(CASE WHEN age > 90 THEN balance ELSE 0 END), 0)::text as days_over_90_amount,
+        MIN(order_date)::text as oldest_order_date,
+        COUNT(*)::text as invoice_count
+      FROM (
+        SELECT
+          o.order_date,
+          COALESCE(o.balance_due, COALESCE(o.total, 0) - COALESCE(o.paid_amount, 0)) as balance,
+          EXTRACT(DAY FROM (${asOfDateStr}::date - COALESCE(o.due_date, o.order_date::date + ${PAYMENT_TERMS_DAYS})))::int as age
+        FROM orders o
+        WHERE o.organization_id = ${ctx.organizationId}
+          AND o.customer_id = ${data.customerId}
+          AND o.deleted_at IS NULL
+          AND o.status NOT IN ('draft', 'cancelled')
+          AND (
+            o.balance_due > 0
+            OR (o.balance_due IS NULL AND COALESCE(o.total, 0) > COALESCE(o.paid_amount, 0))
+          )
+      ) aged
+      WHERE balance > 0
+    `);
+
+    const summaryRow = summaryResult[0];
+    const totalOutstanding = parseFloat(summaryRow?.total_outstanding ?? '0');
+
     const customerSummary: CustomerAgingSummary = {
       customerId: customer.id,
       customerName: customer.name ?? 'Unknown',
       customerEmail: customer.email,
-      isCommercial: false,
-      totalOutstanding: 0,
-      current: 0,
-      overdue1_30: 0,
-      overdue31_60: 0,
-      overdue61_90: 0,
-      overdue90Plus: 0,
-      oldestInvoiceDate: null,
-      invoiceCount: 0,
+      isCommercial: totalOutstanding >= COMMERCIAL_THRESHOLD,
+      totalOutstanding,
+      current: parseFloat(summaryRow?.current_amount ?? '0'),
+      overdue1_30: parseFloat(summaryRow?.days_1_30_amount ?? '0'),
+      overdue31_60: parseFloat(summaryRow?.days_31_60_amount ?? '0'),
+      overdue61_90: parseFloat(summaryRow?.days_61_90_amount ?? '0'),
+      overdue90Plus: parseFloat(summaryRow?.days_over_90_amount ?? '0'),
+      oldestInvoiceDate: summaryRow?.oldest_order_date
+        ? new Date(summaryRow.oldest_order_date)
+        : null,
+      invoiceCount: parseInt(summaryRow?.invoice_count ?? '0', 10),
     };
 
-    for (const order of outstandingOrders) {
-      // Currency columns are already numbers via numericCasted
-      const totalAmount = order.total ?? 0;
-      const paidAmount = order.paidAmount ?? 0;
-      const balanceDue = order.balanceDue ?? totalAmount - paidAmount;
+    // Query 2: Get paginated invoice details with bucket filtering
+    const invoicesResult = await db.execute<{
+      order_id: string;
+      order_number: string;
+      order_date: string;
+      due_date: string;
+      total: string;
+      paid_amount: string;
+      balance_due: string;
+      days_overdue: string;
+      bucket: string;
+    }>(sql`
+      SELECT
+        order_id,
+        order_number,
+        order_date,
+        due_date,
+        total::text,
+        paid_amount::text,
+        balance_due::text,
+        age as days_overdue,
+        CASE
+          WHEN age <= 0 THEN 'current'
+          WHEN age BETWEEN 1 AND 30 THEN '1-30'
+          WHEN age BETWEEN 31 AND 60 THEN '31-60'
+          WHEN age BETWEEN 61 AND 90 THEN '61-90'
+          ELSE '90+'
+        END as bucket
+      FROM (
+        SELECT
+          o.id as order_id,
+          o.order_number,
+          o.order_date,
+          COALESCE(o.due_date, o.order_date::date + ${PAYMENT_TERMS_DAYS}) as due_date,
+          COALESCE(o.total, 0) as total,
+          COALESCE(o.paid_amount, 0) as paid_amount,
+          COALESCE(o.balance_due, COALESCE(o.total, 0) - COALESCE(o.paid_amount, 0)) as balance_due,
+          EXTRACT(DAY FROM (${asOfDateStr}::date - COALESCE(o.due_date, o.order_date::date + ${PAYMENT_TERMS_DAYS})))::int as age
+        FROM orders o
+        WHERE o.organization_id = ${ctx.organizationId}
+          AND o.customer_id = ${data.customerId}
+          AND o.deleted_at IS NULL
+          AND o.status NOT IN ('draft', 'cancelled')
+          AND (
+            o.balance_due > 0
+            OR (o.balance_due IS NULL AND COALESCE(o.total, 0) > COALESCE(o.paid_amount, 0))
+          )
+      ) aged
+      WHERE balance_due > 0
+        ${bucketFilter}
+      ORDER BY age DESC
+      LIMIT ${pageSize}
+      OFFSET ${offset}
+    `);
 
-      if (balanceDue <= 0) continue;
+    // Get total count for pagination (with bucket filter)
+    const countResult = await db.execute<{ count: string }>(sql`
+      SELECT COUNT(*)::text as count
+      FROM (
+        SELECT
+          COALESCE(o.balance_due, COALESCE(o.total, 0) - COALESCE(o.paid_amount, 0)) as balance_due,
+          EXTRACT(DAY FROM (${asOfDateStr}::date - COALESCE(o.due_date, o.order_date::date + ${PAYMENT_TERMS_DAYS})))::int as age
+        FROM orders o
+        WHERE o.organization_id = ${ctx.organizationId}
+          AND o.customer_id = ${data.customerId}
+          AND o.deleted_at IS NULL
+          AND o.status NOT IN ('draft', 'cancelled')
+          AND (
+            o.balance_due > 0
+            OR (o.balance_due IS NULL AND COALESCE(o.total, 0) > COALESCE(o.paid_amount, 0))
+          )
+      ) aged
+      WHERE balance_due > 0
+        ${bucketFilter}
+    `);
 
-      const effectiveDueDate = getEffectiveDueDate(order.orderDate, order.dueDate);
-      const daysOverdue = calculateDaysOverdue(effectiveDueDate, asOfDate);
-      const bucket = getAgingBucket(daysOverdue);
-
-      // Filter by bucket if specified
-      if (data.bucket && bucket !== data.bucket) {
-        continue;
-      }
-
-      allInvoices.push({
-        orderId: order.orderId,
-        orderNumber: order.orderNumber,
-        orderDate: new Date(order.orderDate),
-        dueDate: effectiveDueDate,
-        total: totalAmount,
-        paidAmount,
-        balanceDue,
-        daysOverdue,
-        bucket,
-      });
-
-      // Update summary
-      customerSummary.totalOutstanding += balanceDue;
-      customerSummary.invoiceCount += 1;
-
-      switch (bucket) {
-        case 'current':
-          customerSummary.current += balanceDue;
-          break;
-        case '1-30':
-          customerSummary.overdue1_30 += balanceDue;
-          break;
-        case '31-60':
-          customerSummary.overdue31_60 += balanceDue;
-          break;
-        case '61-90':
-          customerSummary.overdue61_90 += balanceDue;
-          break;
-        case '90+':
-          customerSummary.overdue90Plus += balanceDue;
-          break;
-      }
-
-      const orderDate = new Date(order.orderDate);
-      if (!customerSummary.oldestInvoiceDate || orderDate < customerSummary.oldestInvoiceDate) {
-        customerSummary.oldestInvoiceDate = orderDate;
-      }
-    }
-
-    // Mark as commercial
-    customerSummary.isCommercial = customerSummary.totalOutstanding >= COMMERCIAL_THRESHOLD;
-
-    // Sort by days overdue descending (oldest first)
-    allInvoices.sort((a, b) => b.daysOverdue - a.daysOverdue);
-
-    // Paginate
-    const totalItems = allInvoices.length;
+    const totalItems = parseInt(countResult[0]?.count ?? '0', 10);
     const totalPages = Math.ceil(totalItems / pageSize);
-    const paginatedInvoices = allInvoices.slice(offset, offset + pageSize);
+
+    // Transform invoice results
+    const invoices: AgingInvoiceDetail[] = invoicesResult.map((row) => ({
+      orderId: row.order_id,
+      orderNumber: row.order_number,
+      orderDate: new Date(row.order_date),
+      dueDate: new Date(row.due_date),
+      total: parseFloat(row.total),
+      paidAmount: parseFloat(row.paid_amount),
+      balanceDue: parseFloat(row.balance_due),
+      daysOverdue: parseInt(row.days_overdue, 10),
+      bucket: row.bucket as AgingBucket,
+    }));
 
     const result: CustomerAgingDetailResult = {
       customer: {
@@ -468,7 +484,7 @@ export const getARAgingCustomerDetail = createServerFn()
         isCommercial: customerSummary.isCommercial,
       },
       summary: customerSummary,
-      invoices: paginatedInvoices,
+      invoices,
       pagination: {
         page,
         pageSize,

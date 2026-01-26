@@ -530,9 +530,9 @@ export const bulkUpdateProducts = createServerFn({ method: 'POST' })
   });
 
 /**
- * Bulk update product prices with optional percentage adjustment.
+ * Bulk adjust product prices with percentage or fixed offset.
  */
-export const bulkUpdatePrices = createServerFn({ method: 'POST' })
+export const bulkAdjustPrices = createServerFn({ method: 'POST' })
   .inputValidator(
     z.object({
       productIds: z.array(z.string().uuid()).min(1),

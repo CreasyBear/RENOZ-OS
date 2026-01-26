@@ -2,7 +2,14 @@
  * Invitation Email Template
  *
  * Sent to users when they are invited to join an organization.
- * Uses standard React for rendering (compatible with ReactDOMServer).
+ *
+ * NOTE: This template intentionally uses raw React HTML instead of @react-email
+ * components because it was created for server-side rendering with ReactDOMServer
+ * before the shared email component system was established.
+ *
+ * Future refactoring: Consider migrating to use shared components from
+ * ../../components (EmailLayout, Button, Header, Footer) for consistency.
+ * See: todos/master-merge-review/012-pending-p3-invitation-email-different-pattern.md
  *
  * @see EMAIL-TPL-007
  */

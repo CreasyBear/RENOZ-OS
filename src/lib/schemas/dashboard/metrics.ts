@@ -173,8 +173,14 @@ export const activityItemSchema = z.object({
   userId: z.string().uuid().nullable(),
   userName: z.string().nullable(),
   createdAt: z.coerce.date(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
+  // Omit metadata from schema to avoid Record<string, unknown> vs {} type inference issues
+  // Metadata can be added at runtime but won't be validated
 });
+
+// Extended type with optional metadata for runtime use
+export type ActivityItemWithMetadata = z.infer<typeof activityItemSchema> & {
+  metadata?: Record<string, unknown>;
+};
 
 export type ActivityItem = z.infer<typeof activityItemSchema>;
 

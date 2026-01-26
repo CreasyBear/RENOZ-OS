@@ -24,6 +24,7 @@ import {
   type QuoteLineItem,
 } from '@/lib/schemas';
 import { GST_RATE } from '@/lib/order-calculations';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
 // CONSTANTS
@@ -112,7 +113,7 @@ export const createQuoteVersion = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!opportunity[0]) {
-      throw new Error('Opportunity not found');
+      throw new NotFoundError('Opportunity not found', 'opportunity');
     }
 
     // Calculate totals
@@ -182,7 +183,7 @@ export const getQuoteVersion = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!version[0]) {
-      throw new Error('Quote version not found');
+      throw new NotFoundError('Quote version not found', 'quoteVersion');
     }
 
     return { quoteVersion: version[0] };
@@ -216,7 +217,7 @@ export const listQuoteVersions = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!opportunity[0]) {
-      throw new Error('Opportunity not found');
+      throw new NotFoundError('Opportunity not found', 'opportunity');
     }
 
     // Get all versions
@@ -240,6 +241,7 @@ export const listQuoteVersions = createServerFn({ method: 'GET' })
 /**
  * Restore a previous quote version by creating a new version with that content.
  * This maintains the audit trail - versions are never modified.
+ * All operations are wrapped in a transaction to prevent race conditions.
  */
 export const restoreQuoteVersion = createServerFn({ method: 'POST' })
   .inputValidator(restoreQuoteVersionSchema)
@@ -250,54 +252,94 @@ export const restoreQuoteVersion = createServerFn({ method: 'POST' })
 
     const { opportunityId, sourceVersionId, notes } = data;
 
-    // Get the source version
-    const sourceVersion = await db
-      .select()
-      .from(quoteVersions)
-      .where(
-        and(
-          eq(quoteVersions.id, sourceVersionId),
-          eq(quoteVersions.organizationId, ctx.organizationId)
+    // Wrap all operations in a transaction for atomicity
+    const result = await db.transaction(async (tx) => {
+      // Get the source version
+      const sourceVersion = await tx
+        .select()
+        .from(quoteVersions)
+        .where(
+          and(
+            eq(quoteVersions.id, sourceVersionId),
+            eq(quoteVersions.organizationId, ctx.organizationId)
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (!sourceVersion[0]) {
-      throw new Error('Source quote version not found');
-    }
+      if (!sourceVersion[0]) {
+        throw new NotFoundError('Source quote version not found', 'quoteVersion');
+      }
 
-    // Verify it belongs to the same opportunity
-    if (sourceVersion[0].opportunityId !== opportunityId) {
-      throw new Error('Source version does not belong to this opportunity');
-    }
+      // Verify it belongs to the same opportunity
+      if (sourceVersion[0].opportunityId !== opportunityId) {
+        throw new ValidationError('Source version does not belong to this opportunity');
+      }
 
-    // Get next version number
-    const versionNumber = await getNextVersionNumber(opportunityId);
+      // Get opportunity for probability calculation
+      const opportunity = await tx
+        .select()
+        .from(opportunities)
+        .where(
+          and(
+            eq(opportunities.id, opportunityId),
+            eq(opportunities.organizationId, ctx.organizationId)
+          )
+        )
+        .limit(1);
 
-    // Create new version with source content
-    const restorationNotes = notes
-      ? `Restored from v${sourceVersion[0].versionNumber}. ${notes}`
-      : `Restored from v${sourceVersion[0].versionNumber}`;
+      if (!opportunity[0]) {
+        throw new NotFoundError('Opportunity not found', 'opportunity');
+      }
 
-    const result = await db
-      .insert(quoteVersions)
-      .values({
-        organizationId: ctx.organizationId,
-        opportunityId,
-        versionNumber,
-        items: sourceVersion[0].items,
-        subtotal: sourceVersion[0].subtotal,
-        taxAmount: sourceVersion[0].taxAmount,
-        total: sourceVersion[0].total,
-        notes: restorationNotes,
-        createdBy: ctx.user.id,
-      })
-      .returning();
+      // Get next version number (query within transaction)
+      const latest = await tx
+        .select({ versionNumber: quoteVersions.versionNumber })
+        .from(quoteVersions)
+        .where(eq(quoteVersions.opportunityId, opportunityId))
+        .orderBy(desc(quoteVersions.versionNumber))
+        .limit(1);
 
-    return {
-      quoteVersion: result[0],
-      restoredFrom: sourceVersion[0].versionNumber,
-    };
+      const versionNumber = (latest[0]?.versionNumber ?? 0) + 1;
+
+      // Create new version with source content
+      const restorationNotes = notes
+        ? `Restored from v${sourceVersion[0].versionNumber}. ${notes}`
+        : `Restored from v${sourceVersion[0].versionNumber}`;
+
+      const [newVersion] = await tx
+        .insert(quoteVersions)
+        .values({
+          organizationId: ctx.organizationId,
+          opportunityId,
+          versionNumber,
+          items: sourceVersion[0].items,
+          subtotal: sourceVersion[0].subtotal,
+          taxAmount: sourceVersion[0].taxAmount,
+          total: sourceVersion[0].total,
+          notes: restorationNotes,
+          createdBy: ctx.user.id,
+        })
+        .returning();
+
+      // Update opportunity value to match restored quote
+      await tx
+        .update(opportunities)
+        .set({
+          value: sourceVersion[0].total,
+          weightedValue: Math.round(
+            sourceVersion[0].total * ((opportunity[0].probability ?? 50) / 100)
+          ),
+          updatedBy: ctx.user.id,
+        })
+        .where(eq(opportunities.id, opportunityId));
+
+      return {
+        quoteVersion: newVersion,
+        restoredFrom: sourceVersion[0].versionNumber,
+      };
+    });
+
+    return result;
   });
 
 // ============================================================================
@@ -330,7 +372,7 @@ export const updateQuoteExpiration = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!opportunity[0]) {
-      throw new Error('Opportunity not found');
+      throw new NotFoundError('Opportunity not found', 'opportunity');
     }
 
     // Update expiration - convert string (YYYY-MM-DD) to Date
@@ -380,7 +422,7 @@ export const setDefaultQuoteExpiration = createServerFn({ method: 'POST' })
         .returning();
 
       if (!result[0]) {
-        throw new Error('Opportunity not found');
+        throw new NotFoundError('Opportunity not found', 'opportunity');
       }
 
       return { opportunity: result[0]!, expiresAt };
@@ -413,7 +455,7 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!version[0]) {
-      throw new Error('Quote version not found');
+      throw new NotFoundError('Quote version not found', 'quoteVersion');
     }
 
     // TODO: Implement PDF generation with React-PDF
@@ -471,7 +513,7 @@ export const sendQuote = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!version[0]) {
-      throw new Error('Quote version not found');
+      throw new NotFoundError('Quote version not found', 'quoteVersion');
     }
 
     // Get opportunity for context
@@ -545,12 +587,12 @@ export const compareQuoteVersions = createServerFn({ method: 'GET' })
     ]);
 
     if (!v1[0] || !v2[0]) {
-      throw new Error('One or both quote versions not found');
+      throw new NotFoundError('One or both quote versions not found', 'quoteVersion');
     }
 
     // Verify same opportunity
     if (v1[0].opportunityId !== v2[0].opportunityId) {
-      throw new Error('Quote versions must be from the same opportunity');
+      throw new ValidationError('Quote versions must be from the same opportunity');
     }
 
     // Calculate differences
@@ -718,36 +760,41 @@ export const extendQuoteValidity = createServerFn({ method: 'POST' })
         .limit(1);
 
       if (!opportunity[0]) {
-        throw new Error('Opportunity not found');
+        throw new NotFoundError('Opportunity not found', 'opportunity');
       }
 
       const oldExpiration = opportunity[0].quoteExpiresAt;
 
       // Validate new date is in the future
       if (newExpirationDate <= new Date()) {
-        throw new Error('New expiration date must be in the future');
+        throw new ValidationError('New expiration date must be in the future');
       }
 
-      // Update expiration
-      const result = await db
-        .update(opportunities)
-        .set({
-          quoteExpiresAt: newExpirationDate,
-          updatedBy: ctx.user.id,
-        })
-        .where(eq(opportunities.id, opportunityId))
-        .returning();
+      // Wrap updates in transaction to prevent race condition
+      const result = await db.transaction(async (tx) => {
+        // Update expiration
+        const updated = await tx
+          .update(opportunities)
+          .set({
+            quoteExpiresAt: newExpirationDate,
+            updatedBy: ctx.user.id,
+          })
+          .where(eq(opportunities.id, opportunityId))
+          .returning();
 
-      // Log activity for audit trail
-      await db.insert(opportunityActivities).values({
-        organizationId: ctx.organizationId,
-        opportunityId,
-        type: 'note',
-        description: `Quote validity extended from ${
-          oldExpiration ? oldExpiration.toLocaleDateString('en-AU') : 'unset'
-        } to ${newExpirationDate.toLocaleDateString('en-AU')}. Reason: ${reason}`,
-        createdBy: ctx.user.id,
-        completedAt: new Date(),
+        // Log activity for audit trail
+        await tx.insert(opportunityActivities).values({
+          organizationId: ctx.organizationId,
+          opportunityId,
+          type: 'note',
+          description: `Quote validity extended from ${
+            oldExpiration ? oldExpiration.toLocaleDateString('en-AU') : 'unset'
+          } to ${newExpirationDate.toLocaleDateString('en-AU')}. Reason: ${reason}`,
+          createdBy: ctx.user.id,
+          completedAt: new Date(),
+        });
+
+        return updated;
       });
 
       return {
@@ -786,7 +833,7 @@ export const validateQuoteForConversion = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!opportunity[0]) {
-      throw new Error('Opportunity not found');
+      throw new NotFoundError('Opportunity not found', 'opportunity');
     }
 
     const opp = opportunity[0];

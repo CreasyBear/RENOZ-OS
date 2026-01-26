@@ -53,7 +53,7 @@ function JobTemplatesSettingsPage() {
         name: `${template.name} (Copy)`,
         description: template.description ?? undefined,
         estimatedDuration: template.estimatedDuration,
-        checklistTemplateId: template.checklistTemplateId,
+        checklistTemplateId: template.checklistTemplateId ?? undefined,
         defaultTasks: template.defaultTasks.map((t) => ({
           id: crypto.randomUUID(),
           title: t.title,

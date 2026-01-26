@@ -40,8 +40,11 @@ type OrderFormInput = z.input<typeof orderFormSchema>;
 
 /** Extended form data with calculation results */
 export interface OrderFormContextValue {
-  /** The underlying React Hook Form instance */
+  /** The underlying React Hook Form instance - use specific methods (getValues, etc.) when possible */
   form: UseFormReturn<OrderFormData>;
+
+  /** Get current form values - preferred over form.getValues() for type safety */
+  getValues: () => OrderFormData;
 
   /** Current form data */
   formData: OrderFormData;
@@ -89,28 +92,7 @@ export interface OrderFormProviderProps {
 // CUSTOM HOOK FOR ZOD FORM
 // ============================================================================
 
-/**
- * Custom hook for Zod-validated forms.
- * Follows midday useZodForm pattern.
- *
- * Note: For schemas with refinements, input and output types may differ.
- * We use z.input<T> for defaultValues and z.output<T> for the form data type.
- */
-function useZodForm<T extends z.ZodType>(
-  schema: T,
-  options: {
-    defaultValues?: DefaultValues<z.input<T>>;
-    mode?: 'onChange' | 'onBlur' | 'onSubmit';
-  } = {}
-) {
-  const { defaultValues, mode = 'onChange' } = options;
-
-  return useForm<z.output<T>>({
-    resolver: zodResolver(schema),
-    defaultValues: defaultValues as DefaultValues<z.output<T>>,
-    mode,
-  });
-}
+// Note: useZodForm removed - using useForm directly with explicit types for better type safety
 
 // ============================================================================
 // CONTEXT
@@ -140,10 +122,12 @@ export function OrderFormProvider({
   // Initialize form with Zod validation
   // Note: We use type assertion since validation happens at submit time
   // and customerId is set via CustomerSelector outside the form
-  const form = useZodForm(orderFormSchema, {
+  const form = useForm<OrderFormData>({
+    // @ts-expect-error - zodResolver types don't perfectly align with Zod 4
+    resolver: zodResolver(orderFormSchema),
     defaultValues: {
       // Default order values - customerId set externally via CustomerSelector
-      customerId: '' as unknown as string, // Placeholder until customer selected
+      customerId: '' as string, // Placeholder until customer selected
       status: 'draft',
       orderDate: new Date(),
       shippingAmount: 0,
@@ -156,7 +140,7 @@ export function OrderFormProvider({
         ...initialTemplate,
       },
       ...defaultValues,
-    },
+    } as OrderFormData,
     mode: 'onChange',
   });
 
@@ -223,7 +207,8 @@ export function OrderFormProvider({
   const updateTemplate = useCallback(
     (updates: Partial<OrderFormTemplate>) => {
       const currentTemplate = form.getValues('template') || {};
-      const newTemplate = { ...currentTemplate, ...updates };
+      // Parse the merged template to ensure all defaults are applied
+      const newTemplate = orderFormTemplateSchema.parse({ ...currentTemplate, ...updates });
       form.setValue('template', newTemplate, { shouldValidate: true });
     },
     [form]
@@ -307,8 +292,10 @@ export function OrderFormProvider({
   }, [form]);
 
   // Context value
+  // Cast form via unknown due to react-hook-form generic variance issues with handleSubmit callback types
   const contextValue: OrderFormContextValue = {
-    form,
+    form: form as unknown as UseFormReturn<OrderFormData>,
+    getValues: () => form.getValues() as OrderFormData,
     formData,
     calculations,
     isDirty,

@@ -7,7 +7,6 @@
 
 import type {
   EmailMessage,
-  EmailThread,
   EmailSearchOptions,
   EmailAttachment,
 } from './email-client';
@@ -574,9 +573,10 @@ export function searchEmails(
     }
 
     // To search
+    const toFilter = query.to;
     if (
-      query.to &&
-      !item.toEmails.some((email) => email.toLowerCase().includes(query.to.toLowerCase()))
+      toFilter &&
+      !item.toEmails.some((email) => email.toLowerCase().includes(toFilter.toLowerCase()))
     ) {
       return false;
     }

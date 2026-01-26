@@ -8,7 +8,7 @@
  *
  * @see src/server/functions/users/invitations.ts (original function removed)
  */
-import { task, schedules } from '@trigger.dev/sdk/v3';
+import { schedules } from '@trigger.dev/sdk/v3';
 import { and, eq, lt } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { userInvitations } from 'drizzle/schema';
@@ -20,8 +20,9 @@ import { userInvitations } from 'drizzle/schema';
 /**
  * Task that marks pending invitations as expired if they've passed their expiry date.
  */
-export const expireInvitationsTask = task({
+export const expireInvitationsTask = schedules.task({
   id: 'expire-old-invitations',
+  cron: '0 * * * *',
   run: async () => {
     console.log('Starting invitation expiry check');
 
@@ -30,10 +31,7 @@ export const expireInvitationsTask = task({
     // Find and update all pending invitations that have expired
     const result = await db
       .update(userInvitations)
-      .set({
-        status: 'expired',
-        updatedAt: now,
-      })
+      .set({ status: 'expired' })
       .where(
         and(
           eq(userInvitations.status, 'pending'),
@@ -52,9 +50,3 @@ export const expireInvitationsTask = task({
   },
 });
 
-// Schedule the task to run every hour
-export const expireInvitationsSchedule = schedules.task({
-  id: 'expire-invitations-schedule',
-  task: expireInvitationsTask.id,
-  cron: '0 * * * *', // Every hour at minute 0
-});

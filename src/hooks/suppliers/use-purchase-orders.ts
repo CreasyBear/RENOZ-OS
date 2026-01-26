@@ -62,7 +62,7 @@ export function usePurchaseOrders(options: UsePurchaseOrdersOptions = {}) {
   const listFn = useServerFn(listPurchaseOrders);
 
   return useQuery({
-    queryKey: queryKeys.suppliers.purchaseOrdersListFiltered(filters),
+    queryKey: queryKeys.suppliers.purchaseOrdersList(filters),
     queryFn: () => listFn({ data: filters as PurchaseOrderFilters }),
     enabled,
     staleTime: 30 * 1000,

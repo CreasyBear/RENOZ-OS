@@ -40,6 +40,19 @@ export interface RateLimitResponse {
 // CONFIGURATION
 // ============================================================================
 
+/**
+ * Security configuration for rate limiting behavior.
+ * FAIL_CLOSED: When true, rejects requests when Redis is unavailable (secure).
+ * When false, allows requests through (insecure, for development only).
+ */
+const FAIL_CLOSED = process.env.NODE_ENV === 'production';
+
+/**
+ * Retry timeout in milliseconds before attempting to reconnect to Redis
+ * after a failure. Implements circuit breaker pattern.
+ */
+const CIRCUIT_BREAKER_TIMEOUT_MS = 60_000; // 1 minute
+
 const RATE_LIMITS = {
   /** Chat: 20 messages per minute per user */
   chat: {
@@ -59,14 +72,22 @@ const RATE_LIMITS = {
 
 let redisClient: Redis | null = null;
 let redisAvailable = true;
+let lastRedisFailure = 0;
 
 /**
  * Get or create Redis client for rate limiting.
- * Uses lazy initialization with singleton pattern.
+ * Uses lazy initialization with singleton pattern and circuit breaker.
  */
 function getRedisClient(): Redis | null {
+  // Circuit breaker: if Redis failed recently, skip retry until timeout
   if (!redisAvailable) {
-    return null;
+    const timeSinceFailure = Date.now() - lastRedisFailure;
+    if (timeSinceFailure < CIRCUIT_BREAKER_TIMEOUT_MS) {
+      return null;
+    }
+    // Timeout elapsed, allow retry
+    console.info('[AI Rate Limit] Circuit breaker timeout elapsed, retrying Redis connection');
+    redisAvailable = true;
   }
 
   if (redisClient) {
@@ -81,6 +102,7 @@ function getRedisClient(): Redis | null {
       '[AI Rate Limit] UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not set. Rate limiting disabled.'
     );
     redisAvailable = false;
+    lastRedisFailure = Date.now();
     return null;
   }
 
@@ -93,8 +115,36 @@ function getRedisClient(): Redis | null {
   } catch (error) {
     console.error('[AI Rate Limit] Failed to initialize Redis client:', error);
     redisAvailable = false;
+    lastRedisFailure = Date.now();
     return null;
   }
+}
+
+/**
+ * Create a fail-closed rate limit result (used when Redis is unavailable in production).
+ * Returns a result that rejects the request.
+ */
+function createFailClosedResult(): RateLimitResult {
+  return {
+    success: false,
+    reset: Date.now() + CIRCUIT_BREAKER_TIMEOUT_MS,
+    remaining: 0,
+    limit: 0,
+  };
+}
+
+/**
+ * Create a fail-open rate limit result (used in development when Redis is unavailable).
+ * Returns a result that allows the request.
+ */
+function createFailOpenResult(type: RateLimitType): RateLimitResult {
+  const config = RATE_LIMITS[type];
+  return {
+    success: true,
+    reset: Date.now(),
+    remaining: config.requests,
+    limit: config.requests,
+  };
 }
 
 // ============================================================================
@@ -162,13 +212,13 @@ export const aiRateLimiters = {
       const limiter = getChatLimiter();
 
       if (!limiter) {
-        // Graceful degradation - allow request when Redis unavailable
-        return {
-          success: true,
-          reset: Date.now(),
-          remaining: RATE_LIMITS.chat.requests,
-          limit: RATE_LIMITS.chat.requests,
-        };
+        // Security: fail-closed in production, fail-open in development
+        if (FAIL_CLOSED) {
+          console.error('[AI Rate Limit] Redis unavailable in production - rejecting request');
+          return createFailClosedResult();
+        }
+        console.warn('[AI Rate Limit] Redis unavailable in development - allowing request');
+        return createFailOpenResult('chat');
       }
 
       try {
@@ -181,13 +231,17 @@ export const aiRateLimiters = {
         };
       } catch (error) {
         console.error('[AI Rate Limit] Chat rate limit check failed:', error);
-        // Graceful degradation - allow request on error
-        return {
-          success: true,
-          reset: Date.now(),
-          remaining: RATE_LIMITS.chat.requests,
-          limit: RATE_LIMITS.chat.requests,
-        };
+        // Mark Redis as unavailable and trigger circuit breaker
+        redisAvailable = false;
+        lastRedisFailure = Date.now();
+        chatLimiter = null; // Reset limiter for next attempt
+
+        if (FAIL_CLOSED) {
+          console.error('[AI Rate Limit] Failing closed due to error in production');
+          return createFailClosedResult();
+        }
+        console.warn('[AI Rate Limit] Failing open due to error in development');
+        return createFailOpenResult('chat');
       }
     },
   },
@@ -202,13 +256,13 @@ export const aiRateLimiters = {
       const limiter = getAgentLimiter();
 
       if (!limiter) {
-        // Graceful degradation - allow request when Redis unavailable
-        return {
-          success: true,
-          reset: Date.now(),
-          remaining: RATE_LIMITS.agent.requests,
-          limit: RATE_LIMITS.agent.requests,
-        };
+        // Security: fail-closed in production, fail-open in development
+        if (FAIL_CLOSED) {
+          console.error('[AI Rate Limit] Redis unavailable in production - rejecting request');
+          return createFailClosedResult();
+        }
+        console.warn('[AI Rate Limit] Redis unavailable in development - allowing request');
+        return createFailOpenResult('agent');
       }
 
       try {
@@ -221,13 +275,17 @@ export const aiRateLimiters = {
         };
       } catch (error) {
         console.error('[AI Rate Limit] Agent rate limit check failed:', error);
-        // Graceful degradation - allow request on error
-        return {
-          success: true,
-          reset: Date.now(),
-          remaining: RATE_LIMITS.agent.requests,
-          limit: RATE_LIMITS.agent.requests,
-        };
+        // Mark Redis as unavailable and trigger circuit breaker
+        redisAvailable = false;
+        lastRedisFailure = Date.now();
+        agentLimiter = null; // Reset limiter for next attempt
+
+        if (FAIL_CLOSED) {
+          console.error('[AI Rate Limit] Failing closed due to error in production');
+          return createFailClosedResult();
+        }
+        console.warn('[AI Rate Limit] Failing open due to error in development');
+        return createFailOpenResult('agent');
       }
     },
   },

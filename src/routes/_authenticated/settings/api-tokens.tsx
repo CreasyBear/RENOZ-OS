@@ -10,25 +10,20 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { RouteErrorFallback } from '@/components/layout';
 import { SettingsTableSkeleton } from '@/components/skeletons/settings';
-import { useServerFn } from "@tanstack/react-start";
-import {
-  createApiToken,
-  listApiTokens,
-  revokeApiToken,
-} from "@/lib/server/api-tokens";
 import {
   PermissionGuard,
   useHasPermission,
 } from "@/components/shared/permission-guard";
-import { queryKeys } from "@/lib/query-keys";
-import type {
-  ApiTokenListItem,
-  CreateApiTokenResponse,
-  ApiTokenScope,
-} from "@/lib/schemas/auth";
+import {
+  useApiTokens,
+  useCreateApiToken,
+  useRevokeApiToken,
+  type ApiTokenListItem,
+  type CreateApiTokenResponse,
+  type ApiTokenScope,
+} from "@/hooks/settings";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -67,7 +62,6 @@ function ApiTokensPage() {
 }
 
 function ApiTokensContent() {
-  const queryClient = useQueryClient();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [newlyCreatedToken, setNewlyCreatedToken] =
     useState<CreateApiTokenResponse | null>(null);
@@ -76,38 +70,28 @@ function ApiTokensContent() {
   );
 
   const canCreate = useHasPermission("api_token.create");
+  const canRevoke = useHasPermission("api_token.revoke");
 
-  // Fetch tokens
-  const listTokensFn = useServerFn(listApiTokens);
-  const { data: tokens, isLoading } = useQuery({
-    queryKey: queryKeys.apiTokens.list(),
-    queryFn: () => listTokensFn(),
-  });
+  // Fetch tokens using hook
+  const { data: tokens, isLoading } = useApiTokens();
 
-  // Create token mutation
-  const createTokenFn = useServerFn(createApiToken);
-  const createMutation = useMutation({
-    mutationFn: createTokenFn,
-    onSuccess: (data) => {
-      setNewlyCreatedToken(data);
-      setShowCreateDialog(false);
-      queryClient.invalidateQueries({ queryKey: queryKeys.apiTokens.list() });
-    },
-  });
+  // Create token mutation using hook
+  const createMutation = useCreateApiToken();
 
-  // Revoke token mutation
-  const revokeTokenFn = useServerFn(revokeApiToken);
-  const revokeMutation = useMutation({
-    mutationFn: revokeTokenFn,
-    onSuccess: () => {
-      setTokenToRevoke(null);
-      queryClient.invalidateQueries({ queryKey: queryKeys.apiTokens.list() });
-    },
-  });
+  // Revoke token mutation using hook
+  const revokeMutation = useRevokeApiToken();
 
   const handleCreate = useCallback(
     (name: string, scopes: ApiTokenScope[], expiresAt: Date | null) => {
-      createMutation.mutate({ data: { name, scopes, expiresAt } });
+      createMutation.mutate(
+        { name, scopes, expiresAt },
+        {
+          onSuccess: (data) => {
+            setNewlyCreatedToken(data);
+            setShowCreateDialog(false);
+          },
+        }
+      );
     },
     [createMutation]
   );
@@ -115,7 +99,14 @@ function ApiTokensContent() {
   const handleRevoke = useCallback(
     (reason?: string) => {
       if (tokenToRevoke) {
-        revokeMutation.mutate({ data: { tokenId: tokenToRevoke.id, reason } });
+        revokeMutation.mutate(
+          { tokenId: tokenToRevoke.id, reason },
+          {
+            onSuccess: () => {
+              setTokenToRevoke(null);
+            },
+          }
+        );
       }
     },
     [tokenToRevoke, revokeMutation]
@@ -155,7 +146,7 @@ function ApiTokensContent() {
         <TokenList
           tokens={tokens}
           onRevoke={setTokenToRevoke}
-          canRevoke={useHasPermission("api_token.revoke")}
+          canRevoke={canRevoke}
         />
       ) : (
         <EmptyState onCreateClick={() => setShowCreateDialog(true)} />

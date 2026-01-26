@@ -1,22 +1,25 @@
 /**
- * Process Scheduled Emails Job
+ * Process Scheduled Emails Job (Trigger.dev v3)
  *
  * Runs every minute to check for and send scheduled emails.
- * Uses a cron trigger to poll the database for due emails.
+ * Uses a scheduled task to poll the database for due emails.
  *
  * @see DOM-COMMS-002b
- * @see https://trigger.dev/docs/documentation/guides/scheduled-tasks
+ * @see https://trigger.dev/docs/v3/tasks
  */
-import { cronTrigger } from "@trigger.dev/sdk";
+import { schedules, logger } from "@trigger.dev/sdk/v3";
 import { Resend } from "resend";
-import { client } from "../client";
 import {
   getDueScheduledEmails,
   markScheduledEmailAsSent,
 } from "@/lib/server/scheduled-emails";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { emailHistory, scheduledEmails, type NewEmailHistory } from "drizzle/schema";
+import {
+  emailHistory,
+  scheduledEmails,
+  type NewEmailHistory,
+} from "drizzle/schema";
 import {
   prepareEmailForTracking,
   TRACKING_BASE_URL,
@@ -29,6 +32,17 @@ import { substituteTemplateVariables } from "@/lib/email/sanitize";
 
 // Initialize Resend client
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+export interface ProcessScheduledEmailsResult {
+  processed: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+}
 
 // ============================================================================
 // PRIVACY HELPERS (INT-RES-004)
@@ -53,7 +67,9 @@ function hashEmail(email: string): string {
  * Get template content based on template type
  * In production, this would load from a templates table
  */
-function getTemplateContent(templateType: string): { subject: string; body: string } {
+function getTemplateContent(
+  templateType: string
+): { subject: string; body: string } {
   const templates: Record<string, { subject: string; body: string }> = {
     welcome: {
       subject: "Welcome to {{company_name}}, {{first_name}}!",
@@ -124,23 +140,24 @@ function getTemplateContent(templateType: string): { subject: string; body: stri
 }
 
 // ============================================================================
-// SCHEDULED JOB
+// TASK DEFINITION
 // ============================================================================
 
-export const processScheduledEmailsJob = client.defineJob({
+/**
+ * Process Scheduled Emails Task
+ *
+ * Checks for scheduled emails that are due and sends them via Resend.
+ */
+export const processScheduledEmailsTask = schedules.task({
   id: "process-scheduled-emails",
-  name: "Process Scheduled Emails",
-  version: "1.0.0",
-  trigger: cronTrigger({
-    cron: "* * * * *", // Every minute
-  }),
-  run: async (_payload, io) => {
-    await io.logger.info("Checking for scheduled emails to send");
+  cron: "* * * * *",
+  run: async (): Promise<ProcessScheduledEmailsResult> => {
+    logger.info("Checking for scheduled emails to send");
 
     // Get emails that are due
     const dueEmails = await getDueScheduledEmails(50); // Process up to 50 emails per run
 
-    await io.logger.info(`Found ${dueEmails.length} scheduled emails to process`);
+    logger.info(`Found ${dueEmails.length} scheduled emails to process`);
 
     if (dueEmails.length === 0) {
       return { processed: 0, sent: 0, failed: 0, skipped: 0 };
@@ -152,8 +169,6 @@ export const processScheduledEmailsJob = client.defineJob({
 
     // Process each email
     for (const scheduledEmail of dueEmails) {
-      const taskId = `send-email-${scheduledEmail.id}`;
-
       // INT-RES-004: Check if recipient is suppressed before sending
       const suppression = await isEmailSuppressedDirect(
         scheduledEmail.organizationId,
@@ -162,11 +177,14 @@ export const processScheduledEmailsJob = client.defineJob({
 
       if (suppression.suppressed) {
         // INT-RES-004: Log with hashed email for privacy
-        await io.logger.info(`Skipping suppressed scheduled email: ${hashEmail(scheduledEmail.recipientEmail)} (reason: ${suppression.reason})`, {
-          scheduledEmailId: scheduledEmail.id,
-          reason: suppression.reason,
-          emailHash: hashEmail(scheduledEmail.recipientEmail),
-        });
+        logger.info(
+          `Skipping suppressed scheduled email: ${hashEmail(scheduledEmail.recipientEmail)} (reason: ${suppression.reason})`,
+          {
+            scheduledEmailId: scheduledEmail.id,
+            reason: suppression.reason,
+            emailHash: hashEmail(scheduledEmail.recipientEmail),
+          }
+        );
 
         // Mark scheduled email as skipped
         await db
@@ -184,85 +202,84 @@ export const processScheduledEmailsJob = client.defineJob({
       }
 
       try {
-        await io.runTask(taskId, async () => {
-          await io.logger.info(`Processing scheduled email ${scheduledEmail.id}`);
+        logger.info(`Processing scheduled email ${scheduledEmail.id}`);
 
-          // INT-RES-007: Generate secure unsubscribe URL for this recipient
-          // Note: scheduledEmails table has customerId, not contactId
-          // We use customerId if available, otherwise fall back to email record ID
-          const unsubscribeUrl = generateUnsubscribeUrl({
-            contactId: scheduledEmail.customerId || scheduledEmail.id,
-            email: scheduledEmail.recipientEmail,
-            channel: "email",
+        // INT-RES-007: Generate secure unsubscribe URL for this recipient
+        const unsubscribeUrl = generateUnsubscribeUrl({
+          contactId: scheduledEmail.customerId || scheduledEmail.id,
+          email: scheduledEmail.recipientEmail,
+          channel: "email",
+          organizationId: scheduledEmail.organizationId,
+        });
+
+        // Get template content
+        const template = getTemplateContent(scheduledEmail.templateType);
+        const baseVariables = (scheduledEmail.templateData?.variables ||
+          {}) as Record<string, string | number | boolean>;
+        // INT-RES-007: Add unsubscribe URL to template variables
+        const variables: Record<string, string | number | boolean> = {
+          ...baseVariables,
+          unsubscribe_url: unsubscribeUrl,
+        };
+
+        // Check for subject/body override
+        const templateData = scheduledEmail.templateData || {};
+        const subject = templateData.subjectOverride
+          ? String(templateData.subjectOverride)
+          : substituteTemplateVariables(template.subject, variables);
+        const bodyHtml = templateData.bodyOverride
+          ? String(templateData.bodyOverride)
+          : substituteTemplateVariables(template.body, variables);
+
+        // Create email history record
+        const [emailRecord] = await db
+          .insert(emailHistory)
+          .values({
             organizationId: scheduledEmail.organizationId,
-          });
-
-          // Get template content
-          const template = getTemplateContent(scheduledEmail.templateType);
-          const baseVariables = (scheduledEmail.templateData?.variables || {}) as Record<string, string | number | boolean>;
-          // INT-RES-007: Add unsubscribe URL to template variables
-          const variables: Record<string, string | number | boolean> = {
-            ...baseVariables,
-            unsubscribe_url: unsubscribeUrl,
-          };
-
-          // Check for subject/body override
-          const templateData = scheduledEmail.templateData || {};
-          const subject = templateData.subjectOverride
-            ? String(templateData.subjectOverride)
-            : substituteTemplateVariables(template.subject, variables);
-          const bodyHtml = templateData.bodyOverride
-            ? String(templateData.bodyOverride)
-            : substituteTemplateVariables(template.body, variables);
-
-          // Create email history record
-          const [emailRecord] = await db
-            .insert(emailHistory)
-            .values({
-              organizationId: scheduledEmail.organizationId,
-              senderId: scheduledEmail.userId,
-              fromAddress: `noreply@${TRACKING_BASE_URL.replace(/https?:\/\//, "").split("/")[0]}`,
-              toAddress: scheduledEmail.recipientEmail,
-              customerId: scheduledEmail.customerId,
-              subject,
-              bodyHtml,
-              status: "pending",
-            } as NewEmailHistory)
-            .returning();
-
-          // Prepare email with tracking (wrap links, add tracking pixel)
-          const { html: trackedHtml, linkMap } = prepareEmailForTracking(
+            senderId: scheduledEmail.userId,
+            fromAddress: `noreply@${TRACKING_BASE_URL.replace(/https?:\/\//, "").split("/")[0]}`,
+            toAddress: scheduledEmail.recipientEmail,
+            customerId: scheduledEmail.customerId,
+            subject,
             bodyHtml,
-            emailRecord.id,
-            { trackOpens: true, trackClicks: true }
-          );
+            status: "pending",
+          } as NewEmailHistory)
+          .returning();
 
-          // Convert Map to plain object for JSON storage
-          const linkMapObject = Object.fromEntries(linkMap);
+        // Prepare email with tracking (wrap links, add tracking pixel)
+        const { html: trackedHtml, linkMap } = prepareEmailForTracking(
+          bodyHtml,
+          emailRecord.id,
+          { trackOpens: true, trackClicks: true }
+        );
 
-          // Get sender email from environment
-          const fromEmail = process.env.EMAIL_FROM || "noreply@resend.dev";
-          const fromName = process.env.EMAIL_FROM_NAME || "Renoz CRM";
-          const fromAddress = `${fromName} <${fromEmail}>`;
+        // Convert Map to plain object for JSON storage
+        const linkMapObject = Object.fromEntries(linkMap);
 
-          // Convert HTML to plain text for email
-          const textContent = trackedHtml
-            .replace(/<br\s*\/?>/gi, "\n")
-            .replace(/<\/p>/gi, "\n\n")
-            .replace(/<\/div>/gi, "\n")
-            .replace(/<\/li>/gi, "\n")
-            .replace(/<[^>]+>/g, "")
-            .replace(/&nbsp;/g, " ")
-            .replace(/&amp;/g, "&")
-            .replace(/&lt;/g, "<")
-            .replace(/&gt;/g, ">")
-            .replace(/&quot;/g, '"')
-            .replace(/&#039;/g, "'")
-            .replace(/\n{3,}/g, "\n\n")
-            .trim();
+        // Get sender email from environment
+        const fromEmail = process.env.EMAIL_FROM || "noreply@resend.dev";
+        const fromName = process.env.EMAIL_FROM_NAME || "Renoz CRM";
+        const fromAddress = `${fromName} <${fromEmail}>`;
 
-          // Send the email via Resend with List-Unsubscribe headers
-          const { data: sendResult, error: sendError } = await resend.emails.send({
+        // Convert HTML to plain text for email
+        const textContent = trackedHtml
+          .replace(/<br\s*\/?>/gi, "\n")
+          .replace(/<\/p>/gi, "\n\n")
+          .replace(/<\/div>/gi, "\n")
+          .replace(/<\/li>/gi, "\n")
+          .replace(/<[^>]+>/g, "")
+          .replace(/&nbsp;/g, " ")
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"')
+          .replace(/&#039;/g, "'")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim();
+
+        // Send the email via Resend with List-Unsubscribe headers
+        const { data: sendResult, error: sendError } = await resend.emails.send(
+          {
             from: fromAddress,
             to: [scheduledEmail.recipientEmail],
             subject,
@@ -270,54 +287,57 @@ export const processScheduledEmailsJob = client.defineJob({
             text: textContent,
             headers: {
               // INT-RES-007: CAN-SPAM compliant unsubscribe headers
-              'List-Unsubscribe': `<${unsubscribeUrl}>`,
-              'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+              "List-Unsubscribe": `<${unsubscribeUrl}>`,
+              "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
             },
-          });
-
-          if (sendError) {
-            throw new Error(sendError.message || "Failed to send email via Resend");
           }
+        );
 
-          await io.logger.info(`Sent scheduled email (emailHistoryId: ${emailRecord.id}, resendMessageId: ${sendResult?.id})`, {
+        if (sendError) {
+          throw new Error(
+            sendError.message || "Failed to send email via Resend"
+          );
+        }
+
+        logger.info(
+          `Sent scheduled email (emailHistoryId: ${emailRecord.id}, resendMessageId: ${sendResult?.id})`,
+          {
             subject,
             recipientName: scheduledEmail.recipientName,
-          });
+          }
+        );
 
-          // Update email history status to sent with Resend message ID for webhook correlation
-          await db
-            .update(emailHistory)
-            .set({
-              status: "sent",
-              sentAt: new Date(),
-              bodyHtml: trackedHtml, // Save tracked version
-              resendMessageId: sendResult?.id, // Store for webhook correlation
-              metadata: {
-                linkMap: linkMapObject, // Store linkMap for URL validation
-              },
-            })
-            .where(eq(emailHistory.id, emailRecord.id));
+        // Update email history status to sent with Resend message ID for webhook correlation
+        await db
+          .update(emailHistory)
+          .set({
+            status: "sent",
+            sentAt: new Date(),
+            bodyHtml: trackedHtml, // Save tracked version
+            resendMessageId: sendResult?.id, // Store for webhook correlation
+            metadata: {
+              linkMap: linkMapObject, // Store linkMap for URL validation
+            },
+          })
+          .where(eq(emailHistory.id, emailRecord.id));
 
-          // Mark scheduled email as sent
-          await markScheduledEmailAsSent(scheduledEmail.id, emailRecord.id);
+        // Mark scheduled email as sent
+        await markScheduledEmailAsSent(scheduledEmail.id, emailRecord.id);
 
-          // Create activity record for the email (COMMS-AUTO-001)
-          await createEmailSentActivity({
-            emailId: emailRecord.id,
-            organizationId: scheduledEmail.organizationId,
-            userId: scheduledEmail.userId,
-            customerId: scheduledEmail.customerId,
-            subject,
-            recipientEmail: scheduledEmail.recipientEmail,
-            recipientName: scheduledEmail.recipientName,
-          });
-
-          return { success: true, emailId: emailRecord.id };
+        // Create activity record for the email (COMMS-AUTO-001)
+        await createEmailSentActivity({
+          emailId: emailRecord.id,
+          organizationId: scheduledEmail.organizationId,
+          userId: scheduledEmail.userId,
+          customerId: scheduledEmail.customerId,
+          subject,
+          recipientEmail: scheduledEmail.recipientEmail,
+          recipientName: scheduledEmail.recipientName,
         });
 
         sent++;
       } catch (error) {
-        await io.logger.error(`Failed to send scheduled email ${scheduledEmail.id}`, {
+        logger.error(`Failed to send scheduled email ${scheduledEmail.id}`, {
           error: error instanceof Error ? error.message : String(error),
         });
         failed++;
@@ -332,3 +352,7 @@ export const processScheduledEmailsJob = client.defineJob({
     };
   },
 });
+
+
+// Legacy export for backward compatibility
+export const processScheduledEmailsJob = processScheduledEmailsTask;

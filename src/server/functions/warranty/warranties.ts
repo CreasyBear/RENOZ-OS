@@ -22,6 +22,7 @@ import {
   updateWarrantyOptOutSchema,
   updateCustomerWarrantyOptOutSchema,
 } from '@/lib/schemas/warranty/warranties';
+import { NotFoundError } from '@/lib/server/errors';
 
 // ============================================================================
 // TYPES
@@ -634,7 +635,7 @@ export const updateWarrantyOptOut = typedPostFn(
       .limit(1);
 
     if (warranty.length === 0) {
-      throw new Error('Warranty not found');
+      throw new NotFoundError('Warranty not found', 'warranty');
     }
 
     // Update the opt-out setting
@@ -672,7 +673,7 @@ export const updateCustomerWarrantyOptOut = typedPostFn(
       .limit(1);
 
     if (customer.length === 0) {
-      throw new Error('Customer not found');
+      throw new NotFoundError('Customer not found', 'customer');
     }
 
     // Update the opt-out setting

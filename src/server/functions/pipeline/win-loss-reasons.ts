@@ -20,6 +20,7 @@ import {
   winLossReasonParamsSchema,
   type WinLossReasonType,
 } from '@/lib/schemas';
+import { NotFoundError, ConflictError } from '@/lib/server/errors';
 
 // ============================================================================
 // LIST WIN/LOSS REASONS
@@ -79,7 +80,7 @@ export const getWinLossReason = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!result[0]) {
-      throw new Error('Win/Loss reason not found');
+      throw new NotFoundError('Win/Loss reason not found', 'winLossReason');
     }
 
     return { reason: result[0] };
@@ -158,12 +159,12 @@ export const updateWinLossReason = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing[0]) {
-      throw new Error('Win/Loss reason not found');
+      throw new NotFoundError('Win/Loss reason not found', 'winLossReason');
     }
 
     // Optimistic locking
     if (updateData.version && existing[0].version !== updateData.version) {
-      throw new Error('Win/Loss reason has been modified by another user');
+      throw new ConflictError('Win/Loss reason has been modified by another user');
     }
 
     const result = await db
@@ -204,7 +205,7 @@ export const deleteWinLossReason = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing[0]) {
-      throw new Error('Win/Loss reason not found');
+      throw new NotFoundError('Win/Loss reason not found', 'winLossReason');
     }
 
     // Check if reason is in use

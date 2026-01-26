@@ -53,9 +53,11 @@ import { Route as AuthenticatedSettingsTargetsRouteImport } from './routes/_auth
 import { Route as AuthenticatedSettingsSecurityRouteImport } from './routes/_authenticated/settings/security'
 import { Route as AuthenticatedSettingsScheduledReportsRouteImport } from './routes/_authenticated/settings/scheduled-reports'
 import { Route as AuthenticatedSettingsPreferencesRouteImport } from './routes/_authenticated/settings/preferences'
+import { Route as AuthenticatedSettingsOrganizationRouteImport } from './routes/_authenticated/settings/organization'
 import { Route as AuthenticatedSettingsKnowledgeBaseRouteImport } from './routes/_authenticated/settings/knowledge-base'
 import { Route as AuthenticatedSettingsJobTemplatesRouteImport } from './routes/_authenticated/settings/job-templates'
 import { Route as AuthenticatedSettingsIssueTemplatesRouteImport } from './routes/_authenticated/settings/issue-templates'
+import { Route as AuthenticatedSettingsEmailRouteImport } from './routes/_authenticated/settings/email'
 import { Route as AuthenticatedSettingsDelegationsRouteImport } from './routes/_authenticated/settings/delegations'
 import { Route as AuthenticatedSettingsCategoriesRouteImport } from './routes/_authenticated/settings/categories'
 import { Route as AuthenticatedSettingsApiTokensRouteImport } from './routes/_authenticated/settings/api-tokens'
@@ -375,6 +377,12 @@ const AuthenticatedSettingsPreferencesRoute =
     path: '/preferences',
     getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
+const AuthenticatedSettingsOrganizationRoute =
+  AuthenticatedSettingsOrganizationRouteImport.update({
+    id: '/organization',
+    path: '/organization',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
 const AuthenticatedSettingsKnowledgeBaseRoute =
   AuthenticatedSettingsKnowledgeBaseRouteImport.update({
     id: '/knowledge-base',
@@ -391,6 +399,12 @@ const AuthenticatedSettingsIssueTemplatesRoute =
   AuthenticatedSettingsIssueTemplatesRouteImport.update({
     id: '/issue-templates',
     path: '/issue-templates',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsEmailRoute =
+  AuthenticatedSettingsEmailRouteImport.update({
+    id: '/email',
+    path: '/email',
     getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
 const AuthenticatedSettingsDelegationsRoute =
@@ -911,9 +925,11 @@ export interface FileRoutesByFullPath {
   '/settings/api-tokens': typeof AuthenticatedSettingsApiTokensRoute
   '/settings/categories': typeof AuthenticatedSettingsCategoriesRoute
   '/settings/delegations': typeof AuthenticatedSettingsDelegationsRoute
+  '/settings/email': typeof AuthenticatedSettingsEmailRoute
   '/settings/issue-templates': typeof AuthenticatedSettingsIssueTemplatesRoute
   '/settings/job-templates': typeof AuthenticatedSettingsJobTemplatesRoute
   '/settings/knowledge-base': typeof AuthenticatedSettingsKnowledgeBaseRoute
+  '/settings/organization': typeof AuthenticatedSettingsOrganizationRoute
   '/settings/preferences': typeof AuthenticatedSettingsPreferencesRoute
   '/settings/scheduled-reports': typeof AuthenticatedSettingsScheduledReportsRoute
   '/settings/security': typeof AuthenticatedSettingsSecurityRoute
@@ -1033,9 +1049,11 @@ export interface FileRoutesByTo {
   '/settings/api-tokens': typeof AuthenticatedSettingsApiTokensRoute
   '/settings/categories': typeof AuthenticatedSettingsCategoriesRoute
   '/settings/delegations': typeof AuthenticatedSettingsDelegationsRoute
+  '/settings/email': typeof AuthenticatedSettingsEmailRoute
   '/settings/issue-templates': typeof AuthenticatedSettingsIssueTemplatesRoute
   '/settings/job-templates': typeof AuthenticatedSettingsJobTemplatesRoute
   '/settings/knowledge-base': typeof AuthenticatedSettingsKnowledgeBaseRoute
+  '/settings/organization': typeof AuthenticatedSettingsOrganizationRoute
   '/settings/preferences': typeof AuthenticatedSettingsPreferencesRoute
   '/settings/scheduled-reports': typeof AuthenticatedSettingsScheduledReportsRoute
   '/settings/security': typeof AuthenticatedSettingsSecurityRoute
@@ -1159,9 +1177,11 @@ export interface FileRoutesById {
   '/_authenticated/settings/api-tokens': typeof AuthenticatedSettingsApiTokensRoute
   '/_authenticated/settings/categories': typeof AuthenticatedSettingsCategoriesRoute
   '/_authenticated/settings/delegations': typeof AuthenticatedSettingsDelegationsRoute
+  '/_authenticated/settings/email': typeof AuthenticatedSettingsEmailRoute
   '/_authenticated/settings/issue-templates': typeof AuthenticatedSettingsIssueTemplatesRoute
   '/_authenticated/settings/job-templates': typeof AuthenticatedSettingsJobTemplatesRoute
   '/_authenticated/settings/knowledge-base': typeof AuthenticatedSettingsKnowledgeBaseRoute
+  '/_authenticated/settings/organization': typeof AuthenticatedSettingsOrganizationRoute
   '/_authenticated/settings/preferences': typeof AuthenticatedSettingsPreferencesRoute
   '/_authenticated/settings/scheduled-reports': typeof AuthenticatedSettingsScheduledReportsRoute
   '/_authenticated/settings/security': typeof AuthenticatedSettingsSecurityRoute
@@ -1284,9 +1304,11 @@ export interface FileRouteTypes {
     | '/settings/api-tokens'
     | '/settings/categories'
     | '/settings/delegations'
+    | '/settings/email'
     | '/settings/issue-templates'
     | '/settings/job-templates'
     | '/settings/knowledge-base'
+    | '/settings/organization'
     | '/settings/preferences'
     | '/settings/scheduled-reports'
     | '/settings/security'
@@ -1406,9 +1428,11 @@ export interface FileRouteTypes {
     | '/settings/api-tokens'
     | '/settings/categories'
     | '/settings/delegations'
+    | '/settings/email'
     | '/settings/issue-templates'
     | '/settings/job-templates'
     | '/settings/knowledge-base'
+    | '/settings/organization'
     | '/settings/preferences'
     | '/settings/scheduled-reports'
     | '/settings/security'
@@ -1531,9 +1555,11 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/api-tokens'
     | '/_authenticated/settings/categories'
     | '/_authenticated/settings/delegations'
+    | '/_authenticated/settings/email'
     | '/_authenticated/settings/issue-templates'
     | '/_authenticated/settings/job-templates'
     | '/_authenticated/settings/knowledge-base'
+    | '/_authenticated/settings/organization'
     | '/_authenticated/settings/preferences'
     | '/_authenticated/settings/scheduled-reports'
     | '/_authenticated/settings/security'
@@ -1922,6 +1948,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsPreferencesRouteImport
       parentRoute: typeof AuthenticatedSettingsRoute
     }
+    '/_authenticated/settings/organization': {
+      id: '/_authenticated/settings/organization'
+      path: '/organization'
+      fullPath: '/settings/organization'
+      preLoaderRoute: typeof AuthenticatedSettingsOrganizationRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
     '/_authenticated/settings/knowledge-base': {
       id: '/_authenticated/settings/knowledge-base'
       path: '/knowledge-base'
@@ -1941,6 +1974,13 @@ declare module '@tanstack/react-router' {
       path: '/issue-templates'
       fullPath: '/settings/issue-templates'
       preLoaderRoute: typeof AuthenticatedSettingsIssueTemplatesRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/email': {
+      id: '/_authenticated/settings/email'
+      path: '/email'
+      fullPath: '/settings/email'
+      preLoaderRoute: typeof AuthenticatedSettingsEmailRouteImport
       parentRoute: typeof AuthenticatedSettingsRoute
     }
     '/_authenticated/settings/delegations': {
@@ -2496,9 +2536,11 @@ interface AuthenticatedSettingsRouteChildren {
   AuthenticatedSettingsApiTokensRoute: typeof AuthenticatedSettingsApiTokensRoute
   AuthenticatedSettingsCategoriesRoute: typeof AuthenticatedSettingsCategoriesRoute
   AuthenticatedSettingsDelegationsRoute: typeof AuthenticatedSettingsDelegationsRoute
+  AuthenticatedSettingsEmailRoute: typeof AuthenticatedSettingsEmailRoute
   AuthenticatedSettingsIssueTemplatesRoute: typeof AuthenticatedSettingsIssueTemplatesRoute
   AuthenticatedSettingsJobTemplatesRoute: typeof AuthenticatedSettingsJobTemplatesRoute
   AuthenticatedSettingsKnowledgeBaseRoute: typeof AuthenticatedSettingsKnowledgeBaseRoute
+  AuthenticatedSettingsOrganizationRoute: typeof AuthenticatedSettingsOrganizationRoute
   AuthenticatedSettingsPreferencesRoute: typeof AuthenticatedSettingsPreferencesRoute
   AuthenticatedSettingsScheduledReportsRoute: typeof AuthenticatedSettingsScheduledReportsRoute
   AuthenticatedSettingsSecurityRoute: typeof AuthenticatedSettingsSecurityRoute
@@ -2512,12 +2554,15 @@ const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
   AuthenticatedSettingsApiTokensRoute: AuthenticatedSettingsApiTokensRoute,
   AuthenticatedSettingsCategoriesRoute: AuthenticatedSettingsCategoriesRoute,
   AuthenticatedSettingsDelegationsRoute: AuthenticatedSettingsDelegationsRoute,
+  AuthenticatedSettingsEmailRoute: AuthenticatedSettingsEmailRoute,
   AuthenticatedSettingsIssueTemplatesRoute:
     AuthenticatedSettingsIssueTemplatesRoute,
   AuthenticatedSettingsJobTemplatesRoute:
     AuthenticatedSettingsJobTemplatesRoute,
   AuthenticatedSettingsKnowledgeBaseRoute:
     AuthenticatedSettingsKnowledgeBaseRoute,
+  AuthenticatedSettingsOrganizationRoute:
+    AuthenticatedSettingsOrganizationRoute,
   AuthenticatedSettingsPreferencesRoute: AuthenticatedSettingsPreferencesRoute,
   AuthenticatedSettingsScheduledReportsRoute:
     AuthenticatedSettingsScheduledReportsRoute,
@@ -2807,3 +2852,12 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}

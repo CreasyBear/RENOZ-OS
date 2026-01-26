@@ -10,7 +10,7 @@
  * - Variance analysis and reconciliation
  */
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { Plus, ClipboardList, Play, CheckCircle, ArrowLeft } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { InventoryTableSkeleton } from "@/components/skeletons/inventory";
@@ -29,21 +29,19 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   StockCountList,
-  type StockCount,
-} from "@/components/domain/inventory";
-import {
   CountSheet,
+  VarianceReport,
+  type StockCount,
   type CountItem,
   type CountProgress,
 } from "@/components/domain/inventory";
-import { VarianceReport } from "@/components/domain/inventory";
 import {
-  listStockCounts,
-  getStockCount,
-  startStockCount,
-  updateStockCountItem,
-  updateStockCount,
-} from "@/server/functions/stock-counts";
+  useStockCounts,
+  useStockCount,
+  useStartStockCount,
+  useUpdateStockCountItem,
+  useUpdateStockCount,
+} from "@/hooks/inventory";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -69,124 +67,88 @@ export const Route = createFileRoute("/_authenticated/inventory/counts" as any)(
 // ============================================================================
 
 function StockCountsPage() {
-
   // View state
   const [view, setView] = useState<"list" | "detail" | "count">("list");
   const [activeTab, setActiveTab] = useState<"count" | "variances">("count");
-
-  // Data state
-  const [counts, setCounts] = useState<StockCount[]>([]);
-  const [selectedCount, setSelectedCount] = useState<StockCount | null>(null);
-  const [countItems, setCountItems] = useState<CountItem[]>([]);
-  const [progress, setProgress] = useState<CountProgress | null>(null);
-
-  // Loading states
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [selectedCountId, setSelectedCountId] = useState<string | null>(null);
 
   // Dialog states
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
   const [countToStart, setCountToStart] = useState<StockCount | null>(null);
 
-  // Fetch stock counts
-  const fetchCounts = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const data = await listStockCounts({ data: { page: 1, pageSize: 50 } }) as {
-        counts: any[];
-        total: number;
-        page: number;
-        pageSize: number;
-      };
-      if (data?.counts) {
-        setCounts(
-          data.counts.map((c: any) => ({
-            id: c.id,
-            countCode: c.countCode,
-            countType: c.countType,
-            status: c.status,
-            locationId: c.locationId,
-            assignedTo: c.assignedTo,
-            varianceThreshold: c.varianceThreshold
-              ? Number(c.varianceThreshold)
-              : undefined,
-            notes: c.notes,
-            startedAt: c.startedAt ? new Date(c.startedAt) : null,
-            completedAt: c.completedAt ? new Date(c.completedAt) : null,
-            createdAt: new Date(c.createdAt),
-          }))
-        );
-      }
-    } catch (error) {
-      console.error("Failed to fetch stock counts:", error);
-      toast.error("Failed to load stock counts");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  // Data hooks - using TanStack Query via hooks
+  const {
+    data: countsData,
+    isLoading,
+  } = useStockCounts({ page: 1, pageSize: 50 });
 
-  // Fetch count detail
-  const fetchCountDetail = useCallback(async (countId: string) => {
-    try {
-      setIsLoadingDetail(true);
-      const data = await getStockCount({ data: { id: countId } }) as {
-        count: any;
-        progress: CountProgress;
-      };
-      if (data) {
-        setSelectedCount({
-          id: data.count.id,
-          countCode: data.count.countCode,
-          countType: data.count.countType as StockCount["countType"],
-          status: data.count.status as StockCount["status"],
-          locationId: data.count.locationId,
-          locationName: data.count.location?.name,
-          assignedTo: data.count.assignedTo,
-          createdAt: new Date(data.count.createdAt),
-          progress: data.progress,
-        });
-        setProgress(data.progress);
-        setCountItems(
-          data.count.items.map((item: any) => ({
-            id: item.id,
-            inventoryId: item.inventoryId,
-            productId: "", // TODO: Join with inventory
-            productName: item.inventoryId, // TODO: Get product name
-            productSku: "", // TODO: Get SKU
-            locationName: "", // TODO: Get location
-            expectedQuantity: item.expectedQuantity,
-            countedQuantity: item.countedQuantity,
-            varianceReason: item.varianceReason,
-            countedAt: item.countedAt ? new Date(item.countedAt) : null,
-          }))
-        );
-      }
-    } catch (error) {
-      console.error("Failed to fetch count detail:", error);
-      toast.error("Failed to load count details");
-    } finally {
-      setIsLoadingDetail(false);
-    }
-  }, []);
+  const {
+    data: countDetailData,
+    isLoading: isLoadingDetail,
+  } = useStockCount(selectedCountId ?? "", !!selectedCountId);
 
-  // Initial fetch
-  useEffect(() => {
-    fetchCounts();
-  }, []);
+  // Mutation hooks
+  const startCountMutation = useStartStockCount();
+  const updateItemMutation = useUpdateStockCountItem();
+  const updateCountMutation = useUpdateStockCount();
+
+  // Transform data for list
+  const counts: StockCount[] = (countsData?.counts ?? []).map((c: any) => ({
+    id: c.id,
+    countCode: c.countCode,
+    countType: c.countType,
+    status: c.status,
+    locationId: c.locationId,
+    assignedTo: c.assignedTo,
+    varianceThreshold: c.varianceThreshold ? Number(c.varianceThreshold) : undefined,
+    notes: c.notes,
+    startedAt: c.startedAt ? new Date(c.startedAt) : null,
+    completedAt: c.completedAt ? new Date(c.completedAt) : null,
+    createdAt: new Date(c.createdAt),
+  }));
+
+  // Transform data for detail/count view
+  const selectedCount: StockCount | null = countDetailData?.count
+    ? {
+        id: countDetailData.count.id,
+        countCode: countDetailData.count.countCode,
+        countType: countDetailData.count.countType as StockCount["countType"],
+        status: countDetailData.count.status as StockCount["status"],
+        locationId: countDetailData.count.locationId,
+        locationName: countDetailData.count.location?.name,
+        assignedTo: countDetailData.count.assignedTo,
+        createdAt: new Date(countDetailData.count.createdAt),
+        progress: countDetailData.progress,
+      }
+    : null;
+
+  const progress: CountProgress | null = countDetailData?.progress ?? null;
+
+  const countItems: CountItem[] = (countDetailData?.count?.items ?? []).map((item: any) => ({
+    id: item.id,
+    inventoryId: item.inventoryId,
+    productId: item.inventory?.productId ?? "",
+    productName: item.inventory?.product?.name ?? item.inventoryId,
+    productSku: item.inventory?.product?.sku ?? "",
+    locationName: item.inventory?.location?.name ?? "",
+    expectedQuantity: item.expectedQuantity,
+    countedQuantity: item.countedQuantity,
+    varianceReason: item.varianceReason,
+    countedAt: item.countedAt ? new Date(item.countedAt) : null,
+  }));
 
   // Handlers
   const handleViewCount = useCallback(
     (count: StockCount) => {
-      setSelectedCount(count);
-      fetchCountDetail(count.id);
+      setSelectedCountId(count.id);
       if (count.status === "in_progress") {
         setView("count");
       } else {
         setView("detail");
       }
     },
-    [fetchCountDetail]
+    []
   );
 
   const handleStartCount = useCallback((count: StockCount) => {
@@ -196,91 +158,24 @@ function StockCountsPage() {
 
   const handleConfirmStart = useCallback(async () => {
     if (!countToStart) return;
-    try {
-      const result = await startStockCount({ data: { id: countToStart.id } }) as {
-        count: any;
-        items: any[];
-        progress: CountProgress;
-      };
-      toast.success("Stock count started");
-      setShowStartDialog(false);
-      setCountToStart(null);
-      // Navigate to count view
-      setSelectedCount({
-        ...countToStart,
-        status: "in_progress",
-        progress: result.progress,
-      });
-      setProgress(result.progress);
-      setCountItems(
-        result.items.map((item: any) => ({
-          id: item.id,
-          inventoryId: item.inventoryId,
-          productId: "",
-          productName: item.inventoryId,
-          productSku: "",
-          locationName: "",
-          expectedQuantity: item.expectedQuantity,
-          countedQuantity: null,
-        }))
-      );
-      setView("count");
-      fetchCounts();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to start count");
-    }
-  }, [countToStart, fetchCounts]);
+    await startCountMutation.mutateAsync(countToStart.id);
+    setShowStartDialog(false);
+    setCountToStart(null);
+    // Navigate to count view
+    setSelectedCountId(countToStart.id);
+    setView("count");
+  }, [countToStart, startCountMutation]);
 
   const handleUpdateItem = useCallback(
     async (itemId: string, countedQuantity: number, varianceReason?: string) => {
-      if (!selectedCount) return;
-      try {
-        await updateStockCountItem({
-          data: {
-            countId: selectedCount.id,
-            itemId,
-            data: { countedQuantity, varianceReason },
-          },
-        });
-        // Update local state
-        setCountItems((prev) =>
-          prev.map((item) =>
-            item.id === itemId
-              ? { ...item, countedQuantity, varianceReason }
-              : item
-          )
-        );
-        // Update progress
-        const counted = countItems.filter(
-          (i) => i.id === itemId || i.countedQuantity !== null
-        ).length;
-        const variances = countItems.filter((i) => {
-          if (i.id === itemId) {
-            return countedQuantity !== i.expectedQuantity;
-          }
-          return (
-            i.countedQuantity !== null &&
-            i.countedQuantity !== i.expectedQuantity
-          );
-        }).length;
-        setProgress((prev) =>
-          prev
-            ? {
-                ...prev,
-                countedItems: counted,
-                pendingItems: prev.totalItems - counted,
-                varianceItems: variances,
-                completionPercentage: Math.round(
-                  (counted / prev.totalItems) * 100
-                ),
-              }
-            : null
-        );
-      } catch (error: any) {
-        toast.error(error.message || "Failed to update item");
-      }
+      if (!selectedCountId) return;
+      await updateItemMutation.mutateAsync({
+        countId: selectedCountId,
+        itemId,
+        data: { countedQuantity, varianceReason },
+      });
     },
-    [selectedCount, countItems]
+    [selectedCountId, updateItemMutation]
   );
 
   const handleCompleteCount = useCallback(() => {
@@ -288,26 +183,19 @@ function StockCountsPage() {
   }, []);
 
   const handleConfirmComplete = useCallback(async () => {
-    if (!selectedCount) return;
-    try {
-      await updateStockCount({
-        data: {
-          id: selectedCount.id,
-          data: { status: "completed" },
-        },
-      });
-      toast.success("Stock count completed");
-      setShowCompleteDialog(false);
-      setView("list");
-      fetchCounts();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to complete count");
-    }
-  }, [selectedCount, fetchCounts]);
+    if (!selectedCountId) return;
+    await updateCountMutation.mutateAsync({
+      id: selectedCountId,
+      data: { status: "completed" },
+    });
+    setShowCompleteDialog(false);
+    setView("list");
+    setSelectedCountId(null);
+  }, [selectedCountId, updateCountMutation]);
 
   const handleBack = useCallback(() => {
     setView("list");
-    setSelectedCount(null);
+    setSelectedCountId(null);
   }, []);
 
   const handleNewCount = useCallback(() => {

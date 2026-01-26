@@ -1,15 +1,16 @@
 /**
- * Communication Preferences Settings Route (Container)
+ * Communication Preferences Settings Route
  *
  * Organization-wide communication preference settings and audit history.
  * Shows the preference change history across all contacts.
  *
+ * Note: PreferenceHistory is a self-contained component that fetches its own data.
+ * It requires either contactId or customerId to be functional - for org-wide history,
+ * we display an info page instead.
+ *
  * @see docs/plans/2026-01-24-communications-plumbing-review.md
  */
 import { createFileRoute } from "@tanstack/react-router";
-import { usePreferenceHistory } from "@/hooks/communications";
-import { PreferenceHistory } from "@/components/domain/communications/communication-preferences";
-import { ErrorState } from "@/components/shared";
 import { RouteErrorFallback } from "@/components/layout";
 import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
 import {
@@ -43,36 +44,6 @@ export const Route = createFileRoute(
 // ============================================================================
 
 function PreferencesSettingsContainer() {
-  // ============================================================================
-  // DATA FETCHING
-  // ============================================================================
-  const {
-    data: historyData,
-    isLoading,
-    error,
-    refetch,
-  } = usePreferenceHistory({
-    limit: 100,
-  });
-
-  // ============================================================================
-  // ERROR STATE
-  // ============================================================================
-  if (error) {
-    return (
-      <ErrorState
-        title="Failed to load preference history"
-        description="There was an error loading the communication preference history."
-        onRetry={() => refetch()}
-      />
-    );
-  }
-
-  // ============================================================================
-  // RENDER
-  // ============================================================================
-  const history = historyData?.items ?? [];
-
   return (
     <div className="container py-6 max-w-4xl space-y-6">
       {/* Header */}
@@ -102,13 +73,10 @@ function PreferencesSettingsContainer() {
           </p>
           <p>
             To manage preferences for a specific contact, navigate to their profile page
-            in the Customers section.
+            in the Customers section. The preference history is shown on a per-contact basis.
           </p>
         </CardContent>
       </Card>
-
-      {/* Preference History */}
-      <PreferenceHistory history={history} isLoading={isLoading} />
     </div>
   );
 }

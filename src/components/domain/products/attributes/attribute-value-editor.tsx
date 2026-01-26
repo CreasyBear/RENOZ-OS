@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { setProductAttribute } from "@/lib/server/functions/product-attributes";
+import { setProductAttribute } from "@/server/functions/products/product-attributes";
 
 export interface AttributeDefinition {
   attributeId: string;

@@ -18,7 +18,7 @@ import { type ReactElement } from "react";
 import { db } from "@/lib/db";
 import { organizations } from "drizzle/schema";
 import { eq } from "drizzle-orm";
-import { renderEmail, type RenderEmailOptions } from "./render";
+import { renderEmail } from "./render";
 import {
   OrgEmailProvider,
   type OrgBranding,
@@ -48,7 +48,7 @@ export interface GetOrgEmailDataOptions {
   strict?: boolean;
 }
 
-export interface RenderOrgEmailOptions extends RenderEmailOptions {
+export interface RenderOrgEmailOptions {
   /** Skip DB fetch and use provided org data (for caching/batching) */
   orgData?: OrgEmailData;
 }
@@ -199,7 +199,7 @@ export async function renderOrgEmail(
   );
 
   // Render using base renderEmail
-  const { html, text } = await renderEmail(wrappedElement, options);
+  const { html, text } = await renderEmail(wrappedElement);
 
   return { html, text, orgData };
 }
@@ -272,7 +272,7 @@ export const PREVIEW_ORG_DATA: OrgEmailData = {
  */
 export async function renderPreviewEmail(
   element: ReactElement,
-  options: RenderEmailOptions = {}
+  options: RenderOrgEmailOptions = {}
 ): Promise<RenderOrgEmailResult> {
   return renderOrgEmail("preview", element, {
     ...options,

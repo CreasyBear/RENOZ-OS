@@ -40,8 +40,10 @@ export class SupplierErrorBoundary extends Component<Props, State> {
     // Log error with monitoring system
     logError('Supplier component error caught by error boundary', error, {
       component: 'SupplierErrorBoundary',
-      errorInfo,
-      hasError: true,
+      metadata: {
+        errorInfo,
+        hasError: true,
+      },
     });
 
     this.setState({
@@ -52,7 +54,9 @@ export class SupplierErrorBoundary extends Component<Props, State> {
     // Track error event for analytics
     userAnalytics.trackError(error, {
       component: 'SupplierErrorBoundary',
-      errorBoundary: true,
+      metadata: {
+        errorBoundary: true,
+      },
     });
 
     // Call optional error handler

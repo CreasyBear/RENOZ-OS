@@ -6,29 +6,24 @@
  *
  * Container responsibilities:
  * - All data fetching hooks (useQuery, useMutation)
- * - Server function calls via useServerFn
  * - State management for selected statement
- * - Cache invalidation via queryClient
  *
  * @see src/components/domain/financial/customer-statements.tsx (Presenter)
- * @see src/server/functions/statements.ts
+ * @see src/hooks/financial/use-financial.ts
  * @see _Initiation/_prd/2-domains/financial/financial.prd.json (DOM-FIN-006)
  */
 
 import { useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { CustomerStatements } from '@/components/domain/financial/customer-statements';
 import {
-  generateStatement,
-  listStatements,
-  markStatementSent,
-} from '@/server/functions/financial/statements';
+  useStatements,
+  useGenerateStatement,
+  useMarkStatementSent,
+} from '@/hooks/financial';
 import type { StatementHistoryRecord } from '@/lib/schemas';
-import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================================
 // ROUTE
@@ -58,18 +53,6 @@ export const Route = createFileRoute('/_authenticated/financial/statements')({
 
 function CustomerStatementsPage() {
   // ---------------------------------------------------------------------------
-  // Server Functions
-  // ---------------------------------------------------------------------------
-  const listFn = useServerFn(listStatements);
-  const generateFn = useServerFn(generateStatement);
-  const markSentFn = useServerFn(markStatementSent);
-
-  // ---------------------------------------------------------------------------
-  // Query Client for Cache Invalidation
-  // ---------------------------------------------------------------------------
-  const queryClient = useQueryClient();
-
-  // ---------------------------------------------------------------------------
   // Local State
   // ---------------------------------------------------------------------------
   // TODO: In a real implementation, customerId would come from route params
@@ -85,10 +68,11 @@ function CustomerStatementsPage() {
     data,
     isLoading,
     error,
-  } = useQuery({
-    queryKey: queryKeys.financial.statements(customerId),
-    queryFn: () => listFn({ data: { customerId, page: 1, pageSize: 10 } }),
-    enabled: customerId !== 'placeholder-customer-id', // Don't fetch with placeholder
+  } = useStatements({
+    customerId,
+    page: 1,
+    pageSize: 10,
+    enabled: customerId !== 'placeholder-customer-id',
   });
 
   const statements: StatementHistoryRecord[] = data?.items ?? [];
@@ -99,42 +83,20 @@ function CustomerStatementsPage() {
     : statements[0];
 
   // ---------------------------------------------------------------------------
-  // Mutations - Generate Statement
+  // Mutations
   // ---------------------------------------------------------------------------
-  const generateMutation = useMutation({
-    mutationFn: (params: { dateFrom: string; dateTo: string }) =>
-      generateFn({
-        data: {
-          customerId,
-          startDate: params.dateFrom, // Already in YYYY-MM-DD format
-          endDate: params.dateTo, // Already in YYYY-MM-DD format
-        },
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.statements(customerId) });
-    },
-  });
-
-  // ---------------------------------------------------------------------------
-  // Mutations - Mark Statement Sent (Email)
-  // ---------------------------------------------------------------------------
-  const emailMutation = useMutation({
-    mutationFn: (statementId: string) =>
-      markSentFn({ data: { statementId, sentToEmail: '' } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.statements(customerId) });
-    },
-  });
+  const generateMutation = useGenerateStatement();
+  const emailMutation = useMarkStatementSent();
 
   // ---------------------------------------------------------------------------
   // Handlers
   // ---------------------------------------------------------------------------
   const handleGenerate = (dateFrom: string, dateTo: string) => {
-    generateMutation.mutate({ dateFrom, dateTo });
+    generateMutation.mutate({ customerId, dateFrom, dateTo });
   };
 
   const handleEmail = (statementId: string) => {
-    emailMutation.mutate(statementId);
+    emailMutation.mutate({ statementId, sentToEmail: '', customerId });
   };
 
   const handleSelectStatement = (id: string | null) => {

@@ -167,7 +167,7 @@ export const TargetForm = memo(function TargetForm({
 }: TargetFormProps) {
   const isEditMode = !!target;
 
-  const form = useForm<FormValues>({
+  const form = useForm({
     defaultValues: target ? targetToFormValues(target) : getDefaultFormValues(),
     onSubmit: async ({ value }) => {
       // Convert form values to schema input (string targetValue -> number)

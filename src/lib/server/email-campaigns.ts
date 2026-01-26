@@ -504,6 +504,7 @@ export const populateCampaignRecipients = createServerFn({ method: "POST" })
     }
 
     const recipientsToInsert = Array.from(uniqueEmails.values()).map(contact => ({
+      organizationId: ctx.organizationId,
       campaignId: data.campaignId,
       contactId: contact.id,
       email: contact.email!,

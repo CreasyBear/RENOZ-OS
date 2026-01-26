@@ -12,8 +12,9 @@ import {
   useCampaigns,
   useCancelCampaign,
   useDeleteCampaign,
+  type UseCampaignsOptions,
 } from "@/hooks/communications";
-import { CampaignsList } from "@/components/domain/communications";
+import { CampaignsList, type CampaignListItem } from "@/components/domain/communications";
 import { toastSuccess, toastError } from "@/hooks";
 import { ErrorState } from "@/components/shared";
 import { RouteErrorFallback } from "@/components/layout";
@@ -48,7 +49,7 @@ function CampaignsContainer() {
     error,
     refetch,
   } = useCampaigns({
-    status: statusFilter as Parameters<typeof useCampaigns>[0]["status"],
+    status: statusFilter as UseCampaignsOptions["status"],
   });
 
   // ============================================================================
@@ -118,11 +119,30 @@ function CampaignsContainer() {
   // ============================================================================
   // RENDER
   // ============================================================================
-  const campaigns = campaignsData?.items ?? [];
+  // Map server response to CampaignListItem format
+  // The server returns basic campaign data; stats are populated with defaults
+  // until a separate stats endpoint or aggregation is added
+  const campaigns: CampaignListItem[] = (campaignsData?.items ?? []).map((item) => ({
+    id: item.id,
+    name: item.name,
+    templateType: item.templateType,
+    status: item.status,
+    // Stats default to 0 - these would come from a separate aggregation query
+    recipientCount: 0,
+    sentCount: 0,
+    openCount: 0,
+    clickCount: 0,
+    bounceCount: 0,
+    failedCount: 0,
+    scheduledAt: item.scheduledAt?.toISOString() ?? null,
+    startedAt: item.sentAt?.toISOString() ?? null,
+    completedAt: item.sentAt?.toISOString() ?? null,
+    createdAt: item.createdAt.toISOString(),
+  }));
 
   return (
     <CampaignsList
-      campaigns={campaigns}
+      campaigns={campaigns as CampaignListItem[]}
       isLoading={isLoading}
       onCancel={handleCancel}
       onDelete={handleDelete}

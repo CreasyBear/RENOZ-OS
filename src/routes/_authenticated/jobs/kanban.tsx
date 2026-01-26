@@ -17,8 +17,6 @@ import {
   Profiler,
   type ProfilerOnRenderCallback,
 } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { JobsKanbanSkeleton } from '@/components/skeletons/jobs';
 import {
@@ -45,13 +43,11 @@ import {
   useUpdateTask,
   useCreateTask,
   useDeleteTask,
+  useJobAssignmentsForKanban,
   type KanbanTask,
 } from '@/hooks/jobs';
 import { toast } from '@/lib/toast';
 import { useConfirmation } from '@/hooks';
-import { listJobAssignments } from '@/server/functions/jobs/job-assignments';
-import { useCurrentOrg } from '@/hooks/auth';
-import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -113,29 +109,9 @@ function JobsKanbanPage() {
   const confirm = useConfirmation();
   const navigate = useNavigate();
   const kanbanConfig = useJobTaskKanbanConfig();
-  const { currentOrg } = useCurrentOrg();
-  const listAssignmentsFn = useServerFn(listJobAssignments);
 
   // Get available jobs for proper task creation context
-  const { data: availableJobsResponse } = useQuery({
-    queryKey: queryKeys.jobAssignments.kanbanSelector(currentOrg?.id),
-    queryFn: async () => {
-      if (!currentOrg?.id)
-        return { jobs: [] as Array<{ id: string; jobNumber: string; title: string }> };
-      return listAssignmentsFn({
-        data: {
-          organizationId: currentOrg.id,
-          filters: {
-            limit: 200,
-            offset: 0,
-            sortBy: 'scheduledDate',
-            sortOrder: 'asc',
-          },
-        },
-      });
-    },
-    enabled: !!currentOrg?.id,
-  });
+  const { data: availableJobsResponse } = useJobAssignmentsForKanban();
   const availableJobs = availableJobsResponse?.jobs ?? [];
 
   // Job context for task creation - user must select a job

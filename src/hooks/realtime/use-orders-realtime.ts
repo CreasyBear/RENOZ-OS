@@ -140,7 +140,7 @@ export function useOrdersRealtime(
       queryKeys.orders.all,
       queryKeys.orders.lists(),
       queryKeys.orders.recent,
-      queryKeys.orders.list({ organizationId }),
+      queryKeys.orders.list({}),
       queryKeys.dashboard.orders(),
       queryKeys.dashboard.stats(),
     ],

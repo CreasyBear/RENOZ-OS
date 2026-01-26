@@ -21,6 +21,7 @@ import {
   type Delegation,
 } from '@/lib/schemas/users';
 import { idParamSchema, paginationSchema } from '@/lib/schemas';
+import { NotFoundError, ConflictError } from '@/lib/server/errors';
 
 // ============================================================================
 // CREATE DELEGATION
@@ -43,7 +44,7 @@ export const createDelegation = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!delegate) {
-      throw new Error('Delegate user not found');
+      throw new NotFoundError('Delegate user not found', 'user');
     }
 
     // Check for overlapping active delegation
@@ -67,7 +68,7 @@ export const createDelegation = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (overlapping.length > 0) {
-      throw new Error('You already have an active delegation during this period');
+      throw new ConflictError('You already have an active delegation during this period');
     }
 
     const [delegation] = await db
@@ -379,7 +380,7 @@ export const updateDelegation = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing) {
-      throw new Error('Delegation not found');
+      throw new NotFoundError('Delegation not found', 'delegation');
     }
 
     // If updating dates, check for overlap with other delegations
@@ -401,7 +402,7 @@ export const updateDelegation = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (overlapping.length > 0) {
-      throw new Error('Date range overlaps with another active delegation');
+      throw new ConflictError('Date range overlaps with another active delegation');
     }
 
     const [updated] = await db
@@ -468,7 +469,7 @@ export const cancelDelegation = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing) {
-      throw new Error('Delegation not found');
+      throw new NotFoundError('Delegation not found', 'delegation');
     }
 
     await db
@@ -504,7 +505,7 @@ export const getActiveDelegate = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!user) {
-      throw new Error('User not found');
+      throw new NotFoundError('User not found', 'user');
     }
 
     const now = new Date();

@@ -17,9 +17,9 @@ import {
 } from '@/components/ui/dropdown-menu'
 
 // Helper to create Link with dynamic href (bypasses strict route typing)
-type DynamicLinkProps = Omit<LinkProps, 'to'> & { to: string }
-function DynamicLink({ to, ...props }: DynamicLinkProps) {
-  return <Link to={to as LinkProps['to']} {...props} />
+type DynamicLinkProps = Omit<LinkProps, 'to'> & { to: string; className?: string }
+function DynamicLink({ to, className, ...props }: DynamicLinkProps) {
+  return <Link to={to as LinkProps['to']} className={className} {...props} />
 }
 
 interface BreadcrumbItem {

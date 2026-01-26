@@ -21,8 +21,7 @@ import {
   type ReactNode,
 } from "react";
 import { toast } from "@/hooks";
-import { getTriggeredAlerts } from "@/server/functions/alerts";
-import { getInventoryDashboard, listInventory } from "@/server/functions/inventory";
+import { getTriggeredAlerts, getInventoryDashboard, listInventory } from "@/server/functions/inventory";
 
 // ============================================================================
 // TYPES

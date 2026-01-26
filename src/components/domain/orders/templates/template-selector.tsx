@@ -28,7 +28,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { listTemplates, getTemplate } from "@/lib/server/functions/order-templates";
+import { listTemplates, getTemplate } from "@/server/functions/orders/order-templates";
 
 // ============================================================================
 // TYPES

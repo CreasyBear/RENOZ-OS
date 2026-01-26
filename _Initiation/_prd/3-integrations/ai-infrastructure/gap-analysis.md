@@ -322,3 +322,104 @@ PRD references `bulk_*` in approval pattern but no specific batch tools defined.
 - Warranty agent + tools
 - Purchasing agent + tools
 - Batch operations
+
+---
+
+# Implementation Review Findings (2026-01-26)
+
+## Helicopter Review Summary
+
+| Severity | Count | Category |
+|----------|-------|----------|
+| P1 Critical | 8 | Blocks implementation quality |
+| P2 Important | 12 | Should fix before production |
+| P3 Nice-to-have | 7 | Cleanup and optimization |
+
+**Overall Architecture Compliance: ~70%**
+
+---
+
+## P1 - Critical Issues
+
+### SEC-001: Sensitive PII Exposed in Tool Results
+**Location:** `src/lib/ai/tools/customer-tools.ts:141-159`
+**Fix:** Add `email` and `phone` to `filterSensitiveFields()`
+
+### ARCH-001: Missing AppContext Implementation
+**Location:** Should be at `src/lib/ai/context/types.ts`
+**Fix:** Create full AppContext interface with timezone, locale, baseCurrency, forcedToolCall
+
+### ARCH-002: No Parameter Resolution System
+**Location:** Should be at `src/lib/ai/utils/resolve-params.ts`
+**Fix:** Implement three-tier priority (forcedToolCall > AI params > dashboard > defaults)
+
+### ARCH-003: Tools Not Using Streaming Generators
+**Location:** All files in `src/lib/ai/tools/`
+**Fix:** Convert to `async function*` with `yield` statements
+
+### DATA-001: Version Column Not Used for Optimistic Locking
+**Location:** `src/lib/ai/approvals/executor.ts`
+**Fix:** Increment version on status changes, check expected version
+
+### DATA-002: Expiration Cron Race Condition
+**Location:** `src/trigger/jobs/expire-ai-approvals.ts:52-92`
+**Fix:** Use atomic `UPDATE...WHERE...RETURNING`
+
+### PERF-001: Blocking Operations Before Stream Start
+**Location:** `src/routes/api/ai/chat.ts:83-173`
+**Fix:** Parallelize auth, rate limit, budget check
+
+### SEC-002: Budget Check Fails Open on Error
+**Location:** `src/lib/ai/utils/budget.ts:225-233`
+**Fix:** Return `allowed: false` on error in production
+
+---
+
+## P2 - Important Issues
+
+1. **ARCH-004:** Context via schema instead of executionOptions
+2. **ARCH-005:** No memory integration in agents
+3. **ARCH-006:** Missing context caching
+4. **ARCH-007:** Missing getToolsForAgent registry
+5. **ARCH-008:** No markdown table formatting in tools
+6. **SEC-003:** customerActivities query missing org scoping
+7. **SEC-004:** getConversation missing organization validation
+8. **SEC-005:** Missing per-tool rate limits
+9. **DATA-003:** Tool approval creation not transactional
+10. **DATA-004:** No back-reference from entities to approvals
+11. **DATA-005:** No retry count tracking
+12. **PERF-002:** Duplicate queries for period comparison
+
+---
+
+## Pattern Compliance Matrix
+
+| Pattern | Compliance | Notes |
+|---------|------------|-------|
+| Agent Architecture | 85% | Correct models/temps, missing memory config |
+| AppContext | 30% | Basic UserContext only |
+| Parameter Resolution | 0% | Not implemented |
+| Tool Patterns | 60% | Org scoping good, no streaming/tables |
+| Artifact Streaming | 80% | Definitions exist, no showCanvas integration |
+| Memory Templates | 70% | Redis provider good, no template rendering |
+| Shared Prompts | 75% | Security instructions good, verbose formatting |
+
+---
+
+## Files Requiring Changes
+
+### High Priority
+- `src/lib/ai/context/types.ts` - CREATE: Full AppContext interface
+- `src/lib/ai/context/builder.ts` - CREATE: buildAppContext() function
+- `src/lib/ai/utils/resolve-params.ts` - CREATE: Parameter resolution
+- `src/lib/ai/tools/*.ts` - REFACTOR: Add streaming generators
+- `src/lib/ai/approvals/executor.ts` - FIX: Use version column
+- `src/routes/api/ai/chat.ts` - FIX: Parallelize pre-stream ops
+
+### Medium Priority
+- `src/lib/ai/tools/types.ts` - ADD: Shared context schema
+- `src/lib/ai/tools/index.ts` - ADD: getToolsForAgent() registry
+- `src/lib/ai/tools/customer-tools.ts` - FIX: Filter email/phone
+- `src/lib/ai/utils/budget.ts` - FIX: Fail closed on error
+- `src/lib/ai/ratelimit.ts` - ADD: Per-tool rate limits
+- `src/trigger/jobs/expire-ai-approvals.ts` - FIX: Atomic update

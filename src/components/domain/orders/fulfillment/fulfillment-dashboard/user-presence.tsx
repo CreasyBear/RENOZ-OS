@@ -89,7 +89,7 @@ export function UserPresence({ activeUsers = [], maxVisible = 3, className }: Us
                   <div className="font-medium">{user.name || 'Unknown User'}</div>
                   {user.isCurrentUser && <div className="text-muted-foreground text-xs">You</div>}
                   <div className="text-muted-foreground text-xs">
-                    Active {getTimeAgo(user.lastActive, currentTime)}
+                    Active {currentTime ? getTimeAgo(user.lastActive, currentTime) : ''}
                   </div>
                 </div>
               </TooltipContent>
@@ -245,10 +245,11 @@ export function useFulfillmentPresence() {
   // Set current user and track their activity
   useEffect(() => {
     if (currentUser) {
-      tracker.setCurrentUser(currentUser);
+      const userWithName = { id: currentUser.id, name: currentUser.email ?? null };
+      tracker.setCurrentUser(userWithName);
 
       // Record initial activity
-      tracker.recordActivity(currentUser);
+      tracker.recordActivity(userWithName);
     }
   }, [currentUser]);
 
@@ -267,7 +268,7 @@ export function useFulfillmentPresence() {
   // Function to record user activity (call this on user interactions)
   const recordActivity = useCallback(() => {
     if (currentUser) {
-      tracker.recordActivity(currentUser);
+      tracker.recordActivity({ id: currentUser.id, name: currentUser.email ?? null });
     }
   }, [currentUser]);
 

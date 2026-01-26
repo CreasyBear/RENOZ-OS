@@ -9,6 +9,9 @@ export {
   type WinLossReasonsManagerProps,
 } from "./win-loss-reasons-manager";
 
+// Re-export types from hooks for backwards compatibility
+export type { ReasonForm } from "@/hooks/settings";
+
 export { TargetForm } from './target-form';
 export type { TargetFormProps } from './target-form';
 

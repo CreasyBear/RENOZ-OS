@@ -1,5 +1,3 @@
-import { useQuery } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { JobMaterialsTab } from '@/components/domain/jobs';
 import {
   useJobMaterials,
@@ -7,9 +5,8 @@ import {
   useAddJobMaterial,
   useUpdateJobMaterial,
   useRemoveJobMaterial,
-} from '@/hooks';
-import { listProducts } from '@/server/functions/products/products';
-import { queryKeys } from '@/lib/query-keys';
+} from '@/hooks/jobs';
+import { useProductsForJobMaterials } from '@/hooks/products';
 
 interface JobMaterialsTabContainerProps {
   jobId: string;
@@ -23,28 +20,7 @@ export function JobMaterialsTabContainer({ jobId }: JobMaterialsTabContainerProp
   const updateMaterial = useUpdateJobMaterial();
   const removeMaterial = useRemoveJobMaterial();
 
-  const listProductsFn = useServerFn(listProducts);
-  const { data: productsData, isLoading: isLoadingProducts } = useQuery({
-    queryKey: queryKeys.products.jobMaterials(jobId),
-    queryFn: () =>
-      listProductsFn({
-        data: {
-          page: 1,
-          pageSize: 200,
-          sortBy: 'name',
-          sortOrder: 'asc',
-        },
-      }),
-  });
-
-  const products =
-    productsData?.products.map((product) => ({
-      id: product.id,
-      sku: product.sku ?? null,
-      name: product.name,
-      description: product.description ?? null,
-      unitPrice: product.basePrice ?? 0,
-    })) ?? [];
+  const { data: products = [], isLoading: isLoadingProducts } = useProductsForJobMaterials({ jobId });
 
   return (
     <JobMaterialsTab

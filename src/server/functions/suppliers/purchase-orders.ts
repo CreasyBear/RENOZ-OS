@@ -17,6 +17,7 @@ import { currencySchema, percentageSchema } from '@/lib/schemas/_shared/patterns
 import { purchaseOrders, purchaseOrderItems, suppliers } from 'drizzle/schema/suppliers';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
 // INPUT SCHEMAS
@@ -259,7 +260,7 @@ export const getPurchaseOrder = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!poResult[0]) {
-      throw new Error('Purchase order not found');
+      throw new NotFoundError('Purchase order not found', 'purchaseOrder');
     }
 
     // Get the line items
@@ -403,11 +404,11 @@ export const updatePurchaseOrder = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing[0]) {
-      throw new Error('Purchase order not found');
+      throw new NotFoundError('Purchase order not found', 'purchaseOrder');
     }
 
     if (existing[0].status !== 'draft') {
-      throw new Error('Can only update draft purchase orders');
+      throw new ValidationError('Can only update draft purchase orders');
     }
 
     const updates: Record<string, unknown> = {
@@ -456,11 +457,11 @@ export const deletePurchaseOrder = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing[0]) {
-      throw new Error('Purchase order not found');
+      throw new NotFoundError('Purchase order not found', 'purchaseOrder');
     }
 
     if (existing[0].status !== 'draft') {
-      throw new Error('Can only delete draft purchase orders');
+      throw new ValidationError('Can only delete draft purchase orders');
     }
 
     // Soft delete the PO (items will remain for audit)
@@ -505,7 +506,7 @@ export const submitForApproval = createServerFn({ method: 'POST' })
       .returning();
 
     if (!result[0]) {
-      throw new Error('Purchase order not found or not in draft status');
+      throw new NotFoundError('Purchase order not found or not in draft status', 'purchaseOrder');
     }
 
     return result[0];
@@ -544,7 +545,7 @@ export const approvePurchaseOrder = createServerFn({ method: 'POST' })
       .returning();
 
     if (!result[0]) {
-      throw new Error('Purchase order not found or not pending approval');
+      throw new NotFoundError('Purchase order not found or not pending approval', 'purchaseOrder');
     }
 
     return result[0];
@@ -581,7 +582,7 @@ export const rejectPurchaseOrder = createServerFn({ method: 'POST' })
       .returning();
 
     if (!result[0]) {
-      throw new Error('Purchase order not found or not pending approval');
+      throw new NotFoundError('Purchase order not found or not pending approval', 'purchaseOrder');
     }
 
     return result[0];
@@ -620,7 +621,7 @@ export const markAsOrdered = createServerFn({ method: 'POST' })
       .returning();
 
     if (!result[0]) {
-      throw new Error('Purchase order not found or not approved');
+      throw new NotFoundError('Purchase order not found or not approved', 'purchaseOrder');
     }
 
     return result[0];
@@ -659,7 +660,7 @@ export const cancelPurchaseOrder = createServerFn({ method: 'POST' })
       .returning();
 
     if (!result[0]) {
-      throw new Error('Purchase order not found or cannot be cancelled');
+      throw new ValidationError('Purchase order not found or cannot be cancelled');
     }
 
     return result[0];
@@ -698,7 +699,7 @@ export const closePurchaseOrder = createServerFn({ method: 'POST' })
       .returning();
 
     if (!result[0]) {
-      throw new Error('Purchase order not found or cannot be closed');
+      throw new ValidationError('Purchase order not found or cannot be closed');
     }
 
     return result[0];
@@ -735,11 +736,11 @@ export const addPurchaseOrderItem = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!po[0]) {
-      throw new Error('Purchase order not found');
+      throw new NotFoundError('Purchase order not found', 'purchaseOrder');
     }
 
     if (po[0].status !== 'draft') {
-      throw new Error('Can only add items to draft purchase orders');
+      throw new ValidationError('Can only add items to draft purchase orders');
     }
 
     // Get the next line number
@@ -809,7 +810,7 @@ export const removePurchaseOrderItem = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!item[0]) {
-      throw new Error('Item not found');
+      throw new NotFoundError('Item not found', 'purchaseOrderItem');
     }
 
     // Check if PO is in draft status
@@ -825,7 +826,7 @@ export const removePurchaseOrderItem = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!po[0] || po[0].status !== 'draft') {
-      throw new Error('Can only remove items from draft purchase orders');
+      throw new ValidationError('Can only remove items from draft purchase orders');
     }
 
     // Delete the item

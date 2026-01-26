@@ -46,6 +46,11 @@ import {
   buildStandardCursorResponse,
 } from '@/lib/db/pagination';
 import { GST_RATE } from '@/lib/order-calculations';
+import {
+  generateQuotePdf,
+  generateInvoicePdf,
+  generateDeliveryNotePdf,
+} from '@/trigger/jobs';
 
 // ============================================================================
 // TYPES
@@ -684,6 +689,18 @@ export const createOrder = createServerFn({ method: 'POST' })
       };
     });
 
+    // INT-DOC-007: Trigger quote PDF generation on order creation
+    // Fire-and-forget - don't block order creation on PDF generation
+    generateQuotePdf.trigger({
+      orderId: result.order.id,
+      orderNumber: result.order.orderNumber,
+      organizationId: ctx.organizationId,
+      customerId: result.order.customerId,
+    }).catch((error) => {
+      // Log but don't fail order creation if PDF trigger fails
+      console.error('[INT-DOC-007] Failed to trigger quote PDF generation:', error);
+    });
+
     return {
       ...result.order,
       lineItems: result.lineItems,
@@ -880,6 +897,35 @@ export const updateOrderStatus = createServerFn({ method: 'POST' })
 
       return result;
     });
+
+    // INT-DOC-007: Trigger PDF generation based on status change
+    // Fire-and-forget - don't block status update on PDF generation
+
+    // Generate invoice PDF when order is confirmed (becomes a formal billable order)
+    if (newStatus === 'confirmed') {
+      generateInvoicePdf.trigger({
+        orderId: updated.id,
+        orderNumber: updated.orderNumber,
+        organizationId: ctx.organizationId,
+        customerId: updated.customerId,
+        dueDate: updated.dueDate ?? undefined,
+      }).catch((error) => {
+        console.error('[INT-DOC-007] Failed to trigger invoice PDF generation:', error);
+      });
+    }
+
+    // Generate delivery note PDF when order is shipped
+    if (newStatus === 'shipped') {
+      generateDeliveryNotePdf.trigger({
+        orderId: updated.id,
+        orderNumber: updated.orderNumber,
+        organizationId: ctx.organizationId,
+        customerId: updated.customerId,
+        deliveryDate: statusDates.shippedDate ?? null,
+      }).catch((error) => {
+        console.error('[INT-DOC-007] Failed to trigger delivery note PDF generation:', error);
+      });
+    }
 
     return updated;
   });
@@ -1472,6 +1518,32 @@ export const bulkUpdateOrderStatus = createServerFn({ method: 'POST' })
               updatedBy: ctx.user.id,
             })
             .where(eq(orders.id, orderId));
+
+          // INT-DOC-007: Trigger PDF generation based on status change
+          // Fire-and-forget - don't block bulk update on PDF generation
+          if (newStatus === 'confirmed') {
+            generateInvoicePdf.trigger({
+              orderId: existing.id,
+              orderNumber: existing.orderNumber,
+              organizationId: ctx.organizationId,
+              customerId: existing.customerId,
+              dueDate: existing.dueDate ?? undefined,
+            }).catch((error) => {
+              console.error(`[INT-DOC-007] Failed to trigger invoice PDF for order ${orderId}:`, error);
+            });
+          }
+
+          if (newStatus === 'shipped') {
+            generateDeliveryNotePdf.trigger({
+              orderId: existing.id,
+              orderNumber: existing.orderNumber,
+              organizationId: ctx.organizationId,
+              customerId: existing.customerId,
+              deliveryDate: statusDates.shippedDate ?? null,
+            }).catch((error) => {
+              console.error(`[INT-DOC-007] Failed to trigger delivery note PDF for order ${orderId}:`, error);
+            });
+          }
 
           updated.push(orderId);
         } catch (error) {

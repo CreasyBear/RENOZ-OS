@@ -25,6 +25,7 @@ import {
   calculateOverallHealthStatus,
   DEFAULT_HEALTH_CONFIG,
 } from '@/lib/oauth/health-types';
+import { ServerError } from '@/lib/server/errors';
 
 // ============================================================================
 // ZOD SCHEMAS FOR VALIDATION
@@ -272,7 +273,7 @@ async function checkServiceHealth(
         return await checkMicrosoft365Service(service, accessToken);
 
       default:
-        throw new Error(`Unsupported provider: ${provider}`);
+        throw new ServerError(`Unsupported provider: ${provider}`);
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -313,7 +314,7 @@ async function checkGoogleWorkspaceService(
           'https://people.googleapis.com/v1/people/me/connections?personFields=names&maxResults=1';
         break;
       default:
-        throw new Error(`Unsupported service: ${service}`);
+        throw new ServerError(`Unsupported service: ${service}`);
     }
 
     const response = await fetch(endpoint, {
@@ -434,7 +435,7 @@ async function checkMicrosoft365Service(
         endpoint = 'https://graph.microsoft.com/v1.0/me/contacts?$top=1';
         break;
       default:
-        throw new Error(`Unsupported service: ${service}`);
+        throw new ServerError(`Unsupported service: ${service}`);
     }
 
     const response = await fetch(endpoint, {

@@ -173,7 +173,7 @@ function generatePresetInstallments(
     }
 
     default:
-      throw new Error(`Unknown plan type: ${planType}`);
+      throw new ValidationError(`Unknown plan type: ${planType}`);
   }
 
   return installments;
@@ -642,45 +642,48 @@ export const deletePaymentPlan = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<{ deleted: number }> => {
     const ctx = await withAuth({ permission: PERMISSIONS.financial.delete });
 
-    // Check for any paid installments
-    const paidInstallments = await db
-      .select()
-      .from(paymentSchedules)
-      .where(
-        and(
-          eq(paymentSchedules.orderId, data.orderId),
-          eq(paymentSchedules.organizationId, ctx.organizationId),
-          eq(paymentSchedules.status, 'paid')
+    // Wrap in transaction to prevent race condition between check and delete
+    return await db.transaction(async (tx) => {
+      // Check for any paid installments
+      const paidInstallments = await tx
+        .select()
+        .from(paymentSchedules)
+        .where(
+          and(
+            eq(paymentSchedules.orderId, data.orderId),
+            eq(paymentSchedules.organizationId, ctx.organizationId),
+            eq(paymentSchedules.status, 'paid')
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (paidInstallments.length > 0) {
-      throw new ConflictError('Cannot delete payment plan with paid installments');
-    }
+      if (paidInstallments.length > 0) {
+        throw new ConflictError('Cannot delete payment plan with paid installments');
+      }
 
-    // Count before delete
-    const countResult = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(paymentSchedules)
-      .where(
-        and(
-          eq(paymentSchedules.orderId, data.orderId),
-          eq(paymentSchedules.organizationId, ctx.organizationId)
-        )
-      );
+      // Count before delete
+      const countResult = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(paymentSchedules)
+        .where(
+          and(
+            eq(paymentSchedules.orderId, data.orderId),
+            eq(paymentSchedules.organizationId, ctx.organizationId)
+          )
+        );
 
-    const deleteCount = countResult[0]?.count ?? 0;
+      const deleteCount = countResult[0]?.count ?? 0;
 
-    // Delete all installments
-    await db
-      .delete(paymentSchedules)
-      .where(
-        and(
-          eq(paymentSchedules.orderId, data.orderId),
-          eq(paymentSchedules.organizationId, ctx.organizationId)
-        )
-      );
+      // Delete all installments
+      await tx
+        .delete(paymentSchedules)
+        .where(
+          and(
+            eq(paymentSchedules.orderId, data.orderId),
+            eq(paymentSchedules.organizationId, ctx.organizationId)
+          )
+        );
 
-    return { deleted: deleteCount };
+      return { deleted: deleteCount };
+    });
   });

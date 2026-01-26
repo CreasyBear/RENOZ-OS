@@ -235,12 +235,15 @@ export const checkExpiringWarrantiesJob = client.defineJob({
         });
 
         // Build payload for expiry event
+        // Note: customerName uses ?? because Drizzle infers join columns as nullable
         const payload: WarrantyExpiringSoonPayload = {
           warrantyId: warranty.id,
           warrantyNumber: warranty.warrantyNumber,
           organizationId: warranty.organizationId,
           customerId: warranty.customerId,
+          customerName: warranty.customerName ?? 'Unknown Customer',
           customerEmail: warranty.customerEmail ?? undefined,
+          productId: warranty.productId!,
           productName,
           policyType: warranty.policyType,
           expiryDate: warranty.expiryDate.toISOString(),

@@ -13,7 +13,7 @@ import {
   requestPortalLinkSchema,
   revokePortalAccessSchema,
 } from '@/lib/schemas/portal';
-import { AuthError, NotFoundError } from '@/lib/server/errors';
+import { AuthError, NotFoundError, ServerError } from '@/lib/server/errors';
 import { logAuditEvent } from '../_shared/audit-logs';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 
@@ -42,12 +42,12 @@ export const requestPortalLink = createServerFn({ method: 'POST' })
     });
 
     if (linkError) {
-      throw new Error(linkError.message);
+      throw new ServerError(linkError.message);
     }
 
     const authUserId = linkData?.user?.id;
     if (!authUserId) {
-      throw new Error('Failed to resolve auth user for portal identity');
+      throw new ServerError('Failed to resolve auth user for portal identity');
     }
 
     // Upsert portal identity

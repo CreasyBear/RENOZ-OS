@@ -90,9 +90,11 @@ export function DashboardProvider({
       const params = dateRangeToSearchParams(range, presetValue);
 
       // Navigate to update search params without full page reload
+      // Type assertion needed for TanStack Router's strict search param typing
       navigate({
-        search: (prev: Record<string, unknown>) => ({
-          ...prev,
+        // @ts-expect-error - search reducer returns compatible params but types are overly strict
+        search: (prev: Record<string, unknown> | null) => ({
+          ...(prev ?? {}),
           ...params,
           // Remove old params if switching from custom to preset
           ...(presetValue !== "custom" && { start: undefined, end: undefined }),

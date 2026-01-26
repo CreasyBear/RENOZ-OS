@@ -256,7 +256,8 @@ export function isHealthIssue(status: ConnectionHealthStatus | ServiceHealthStat
 export function getHealthStatusDescription(
   status: ConnectionHealthStatus | ServiceHealthStatus
 ): string {
-  const descriptions: Record<string, string> = {
+  // Connection-specific descriptions
+  const connectionDescriptions: Record<ConnectionHealthStatus, string> = {
     [ConnectionHealthStatus.HEALTHY]: 'Connection is working normally',
     [ConnectionHealthStatus.TOKEN_EXPIRED]: 'Access token has expired and needs refresh',
     [ConnectionHealthStatus.API_ERROR]: 'API request failed - check service status',
@@ -265,7 +266,10 @@ export function getHealthStatusDescription(
     [ConnectionHealthStatus.NETWORK_ERROR]: 'Network connectivity issues',
     [ConnectionHealthStatus.CONFIG_ERROR]: 'Configuration error - check settings',
     [ConnectionHealthStatus.UNKNOWN]: 'Unable to determine connection status',
+  };
 
+  // Service-specific descriptions
+  const serviceDescriptions: Record<ServiceHealthStatus, string> = {
     [ServiceHealthStatus.HEALTHY]: 'Service is accessible and responding',
     [ServiceHealthStatus.UNAUTHORIZED]: 'Authentication failed - check token validity',
     [ServiceHealthStatus.FORBIDDEN]: 'Access denied - insufficient permissions',
@@ -278,5 +282,10 @@ export function getHealthStatusDescription(
     [ServiceHealthStatus.UNKNOWN]: 'Unable to determine service status',
   };
 
-  return descriptions[status] || 'Unknown status';
+  // Check if it's a ConnectionHealthStatus first
+  if (Object.values(ConnectionHealthStatus).includes(status as ConnectionHealthStatus)) {
+    return connectionDescriptions[status as ConnectionHealthStatus] || 'Unknown status';
+  }
+
+  return serviceDescriptions[status as ServiceHealthStatus] || 'Unknown status';
 }

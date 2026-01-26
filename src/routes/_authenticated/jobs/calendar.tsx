@@ -812,7 +812,7 @@ function JobsCalendarPage() {
               oauthLoading={oauthLoading}
               onManageIntegrations={handleManageIntegrations}
               onCreateTemplate={handleCreateTemplate}
-              tasks={normalizedWeeklyTasks}
+              tasks={normalizedWeeklyTasks as any}
               isLoading={weeklyLoading}
               error={weeklyError}
               onReschedule={handleWeeklyReschedule}

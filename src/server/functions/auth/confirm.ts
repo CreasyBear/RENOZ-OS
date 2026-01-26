@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { db } from '@/lib/db';
 import { organizations, users } from 'drizzle/schema';
 import { eq } from 'drizzle-orm';
+import { AuthError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
 // COMPLETE SIGNUP - Create org and user after email confirmation
@@ -29,12 +30,12 @@ export const completeSignup = createServerFn({ method: 'POST' })
     const { data: authUser, error: authError } = await supabase.auth.getUser();
 
     if (authError || !authUser.user) {
-      throw new Error('Authentication required');
+      throw new AuthError('Authentication required');
     }
 
     // Verify the user ID matches
     if (authUser.user.id !== data.userId) {
-      throw new Error('User ID mismatch');
+      throw new ValidationError('User ID mismatch');
     }
 
     // Check if user already exists (idempotent)
@@ -101,7 +102,7 @@ export const confirmEmailFn = createServerFn({ method: 'GET' })
     ) {
       return searchParams;
     }
-    throw new Error('Invalid search params');
+    throw new ValidationError('Invalid search params');
   })
   .handler(async ({ data }) => {
     const request = getRequest();

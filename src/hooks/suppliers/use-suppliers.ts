@@ -41,7 +41,7 @@ export function useSuppliers(options: UseSuppliersOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.suppliers.suppliersListFiltered(filters),
-    queryFn: () => listSuppliers({ data: filters as SupplierFilters }),
+    queryFn: () => listSuppliers({ data: filters as Record<string, unknown> }),
     enabled,
     staleTime: 30 * 1000,
   });

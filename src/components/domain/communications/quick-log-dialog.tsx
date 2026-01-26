@@ -202,7 +202,9 @@ export function QuickLogDialog({
             : "Meeting recorded"
       );
       queryClient.invalidateQueries({ queryKey: queryKeys.activities.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.activities.byCustomer(customerId) });
+      if (customerId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.activities.byCustomer(customerId) });
+      }
       onOpenChange(false);
     },
     onError: (error) => {

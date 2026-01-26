@@ -21,7 +21,9 @@ import {
   transferInventory,
   receiveInventory,
   listMovements,
+  getInventoryDashboard,
 } from '@/server/functions/inventory/inventory';
+import { getLocationUtilization } from '@/server/functions/inventory/locations';
 import type {
   InventoryListQuery,
   MovementListQuery,
@@ -316,6 +318,49 @@ export function useTransferInventory() {
 /**
  * Receive new inventory stock
  */
+/**
+ * Fetch inventory movements with filtering (general query, not tied to specific inventory item)
+ */
+export function useMovements(
+  filters: Partial<MovementListQuery> & { page?: number; pageSize?: number; sortOrder?: 'asc' | 'desc' } = {},
+  enabled = true
+) {
+  const queryFilters: MovementListQuery = {
+    page: filters.page ?? 1,
+    pageSize: filters.pageSize ?? 50,
+    sortOrder: filters.sortOrder ?? 'desc',
+    ...filters,
+  };
+  return useQuery({
+    queryKey: queryKeys.inventory.movements(queryFilters),
+    queryFn: () => listMovements({ data: queryFilters }),
+    enabled,
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Fetch inventory movements with auto-refresh for dashboard
+ */
+export function useMovementsDashboard(
+  filters: Partial<MovementListQuery> & { page?: number; pageSize?: number; sortOrder?: 'asc' | 'desc' } = {},
+  enabled = true
+) {
+  const queryFilters: MovementListQuery = {
+    page: filters.page ?? 1,
+    pageSize: filters.pageSize ?? 50,
+    sortOrder: filters.sortOrder ?? 'desc',
+    ...filters,
+  };
+  return useQuery({
+    queryKey: queryKeys.inventory.movements({ ...queryFilters, dashboard: true }),
+    queryFn: () => listMovements({ data: queryFilters }),
+    enabled,
+    staleTime: 15 * 1000,
+    refetchInterval: 30 * 1000,
+  });
+}
+
 export function useReceiveInventory() {
   const queryClient = useQueryClient();
 
@@ -401,5 +446,35 @@ export function useReceiveInventory() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.inventory.movementsAll() });
     },
+  });
+}
+
+// ============================================================================
+// DASHBOARD HOOKS
+// ============================================================================
+
+/**
+ * Fetch inventory dashboard metrics and top movers
+ */
+export function useInventoryDashboard(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.inventory.dashboard(),
+    queryFn: () => getInventoryDashboard(),
+    enabled,
+    staleTime: 30 * 1000,
+    refetchInterval: 30 * 1000, // Auto-refresh every 30 seconds
+  });
+}
+
+/**
+ * Fetch location utilization data
+ */
+export function useLocationUtilization(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.locations.utilization(),
+    queryFn: () => getLocationUtilization({}),
+    enabled,
+    staleTime: 60 * 1000,
+    refetchInterval: 60 * 1000, // Auto-refresh every 60 seconds
   });
 }

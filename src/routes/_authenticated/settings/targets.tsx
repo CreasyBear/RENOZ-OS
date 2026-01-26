@@ -109,6 +109,13 @@ const PERIOD_LABELS: Record<TargetPeriod, string> = {
 // TYPES
 // ============================================================================
 
+// The server returns dates as strings from the database
+// This differs from the TargetType schema which expects Date objects
+type ServerTarget = Omit<TargetType, 'startDate' | 'endDate'> & {
+  startDate: string;
+  endDate: string;
+};
+
 interface FilterState {
   search: string;
   metric: TargetMetric | 'all';
@@ -177,13 +184,23 @@ function TargetsSettingsPage() {
     setFormOpen(true);
   }, []);
 
-  const handleEditClick = useCallback((target: TargetType) => {
-    setEditingTarget(target);
+  const handleEditClick = useCallback((target: ServerTarget) => {
+    // Convert string dates to Date objects for the form
+    setEditingTarget({
+      ...target,
+      startDate: new Date(target.startDate),
+      endDate: new Date(target.endDate),
+    });
     setFormOpen(true);
   }, []);
 
-  const handleDeleteClick = useCallback((target: TargetType) => {
-    setTargetToDelete(target);
+  const handleDeleteClick = useCallback((target: ServerTarget) => {
+    // Convert string dates to Date objects
+    setTargetToDelete({
+      ...target,
+      startDate: new Date(target.startDate),
+      endDate: new Date(target.endDate),
+    });
     setDeleteConfirmOpen(true);
   }, []);
 

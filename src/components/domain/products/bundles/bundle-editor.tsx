@@ -46,7 +46,7 @@ import {
   removeBundleComponent,
   calculateBundlePrice,
   validateBundle,
-} from "@/lib/server/functions/product-bundles";
+} from "@/server/functions/products/product-bundles";
 
 interface BundleComponent {
   id: string;

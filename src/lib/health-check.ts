@@ -270,7 +270,6 @@ suppliersHealthChecker.registerCheck('feature_flags', async (): Promise<HealthCh
 export const runSuppliersHealthCheck = () => suppliersHealthChecker.runAllChecks();
 
 export { HealthChecker };
-export type { HealthCheckResult, SystemHealth };
 
 // Periodic health check (every 5 minutes in production)
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
@@ -288,7 +287,9 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
         if (health.overall === 'unhealthy') {
           logger.error('System health check failed', undefined, {
             component: 'health_check',
-            services: health.services,
+            metadata: {
+              services: health.services,
+            },
           });
         }
       } catch (error) {

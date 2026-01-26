@@ -1,155 +1,179 @@
 /**
- * Sync Xero Job
+ * Sync Xero Job (Trigger.dev v3)
  *
- * Background job to sync data with Xero accounting software.
+ * Background tasks to sync data with Xero accounting software.
  * Triggered when deals are won to create invoices.
  *
  * This is a placeholder implementation - actual Xero integration
  * requires OAuth setup and the Xero API client.
  *
- * @see https://trigger.dev/docs/documentation/guides/create-a-job
+ * @see https://trigger.dev/docs/v3/tasks
  * @see https://developer.xero.com/documentation/
  */
-import { eventTrigger } from '@trigger.dev/sdk'
-import { client, pipelineEvents, type DealWonPayload } from '../client'
+import { task, logger } from "@trigger.dev/sdk/v3";
 
 // ============================================================================
-// XERO SYNC JOB
+// TYPES
+// ============================================================================
+
+export interface SyncXeroInvoicePayload {
+  opportunityId: string;
+  opportunityName: string;
+  organizationId: string;
+  customerId: string;
+  value: number;
+}
+
+export interface SyncXeroContactPayload {
+  customerId: string;
+  organizationId: string;
+}
+
+export interface SyncXeroInvoiceResult {
+  success: boolean;
+  opportunityId: string;
+  reason?: string;
+  xeroInvoiceId?: string;
+  xeroInvoiceNumber?: string;
+  invoiceTotal?: number;
+}
+
+export interface SyncXeroContactResult {
+  success: boolean;
+  customerId: string;
+  message: string;
+}
+
+// ============================================================================
+// TASK DEFINITIONS
 // ============================================================================
 
 /**
- * Create Invoice in Xero Job
+ * Create Invoice in Xero Task
  *
  * When a deal is won, create a corresponding invoice in Xero.
  *
- * This job:
+ * This task:
  * 1. Fetches deal/opportunity details
  * 2. Fetches or creates Xero contact for the customer
  * 3. Creates a draft invoice in Xero
  * 4. Updates the deal with the Xero invoice reference
  */
-export const syncXeroInvoiceJob = client.defineJob({
-  id: 'sync-xero-invoice',
-  name: 'Create Xero Invoice',
-  version: '1.0.0',
-  trigger: eventTrigger({
-    name: pipelineEvents.dealWon,
-  }),
-  run: async (payload: DealWonPayload, io) => {
-    const { opportunityId, opportunityName, organizationId, customerId, value } = payload
+export const syncXeroInvoiceTask = task({
+  id: "sync-xero-invoice",
+  retry: {
+    maxAttempts: 3,
+  },
+  run: async (payload: SyncXeroInvoicePayload): Promise<SyncXeroInvoiceResult> => {
+    const {
+      opportunityId,
+      opportunityName,
+      organizationId,
+      customerId,
+      value,
+    } = payload;
 
-    await io.logger.info('Starting Xero invoice sync', {
+    logger.info("Starting Xero invoice sync", {
       opportunityId,
       opportunityName,
       value,
-    })
+    });
 
     // Step 1: Check if Xero is configured for this org
-    const xeroConfig = await io.runTask('check-xero-config', async () => {
-      // TODO: Check if organization has Xero connected
-      // const { data } = await supabase
-      //   .from('integrations')
-      //   .select('*')
-      //   .eq('organization_id', organizationId)
-      //   .eq('provider', 'xero')
-      //   .eq('status', 'active')
-      //   .single()
+    // TODO: Check if organization has Xero connected
+    // const { data } = await supabase
+    //   .from('integrations')
+    //   .select('*')
+    //   .eq('organization_id', organizationId)
+    //   .eq('provider', 'xero')
+    //   .eq('status', 'active')
+    //   .single()
 
-      await io.logger.info('Checking Xero integration status')
+    logger.info("Checking Xero integration status");
 
-      // Placeholder - return null if not configured
-      return null as { tenantId: string; accessToken: string } | null
-    })
+    // Placeholder - return null if not configured
+    const xeroConfig = null as { tenantId: string; accessToken: string } | null;
 
     if (!xeroConfig) {
-      await io.logger.warn('Xero not configured for organization', {
+      logger.warn("Xero not configured for organization", {
         organizationId,
-      })
+      });
       return {
         success: false,
-        reason: 'Xero not configured',
+        reason: "Xero not configured",
         opportunityId,
-      }
+      };
     }
 
     // Step 2: Fetch opportunity/deal details
-    await io.runTask('fetch-opportunity', async () => {
-      // TODO: Fetch full opportunity with line items
-      return {
-        id: opportunityId,
-        name: opportunityName,
-        value,
-        customerId,
-        lineItems: [],
-      }
-    })
+    // TODO: Fetch full opportunity with line items when Xero integration is implemented
+    // This placeholder captures the data structure needed for invoice creation
+    void {
+      id: opportunityId,
+      name: opportunityName,
+      value,
+      customerId,
+      lineItems: [],
+    };
 
     // Step 3: Fetch or create Xero contact
-    const xeroContact = await io.runTask('sync-xero-contact', async () => {
-      await io.logger.info('Syncing customer to Xero')
+    logger.info("Syncing customer to Xero");
 
-      // TODO: Implementation:
-      // 1. Check if customer has xero_contact_id
-      // 2. If not, create contact in Xero
-      // 3. Save xero_contact_id to customer record
+    // TODO: Implementation:
+    // 1. Check if customer has xero_contact_id
+    // 2. If not, create contact in Xero
+    // 3. Save xero_contact_id to customer record
 
-      return {
-        contactId: `xero-contact-${customerId}`,
-        name: 'Customer Name',
-      }
-    })
+    const xeroContact = {
+      contactId: `xero-contact-${customerId}`,
+      name: "Customer Name",
+    };
 
     // Step 4: Create invoice in Xero
-    const invoice = await io.runTask('create-xero-invoice', async () => {
-      await io.logger.info('Creating invoice in Xero', {
-        contactId: xeroContact.contactId,
-        amount: value,
-      })
+    logger.info("Creating invoice in Xero", {
+      contactId: xeroContact.contactId,
+      amount: value,
+    });
 
-      // TODO: Use Xero API client
-      // const xeroClient = new XeroClient(xeroConfig)
-      // const invoice = await xeroClient.accountingApi.createInvoices(
-      //   xeroConfig.tenantId,
-      //   {
-      //     invoices: [{
-      //       type: Invoice.TypeEnum.ACCREC,
-      //       contact: { contactID: xeroContact.contactId },
-      //       lineItems: opportunity.lineItems.map(item => ({
-      //         description: item.description,
-      //         quantity: item.quantity,
-      //         unitAmount: item.unitPrice,
-      //       })),
-      //       date: new Date().toISOString().split('T')[0],
-      //       status: Invoice.StatusEnum.DRAFT,
-      //       reference: opportunity.name,
-      //     }],
-      //   }
-      // )
+    // TODO: Use Xero API client
+    // const xeroClient = new XeroClient(xeroConfig)
+    // const invoice = await xeroClient.accountingApi.createInvoices(
+    //   xeroConfig.tenantId,
+    //   {
+    //     invoices: [{
+    //       type: Invoice.TypeEnum.ACCREC,
+    //       contact: { contactID: xeroContact.contactId },
+    //       lineItems: opportunity.lineItems.map(item => ({
+    //         description: item.description,
+    //         quantity: item.quantity,
+    //         unitAmount: item.unitPrice,
+    //       })),
+    //       date: new Date().toISOString().split('T')[0],
+    //       status: Invoice.StatusEnum.DRAFT,
+    //       reference: opportunity.name,
+    //     }],
+    //   }
+    // )
 
-      // Placeholder
-      return {
-        invoiceId: `INV-${Date.now()}`,
-        invoiceNumber: `DRAFT-${opportunityId.slice(0, 8)}`,
-        status: 'DRAFT',
-        total: value,
-      }
-    })
+    // Placeholder
+    const invoice = {
+      invoiceId: `INV-${Date.now()}`,
+      invoiceNumber: `DRAFT-${opportunityId.slice(0, 8)}`,
+      status: "DRAFT",
+      total: value,
+    };
 
     // Step 5: Update opportunity with Xero reference
-    await io.runTask('update-opportunity', async () => {
-      await io.logger.info('Updating opportunity with Xero invoice', {
-        opportunityId,
-        xeroInvoiceId: invoice.invoiceId,
-      })
+    logger.info("Updating opportunity with Xero invoice", {
+      opportunityId,
+      xeroInvoiceId: invoice.invoiceId,
+    });
 
-      // TODO: Update opportunity record
-      // await supabase
-      //   .from('opportunities')
-      //   .update({ xero_invoice_id: invoice.invoiceId })
-      //   .eq('id', opportunityId)
-
-      return { success: true }
-    })
+    // TODO: Update opportunity record
+    // await supabase
+    //   .from('opportunities')
+    //   .update({ xero_invoice_id: invoice.invoiceId })
+    //   .eq('id', opportunityId)
 
     return {
       success: true,
@@ -157,25 +181,24 @@ export const syncXeroInvoiceJob = client.defineJob({
       xeroInvoiceId: invoice.invoiceId,
       xeroInvoiceNumber: invoice.invoiceNumber,
       invoiceTotal: invoice.total,
-    }
+    };
   },
-})
+});
 
-// ============================================================================
-// XERO CONTACT SYNC JOB (can be triggered manually)
-// ============================================================================
+/**
+ * Sync Customer to Xero Task
+ *
+ * Can be triggered manually to sync a customer to Xero.
+ */
+export const syncXeroContactTask = task({
+  id: "sync-xero-contact",
+  retry: {
+    maxAttempts: 3,
+  },
+  run: async (payload: SyncXeroContactPayload): Promise<SyncXeroContactResult> => {
+    const { customerId, organizationId: _organizationId } = payload;
 
-export const syncXeroContactJob = client.defineJob({
-  id: 'sync-xero-contact',
-  name: 'Sync Customer to Xero',
-  version: '1.0.0',
-  trigger: eventTrigger({
-    name: 'customer.sync_xero',
-  }),
-  run: async (payload: { customerId: string; organizationId: string }, io) => {
-    const { customerId, organizationId: _organizationId } = payload
-
-    await io.logger.info('Syncing customer to Xero', { customerId })
+    logger.info("Syncing customer to Xero", { customerId });
 
     // TODO: Implement Xero contact sync
     // 1. Fetch customer details
@@ -186,7 +209,11 @@ export const syncXeroContactJob = client.defineJob({
     return {
       success: true,
       customerId,
-      message: 'Customer sync placeholder',
-    }
+      message: "Customer sync placeholder",
+    };
   },
-})
+});
+
+// Legacy exports for backward compatibility
+export const syncXeroInvoiceJob = syncXeroInvoiceTask;
+export const syncXeroContactJob = syncXeroContactTask;

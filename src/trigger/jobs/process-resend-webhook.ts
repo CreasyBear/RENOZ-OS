@@ -1,7 +1,7 @@
 /**
- * Process Resend Webhook Job
+ * Process Resend Webhook Task (Trigger.dev v3)
  *
- * Background job that processes Resend webhook events with full data integrity:
+ * Background task that processes Resend webhook events with full data integrity:
  * - DI-001: Idempotency via webhook_events table
  * - DI-002: Status state machine enforcement
  * - DI-003: Race condition prevention with conditional UPDATEs
@@ -18,32 +18,31 @@
  * @see todos/resend-integration/004-pending-p1-webhook-idempotency.md
  * @see todos/resend-integration/005-pending-p1-status-state-machine.md
  * @see todos/resend-integration/006-pending-p1-race-condition-prevention.md
+ * @see https://trigger.dev/docs/v3/tasks
  */
 
-import { eventTrigger } from '@trigger.dev/sdk';
-import { and, eq, isNull, sql } from 'drizzle-orm';
-import { client } from '../client';
-import { db } from '@/lib/db';
+import { task, logger } from "@trigger.dev/sdk/v3";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import { db } from "@/lib/db";
 import {
   emailHistory,
   webhookEvents,
   type LinkClick,
   type WebhookEventPayload,
-} from 'drizzle/schema';
+} from "drizzle/schema";
 import {
-  resendWebhookEvent,
   type ResendWebhookPayload,
   type ResendWebhookEventType,
-} from '@/routes/api/webhooks/resend';
+} from "@/routes/api/webhooks/resend";
 import {
   addSuppressionDirect,
   trackSoftBounce,
-} from '@/server/functions/communications/email-suppression';
+} from "@/server/functions/communications/email-suppression";
 import {
   createEmailDeliveredActivity,
   createEmailOpenedActivity,
   createEmailClickedActivity,
-} from '@/lib/server/activity-bridge';
+} from "@/lib/server/activity-bridge";
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -99,7 +98,9 @@ interface EmailDetails {
 /**
  * Fetch email details by email history ID for activity creation
  */
-async function getEmailDetails(emailHistoryId: string): Promise<EmailDetails | null> {
+async function getEmailDetails(
+  emailHistoryId: string
+): Promise<EmailDetails | null> {
   const email = await db.query.emailHistory?.findFirst({
     where: eq(emailHistory.id, emailHistoryId),
     columns: {
@@ -168,7 +169,7 @@ async function handleEmailSent(
   const result = await db
     .update(emailHistory)
     .set({
-      status: 'sent',
+      status: "sent",
       sentAt: new Date(),
     })
     .where(
@@ -197,7 +198,7 @@ async function handleEmailDelivered(
   const result = await db
     .update(emailHistory)
     .set({
-      status: 'delivered',
+      status: "delivered",
       deliveredAt: new Date(),
     })
     .where(
@@ -229,7 +230,7 @@ async function handleEmailOpened(
   const result = await db
     .update(emailHistory)
     .set({
-      status: 'opened',
+      status: "opened",
       openedAt: new Date(),
     })
     .where(
@@ -268,8 +269,10 @@ async function handleEmailClicked(
   emailHistoryId?: string;
 }> {
   const clickData: LinkClick = {
-    linkId: link ? Buffer.from(link).toString('base64').slice(0, 16) : 'unknown',
-    url: link ?? 'unknown',
+    linkId: link
+      ? Buffer.from(link).toString("base64").slice(0, 16)
+      : "unknown",
+    url: link ?? "unknown",
     clickedAt: clickTimestamp ?? new Date().toISOString(),
   };
 
@@ -278,7 +281,7 @@ async function handleEmailClicked(
   const result = await db
     .update(emailHistory)
     .set({
-      status: 'clicked',
+      status: "clicked",
       clickedAt: sql`COALESCE(${emailHistory.clickedAt}, NOW())`,
       // Atomically append to linkClicks JSONB array (DI-003)
       linkClicks: sql`
@@ -324,17 +327,22 @@ async function handleEmailClicked(
  */
 async function handleEmailBounced(
   emailId: string,
-  bounceType: 'Permanent' | 'Transient' | undefined,
+  bounceType: "Permanent" | "Transient" | undefined,
   bounceMessage: string | undefined
-): Promise<{ updated: boolean; emailHistoryId?: string; organizationId?: string; toAddress?: string }> {
+): Promise<{
+  updated: boolean;
+  emailHistoryId?: string;
+  organizationId?: string;
+  toAddress?: string;
+}> {
   // Bounce is terminal state - always update (DI-002)
   const result = await db
     .update(emailHistory)
     .set({
-      status: 'bounced',
+      status: "bounced",
       bouncedAt: new Date(),
-      bounceReason: bounceMessage ?? 'Unknown bounce reason',
-      bounceType: bounceType === 'Permanent' ? 'hard' : 'soft',
+      bounceReason: bounceMessage ?? "Unknown bounce reason",
+      bounceType: bounceType === "Permanent" ? "hard" : "soft",
     })
     .where(eq(emailHistory.resendMessageId, emailId))
     .returning({
@@ -355,14 +363,17 @@ async function handleEmailBounced(
  * Handle email.complained event (spam complaint)
  * This is a terminal state - always sets complaint info
  */
-async function handleEmailComplained(
-  emailId: string
-): Promise<{ updated: boolean; emailHistoryId?: string; organizationId?: string; toAddress?: string }> {
+async function handleEmailComplained(emailId: string): Promise<{
+  updated: boolean;
+  emailHistoryId?: string;
+  organizationId?: string;
+  toAddress?: string;
+}> {
   // Complaint is terminal state - always update (DI-002)
   const result = await db
     .update(emailHistory)
     .set({
-      status: 'failed', // Use 'failed' as the status for complaints
+      status: "failed", // Use 'failed' as the status for complaints
       complainedAt: new Date(),
     })
     .where(eq(emailHistory.resendMessageId, emailId))
@@ -381,30 +392,28 @@ async function handleEmailComplained(
 }
 
 // ============================================================================
-// JOB DEFINITION
+// TASK DEFINITION
 // ============================================================================
 
 /**
- * Process Resend Webhook Job
+ * Process Resend Webhook Task
  *
  * Handles async processing of Resend webhook events with full data integrity:
  * - Idempotency check before processing
  * - State machine enforcement for status transitions
  * - Race-safe conditional updates
  */
-export const processResendWebhookJob = client.defineJob({
-  id: 'process-resend-webhook',
-  name: 'Process Resend Webhook Event',
-  version: '2.0.0', // Bumped for INT-RES-002 implementation
-  trigger: eventTrigger({
-    name: resendWebhookEvent,
-  }),
-  run: async (payload: ResendWebhookPayload, io): Promise<ProcessingResult> => {
+export const processResendWebhookTask = task({
+  id: "process-resend-webhook",
+  retry: {
+    maxAttempts: 3,
+  },
+  run: async (payload: ResendWebhookPayload): Promise<ProcessingResult> => {
     const { event, receivedAt } = payload;
     const { type, data } = event;
     const emailId = data.email_id;
 
-    await io.logger.info('Processing Resend webhook event', {
+    logger.info("Processing Resend webhook event", {
       eventType: type,
       emailId,
       receivedAt,
@@ -416,7 +425,7 @@ export const processResendWebhookJob = client.defineJob({
     const alreadyProcessed = await isEventProcessed(emailId, type);
 
     if (alreadyProcessed) {
-      await io.logger.info('Skipping duplicate event', {
+      logger.info("Skipping duplicate event", {
         eventType: type,
         emailId,
       });
@@ -437,8 +446,8 @@ export const processResendWebhookJob = client.defineJob({
 
     try {
       switch (type) {
-        case 'email.sent': {
-          await io.logger.info('Processing email.sent event', { emailId });
+        case "email.sent": {
+          logger.info("Processing email.sent event", { emailId });
           const sentResult = await handleEmailSent(emailId);
           result = {
             updated: sentResult.updated,
@@ -446,15 +455,18 @@ export const processResendWebhookJob = client.defineJob({
           };
 
           if (!sentResult.updated) {
-            await io.logger.warn('email.sent: No matching email found or already in later state', {
-              emailId,
-            });
+            logger.warn(
+              "email.sent: No matching email found or already in later state",
+              {
+                emailId,
+              }
+            );
           }
           break;
         }
 
-        case 'email.delivered': {
-          await io.logger.info('Processing email.delivered event', { emailId });
+        case "email.delivered": {
+          logger.info("Processing email.delivered event", { emailId });
           const deliveredResult = await handleEmailDelivered(emailId);
           result = {
             updated: deliveredResult.updated,
@@ -462,14 +474,16 @@ export const processResendWebhookJob = client.defineJob({
           };
 
           if (!deliveredResult.updated) {
-            await io.logger.warn(
-              'email.delivered: No matching email found or invalid state transition',
+            logger.warn(
+              "email.delivered: No matching email found or invalid state transition",
               { emailId }
             );
           } else if (deliveredResult.emailHistoryId) {
             // INT-RES-002: Create activity record for delivery
             try {
-              const emailDetails = await getEmailDetails(deliveredResult.emailHistoryId);
+              const emailDetails = await getEmailDetails(
+                deliveredResult.emailHistoryId
+              );
               if (emailDetails) {
                 const activityResult = await createEmailDeliveredActivity({
                   emailId: emailDetails.id,
@@ -480,25 +494,29 @@ export const processResendWebhookJob = client.defineJob({
                   recipientName: null,
                 });
                 if (activityResult.success) {
-                  await io.logger.info('Created delivery activity', {
+                  logger.info("Created delivery activity", {
                     emailId,
                     activityId: activityResult.activityId,
                   });
-                  (result as Record<string, unknown>).activityId = activityResult.activityId;
+                  (result as Record<string, unknown>).activityId =
+                    activityResult.activityId;
                 }
               }
             } catch (activityError) {
-              await io.logger.error('Failed to create delivery activity', {
+              logger.error("Failed to create delivery activity", {
                 emailId,
-                error: activityError instanceof Error ? activityError.message : 'Unknown error',
+                error:
+                  activityError instanceof Error
+                    ? activityError.message
+                    : "Unknown error",
               });
             }
           }
           break;
         }
 
-        case 'email.opened': {
-          await io.logger.info('Processing email.opened event', { emailId });
+        case "email.opened": {
+          logger.info("Processing email.opened event", { emailId });
           const openedResult = await handleEmailOpened(emailId);
           result = {
             updated: openedResult.updated,
@@ -507,10 +525,12 @@ export const processResendWebhookJob = client.defineJob({
           };
 
           if (openedResult.wasFirstOpen && openedResult.emailHistoryId) {
-            await io.logger.info('First open recorded', { emailId });
+            logger.info("First open recorded", { emailId });
             // INT-RES-002: Create activity record for first open
             try {
-              const emailDetails = await getEmailDetails(openedResult.emailHistoryId);
+              const emailDetails = await getEmailDetails(
+                openedResult.emailHistoryId
+              );
               if (emailDetails) {
                 const activityResult = await createEmailOpenedActivity({
                   emailId: emailDetails.id,
@@ -521,28 +541,32 @@ export const processResendWebhookJob = client.defineJob({
                   recipientName: null,
                 });
                 if (activityResult.success) {
-                  await io.logger.info('Created email opened activity', {
+                  logger.info("Created email opened activity", {
                     emailId,
                     activityId: activityResult.activityId,
                   });
-                  (result as Record<string, unknown>).activityId = activityResult.activityId;
+                  (result as Record<string, unknown>).activityId =
+                    activityResult.activityId;
                 }
               }
             } catch (activityError) {
-              await io.logger.error('Failed to create email opened activity', {
+              logger.error("Failed to create email opened activity", {
                 emailId,
-                error: activityError instanceof Error ? activityError.message : 'Unknown error',
+                error:
+                  activityError instanceof Error
+                    ? activityError.message
+                    : "Unknown error",
               });
             }
           }
           break;
         }
 
-        case 'email.clicked': {
+        case "email.clicked": {
           const link = data.click?.link;
           const timestamp = data.click?.timestamp;
 
-          await io.logger.info('Processing email.clicked event', {
+          logger.info("Processing email.clicked event", {
             emailId,
             link,
           });
@@ -560,10 +584,12 @@ export const processResendWebhookJob = client.defineJob({
           };
 
           if (clickedResult.wasFirstClick && clickedResult.emailHistoryId) {
-            await io.logger.info('First click recorded', { emailId, link });
+            logger.info("First click recorded", { emailId, link });
             // INT-RES-002: Create activity record for first click
             try {
-              const emailDetails = await getEmailDetails(clickedResult.emailHistoryId);
+              const emailDetails = await getEmailDetails(
+                clickedResult.emailHistoryId
+              );
               if (emailDetails) {
                 const activityResult = await createEmailClickedActivity({
                   emailId: emailDetails.id,
@@ -572,33 +598,39 @@ export const processResendWebhookJob = client.defineJob({
                   subject: emailDetails.subject,
                   recipientEmail: emailDetails.toAddress,
                   recipientName: null,
-                  clickedUrl: link ?? 'unknown',
-                  linkId: link ? Buffer.from(link).toString('base64').slice(0, 16) : 'unknown',
+                  clickedUrl: link ?? "unknown",
+                  linkId: link
+                    ? Buffer.from(link).toString("base64").slice(0, 16)
+                    : "unknown",
                 });
                 if (activityResult.success) {
-                  await io.logger.info('Created email clicked activity', {
+                  logger.info("Created email clicked activity", {
                     emailId,
                     link,
                     activityId: activityResult.activityId,
                   });
-                  (result as Record<string, unknown>).activityId = activityResult.activityId;
+                  (result as Record<string, unknown>).activityId =
+                    activityResult.activityId;
                 }
               }
             } catch (activityError) {
-              await io.logger.error('Failed to create email clicked activity', {
+              logger.error("Failed to create email clicked activity", {
                 emailId,
-                error: activityError instanceof Error ? activityError.message : 'Unknown error',
+                error:
+                  activityError instanceof Error
+                    ? activityError.message
+                    : "Unknown error",
               });
             }
           }
           break;
         }
 
-        case 'email.bounced': {
+        case "email.bounced": {
           const bounceType = data.bounce?.type;
           const bounceMessage = data.bounce?.message;
 
-          await io.logger.warn('Processing email.bounced event', {
+          logger.warn("Processing email.bounced event", {
             emailId,
             bounceType,
             bounceMessage,
@@ -613,13 +645,13 @@ export const processResendWebhookJob = client.defineJob({
             updated: bouncedResult.updated,
             emailHistoryId: bouncedResult.emailHistoryId,
             bounceType,
-            isHardBounce: bounceType === 'Permanent',
+            isHardBounce: bounceType === "Permanent",
           };
 
           // INT-RES-004: Auto-add hard bounces to suppression list immediately
           if (
             bouncedResult.updated &&
-            bounceType === 'Permanent' &&
+            bounceType === "Permanent" &&
             bouncedResult.toAddress &&
             bouncedResult.organizationId
           ) {
@@ -627,16 +659,16 @@ export const processResendWebhookJob = client.defineJob({
               const suppressionResult = await addSuppressionDirect({
                 organizationId: bouncedResult.organizationId,
                 email: bouncedResult.toAddress,
-                reason: 'bounce',
-                bounceType: 'hard',
-                source: 'webhook',
+                reason: "bounce",
+                bounceType: "hard",
+                source: "webhook",
                 resendEventId: emailId,
                 metadata: {
                   bounceMessage: bounceMessage ?? undefined,
                 },
               });
 
-              await io.logger.info('Added email to suppression list for hard bounce', {
+              logger.info("Added email to suppression list for hard bounce", {
                 emailId,
                 toAddress: bouncedResult.toAddress,
                 suppressionId: suppressionResult.id,
@@ -644,15 +676,16 @@ export const processResendWebhookJob = client.defineJob({
               });
 
               (result as Record<string, unknown>).suppressionAdded = true;
-              (result as Record<string, unknown>).suppressionId = suppressionResult.id;
+              (result as Record<string, unknown>).suppressionId =
+                suppressionResult.id;
             } catch (suppressionError) {
-              await io.logger.error('Failed to add email to suppression list', {
+              logger.error("Failed to add email to suppression list", {
                 emailId,
                 toAddress: bouncedResult.toAddress,
                 error:
                   suppressionError instanceof Error
                     ? suppressionError.message
-                    : 'Unknown error',
+                    : "Unknown error",
               });
             }
           }
@@ -660,7 +693,7 @@ export const processResendWebhookJob = client.defineJob({
           // INT-RES-004: Track soft bounces with 3-strike rule
           if (
             bouncedResult.updated &&
-            bounceType === 'Transient' &&
+            bounceType === "Transient" &&
             bouncedResult.toAddress &&
             bouncedResult.organizationId
           ) {
@@ -674,7 +707,7 @@ export const processResendWebhookJob = client.defineJob({
                 },
               });
 
-              await io.logger.info('Tracked soft bounce', {
+              logger.info("Tracked soft bounce", {
                 emailId,
                 toAddress: bouncedResult.toAddress,
                 suppressionId: softBounceResult.id,
@@ -684,32 +717,34 @@ export const processResendWebhookJob = client.defineJob({
               });
 
               (result as Record<string, unknown>).softBounceTracked = true;
-              (result as Record<string, unknown>).bounceCount = softBounceResult.bounceCount;
-              (result as Record<string, unknown>).suppressionTriggered = softBounceResult.suppressed;
+              (result as Record<string, unknown>).bounceCount =
+                softBounceResult.bounceCount;
+              (result as Record<string, unknown>).suppressionTriggered =
+                softBounceResult.suppressed;
 
               if (softBounceResult.suppressed) {
-                await io.logger.warn('Email auto-suppressed after 3 soft bounces', {
+                logger.warn("Email auto-suppressed after 3 soft bounces", {
                   emailId,
                   toAddress: bouncedResult.toAddress,
                   bounceCount: softBounceResult.bounceCount,
                 });
               }
             } catch (softBounceError) {
-              await io.logger.error('Failed to track soft bounce', {
+              logger.error("Failed to track soft bounce", {
                 emailId,
                 toAddress: bouncedResult.toAddress,
                 error:
                   softBounceError instanceof Error
                     ? softBounceError.message
-                    : 'Unknown error',
+                    : "Unknown error",
               });
             }
           }
           break;
         }
 
-        case 'email.complained': {
-          await io.logger.warn('Processing email.complained (spam) event', {
+        case "email.complained": {
+          logger.warn("Processing email.complained (spam) event", {
             emailId,
           });
 
@@ -729,28 +764,32 @@ export const processResendWebhookJob = client.defineJob({
               const suppressionResult = await addSuppressionDirect({
                 organizationId: complainedResult.organizationId,
                 email: complainedResult.toAddress,
-                reason: 'complaint',
-                source: 'webhook',
+                reason: "complaint",
+                source: "webhook",
                 resendEventId: emailId,
               });
 
-              await io.logger.info('Added email to suppression list for spam complaint', {
-                emailId,
-                toAddress: complainedResult.toAddress,
-                suppressionId: suppressionResult.id,
-                isNew: suppressionResult.isNew,
-              });
+              logger.info(
+                "Added email to suppression list for spam complaint",
+                {
+                  emailId,
+                  toAddress: complainedResult.toAddress,
+                  suppressionId: suppressionResult.id,
+                  isNew: suppressionResult.isNew,
+                }
+              );
 
               (result as Record<string, unknown>).suppressionAdded = true;
-              (result as Record<string, unknown>).suppressionId = suppressionResult.id;
+              (result as Record<string, unknown>).suppressionId =
+                suppressionResult.id;
             } catch (suppressionError) {
-              await io.logger.error('Failed to add email to suppression list', {
+              logger.error("Failed to add email to suppression list", {
                 emailId,
                 toAddress: complainedResult.toAddress,
                 error:
                   suppressionError instanceof Error
                     ? suppressionError.message
-                    : 'Unknown error',
+                    : "Unknown error",
               });
             }
           }
@@ -758,7 +797,7 @@ export const processResendWebhookJob = client.defineJob({
         }
 
         default: {
-          await io.logger.warn('Unknown event type received', {
+          logger.warn("Unknown event type received", {
             eventType: type,
             emailId,
           });
@@ -768,8 +807,8 @@ export const processResendWebhookJob = client.defineJob({
       }
     } catch (error) {
       errorMessage =
-        error instanceof Error ? error.message : 'Unknown processing error';
-      await io.logger.error('Error processing webhook event', {
+        error instanceof Error ? error.message : "Unknown processing error";
+      logger.error("Error processing webhook event", {
         eventType: type,
         emailId,
         error: errorMessage,
@@ -794,7 +833,10 @@ export const processResendWebhookJob = client.defineJob({
             ? { type: event.data.bounce.type, message: event.data.bounce.message }
             : undefined,
           click: event.data.click
-            ? { link: event.data.click.link, timestamp: event.data.click.timestamp }
+            ? {
+                link: event.data.click.link,
+                timestamp: event.data.click.timestamp,
+              }
             : undefined,
         },
       };
@@ -809,11 +851,11 @@ export const processResendWebhookJob = client.defineJob({
       );
     } catch (recordError) {
       // Log but don't fail - the main processing succeeded
-      await io.logger.error('Failed to record processed event', {
+      logger.error("Failed to record processed event", {
         emailId,
         eventType: type,
         error:
-          recordError instanceof Error ? recordError.message : 'Unknown error',
+          recordError instanceof Error ? recordError.message : "Unknown error",
       });
     }
 
@@ -824,10 +866,21 @@ export const processResendWebhookJob = client.defineJob({
       success: !errorMessage,
       eventType: type,
       emailId,
-      wasFirstEvent: (result as { wasFirstOpen?: boolean; wasFirstClick?: boolean })
-        .wasFirstOpen || (result as { wasFirstClick?: boolean }).wasFirstClick,
+      wasFirstEvent:
+        (result as { wasFirstOpen?: boolean; wasFirstClick?: boolean })
+          .wasFirstOpen ||
+        (result as { wasFirstClick?: boolean }).wasFirstClick,
       error: errorMessage,
       details: result,
     };
   },
 });
+
+// ============================================================================
+// LEGACY EXPORTS - for backward compatibility
+// ============================================================================
+
+/**
+ * @deprecated Use processResendWebhookTask instead
+ */
+export const processResendWebhookJob = processResendWebhookTask;

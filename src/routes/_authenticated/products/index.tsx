@@ -30,7 +30,7 @@ import {
 } from "@/components/ui/select";
 import { EmptyState } from "@/components/shared/empty-state";
 import { SearchEmptyState } from "@/components/shared/search-empty-state";
-import { listProducts, getCategoryTree } from "@/lib/server/functions/products";
+import { listProducts, getCategoryTree } from "@/server/functions/products/products";
 import { ProductTable } from "@/components/domain/products/product-table";
 import { CategorySidebar } from "@/components/domain/products";
 

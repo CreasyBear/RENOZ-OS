@@ -10,8 +10,9 @@
  * - Bulk location import
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { Plus, Upload, Download, RefreshCw } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { TreeDetailSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
@@ -28,20 +29,19 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   LocationTree,
-  type WarehouseLocation,
-} from "@/components/domain/inventory";
-import { LocationForm } from "@/components/domain/inventory";
-import {
+  LocationForm,
   LocationDetail,
+  type WarehouseLocation,
   type LocationContents,
 } from "@/components/domain/inventory";
 import {
-  getWarehouseLocationHierarchy,
-  getLocation,
-  createWarehouseLocation,
-  updateWarehouseLocation,
-  deleteWarehouseLocation,
-} from "@/server/functions/locations";
+  useLocationHierarchy,
+  useLocationDetail,
+  useCreateWarehouseLocation,
+  useUpdateWarehouseLocation,
+  useDeleteWarehouseLocation,
+} from "@/hooks/inventory";
+import { queryKeys } from "@/lib/query-keys";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -68,21 +68,10 @@ export const Route = createFileRoute("/_authenticated/inventory/locations" as an
 
 function LocationsPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // State
-  const [locations, setLocations] = useState<WarehouseLocation[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<WarehouseLocation | null>(null);
-  const [locationContents, setLocationContents] = useState<LocationContents[]>([]);
-  const [locationMetrics, setLocationMetrics] = useState<{
-    itemCount: number;
-    totalQuantity: number;
-    totalValue: number;
-  } | null>(null);
-
-  // Loading states
-  const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Dialog states
   const [showFormDialog, setShowFormDialog] = useState(false);
@@ -92,64 +81,41 @@ function LocationsPage() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [deletingLocation, setDeletingLocation] = useState<WarehouseLocation | null>(null);
 
-  // Fetch location hierarchy
-  const fetchLocations = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const data = await getWarehouseLocationHierarchy({ data: {} });
-      if (data && typeof data === 'object' && 'hierarchy' in data && data.hierarchy) {
-        setLocations(data.hierarchy as unknown as WarehouseLocation[]);
-      }
-    } catch (error) {
-      console.error("Failed to fetch locations:", error);
-      toast.error("Failed to load locations");
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+  // Data hooks - using TanStack Query via hooks
+  const {
+    data: hierarchyData,
+    isLoading,
+  } = useLocationHierarchy();
 
-  // Fetch location detail
-  const fetchLocationDetail = useCallback(async (locationId: string) => {
-    try {
-      setIsLoadingDetail(true);
-      const data = await getLocation({ data: { id: locationId } });
-      if (data) {
-        setLocationContents(
-          (data.contents || []).map((item: any) => ({
-            id: item.id,
-            productId: item.productId,
-            productName: item.product?.name ?? "Unknown",
-            productSku: item.product?.sku ?? "N/A",
-            quantityOnHand: item.quantityOnHand ?? 0,
-            quantityAllocated: item.quantityAllocated ?? 0,
-            quantityAvailable: item.quantityAvailable ?? 0,
-            unitCost: Number(item.unitCost) ?? 0,
-            totalValue: Number(item.totalValue) ?? 0,
-          }))
-        );
-        setLocationMetrics(data.metrics);
-      }
-    } catch (error) {
-      console.error("Failed to fetch location detail:", error);
-    } finally {
-      setIsLoadingDetail(false);
-    }
-  }, []);
+  const {
+    data: locationDetailData,
+    isLoading: isLoadingDetail,
+  } = useLocationDetail(selectedLocation?.id ?? "", !!selectedLocation);
 
-  // Initial fetch
-  useEffect(() => {
-    fetchLocations();
-  }, []);
+  // Mutation hooks
+  const createMutation = useCreateWarehouseLocation();
+  const updateMutation = useUpdateWarehouseLocation();
+  const deleteMutation = useDeleteWarehouseLocation();
 
-  // Fetch detail when selection changes
-  useEffect(() => {
-    if (selectedLocation) {
-      fetchLocationDetail(selectedLocation.id);
-    } else {
-      setLocationContents([]);
-      setLocationMetrics(null);
-    }
-  }, [selectedLocation, fetchLocationDetail]);
+  // Transform data (hierarchy data may have nullable isActive, coerce to required)
+  const locations: WarehouseLocation[] = (hierarchyData ?? []).map((loc: any) => ({
+    ...loc,
+    isActive: loc.isActive ?? true,
+  }));
+
+  const locationContents: LocationContents[] = (locationDetailData?.contents ?? []).map((item: any) => ({
+    id: item.id,
+    productId: item.productId,
+    productName: item.product?.name ?? "Unknown",
+    productSku: item.product?.sku ?? "N/A",
+    quantityOnHand: item.quantityOnHand ?? 0,
+    quantityAllocated: item.quantityAllocated ?? 0,
+    quantityAvailable: item.quantityAvailable ?? 0,
+    unitCost: Number(item.unitCost) ?? 0,
+    totalValue: Number(item.totalValue) ?? 0,
+  }));
+
+  const locationMetrics = locationDetailData?.metrics ?? null;
 
   // Handlers
   const handleSelect = useCallback((location: WarehouseLocation) => {
@@ -183,43 +149,28 @@ function LocationsPage() {
 
   const handleFormSubmit = useCallback(
     async (data: any) => {
-      try {
-        setIsSubmitting(true);
-        if (formMode === "edit" && editingLocation) {
-          await updateWarehouseLocation({
-            data: { id: editingLocation.id, data },
-          });
-          toast.success("Location updated");
-        } else {
-          await createWarehouseLocation({ data });
-          toast.success("Location created");
-        }
-        setShowFormDialog(false);
-        fetchLocations();
-      } catch (error: any) {
-        toast.error(error.message || "Failed to save location");
-      } finally {
-        setIsSubmitting(false);
+      if (formMode === "edit" && editingLocation) {
+        await updateMutation.mutateAsync({
+          id: editingLocation.id,
+          data,
+        });
+      } else {
+        await createMutation.mutateAsync(data);
       }
+      setShowFormDialog(false);
     },
-    [formMode, editingLocation, fetchLocations]
+    [formMode, editingLocation, createMutation, updateMutation]
   );
 
   const handleConfirmDelete = useCallback(async () => {
     if (!deletingLocation) return;
-    try {
-      await deleteWarehouseLocation({ data: { id: deletingLocation.id } });
-      toast.success("Location deleted");
-      setShowDeleteDialog(false);
-      setDeletingLocation(null);
-      if (selectedLocation?.id === deletingLocation.id) {
-        setSelectedLocation(null);
-      }
-      fetchLocations();
-    } catch (error: any) {
-      toast.error(error.message || "Failed to delete location");
+    await deleteMutation.mutateAsync(deletingLocation.id);
+    setShowDeleteDialog(false);
+    setDeletingLocation(null);
+    if (selectedLocation?.id === deletingLocation.id) {
+      setSelectedLocation(null);
     }
-  }, [deletingLocation, selectedLocation, fetchLocations]);
+  }, [deletingLocation, selectedLocation, deleteMutation]);
 
   const handleItemClick = useCallback(
     (item: LocationContents) => {
@@ -233,12 +184,11 @@ function LocationsPage() {
   );
 
   const handleRefresh = useCallback(() => {
-    fetchLocations();
-    if (selectedLocation) {
-      fetchLocationDetail(selectedLocation.id);
-    }
+    queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
     toast.success("Refreshed");
-  }, [fetchLocations, fetchLocationDetail, selectedLocation]);
+  }, [queryClient]);
+
+  const isSubmitting = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 
   return (
     <PageLayout variant="full-width">

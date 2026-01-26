@@ -1,39 +1,67 @@
 # AI Infrastructure System Progress
 # PRD: ai-infrastructure.prd.json
 # Started: 2026-01-17
-# Updated: 2026-01-17
+# Updated: 2026-01-26
 
 ## Stories (19 total)
 
-- [ ] AI-INFRA-001: AI Conversations Schema
-- [ ] AI-INFRA-002: AI Approvals Schema
-- [ ] AI-INFRA-003: AI Agent Tasks Schema
-- [ ] AI-INFRA-004: AI Cost Tracking Schema
-- [ ] AI-INFRA-005: Haiku Triage Router
-- [ ] AI-INFRA-006: Specialist Agent Configuration
+### Phase 1: Schema (Stories 001-004)
+- [~] AI-INFRA-001: AI Conversations Schema (implemented, needs ai_conversation_messages table)
+- [~] AI-INFRA-002: AI Approvals Schema (implemented, version column not used)
+- [~] AI-INFRA-003: AI Agent Tasks Schema (implemented)
+- [~] AI-INFRA-004: AI Cost Tracking Schema (implemented)
+
+### Phase 2: Agents (Stories 005-006)
+- [~] AI-INFRA-005: Haiku Triage Router (implemented, correct patterns)
+- [~] AI-INFRA-006: Specialist Agent Configuration (implemented, missing memory config)
+
+### Phase 3: Tools & Infrastructure (Stories 011-014, 018-019)
+- [ ] AI-INFRA-011: AI Agent Trigger.dev Integration (needs RLS context)
+- [~] AI-INFRA-012: Memory Persistence Layer (Redis implemented, needs template rendering)
+- [~] AI-INFRA-013: Chat Streaming API Route (implemented, needs pre-stream optimization)
+- [~] AI-INFRA-014: AI Tool Implementations (implemented, needs streaming generators)
+- [~] AI-INFRA-018: AI Rate Limiting (global only, needs per-tool limits)
+- [~] AI-INFRA-019: Cost Budget Enforcement (fails open on error)
+
+### Phase 4: API Routes (Stories 015-017)
+- [~] AI-INFRA-015: Approval Execution Engine (implemented, version column not used)
+- [ ] AI-INFRA-016: Artifacts Streaming API (needs showCanvas pattern)
+- [~] AI-INFRA-017: Approval Expiry Cron Job (race condition)
+
+### Phase 5: UI (Stories 007-010)
 - [ ] AI-INFRA-007: Approval Modal UI
 - [ ] AI-INFRA-008: Cost Indicator UI
 - [ ] AI-INFRA-009: Artifact Renderer UI
 - [ ] AI-INFRA-010: AI Chat Panel Widget
-- [ ] AI-INFRA-011: AI Agent Trigger.dev Integration
-- [ ] AI-INFRA-012: Memory Persistence Layer
-- [ ] AI-INFRA-013: Chat Streaming API Route
-- [ ] AI-INFRA-014: AI Tool Implementations
-- [ ] AI-INFRA-015: Approval Execution Engine
-- [ ] AI-INFRA-016: Artifacts Streaming API
-- [ ] AI-INFRA-017: Approval Expiry Cron Job
-- [ ] AI-INFRA-018: AI Rate Limiting
-- [ ] AI-INFRA-019: Cost Budget Enforcement
 
 ## Current Story
-Not started
+Helicopter Review Complete - See gap-analysis.md
+
+## Status Legend
+- [x] Complete
+- [~] Partial (implementation exists, has gaps)
+- [ ] Not started
 
 ## Iteration Count
-Total: 0
-Current Story: 0
+Total: 0 (PRD execution not yet started)
+Current Story: N/A
 
 ## Blockers
-None
+See gap-analysis.md for full list:
+- SEC-001: PII exposed in tool results (P1)
+- ARCH-001: Missing AppContext implementation (P1)
+- ARCH-002: No parameter resolution system (P1)
+- ARCH-003: Tools not using streaming generators (P1)
+- DATA-001: Version column not used for optimistic locking (P1)
+- DATA-002: Expiration cron race condition (P1)
+- PERF-001: Blocking operations before stream start (P1)
+- SEC-002: Budget check fails open on error (P1)
 
 ## Notes
-- Progress tracking initialized
+- Progress tracking initialized: 2026-01-17
+- Helicopter review completed: 2026-01-26
+- Architecture compliance: ~70%
+- 8 P1 critical issues identified
+- 12 P2 important issues identified
+- 7 P3 nice-to-have issues identified
+- Full analysis in gap-analysis.md

@@ -49,7 +49,7 @@ function CustomerDetailPage() {
     data: customer,
     isLoading,
     error,
-  } = useCustomer(customerId)
+  } = useCustomer({ id: customerId })
 
   // Loading state
   if (isLoading) {

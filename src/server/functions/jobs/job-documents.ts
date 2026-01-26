@@ -31,6 +31,7 @@ import {
   type ListJobDocumentsResponse,
   type DeleteJobDocumentResponse,
 } from '@/lib/schemas/jobs/job-documents';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
 // TYPES
@@ -76,7 +77,7 @@ export const uploadJobDocument = createServerFn({ method: 'POST' })
     // Additional file validation
     const validation = validateDocumentFile(validated.file.type, validated.file.size);
     if (!validation.valid) {
-      throw new Error(validation.error);
+      throw new ValidationError(validation.error ?? 'Invalid file');
     }
 
     return validated;
@@ -96,7 +97,7 @@ export const uploadJobDocument = createServerFn({ method: 'POST' })
         .limit(1);
 
       if (!jobAssignment) {
-        throw new Error('Job assignment not found');
+        throw new NotFoundError('Job assignment not found', 'jobAssignment');
       }
 
       // Convert File to ArrayBuffer for processing
@@ -208,7 +209,7 @@ export const listJobDocuments = createServerFn({ method: 'GET' })
         .limit(1);
 
       if (!jobAssignment) {
-        throw new Error('Job assignment not found');
+        throw new NotFoundError('Job assignment not found', 'jobAssignment');
       }
 
       // Get all photos for this job assignment
@@ -262,7 +263,7 @@ export const deleteJobDocument = createServerFn({ method: 'POST' })
         .returning();
 
       if (!deletedPhoto) {
-        throw new Error('Document not found');
+        throw new NotFoundError('Document not found', 'document');
       }
 
       // In a real implementation, also delete the file from storage

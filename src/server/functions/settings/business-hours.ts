@@ -15,6 +15,7 @@ import { db } from '@/lib/db';
 import { businessHoursConfig, type WeeklySchedule, type DaySchedule } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { logAuditEvent } from '../_shared/audit-logs';
 import { AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 
@@ -121,7 +122,7 @@ export const getBusinessHours = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!config) {
-      throw new Error('Business hours configuration not found');
+      throw new NotFoundError('Business hours configuration not found', 'businessHoursConfig');
     }
 
     return config;
@@ -244,7 +245,7 @@ export const updateBusinessHours = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!current) {
-      throw new Error('Business hours configuration not found');
+      throw new NotFoundError('Business hours configuration not found', 'businessHoursConfig');
     }
 
     // If setting as default, unset other defaults
@@ -331,7 +332,7 @@ export const deleteBusinessHours = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!config) {
-      throw new Error('Business hours configuration not found');
+      throw new NotFoundError('Business hours configuration not found', 'businessHoursConfig');
     }
 
     // Check if it's the default and there are others
@@ -342,7 +343,7 @@ export const deleteBusinessHours = createServerFn({ method: 'POST' })
         .where(eq(businessHoursConfig.organizationId, ctx.organizationId));
 
       if (countResult.count > 1) {
-        throw new Error('Cannot delete the default business hours. Set another as default first.');
+        throw new ValidationError('Cannot delete the default business hours. Set another as default first.');
       }
     }
 

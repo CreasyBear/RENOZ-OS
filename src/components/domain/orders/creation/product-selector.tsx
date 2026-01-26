@@ -40,7 +40,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { listProducts } from "@/lib/server/functions/products";
+import { listProducts } from "@/server/functions/products/products";
 
 // ============================================================================
 // TYPES

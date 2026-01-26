@@ -45,7 +45,7 @@ import {
   getSearchSuggestions,
   getSearchFacets,
   recordSearchEvent,
-} from "@/lib/server/functions/product-search";
+} from "@/server/functions/products/product-search";
 
 interface ProductSearchInterfaceProps {
   onSearch?: (query: string, filters: SearchFilters) => void;

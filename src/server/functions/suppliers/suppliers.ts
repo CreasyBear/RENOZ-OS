@@ -17,6 +17,7 @@ import { suppliers, supplierPerformanceMetrics } from 'drizzle/schema/suppliers'
 import { purchaseOrders } from 'drizzle/schema/suppliers';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
 // INPUT SCHEMAS
@@ -229,7 +230,7 @@ export const getSupplier = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!result[0]) {
-      throw new Error('Supplier not found');
+      throw new NotFoundError('Supplier not found', 'Supplier');
     }
 
     // Get recent performance metrics (last 12 months)
@@ -372,7 +373,7 @@ export const updateSupplier = createServerFn({ method: 'POST' })
       .returning();
 
     if (!result[0]) {
-      throw new Error('Supplier not found');
+      throw new NotFoundError('Supplier not found', 'Supplier');
     }
 
     return result[0];
@@ -399,7 +400,7 @@ export const deleteSupplier = createServerFn({ method: 'POST' })
       );
 
     if (Number(activeOrders[0]?.count ?? 0) > 0) {
-      throw new Error('Cannot delete supplier with active purchase orders');
+      throw new ValidationError('Cannot delete supplier with active purchase orders');
     }
 
     const result = await db
@@ -419,7 +420,7 @@ export const deleteSupplier = createServerFn({ method: 'POST' })
       .returning({ id: suppliers.id });
 
     if (!result[0]) {
-      throw new Error('Supplier not found');
+      throw new NotFoundError('Supplier not found', 'Supplier');
     }
 
     return { success: true, id: result[0].id };
@@ -479,7 +480,7 @@ export const updateSupplierRating = createServerFn({ method: 'POST' })
       .returning();
 
     if (!result[0]) {
-      throw new Error('Supplier not found');
+      throw new NotFoundError('Supplier not found', 'Supplier');
     }
 
     return {

@@ -15,6 +15,7 @@ import { db } from '@/lib/db';
 import { userGroups, userGroupMembers, users } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { NotFoundError, ConflictError } from '@/lib/server/errors';
 import {
   createGroupSchema,
   updateGroupSchema,
@@ -53,7 +54,7 @@ export const createGroup = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (existing.length > 0) {
-      throw new Error('A group with this name already exists');
+      throw new ConflictError('A group with this name already exists');
     }
 
     const [group] = await db
@@ -193,7 +194,7 @@ export const getGroup = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!group) {
-      throw new Error('Group not found');
+      throw new NotFoundError('Group not found', 'group');
     }
 
     return group as GroupWithMemberCount;
@@ -228,7 +229,7 @@ export const updateGroup = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing) {
-      throw new Error('Group not found');
+      throw new NotFoundError('Group not found', 'group');
     }
 
     // Check for duplicate name if changing name
@@ -247,7 +248,7 @@ export const updateGroup = createServerFn({ method: 'POST' })
         .limit(1);
 
       if (duplicate.length > 0) {
-        throw new Error('A group with this name already exists');
+        throw new ConflictError('A group with this name already exists');
       }
     }
 
@@ -302,7 +303,7 @@ export const deleteGroup = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing) {
-      throw new Error('Group not found');
+      throw new NotFoundError('Group not found', 'group');
     }
 
     // Soft delete group (members will be cascade deleted by FK)
@@ -349,7 +350,7 @@ export const listGroupMembers = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!group) {
-      throw new Error('Group not found');
+      throw new NotFoundError('Group not found', 'group');
     }
 
     // Get members with user info
@@ -415,7 +416,7 @@ export const addGroupMember = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!group) {
-      throw new Error('Group not found');
+      throw new NotFoundError('Group not found', 'group');
     }
 
     // Verify user belongs to same organization
@@ -426,7 +427,7 @@ export const addGroupMember = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!user) {
-      throw new Error('User not found');
+      throw new NotFoundError('User not found', 'user');
     }
 
     // Check if already a member
@@ -439,7 +440,7 @@ export const addGroupMember = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (existing.length > 0) {
-      throw new Error('User is already a member of this group');
+      throw new ConflictError('User is already a member of this group');
     }
 
     // Add member
@@ -501,7 +502,7 @@ export const updateGroupMemberRole = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!membership) {
-      throw new Error('Membership not found');
+      throw new NotFoundError('Membership not found', 'membership');
     }
 
     // Update role
@@ -554,7 +555,7 @@ export const removeGroupMember = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!membership) {
-      throw new Error('Membership not found');
+      throw new NotFoundError('Membership not found', 'membership');
     }
 
     // Remove member
@@ -588,7 +589,7 @@ export const getUserGroups = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!user) {
-      throw new Error('User not found');
+      throw new NotFoundError('User not found', 'user');
     }
 
     // Get user's groups with their role in each

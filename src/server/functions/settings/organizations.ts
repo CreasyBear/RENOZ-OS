@@ -18,6 +18,7 @@ import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { logAuditEvent } from '../_shared/audit-logs';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
+import { NotFoundError } from '@/lib/server/errors';
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -116,7 +117,7 @@ const _getOrganization = cache(async (organizationId: string) => {
     .limit(1);
 
   if (!organization) {
-    throw new Error('Organization not found');
+    throw new NotFoundError('Organization not found', 'organization');
   }
 
   return organization;
@@ -148,7 +149,7 @@ export const updateOrganization = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!currentOrg) {
-      throw new Error('Organization not found');
+      throw new NotFoundError('Organization not found', 'organization');
     }
 
     // Build update object with merged nested fields
@@ -251,7 +252,7 @@ const _getOrganizationSettings = cache(async (organizationId: string) => {
     .limit(1);
 
   if (!organization) {
-    throw new Error('Organization not found');
+    throw new NotFoundError('Organization not found', 'organization');
   }
 
   return organization.settings;
@@ -285,7 +286,7 @@ export const updateOrganizationSettings = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!currentOrg) {
-      throw new Error('Organization not found');
+      throw new NotFoundError('Organization not found', 'organization');
     }
 
     const newSettings = {
@@ -338,7 +339,7 @@ export const getOrganizationBranding = createServerFn({ method: 'GET' }).handler
     .limit(1);
 
   if (!organization) {
-    throw new Error('Organization not found');
+    throw new NotFoundError('Organization not found', 'organization');
   }
 
   return {
@@ -370,7 +371,7 @@ export const updateOrganizationBranding = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!currentOrg) {
-      throw new Error('Organization not found');
+      throw new NotFoundError('Organization not found', 'organization');
     }
 
     const newBranding = {

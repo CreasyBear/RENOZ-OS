@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { searchProducts } from "@/lib/server/functions/products";
+import { quickSearchProducts } from "@/server/functions/products/products";
 
 interface Product {
   id: string;
@@ -75,7 +75,7 @@ export function ComponentSelector({
 
       setIsLoading(true);
       try {
-        const result = await searchProducts({
+        const result = await quickSearchProducts({
           data: {
             q: searchQuery,
             limit: 20,

@@ -14,7 +14,7 @@ import { OrderDetailSkeleton } from "@/components/skeletons/orders";
 import { Button } from "@/components/ui/button";
 import { toastSuccess, toastError } from "@/hooks";
 import { OrderDetail } from "@/components/domain/orders";
-import { duplicateOrder } from "@/lib/server/functions/orders";
+import { duplicateOrder } from "@/server/functions/orders/orders";
 import { queryKeys } from "@/lib/query-keys";
 
 // ============================================================================

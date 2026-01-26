@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 // Category with children from getCategoryTree
-// Using index signature to allow additional properties from server response
+// Note: Additional server properties (organizationId, createdAt, etc.) are ignored by this component
 interface CategoryNode {
   id: string;
   name: string;
@@ -23,8 +23,6 @@ interface CategoryNode {
   sortOrder: number;
   isActive: boolean;
   children: CategoryNode[];
-  // Allow additional properties from server (organizationId, createdAt, etc.)
-  [key: string]: unknown;
 }
 
 interface CategorySidebarProps {

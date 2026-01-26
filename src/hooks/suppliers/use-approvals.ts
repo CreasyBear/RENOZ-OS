@@ -19,8 +19,8 @@ import {
   getApprovalDetails,
   getApprovalHistory,
   getApprovalStats,
-  approvePurchaseOrder,
-  rejectPurchaseOrder,
+  approvePurchaseOrderAtLevel,
+  rejectPurchaseOrderAtLevel,
   bulkApproveApprovals,
   escalateApproval,
   delegateApproval,
@@ -124,7 +124,7 @@ export function useMyApprovalStats(options: { enabled?: boolean } = {}) {
  */
 export function useApproveItem() {
   const queryClient = useQueryClient();
-  const approveFn = useServerFn(approvePurchaseOrder);
+  const approveFn = useServerFn(approvePurchaseOrderAtLevel);
 
   return useMutation({
     mutationFn: (data: ApproveRejectInput) => approveFn({ data }),
@@ -147,7 +147,7 @@ export function useApproveItem() {
  */
 export function useRejectItem() {
   const queryClient = useQueryClient();
-  const rejectFn = useServerFn(rejectPurchaseOrder);
+  const rejectFn = useServerFn(rejectPurchaseOrderAtLevel);
 
   return useMutation({
     mutationFn: (data: RejectInput) => rejectFn({ data }),
@@ -185,7 +185,7 @@ export function useBulkApprove() {
  */
 export function useBulkReject() {
   const queryClient = useQueryClient();
-  const rejectFn = useServerFn(rejectPurchaseOrder);
+  const rejectFn = useServerFn(rejectPurchaseOrderAtLevel);
 
   return useMutation({
     mutationFn: async (items: RejectInput[]) => {

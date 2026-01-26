@@ -9,13 +9,10 @@
  *
  * @see src/server/functions/suppliers/approvals.ts (original function removed)
  */
-import { task, schedules } from '@trigger.dev/sdk/v3';
-import { and, eq, sql, isNull, asc } from 'drizzle-orm';
+import { schedules } from '@trigger.dev/sdk/v3';
+import { and, eq, sql, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import {
-  purchaseOrderApprovals,
-  purchaseOrderApprovalRules,
-} from 'drizzle/schema/suppliers';
+import { purchaseOrderApprovals } from 'drizzle/schema/suppliers';
 import { organizations, notifications, users } from 'drizzle/schema';
 
 // ============================================================================
@@ -51,7 +48,7 @@ async function notifyEscalation(
     await db.insert(notifications).values({
       organizationId: approval.organizationId,
       userId: admin.id,
-      type: 'approval',
+      type: 'system',
       title: 'Purchase Order Approval Escalated',
       message: `A purchase order approval has been automatically escalated. Reason: ${reason}`,
       data: {
@@ -71,11 +68,12 @@ async function notifyEscalation(
 // ============================================================================
 
 /**
- * Task that finds and escalates overdue purchase order approvals.
- * Runs across all organizations.
+ * Scheduled task that finds and escalates overdue purchase order approvals.
+ * Runs across all organizations every 15 minutes.
  */
-export const autoEscalateApprovalsTask = task({
+export const autoEscalateApprovalsTask = schedules.task({
   id: 'auto-escalate-approvals',
+  cron: '*/15 * * * *',
   run: async () => {
     console.log('Starting approval escalation check');
 
@@ -110,19 +108,6 @@ export const autoEscalateApprovalsTask = task({
         .limit(100);
 
       for (const approval of overdueApprovals) {
-        // Get the applicable rule to find escalation target
-        const rule = await db
-          .select()
-          .from(purchaseOrderApprovalRules)
-          .where(
-            and(
-              eq(purchaseOrderApprovalRules.organizationId, approval.organizationId),
-              eq(purchaseOrderApprovalRules.isActive, true)
-            )
-          )
-          .orderBy(asc(purchaseOrderApprovalRules.priority))
-          .limit(1);
-
         const reason = 'Approval deadline exceeded - auto-escalated';
 
         // Update approval status to escalated
@@ -152,11 +137,4 @@ export const autoEscalateApprovalsTask = task({
       organizationsChecked: orgs.length,
     };
   },
-});
-
-// Schedule the task to run every 15 minutes
-export const autoEscalateApprovalsSchedule = schedules.task({
-  id: 'auto-escalate-approvals-schedule',
-  task: autoEscalateApprovalsTask.id,
-  cron: '*/15 * * * *',
 });

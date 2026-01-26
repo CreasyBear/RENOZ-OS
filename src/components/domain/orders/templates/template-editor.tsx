@@ -65,7 +65,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
-import { listProducts } from "@/lib/server/functions/products";
+import { listProducts } from "@/server/functions/products/products";
 
 // ============================================================================
 // TYPES

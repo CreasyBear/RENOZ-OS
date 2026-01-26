@@ -41,6 +41,12 @@ export interface OrganizationSettings {
   numberFormat?: "1,234.56" | "1.234,56" | "1 234,56";
   /** Portal-specific branding overrides */
   portalBranding?: OrganizationBranding;
+  /** Whether the onboarding checklist has been dismissed */
+  onboardingChecklistDismissed?: boolean;
+  /** When the onboarding checklist was dismissed (ISO string) */
+  onboardingChecklistDismissedAt?: string;
+  /** User ID who dismissed the onboarding checklist */
+  onboardingChecklistDismissedBy?: string;
 }
 
 export interface OrganizationBranding {

@@ -25,6 +25,9 @@ export * from './customers';
 // --- Dashboard ---
 export * from './dashboard';
 
+// --- Documents ---
+export * from './documents';
+
 // --- Files ---
 export * from './files';
 
@@ -36,6 +39,9 @@ export * from './inventory';
 
 // --- Jobs ---
 export * from './jobs';
+
+// --- Products ---
+export * from './products';
 
 // --- Orders ---
 export * from './orders';
@@ -51,6 +57,12 @@ export * from './suppliers';
 
 // --- Support ---
 export * from './support';
+
+// --- Users ---
+export * from './users';
+
+// --- Settings ---
+export * from './settings';
 
 // --- Warranty ---
 export * from './warranty';

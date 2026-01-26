@@ -8,8 +8,6 @@
  */
 
 import { memo, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import {
   Plus,
   Edit2,
@@ -61,12 +59,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { toastSuccess, toastError } from "@/hooks";
 import {
-  listWinLossReasons,
-  createWinLossReason,
-  updateWinLossReason,
-  deleteWinLossReason,
-} from "@/server/functions/pipeline/win-loss-reasons";
-import type { WinLossReasonType } from "@/lib/schemas/pipeline";
+  useWinLossReasons,
+  useCreateWinLossReason,
+  useUpdateWinLossReason,
+  useDeleteWinLossReason,
+  type ReasonForm,
+  type WinLossReasonType,
+} from "@/hooks/settings";
 
 // ============================================================================
 // TYPES
@@ -74,13 +73,6 @@ import type { WinLossReasonType } from "@/lib/schemas/pipeline";
 
 export interface WinLossReasonsManagerProps {
   className?: string;
-}
-
-interface ReasonForm {
-  name: string;
-  type: WinLossReasonType;
-  description: string;
-  isActive: boolean;
 }
 
 const EMPTY_FORM: ReasonForm = {
@@ -97,7 +89,6 @@ const EMPTY_FORM: ReasonForm = {
 export const WinLossReasonsManager = memo(function WinLossReasonsManager({
   className,
 }: WinLossReasonsManagerProps) {
-  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<WinLossReasonType>("win");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -105,67 +96,13 @@ export const WinLossReasonsManager = memo(function WinLossReasonsManager({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [form, setForm] = useState<ReasonForm>(EMPTY_FORM);
 
-  // Fetch reasons
-  const { data, isLoading } = useQuery({
-    queryKey: queryKeys.settings.winLossReasons(),
-    queryFn: async () => {
-      const result = await listWinLossReasons({ data: {} });
-      return result;
-    },
-  });
+  // Fetch reasons using hook
+  const { data, isLoading } = useWinLossReasons();
 
-  // Create mutation
-  const createMutation = useMutation({
-    mutationFn: async (data: ReasonForm) => {
-      return createWinLossReason({ data });
-    },
-    onSuccess: () => {
-      toastSuccess("Reason created successfully");
-      setDialogOpen(false);
-      setForm(EMPTY_FORM);
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.winLossReasons() });
-    },
-    onError: () => {
-      toastError("Failed to create reason");
-    },
-  });
-
-  // Update mutation
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: ReasonForm }) => {
-      return updateWinLossReason({ data: { id, data } });
-    },
-    onSuccess: () => {
-      toastSuccess("Reason updated successfully");
-      setDialogOpen(false);
-      setEditingId(null);
-      setForm(EMPTY_FORM);
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.winLossReasons() });
-    },
-    onError: () => {
-      toastError("Failed to update reason");
-    },
-  });
-
-  // Delete mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return deleteWinLossReason({ data: { id } });
-    },
-    onSuccess: (result) => {
-      if (result.deactivated) {
-        toastSuccess(`Reason deactivated (used by ${result.usageCount} opportunities)`);
-      } else {
-        toastSuccess("Reason deleted successfully");
-      }
-      setDeleteDialogOpen(false);
-      setDeletingId(null);
-      queryClient.invalidateQueries({ queryKey: queryKeys.settings.winLossReasons() });
-    },
-    onError: () => {
-      toastError("Failed to delete reason");
-    },
-  });
+  // Mutations using hooks
+  const createMutation = useCreateWinLossReason();
+  const updateMutation = useUpdateWinLossReason();
+  const deleteMutation = useDeleteWinLossReason();
 
   // Filter reasons by type
   const winReasons = data?.reasons.filter((r) => r.type === "win") ?? [];
@@ -191,9 +128,31 @@ export const WinLossReasonsManager = memo(function WinLossReasonsManager({
     }
 
     if (editingId) {
-      updateMutation.mutate({ id: editingId, data: form });
+      updateMutation.mutate(
+        { id: editingId, data: form },
+        {
+          onSuccess: () => {
+            toastSuccess("Reason updated successfully");
+            setDialogOpen(false);
+            setEditingId(null);
+            setForm(EMPTY_FORM);
+          },
+          onError: () => {
+            toastError("Failed to update reason");
+          },
+        }
+      );
     } else {
-      createMutation.mutate(form);
+      createMutation.mutate(form, {
+        onSuccess: () => {
+          toastSuccess("Reason created successfully");
+          setDialogOpen(false);
+          setForm(EMPTY_FORM);
+        },
+        onError: () => {
+          toastError("Failed to create reason");
+        },
+      });
     }
   };
 
@@ -423,7 +382,25 @@ export const WinLossReasonsManager = memo(function WinLossReasonsManager({
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => deletingId && deleteMutation.mutate(deletingId)}
+              onClick={() =>
+                deletingId &&
+                deleteMutation.mutate(deletingId, {
+                  onSuccess: (result) => {
+                    if (result.deactivated) {
+                      toastSuccess(
+                        `Reason deactivated (used by ${result.usageCount} opportunities)`
+                      );
+                    } else {
+                      toastSuccess("Reason deleted successfully");
+                    }
+                    setDeleteDialogOpen(false);
+                    setDeletingId(null);
+                  },
+                  onError: () => {
+                    toastError("Failed to delete reason");
+                  },
+                })
+              }
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {deleteMutation.isPending ? "Deleting..." : "Delete"}

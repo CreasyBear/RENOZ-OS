@@ -1,18 +1,29 @@
 /**
- * File Cleanup Jobs
+ * File Cleanup Tasks (Trigger.dev v3)
  *
- * Background jobs to clean up orphaned file uploads:
+ * Background tasks to clean up orphaned file uploads:
  * - Pending uploads: Files where upload was started but never confirmed (24h+ old)
  * - Soft-deleted files: Files marked for deletion that need R2 cleanup (7 days old)
  *
  * @see thoughts/shared/plans/2026-01-17-foundation-premortem-fixes.md FIX-004, FIX-005
+ * @see https://trigger.dev/docs/v3/tasks
  */
-import { cronTrigger } from "@trigger.dev/sdk";
+import { schedules, logger } from "@trigger.dev/sdk/v3";
 import { eq, and, isNotNull, lt } from "drizzle-orm";
-import { client } from "../client";
 import { db } from "@/lib/db";
 import { attachments } from "drizzle/schema";
 import { deleteObject } from "@/lib/storage";
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+export interface CleanupResult {
+  cleaned?: number;
+  purged?: number;
+  errors: number;
+  total: number;
+}
 
 // ============================================================================
 // FIX-004: CLEANUP PENDING UPLOADS
@@ -26,42 +37,36 @@ import { deleteObject } from "@/lib/storage";
  *
  * Runs hourly to catch abandoned uploads.
  */
-export const cleanupPendingUploadsJob = client.defineJob({
+export const cleanupPendingUploadsTask = schedules.task({
   id: "cleanup-pending-uploads",
-  name: "Cleanup Pending Uploads",
-  version: "1.0.0",
-  trigger: cronTrigger({
-    cron: "0 * * * *", // Every hour
-  }),
-  run: async (_payload, io) => {
+  cron: "0 * * * *",
+  run: async (): Promise<CleanupResult> => {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours ago
 
-    await io.logger.info("Starting pending uploads cleanup", {
+    logger.info("Starting pending uploads cleanup", {
       cutoffDate: cutoff.toISOString(),
     });
 
     // Find pending uploads older than cutoff
     // Pending = deletedAt is NOT NULL (used as pending marker)
     // AND createdAt < cutoff (older than 24h)
-    const staleUploads = await io.runTask("find-stale-uploads", async () => {
-      return db
-        .select({
-          id: attachments.id,
-          storageKey: attachments.storageKey,
-          originalFilename: attachments.originalFilename,
-          createdAt: attachments.createdAt,
-        })
-        .from(attachments)
-        .where(
-          and(
-            isNotNull(attachments.deletedAt), // Pending state
-            lt(attachments.createdAt, cutoff) // Older than 24h
-          )
+    const staleUploads = await db
+      .select({
+        id: attachments.id,
+        storageKey: attachments.storageKey,
+        originalFilename: attachments.originalFilename,
+        createdAt: attachments.createdAt,
+      })
+      .from(attachments)
+      .where(
+        and(
+          isNotNull(attachments.deletedAt), // Pending state
+          lt(attachments.createdAt, cutoff) // Older than 24h
         )
-        .limit(100); // Process in batches
-    });
+      )
+      .limit(100); // Process in batches
 
-    await io.logger.info(`Found ${staleUploads.length} stale pending uploads`);
+    logger.info(`Found ${staleUploads.length} stale pending uploads`);
 
     let cleaned = 0;
     let errors = 0;
@@ -69,33 +74,29 @@ export const cleanupPendingUploadsJob = client.defineJob({
     for (const upload of staleUploads) {
       try {
         // Delete from R2 (may already be gone if upload failed)
-        await io.runTask(`delete-r2-${upload.id}`, async () => {
-          try {
-            await deleteObject({ key: upload.storageKey });
-            await io.logger.debug(`Deleted R2 object: ${upload.storageKey}`);
-          } catch (error) {
-            // Ignore - file may not exist in R2
-            await io.logger.debug(
-              `R2 delete skipped (may not exist): ${upload.storageKey}`
-            );
-          }
-        });
+        try {
+          await deleteObject({ key: upload.storageKey });
+          logger.debug(`Deleted R2 object: ${upload.storageKey}`);
+        } catch (error) {
+          // Ignore - file may not exist in R2
+          logger.debug(
+            `R2 delete skipped (may not exist): ${upload.storageKey}`
+          );
+        }
 
         // Delete database record
-        await io.runTask(`delete-db-${upload.id}`, async () => {
-          await db.delete(attachments).where(eq(attachments.id, upload.id));
-        });
+        await db.delete(attachments).where(eq(attachments.id, upload.id));
 
         cleaned++;
       } catch (error) {
         errors++;
-        await io.logger.error(`Failed to clean up upload ${upload.id}`, {
+        logger.error(`Failed to clean up upload ${upload.id}`, {
           error: error instanceof Error ? error.message : "Unknown error",
         });
       }
     }
 
-    await io.logger.info("Pending uploads cleanup complete", {
+    logger.info("Pending uploads cleanup complete", {
       cleaned,
       errors,
       total: staleUploads.length,
@@ -104,6 +105,7 @@ export const cleanupPendingUploadsJob = client.defineJob({
     return { cleaned, errors, total: staleUploads.length };
   },
 });
+
 
 // ============================================================================
 // FIX-005: CLEANUP SOFT-DELETED FILES
@@ -121,17 +123,13 @@ export const cleanupPendingUploadsJob = client.defineJob({
  *
  * Runs daily at 3 AM.
  */
-export const cleanupSoftDeletedFilesJob = client.defineJob({
+export const cleanupSoftDeletedFilesTask = schedules.task({
   id: "cleanup-soft-deleted-files",
-  name: "Cleanup Soft-Deleted Files",
-  version: "1.0.0",
-  trigger: cronTrigger({
-    cron: "0 3 * * *", // Daily at 3 AM
-  }),
-  run: async (_payload, io) => {
+  cron: "0 3 * * *",
+  run: async (): Promise<CleanupResult> => {
     const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
 
-    await io.logger.info("Starting soft-deleted files cleanup", {
+    logger.info("Starting soft-deleted files cleanup", {
       cutoffDate: cutoff.toISOString(),
     });
 
@@ -139,25 +137,23 @@ export const cleanupSoftDeletedFilesJob = client.defineJob({
     // These are confirmed files that were later deleted (deletedAt < cutoff)
     // We distinguish from pending by checking if deletedAt is in the past
     // AND the file was confirmed at some point (would have had deletedAt cleared then set again)
-    const deletedFiles = await io.runTask("find-deleted-files", async () => {
-      return db
-        .select({
-          id: attachments.id,
-          storageKey: attachments.storageKey,
-          originalFilename: attachments.originalFilename,
-          deletedAt: attachments.deletedAt,
-        })
-        .from(attachments)
-        .where(
-          and(
-            isNotNull(attachments.deletedAt),
-            lt(attachments.deletedAt, cutoff) // Deleted more than 7 days ago
-          )
+    const deletedFiles = await db
+      .select({
+        id: attachments.id,
+        storageKey: attachments.storageKey,
+        originalFilename: attachments.originalFilename,
+        deletedAt: attachments.deletedAt,
+      })
+      .from(attachments)
+      .where(
+        and(
+          isNotNull(attachments.deletedAt),
+          lt(attachments.deletedAt, cutoff) // Deleted more than 7 days ago
         )
-        .limit(100); // Process in batches
-    });
+      )
+      .limit(100); // Process in batches
 
-    await io.logger.info(`Found ${deletedFiles.length} soft-deleted files to purge`);
+    logger.info(`Found ${deletedFiles.length} soft-deleted files to purge`);
 
     let purged = 0;
     let errors = 0;
@@ -165,33 +161,29 @@ export const cleanupSoftDeletedFilesJob = client.defineJob({
     for (const file of deletedFiles) {
       try {
         // Delete from R2
-        await io.runTask(`delete-r2-${file.id}`, async () => {
-          try {
-            await deleteObject({ key: file.storageKey });
-            await io.logger.debug(`Deleted R2 object: ${file.storageKey}`);
-          } catch (error) {
-            // Ignore - file may already be deleted
-            await io.logger.debug(
-              `R2 delete skipped (may not exist): ${file.storageKey}`
-            );
-          }
-        });
+        try {
+          await deleteObject({ key: file.storageKey });
+          logger.debug(`Deleted R2 object: ${file.storageKey}`);
+        } catch (error) {
+          // Ignore - file may already be deleted
+          logger.debug(
+            `R2 delete skipped (may not exist): ${file.storageKey}`
+          );
+        }
 
         // Permanently delete database record
-        await io.runTask(`delete-db-${file.id}`, async () => {
-          await db.delete(attachments).where(eq(attachments.id, file.id));
-        });
+        await db.delete(attachments).where(eq(attachments.id, file.id));
 
         purged++;
       } catch (error) {
         errors++;
-        await io.logger.error(`Failed to purge file ${file.id}`, {
+        logger.error(`Failed to purge file ${file.id}`, {
           error: error instanceof Error ? error.message : "Unknown error",
         });
       }
     }
 
-    await io.logger.info("Soft-deleted files cleanup complete", {
+    logger.info("Soft-deleted files cleanup complete", {
       purged,
       errors,
       total: deletedFiles.length,
@@ -200,3 +192,18 @@ export const cleanupSoftDeletedFilesJob = client.defineJob({
     return { purged, errors, total: deletedFiles.length };
   },
 });
+
+
+// ============================================================================
+// LEGACY EXPORTS - for backward compatibility
+// ============================================================================
+
+/**
+ * @deprecated Use cleanupPendingUploadsTask instead
+ */
+export const cleanupPendingUploadsJob = cleanupPendingUploadsTask;
+
+/**
+ * @deprecated Use cleanupSoftDeletedFilesTask instead
+ */
+export const cleanupSoftDeletedFilesJob = cleanupSoftDeletedFilesTask;

@@ -34,7 +34,7 @@ import type { CursorPaginatedResponse } from '@/lib/db/pagination';
 // ============================================================================
 
 /** Filters for activity feed queries */
-interface ActivityFeedFilters {
+interface ActivityFeedFilters extends Record<string, unknown> {
   entityType?: ActivityEntityType;
   entityId?: string;
   action?: ActivityAction;

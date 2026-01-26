@@ -14,6 +14,7 @@ import {
   createEmailOpenedActivity,
   createEmailClickedActivity,
 } from '@/lib/server/activity-bridge';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 
 export const handleEmailEvent = createServerFn({ method: 'POST' })
   .inputValidator(emailEventSchema)
@@ -30,7 +31,7 @@ export const handleEmailEvent = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!email) {
-      throw new Error('Email not found');
+      throw new NotFoundError('Email not found', 'email');
     }
 
     const baseUpdate = {
@@ -76,7 +77,7 @@ export const handleEmailEvent = createServerFn({ method: 'POST' })
 
     if (eventType === 'clicked') {
       if (!linkId || !clickedUrl) {
-        throw new Error('Clicked events require linkId and clickedUrl');
+        throw new ValidationError('Clicked events require linkId and clickedUrl');
       }
 
       await db

@@ -22,6 +22,7 @@ import { customers } from 'drizzle/schema/customers';
 import { issues } from 'drizzle/schema/support/issues';
 import { orderLineItems, orders } from 'drizzle/schema/orders';
 import { withAuth } from '@/lib/server/protected';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import {
   createRmaSchema,
   updateRmaSchema,
@@ -78,7 +79,7 @@ export const createRma = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!order) {
-      throw new Error('Order not found');
+      throw new NotFoundError('Order not found', 'order');
     }
 
     // Verify issue exists if provided
@@ -90,7 +91,7 @@ export const createRma = createServerFn({ method: 'POST' })
         .limit(1);
 
       if (!issue) {
-        throw new Error('Issue not found');
+        throw new NotFoundError('Issue not found', 'issue');
       }
     }
 
@@ -137,7 +138,7 @@ export const createRma = createServerFn({ method: 'POST' })
         const invalidIds = lineItemIds.filter((id) => !existingIds.has(id));
 
         if (invalidIds.length > 0) {
-          throw new Error(
+          throw new ValidationError(
             `Invalid line item IDs: ${invalidIds.join(', ')}. Items must belong to the specified order.`
           );
         }
@@ -354,7 +355,7 @@ export const updateRma = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing) {
-      throw new Error('RMA not found');
+      throw new NotFoundError('RMA not found', 'rma');
     }
 
     // Update RMA
@@ -497,12 +498,12 @@ export const approveRma = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing) {
-      throw new Error('RMA not found');
+      throw new NotFoundError('RMA not found', 'rma');
     }
 
     // Validate transition
     if (!isValidRmaTransition(existing.status, 'approved')) {
-      throw new Error(
+      throw new ValidationError(
         `Cannot approve RMA in ${existing.status} status. Must be in 'requested' status.`
       );
     }
@@ -560,12 +561,12 @@ export const rejectRma = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing) {
-      throw new Error('RMA not found');
+      throw new NotFoundError('RMA not found', 'rma');
     }
 
     // Validate transition
     if (!isValidRmaTransition(existing.status, 'rejected')) {
-      throw new Error(
+      throw new ValidationError(
         `Cannot reject RMA in ${existing.status} status. Must be in 'requested' or 'approved' status.`
       );
     }
@@ -621,12 +622,12 @@ export const receiveRma = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing) {
-      throw new Error('RMA not found');
+      throw new NotFoundError('RMA not found', 'rma');
     }
 
     // Validate transition
     if (!isValidRmaTransition(existing.status, 'received')) {
-      throw new Error(
+      throw new ValidationError(
         `Cannot receive RMA in ${existing.status} status. Must be in 'approved' status.`
       );
     }
@@ -694,12 +695,12 @@ export const processRma = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing) {
-      throw new Error('RMA not found');
+      throw new NotFoundError('RMA not found', 'rma');
     }
 
     // Validate transition
     if (!isValidRmaTransition(existing.status, 'processed')) {
-      throw new Error(
+      throw new ValidationError(
         `Cannot process RMA in ${existing.status} status. Must be in 'received' status.`
       );
     }

@@ -33,7 +33,7 @@ import {
   setPrimaryImage,
   deleteProductImage,
   reorderProductImages,
-} from "@/lib/server/functions/product-images";
+} from "@/server/functions/products/product-images";
 
 export interface GalleryImage {
   id: string;

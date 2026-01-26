@@ -17,6 +17,7 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 import { logAuditEvent } from '../_shared/audit-logs';
 import { AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 import { paginationSchema } from '@/lib/schemas';
+import { NotFoundError, ConflictError } from '@/lib/server/errors';
 
 // ============================================================================
 // VALIDATION SCHEMAS
@@ -158,7 +159,7 @@ export const getHoliday = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!holiday) {
-      throw new Error('Holiday not found');
+      throw new NotFoundError('Holiday not found', 'Holiday');
     }
 
     return holiday;
@@ -190,7 +191,7 @@ export const createHoliday = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (existing) {
-      throw new Error('A holiday already exists for this date');
+      throw new ConflictError('A holiday already exists for this date');
     }
 
     const [created] = await db
@@ -256,7 +257,7 @@ export const updateHoliday = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!current) {
-      throw new Error('Holiday not found');
+      throw new NotFoundError('Holiday not found', 'Holiday');
     }
 
     // Check for duplicate date if changing (data.date is already YYYY-MM-DD string)
@@ -274,7 +275,7 @@ export const updateHoliday = createServerFn({ method: 'POST' })
         .limit(1);
 
       if (existing) {
-        throw new Error('A holiday already exists for this date');
+        throw new ConflictError('A holiday already exists for this date');
       }
     }
 
@@ -345,7 +346,7 @@ export const deleteHoliday = createServerFn({ method: 'POST' })
       .returning({ id: organizationHolidays.id, name: organizationHolidays.name });
 
     if (!deleted) {
-      throw new Error('Holiday not found');
+      throw new NotFoundError('Holiday not found', 'Holiday');
     }
 
     // Log audit

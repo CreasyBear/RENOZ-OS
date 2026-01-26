@@ -11,7 +11,7 @@
  * - Offline capability with sync
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useCallback, useEffect, memo } from "react";
+import { useState, useCallback, memo } from "react";
 import {
   Package,
   MapPin,
@@ -43,16 +43,14 @@ import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { toast } from "@/hooks";
-import { useOnlineStatus, useOfflineQueue } from "@/hooks";
+import { toast, useOnlineStatus, useOfflineQueue } from "@/hooks";
+import { useLocations, useInventory } from "@/hooks/inventory";
 import {
   BarcodeScanner,
   QuantityInput,
   OfflineIndicator,
   MobilePageHeader,
 } from "@/components/mobile/inventory-actions";
-import { listLocations } from "@/server/functions/locations";
-import { listInventory } from "@/server/functions/inventory";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -210,16 +208,18 @@ const LocationButton = memo(function LocationButton({
 function MobileCountingPage() {
   const navigate = useNavigate();
 
-  // State
-  const [locations, setLocations] = useState<Array<{ id: string; name: string; code: string }>>([]);
-  const [, setSelectedLocation] = useState<string | null>(null);
+  // Session state
+  const [selectedLocationId, setSelectedLocationId] = useState<string | null>(null);
   const [countSession, setCountSession] = useState<CountSession | null>(null);
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [countedQuantity, setCountedQuantity] = useState(0);
   const [isBlindCount, setIsBlindCount] = useState(true);
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
   const [isVerified, setIsVerified] = useState(false);
-  // Persist offline queue to localStorage using useOfflineQueue hook
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
+  // Offline queue
   const {
     addToQueue,
     syncQueue,
@@ -227,101 +227,86 @@ function MobileCountingPage() {
     queueLength,
   } = useOfflineQueue<PendingCount>("mobile-counting-queue");
   const isOnline = useOnlineStatus();
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
+  // Data fetching with hooks
+  const { locations: locationsData, isLoading: isLocationsLoading, fetchLocations: refetchLocations } = useLocations({
+    autoFetch: true,
+  });
+
+  // Fetch inventory when a location is selected (for starting session)
+  const { data: inventoryData, isLoading: isInventoryLoading } = useInventory({
+    locationId: selectedLocationId ?? undefined,
+    page: 1,
+    pageSize: 100,
+    enabled: !!selectedLocationId && !countSession,
+  });
+
+  // Transform location data
+  const locations = (locationsData ?? []).map((l) => ({
+    id: l.id,
+    name: l.name,
+    code: l.code ?? "",
+  }));
 
   const currentItem = countSession?.items[currentItemIndex];
   const completedCount = countSession?.items.filter((i) => i.status !== "pending").length ?? 0;
   const progress = countSession ? (completedCount / countSession.items.length) * 100 : 0;
 
-  // Load locations function (extracted for reuse)
-  const loadLocations = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const data = (await (listLocations as any)({
-        data: { page: 1, pageSize: 100 },
-      })) as any;
-      if (data?.locations) {
-        setLocations(
-          data.locations.map((l: any) => ({
-            id: l.id,
-            name: l.name,
-            code: l.locationCode ?? l.code ?? "",
-          }))
-        );
-      }
-    } catch (error) {
-      console.error("Failed to load locations:", error);
-      toast.error("Failed to load locations", {
-        action: {
-          label: "Retry",
-          onClick: () => loadLocations(),
-        },
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  // Load locations on mount
-  useEffect(() => {
-    loadLocations();
-  }, [loadLocations]);
-
   // Start count session for a location
   const handleStartSession = useCallback(
-    async (locationId: string) => {
-      try {
-        setIsLoading(true);
-        const location = locations.find((l) => l.id === locationId);
-        if (!location) return;
+    (locationId: string) => {
+      const location = locations.find((l) => l.id === locationId);
+      if (!location) return;
 
-        // Fetch inventory at this location
-        const data = (await listInventory({
-          data: { locationId, page: 1, pageSize: 100 },
-        })) as any;
-
-        const items: CountItem[] = (data?.items ?? []).map((item: any) => ({
-          inventoryId: item.id,
-          productId: item.productId,
-          productName: item.product?.name ?? "Unknown",
-          productSku: item.product?.sku ?? "",
-          expectedQty: item.quantityOnHand ?? 0,
-          countedQty: null,
-          variance: null,
-          status: "pending" as const,
-        }));
-
-        if (items.length === 0) {
-          toast.warning("No items at this location");
-          return;
-        }
-
-        setCountSession({
-          id: `count-${Date.now()}`,
-          locationId,
-          locationCode: location.code,
-          locationName: location.name,
-          items,
-          status: "in_progress",
-          startedAt: new Date(),
-          completedAt: null,
-        });
-        setSelectedLocation(locationId);
-        setCurrentItemIndex(0);
-        setCountedQuantity(0);
-        setScannedBarcode(null);
-        setIsVerified(false);
-      } catch (error) {
-        console.error("Failed to start count session:", error);
-        toast.error("Failed to start count session");
-      } finally {
-        setIsLoading(false);
-      }
+      setSelectedLocationId(locationId);
     },
     [locations]
   );
+
+  // When inventory data loads after location selection, create the session
+  const handleCreateSession = useCallback(() => {
+    if (!selectedLocationId || !inventoryData?.items || countSession) return;
+
+    const location = locations.find((l) => l.id === selectedLocationId);
+    if (!location) return;
+
+    const items: CountItem[] = (inventoryData.items ?? []).map((item: any) => ({
+      inventoryId: item.id,
+      productId: item.productId,
+      productName: item.product?.name ?? "Unknown",
+      productSku: item.product?.sku ?? "",
+      expectedQty: item.quantityOnHand ?? 0,
+      countedQty: null,
+      variance: null,
+      status: "pending" as const,
+    }));
+
+    if (items.length === 0) {
+      toast.warning("No items at this location");
+      setSelectedLocationId(null);
+      return;
+    }
+
+    setCountSession({
+      id: `count-${Date.now()}`,
+      locationId: selectedLocationId,
+      locationCode: location.code,
+      locationName: location.name,
+      items,
+      status: "in_progress",
+      startedAt: new Date(),
+      completedAt: null,
+    });
+    setCurrentItemIndex(0);
+    setCountedQuantity(0);
+    setScannedBarcode(null);
+    setIsVerified(false);
+  }, [selectedLocationId, inventoryData, countSession, locations]);
+
+  // Auto-create session when inventory loads
+  if (selectedLocationId && inventoryData?.items && !countSession && !isInventoryLoading) {
+    handleCreateSession();
+  }
 
   // Handle barcode scan for verification
   const handleScan = useCallback(
@@ -441,12 +426,14 @@ function MobileCountingPage() {
   // Reset and go back to location selection
   const handleNewSession = useCallback(() => {
     setCountSession(null);
-    setSelectedLocation(null);
+    setSelectedLocationId(null);
     setCurrentItemIndex(0);
     setCountedQuantity(0);
     setScannedBarcode(null);
     setIsVerified(false);
   }, []);
+
+  const isLoading = isLocationsLoading || (selectedLocationId && isInventoryLoading && !countSession);
 
   return (
     <div className="min-h-dvh bg-muted/30">
@@ -496,7 +483,7 @@ function MobileCountingPage() {
                     <p className="text-muted-foreground text-sm mb-4">
                       Warehouse locations need to be set up before counting.
                     </p>
-                    <Button variant="outline" onClick={loadLocations}>
+                    <Button variant="outline" onClick={() => refetchLocations()}>
                       <RefreshCw className="h-4 w-4 mr-2" />
                       Refresh
                     </Button>

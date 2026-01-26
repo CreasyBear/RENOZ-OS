@@ -52,7 +52,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { toastSuccess, toastError } from "@/hooks";
-import { listTemplates, deleteTemplate } from "@/lib/server/functions/order-templates";
+import { listTemplates, deleteTemplate } from "@/server/functions/orders/order-templates";
 
 // ============================================================================
 // TYPES

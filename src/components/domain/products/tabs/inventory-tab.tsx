@@ -32,7 +32,7 @@ import {
   getProductInventory,
   getInventoryStats,
   getLowStockAlerts,
-} from "@/lib/server/functions/product-inventory";
+} from "@/server/functions/products/product-inventory";
 
 interface ProductInventoryTabProps {
   productId: string;

@@ -8,7 +8,6 @@
 
 import { useState, useMemo } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import {
   TrendingUp,
   Users,
@@ -45,12 +44,11 @@ import { ForecastTable } from "@/components/domain/reports/forecast-table";
 import { cn } from "@/lib/utils";
 import { FormatAmount } from "@/components/shared/format";
 import {
-  getPipelineForecast,
-  getPipelineVelocity,
-  getRevenueAttribution,
-} from "@/server/functions/pipeline";
+  usePipelineForecast,
+  usePipelineVelocity,
+  useRevenueAttribution,
+} from "@/hooks/pipeline";
 import type { ForecastGroupBy } from "@/lib/schemas/pipeline";
-import { queryKeys } from "@/lib/query-keys";
 
 // ============================================================================
 // ROUTE
@@ -136,49 +134,25 @@ function PipelineForecastPage() {
     [timePeriod]
   );
 
-  // Fetch forecast data - startDate and endDate are already YYYY-MM-DD strings
-  const forecastQuery = useQuery({
-    queryKey: queryKeys.reports.pipelineForecast(startDate, endDate, groupBy),
-    queryFn: async () => {
-      const result = await getPipelineForecast({
-        data: {
-          startDate,
-          endDate,
-          groupBy,
-          includeWeighted: true,
-        },
-      });
-      return result;
-    },
+  // Fetch forecast data using centralized hook
+  const forecastQuery = usePipelineForecast({
+    startDate,
+    endDate,
+    groupBy,
+    includeWeighted: true,
   });
 
-  // Fetch velocity metrics - dateFrom/dateTo are optional YYYY-MM-DD strings
-  const velocityQuery = useQuery({
-    queryKey: queryKeys.reports.pipelineVelocity(startDate, endDate),
-    queryFn: async () => {
-      const result = await getPipelineVelocity({
-        data: {
-          dateFrom: startDate,
-          dateTo: endDate,
-        },
-      });
-      return result;
-    },
+  // Fetch velocity metrics using centralized hook
+  const velocityQuery = usePipelineVelocity({
+    dateFrom: startDate,
+    dateTo: endDate,
   });
 
-  // Fetch revenue attribution - dateFrom/dateTo are required YYYY-MM-DD strings
-  const attributionQuery = useQuery({
-    queryKey: queryKeys.reports.revenueAttribution(startDate, endDate),
-    queryFn: async () => {
-      const result = await getRevenueAttribution({
-        data: {
-          dateFrom: startDate,
-          dateTo: endDate,
-          groupBy: "month",
-        },
-      });
-      return result;
-    },
+  // Fetch revenue attribution using centralized hook
+  const attributionQuery = useRevenueAttribution({
+    dateFrom: startDate,
+    dateTo: endDate,
+    groupBy: "month",
   });
 
   const isLoading = forecastQuery.isLoading || velocityQuery.isLoading;

@@ -33,6 +33,7 @@ import {
   type TargetProgressResponse,
   type TargetMetric,
 } from '@/lib/schemas/dashboard/targets';
+import { NotFoundError } from '@/lib/server/errors';
 
 // ============================================================================
 // HELPERS
@@ -245,7 +246,7 @@ export const getTarget = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!target) {
-      throw new Error('Target not found');
+      throw new NotFoundError('Target not found', 'target');
     }
 
     return target;
@@ -305,7 +306,7 @@ export const updateTarget = createServerFn({ method: 'POST' })
       .returning();
 
     if (!target) {
-      throw new Error('Target not found');
+      throw new NotFoundError('Target not found', 'target');
     }
 
     return target;
@@ -330,7 +331,7 @@ export const deleteTarget = createServerFn({ method: 'POST' })
       .returning();
 
     if (!target) {
-      throw new Error('Target not found');
+      throw new NotFoundError('Target not found', 'target');
     }
 
     return { success: true };

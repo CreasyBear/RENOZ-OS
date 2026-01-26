@@ -45,7 +45,7 @@ import {
   paginationSchema,
 } from '@/lib/schemas';
 import { withAuth } from '@/lib/server/protected';
-import { ConflictError } from '@/lib/server/errors';
+import { ConflictError, NotFoundError, ValidationError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 
 // ============================================================================
@@ -232,7 +232,7 @@ export const getOpportunity = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!opportunity[0]) {
-      throw new Error('Opportunity not found');
+      throw new NotFoundError('Opportunity not found', 'opportunity');
     }
 
     // Get customer
@@ -397,7 +397,7 @@ export const updateOpportunity = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!current[0]) {
-      throw new Error('Opportunity not found');
+      throw new NotFoundError('Opportunity not found', 'opportunity');
     }
 
     // Prepare update data (version will be incremented atomically in SQL)
@@ -503,7 +503,7 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!current[0]) {
-      throw new Error('Opportunity not found');
+      throw new NotFoundError('Opportunity not found', 'opportunity');
     }
 
     // Validate win/loss reason for closed stages
@@ -614,7 +614,7 @@ export const deleteOpportunity = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!current[0]) {
-      throw new Error('Opportunity not found');
+      throw new NotFoundError('Opportunity not found', 'opportunity');
     }
 
     await db.transaction(async (tx) => {
@@ -758,17 +758,17 @@ export const convertToOrder = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!opportunity[0]) {
-      throw new Error('Opportunity not found');
+      throw new NotFoundError('Opportunity not found', 'opportunity');
     }
 
     // Validate stage is "won"
     if (opportunity[0].stage !== 'won') {
-      throw new Error('Only won opportunities can be converted to orders');
+      throw new ValidationError('Only won opportunities can be converted to orders');
     }
 
     // Check quote validity
     if (opportunity[0].quoteExpiresAt && new Date(opportunity[0].quoteExpiresAt) < new Date()) {
-      throw new Error(
+      throw new ValidationError(
         'Quote has expired. Please extend validity or create a new quote before converting.'
       );
     }
@@ -878,7 +878,7 @@ export const getActivity = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!activity[0]) {
-      throw new Error('Activity not found');
+      throw new NotFoundError('Activity not found', 'opportunityActivity');
     }
 
     return { activity: activity[0] };
@@ -911,7 +911,7 @@ export const logActivity = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!opportunity[0]) {
-      throw new Error('Opportunity not found');
+      throw new NotFoundError('Opportunity not found', 'opportunity');
     }
 
     // Create activity
@@ -961,7 +961,7 @@ export const updateActivity = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!current[0]) {
-      throw new Error('Activity not found');
+      throw new NotFoundError('Activity not found', 'opportunityActivity');
     }
 
     // Prepare update
@@ -1015,7 +1015,7 @@ export const completeActivity = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!current[0]) {
-      throw new Error('Activity not found');
+      throw new NotFoundError('Activity not found', 'opportunityActivity');
     }
 
     const result = await db
@@ -1055,7 +1055,7 @@ export const deleteActivity = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!current[0]) {
-      throw new Error('Activity not found');
+      throw new NotFoundError('Activity not found', 'opportunityActivity');
     }
 
     await db.delete(opportunityActivities).where(eq(opportunityActivities.id, id));
@@ -1092,7 +1092,7 @@ export const getActivityTimeline = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!opportunity[0]) {
-      throw new Error('Opportunity not found');
+      throw new NotFoundError('Opportunity not found', 'opportunity');
     }
 
     const startDate = new Date();

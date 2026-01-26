@@ -66,7 +66,7 @@ export interface LocationContents {
   utilization: number;
 }
 
-export interface LocationFilters {
+export interface LocationFilters extends Record<string, unknown> {
   parentId?: string;
   type?: LocationType;
   active?: boolean;
@@ -531,3 +531,109 @@ function buildHierarchy(locations: WarehouseLocation[]): LocationHierarchy[] {
 }
 
 export default useLocations;
+
+// ============================================================================
+// SIMPLE FOCUSED HOOKS
+// ============================================================================
+
+import {
+  getWarehouseLocationHierarchy,
+  getLocation as getLocationDetail,
+  createWarehouseLocation,
+  updateWarehouseLocation,
+  deleteWarehouseLocation,
+} from '@/server/functions/inventory/locations';
+
+/**
+ * Fetch warehouse location hierarchy
+ */
+export function useLocationHierarchy(rootId?: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.locations.hierarchy(rootId),
+    queryFn: async () => {
+      const data = await getWarehouseLocationHierarchy({ data: { id: rootId } });
+      return data?.hierarchy ?? [];
+    },
+    enabled,
+    staleTime: 60 * 1000,
+  });
+}
+
+/**
+ * Fetch location detail with contents
+ */
+export function useLocationDetail(locationId: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.locations.detail(locationId),
+    queryFn: async () => {
+      const data = await getLocationDetail({ data: { id: locationId } });
+      return data ?? null;
+    },
+    enabled: enabled && !!locationId,
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Create a warehouse location
+ */
+export function useCreateWarehouseLocation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: {
+      locationCode: string;
+      name: string;
+      locationType: string;
+      parentId?: string;
+      capacity?: number;
+      attributes?: Record<string, any>;
+    }) => createWarehouseLocation({ data: data as any }),
+    onSuccess: () => {
+      toast.success('Location created');
+      queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to create location');
+    },
+  });
+}
+
+/**
+ * Update a warehouse location
+ */
+export function useUpdateWarehouseLocation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) =>
+      updateWarehouseLocation({ data: { id, data } }),
+    onSuccess: (_data, variables) => {
+      toast.success('Location updated');
+      queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.locations.detail(variables.id) });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to update location');
+    },
+  });
+}
+
+/**
+ * Delete a warehouse location
+ */
+export function useDeleteWarehouseLocation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (locationId: string) =>
+      deleteWarehouseLocation({ data: { id: locationId } }),
+    onSuccess: () => {
+      toast.success('Location deleted');
+      queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to delete location');
+    },
+  });
+}

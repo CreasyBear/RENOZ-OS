@@ -65,11 +65,8 @@ function OrderCreationForm({
   customerSearch: string;
   onCustomerSearchChange: (value: string) => void;
 }) {
-  const { form, formData, calculations, isValid, hasLineItems, resetForm } = useOrderForm();
+  const { getValues, formData, calculations, isValid, hasLineItems, resetForm } = useOrderForm();
   const [selectedCustomer, setSelectedCustomer] = React.useState<SelectedCustomer | null>(null);
-
-  // Get form methods for submission
-  const { getValues } = form;
 
   // Handlers
   const handleSubmit = useCallback(async () => {

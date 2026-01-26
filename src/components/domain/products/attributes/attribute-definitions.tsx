@@ -70,7 +70,7 @@ import {
   createAttribute,
   updateAttribute,
   deleteAttribute,
-} from "@/lib/server/functions/product-attributes";
+} from "@/server/functions/products/product-attributes";
 
 // Types
 const ATTRIBUTE_TYPES = [

@@ -4,22 +4,26 @@
  * Displays detailed user information with tabs for profile, groups, and activity.
  * Allows editing user details, role, and status.
  *
- * @see src/server/functions/users.ts for server functions
+ * @see src/hooks/users/use-users.ts for TanStack Query hooks
  */
 import { createFileRoute, Link, useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useState } from 'react';
-import { useServerFn } from '@tanstack/react-start';
+import { useState, useEffect } from 'react';
 import {
-  getUser,
-  updateUser,
-  deactivateUser,
-  reactivateUser,
-  transferOwnership,
-} from '@/server/functions/users/users';
-import { getUserActivity } from '@/server/functions/_shared/audit-logs';
+  useUser,
+  useUserActivity,
+  useUpdateUser,
+  useDeactivateUser,
+  useReactivateUser,
+  useTransferOwnership,
+} from '@/hooks/users/use-users';
 import { useConfirmation } from '@/hooks';
+import { RouteErrorFallback } from '@/components/layout';
+import { AdminDetailSkeleton } from '@/components/skeletons/admin';
 
-// Explicit types for loader data to avoid inference issues
+// ============================================================================
+// TYPES
+// ============================================================================
+
 interface UserGroup {
   groupId: string;
   groupName: string;
@@ -63,17 +67,11 @@ interface ActivityResult {
   };
 }
 
-import { RouteErrorFallback } from '@/components/layout';
-import { AdminDetailSkeleton } from '@/components/skeletons/admin';
+// ============================================================================
+// ROUTE CONFIGURATION
+// ============================================================================
 
 export const Route = createFileRoute('/_authenticated/admin/users/$userId')({
-  loader: (async ({ params }: { params: { userId: string } }) => {
-    const [user, activity] = await Promise.all([
-      getUser({ data: { id: params.userId } }),
-      getUserActivity({ data: { userId: params.userId, page: 1, pageSize: 10 } }),
-    ]);
-    return { user, activity };
-  }) as never,
   component: UserDetailPage,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/admin/users" />
@@ -84,6 +82,10 @@ export const Route = createFileRoute('/_authenticated/admin/users/$userId')({
     </div>
   ),
 });
+
+// ============================================================================
+// CONSTANTS
+// ============================================================================
 
 const ROLE_OPTIONS = [
   { value: 'admin', label: 'Admin', description: 'Full administrative access' },
@@ -101,19 +103,76 @@ const STATUS_OPTIONS = [
 
 type Tab = 'profile' | 'groups' | 'activity';
 
+// ============================================================================
+// CONTAINER COMPONENT
+// ============================================================================
+
+/**
+ * User detail container - handles data fetching
+ * @source user from useUser hook
+ * @source activity from useUserActivity hook
+ */
 function UserDetailPage() {
-  const navigate = useNavigate();
-  const loaderData = Route.useLoaderData() as { user: UserWithGroups; activity: ActivityResult };
-  const user = loaderData.user;
-  const activity = loaderData.activity;
   const { userId } = Route.useParams();
 
-  const updateFn = useServerFn(updateUser);
-  const deactivateFn = useServerFn(deactivateUser);
-  const reactivateFn = useServerFn(reactivateUser);
-  const transferOwnershipFn = useServerFn(transferOwnership);
+  // Fetch user and activity data
+  const { data: user, isLoading: isLoadingUser, error: userError } = useUser(userId);
+  const { data: activity, isLoading: isLoadingActivity } = useUserActivity(userId);
 
+  // Show loading state while fetching user data
+  if (isLoadingUser) {
+    return (
+      <div className="p-6">
+        <AdminDetailSkeleton />
+      </div>
+    );
+  }
+
+  // Show error state if user fetch failed
+  if (userError || !user) {
+    return (
+      <RouteErrorFallback
+        error={userError || new Error('User not found')}
+        parentRoute="/admin/users"
+      />
+    );
+  }
+
+  return (
+    <UserDetailPresenter
+      user={user as UserWithGroups}
+      activity={activity as ActivityResult | undefined}
+      isLoadingActivity={isLoadingActivity}
+      userId={userId}
+    />
+  );
+}
+
+// ============================================================================
+// PRESENTER COMPONENT
+// ============================================================================
+
+interface UserDetailPresenterProps {
+  user: UserWithGroups;
+  activity?: ActivityResult;
+  isLoadingActivity: boolean;
+  userId: string;
+}
+
+function UserDetailPresenter({
+  user,
+  activity,
+  isLoadingActivity,
+  userId,
+}: UserDetailPresenterProps) {
+  const navigate = useNavigate();
   const confirm = useConfirmation();
+
+  // Get mutations
+  const updateUserMutation = useUpdateUser();
+  const deactivateUserMutation = useDeactivateUser();
+  const reactivateUserMutation = useReactivateUser();
+  const transferOwnershipMutation = useTransferOwnership();
 
   // Get current user's role from route context
   const { appUser } = useRouteContext({ from: '/_authenticated' }) as {
@@ -121,40 +180,45 @@ function UserDetailPage() {
   };
   const currentUserIsOwner = appUser?.role === 'owner';
 
+  // UI state
   const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [isEditing, setIsEditing] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Form state
+  // Form state - reset when user data changes
   const [editName, setEditName] = useState(user.name ?? '');
   const [editRole, setEditRole] = useState(user.role);
   const [editStatus, setEditStatus] = useState(user.status);
 
+  // Reset form state when user data changes
+  useEffect(() => {
+    setEditName(user.name ?? '');
+    setEditRole(user.role);
+    setEditStatus(user.status);
+  }, [user.name, user.role, user.status]);
+
   const isOwner = user.role === 'owner';
+  const isLoading =
+    updateUserMutation.isPending ||
+    deactivateUserMutation.isPending ||
+    reactivateUserMutation.isPending ||
+    transferOwnershipMutation.isPending;
 
   const handleSave = async () => {
-    setIsLoading(true);
     try {
-      await updateFn({
-        data: {
-          id: userId,
-          name: editName || undefined,
-          role: editRole !== user.role ? editRole : undefined,
-          status: editStatus !== user.status ? editStatus : undefined,
-        },
+      await updateUserMutation.mutateAsync({
+        id: userId,
+        name: editName || undefined,
+        role: editRole !== user.role ? editRole : undefined,
+        status: editStatus !== user.status ? editStatus : undefined,
       });
       setMessage({ type: 'success', text: 'User updated successfully' });
       setIsEditing(false);
-      // Reload to get fresh data
-      navigate({ to: '.', replace: true });
     } catch (err) {
       setMessage({
         type: 'error',
         text: err instanceof Error ? err.message : 'Failed to update user',
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -169,9 +233,8 @@ function UserDetailPage() {
     });
     if (!result.confirmed) return;
 
-    setIsLoading(true);
     try {
-      await deactivateFn({ data: { id: userId } });
+      await deactivateUserMutation.mutateAsync(userId);
       setMessage({ type: 'success', text: 'User deactivated successfully' });
       navigate({ to: '/admin/users' });
     } catch (err) {
@@ -179,24 +242,18 @@ function UserDetailPage() {
         type: 'error',
         text: err instanceof Error ? err.message : 'Failed to deactivate user',
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handleReactivate = async () => {
-    setIsLoading(true);
     try {
-      await reactivateFn({ data: { id: userId } });
+      await reactivateUserMutation.mutateAsync(userId);
       setMessage({ type: 'success', text: 'User reactivated successfully' });
-      navigate({ to: '.', replace: true });
     } catch (err) {
       setMessage({
         type: 'error',
         text: err instanceof Error ? err.message : 'Failed to reactivate user',
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -210,27 +267,24 @@ function UserDetailPage() {
     });
     if (!result.confirmed) return;
 
-    setIsLoading(true);
     try {
-      await transferOwnershipFn({ data: { newOwnerId: userId } });
-      setMessage({ type: 'success', text: 'Ownership transferred successfully. You are now an admin.' });
+      await transferOwnershipMutation.mutateAsync(userId);
+      setMessage({
+        type: 'success',
+        text: 'Ownership transferred successfully. You are now an admin.',
+      });
       navigate({ to: '/admin/users' });
     } catch (err) {
       setMessage({
         type: 'error',
         text: err instanceof Error ? err.message : 'Failed to transfer ownership',
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
   // Can transfer ownership if: current user is owner, viewing a non-owner, active user, and not self
   const canTransferOwnership =
-    currentUserIsOwner &&
-    !isOwner &&
-    user.status === 'active' &&
-    appUser?.id !== userId;
+    currentUserIsOwner && !isOwner && user.status === 'active' && appUser?.id !== userId;
 
   return (
     <div className="space-y-6 p-6">
@@ -430,7 +484,7 @@ function UserDetailPage() {
               {isEditing && !isOwner ? (
                 <select
                   value={editRole}
-                  onChange={(e) => setEditRole(e.target.value as any)}
+                  onChange={(e) => setEditRole(e.target.value as UserRole)}
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 >
                   {ROLE_OPTIONS.map((option) => (
@@ -450,7 +504,7 @@ function UserDetailPage() {
               {isEditing && !isOwner && user.status !== 'deactivated' ? (
                 <select
                   value={editStatus}
-                  onChange={(e) => setEditStatus(e.target.value as any)}
+                  onChange={(e) => setEditStatus(e.target.value as UserStatus)}
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 >
                   {STATUS_OPTIONS.map((option) => (
@@ -504,7 +558,11 @@ function UserDetailPage() {
 
         {activeTab === 'activity' && (
           <div className="p-6">
-            {activity.items.length === 0 ? (
+            {isLoadingActivity ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-indigo-600" />
+              </div>
+            ) : !activity || activity.items.length === 0 ? (
               <p className="py-8 text-center text-gray-500">No recent activity</p>
             ) : (
               <ul className="space-y-4">

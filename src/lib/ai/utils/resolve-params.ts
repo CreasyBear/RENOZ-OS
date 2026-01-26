@@ -217,7 +217,7 @@ export function getSchemaDefaults<T extends z.ZodSchema>(
     const shape = schema.shape;
     for (const [key, fieldSchema] of Object.entries(shape)) {
       if (fieldSchema instanceof z.ZodDefault) {
-        defaults[key] = fieldSchema._def.defaultValue();
+        defaults[key] = (fieldSchema._def as { defaultValue: () => unknown }).defaultValue();
       }
     }
   }

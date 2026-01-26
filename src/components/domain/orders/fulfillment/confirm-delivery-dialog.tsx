@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { toastSuccess, toastError } from "@/hooks";
-import { confirmDelivery } from "@/lib/server/functions/order-shipments";
+import { confirmDelivery } from "@/server/functions/orders/order-shipments";
 
 // ============================================================================
 // TYPES

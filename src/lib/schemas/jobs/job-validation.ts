@@ -184,9 +184,9 @@ export function validateQuickJobForm(data: QuickJobFormInput) {
  * Extracts field-specific error messages from Zod validation result.
  */
 export function getFieldErrors(
-  result: z.SafeParseReturnType<unknown, unknown>
+  result: { success: boolean; error?: z.ZodError; data?: unknown }
 ): Record<string, string> {
-  if (result.success) return {};
+  if (result.success || !result.error) return {};
 
   const errors: Record<string, string> = {};
   result.error.issues.forEach((issue: z.ZodIssue) => {

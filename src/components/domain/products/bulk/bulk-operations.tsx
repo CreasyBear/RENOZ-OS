@@ -42,10 +42,10 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   bulkUpdateProducts,
-  bulkUpdatePrices,
+  bulkAdjustPrices,
   bulkDeleteProducts,
   exportProducts,
-} from "@/lib/server/functions/product-bulk-ops";
+} from "@/server/functions/products/product-bulk-ops";
 
 interface ProductBulkOperationsProps {
   selectedIds: string[];
@@ -129,7 +129,7 @@ export function ProductBulkOperations({
             [priceField]: numValue,
           };
 
-      await bulkUpdatePrices({
+      await bulkAdjustPrices({
         data: {
           productIds: selectedIds,
           adjustment,

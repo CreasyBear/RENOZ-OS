@@ -30,6 +30,7 @@ import {
   type XeroLineItem,
   type XeroInvoicePayload,
 } from '@/lib/schemas';
+import { ServerError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
 // CONSTANTS
@@ -171,7 +172,7 @@ async function sendToXeroApi(
   const xeroConfigured = true; // Placeholder
 
   if (!xeroConfigured) {
-    throw new Error('Xero integration not configured for this organization');
+    throw new ServerError('Xero integration not configured for this organization');
   }
 
   // Simulate API latency
@@ -179,11 +180,11 @@ async function sendToXeroApi(
 
   // Simulate validation errors for testing
   if (!payload.contact.name) {
-    throw new Error('Xero validation error: Contact name is required');
+    throw new ValidationError('Xero validation error: Contact name is required');
   }
 
   if (payload.lineItems.length === 0) {
-    throw new Error('Xero validation error: At least one line item is required');
+    throw new ValidationError('Xero validation error: At least one line item is required');
   }
 
   // Generate mock Xero invoice ID (in production, this comes from Xero response)
@@ -410,7 +411,7 @@ export const handleXeroPaymentUpdate = createServerFn()
     // Environment gate: Webhooks must be explicitly enabled
     const XERO_WEBHOOKS_ENABLED = process.env.XERO_WEBHOOKS_ENABLED === 'true';
     if (!XERO_WEBHOOKS_ENABLED) {
-      throw new Error('Xero webhooks not enabled - configure XERO_WEBHOOKS_ENABLED=true');
+      throw new ServerError('Xero webhooks not enabled - configure XERO_WEBHOOKS_ENABLED=true');
     }
 
     const { xeroInvoiceId, amountPaid, paymentDate, reference } = data;

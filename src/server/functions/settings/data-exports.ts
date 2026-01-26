@@ -19,6 +19,7 @@ import {
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { logAuditEvent } from '../_shared/audit-logs';
 import { AUDIT_ACTIONS } from 'drizzle/schema';
 import { paginationSchema } from '@/lib/schemas';
@@ -129,7 +130,7 @@ export const getDataExport = createServerFn({ method: 'GET' })
       .where(and(eq(dataExports.id, data.id), eq(dataExports.organizationId, ctx.organizationId)))
       .limit(1);
     if (!exportJob) {
-      throw new Error('Export not found');
+      throw new NotFoundError('Export not found', 'export');
     }
     // Users can only see their own exports unless admin
     if (
@@ -137,7 +138,7 @@ export const getDataExport = createServerFn({ method: 'GET' })
       ctx.user.role !== 'admin' &&
       ctx.user.role !== 'owner'
     ) {
-      throw new Error('Export not found');
+      throw new NotFoundError('Export not found', 'export');
     }
     return exportJob;
   });
@@ -160,7 +161,7 @@ export const createDataExport = createServerFn({ method: 'POST' })
         and(eq(dataExports.organizationId, ctx.organizationId), eq(dataExports.status, 'pending'))
       );
     if (pendingCount >= MAX_CONCURRENT_EXPORTS) {
-      throw new Error(
+      throw new ValidationError(
         `Maximum of ${MAX_CONCURRENT_EXPORTS} pending exports. Please wait for current exports to complete.`
       );
     }
@@ -241,10 +242,10 @@ export const cancelDataExport = createServerFn({ method: 'POST' })
       )
       .limit(1);
     if (!exportJob) {
-      throw new Error('Export not found');
+      throw new NotFoundError('Export not found', 'export');
     }
     if (exportJob.status !== 'pending' && exportJob.status !== 'processing') {
-      throw new Error('Only pending or processing exports can be cancelled');
+      throw new ValidationError('Only pending or processing exports can be cancelled');
     }
     const [updated] = await db
       .update(dataExports)
@@ -278,7 +279,7 @@ export const deleteDataExport = createServerFn({ method: 'POST' })
       )
       .limit(1);
     if (!exportJob) {
-      throw new Error('Export not found');
+      throw new NotFoundError('Export not found', 'export');
     }
     // TODO: Delete file from storage if exists
     // if (exportJob.fileUrl) {
@@ -381,16 +382,16 @@ export const getExportDownloadUrl = createServerFn({ method: 'GET' })
       )
       .limit(1);
     if (!exportJob) {
-      throw new Error('Export not found');
+      throw new NotFoundError('Export not found', 'export');
     }
     if (exportJob.status !== 'completed') {
-      throw new Error('Export is not ready for download');
+      throw new ValidationError('Export is not ready for download');
     }
     if (!exportJob.fileUrl) {
-      throw new Error('Export file not available');
+      throw new ValidationError('Export file not available');
     }
     if (exportJob.expiresAt && new Date(exportJob.expiresAt) < new Date()) {
-      throw new Error('Export has expired');
+      throw new ValidationError('Export has expired');
     }
     // TODO: Generate signed URL if using cloud storage
     // For now, return the stored URL

@@ -39,7 +39,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/formatters";
-import { listAmendments } from "@/lib/server/functions/order-amendments";
+import { listAmendments } from "@/server/functions/orders/order-amendments";
 import type { AmendmentStatus, AmendmentType, AmendmentChanges, FinancialImpact } from "@/lib/schemas/orders";
 
 // ============================================================================
@@ -79,8 +79,8 @@ const STATUS_CONFIG: Record<
     icon: typeof FileEdit;
   }
 > = {
-  pending: {
-    label: "Pending",
+  requested: {
+    label: "Requested",
     color: "bg-amber-100 text-amber-800",
     icon: Clock,
   },
@@ -194,9 +194,9 @@ export const AmendmentList = memo(function AmendmentList({
         const changes = amendment.changes as AmendmentChanges | null;
         const financialImpact = changes?.financialImpact as FinancialImpact | undefined;
 
-        const canReview = amendment.status === "pending" && onReview;
+        const canReview = amendment.status === "requested" && onReview;
         const canApply = amendment.status === "approved" && onApply;
-        const canCancel = amendment.status === "pending" && onCancel;
+        const canCancel = amendment.status === "requested" && onCancel;
 
         return (
           <Card key={amendment.id}>

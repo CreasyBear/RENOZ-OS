@@ -16,7 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { addProductImage } from "@/lib/server/functions/product-images";
+import { addProductImage } from "@/server/functions/products/product-images";
 
 // Validation constants
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];

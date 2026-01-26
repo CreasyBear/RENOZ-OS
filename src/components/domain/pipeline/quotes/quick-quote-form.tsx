@@ -69,7 +69,7 @@ import { cn } from "@/lib/utils";
 import { FormatAmount } from "@/components/shared/format";
 import { toastSuccess, toastError } from "@/hooks";
 import { getCustomers } from "@/server/customers";
-import { listProducts } from "@/lib/server/functions/products";
+import { listProducts } from "@/server/functions/products/products";
 import { createQuoteVersion } from "@/server/functions/pipeline/quote-versions";
 import { GST_RATE } from "@/lib/order-calculations";
 

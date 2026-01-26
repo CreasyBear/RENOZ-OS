@@ -47,7 +47,7 @@ export function useDuplicateScan(options: ScanDuplicatesOptions = {}) {
   const scanFn = useServerFn(scanForDuplicates);
 
   return useQuery({
-    queryKey: queryKeys.customers.duplicates.scan({ threshold, limit }),
+    queryKey: queryKeys.customers.duplicates.detection({ threshold, limit }),
     queryFn: async () => {
       const result = await scanFn({
         data: {

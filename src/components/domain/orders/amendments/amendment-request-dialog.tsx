@@ -53,8 +53,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/formatters";
 import { toastSuccess, toastError } from "@/hooks";
-import { getOrderWithCustomer } from "@/lib/server/functions/orders";
-import { requestAmendment } from "@/lib/server/functions/order-amendments";
+import { getOrderWithCustomer } from "@/server/functions/orders/orders";
+import { requestAmendment } from "@/server/functions/orders/order-amendments";
 import type { AmendmentType, ItemChange } from "@/lib/schemas/orders";
 
 // ============================================================================

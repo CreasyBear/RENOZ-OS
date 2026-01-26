@@ -9,7 +9,7 @@
  *
  * @see _Initiation/_prd/2-domains/support/support.prd.json DOM-SUP-002b
  */
-import { task, schedules } from '@trigger.dev/sdk/v3';
+import { schedules } from '@trigger.dev/sdk/v3';
 import { and, eq, lt, isNull, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { issues, notifications, users, activities, slaTracking } from 'drizzle/schema';
@@ -149,8 +149,9 @@ async function notifyManagerOfEscalation(
  * 3. Priority-based escalation works (high/critical priority)
  * 4. Manager notification sent on auto-escalation
  */
-export const autoEscalateIssuesTask = task({
+export const autoEscalateIssuesTask = schedules.task({
   id: 'auto-escalate-issues',
+  cron: '*/15 * * * *',
   run: async () => {
     console.log('Starting auto-escalation check');
 
@@ -353,9 +354,3 @@ export const autoEscalateIssuesTask = task({
   },
 });
 
-// Schedule the task to run every 15 minutes
-export const autoEscalateIssuesSchedule = schedules.task({
-  id: 'auto-escalate-issues-schedule',
-  task: autoEscalateIssuesTask.id,
-  cron: '*/15 * * * *',
-});

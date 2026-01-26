@@ -11,10 +11,11 @@ import { loginSchema, registerSchema } from '@/lib/schemas/auth'
 import { z } from 'zod'
 
 // Search params for redirect after login
+// Note: Using passthrough() to avoid TanStack Router URL normalization redirect loops
 const loginSearchSchema = z.object({
   redirect: z.string().optional(),
-  mode: z.enum(['login', 'register']).optional().default('login'),
-})
+  mode: z.enum(['login', 'register']).optional(),
+}).passthrough()
 
 export const Route = createFileRoute('/login')({
   validateSearch: loginSearchSchema,
@@ -36,7 +37,7 @@ function LoginPage() {
   const navigate = useNavigate()
   const search = useSearch({ from: '/login' })
 
-  const [mode, setMode] = useState<FormMode>(search.mode ?? 'login')
+  const [mode, setMode] = useState<FormMode>(search.mode || 'login')
   const [isLoading, setIsLoading] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
   const [failedAttempts, setFailedAttempts] = useState(0)

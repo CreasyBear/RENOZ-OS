@@ -18,7 +18,7 @@ export const useZodForm = <T extends z.ZodType<any, any>>(
   options?: Omit<UseFormProps<z.infer<T>>, 'resolver'>
 ) => {
   return useForm<z.infer<T>>({
-    resolver: zodResolver(schema),
+    resolver: zodResolver(schema) as any,
     mode: 'onChange', // Validate on change for better UX
     ...options,
   });
@@ -220,7 +220,7 @@ export function useFilterForm<T extends Record<string, any>>(
 ) {
   return useZodForm(schema, {
     mode: 'onChange',
-    defaultValues: {} as T,
+    defaultValues: {} as any,
     ...options,
   });
 }

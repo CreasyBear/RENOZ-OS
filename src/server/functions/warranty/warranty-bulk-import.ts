@@ -14,6 +14,7 @@ import { warranties, warrantyPolicies, customers, products } from 'drizzle/schem
 import { withAuth } from '@/lib/server/protected';
 import { triggerWarrantyRegistrationNotification } from './warranty-policies';
 import { typedPostFn } from '@/lib/server/typed-server-fn';
+import { ValidationError } from '@/lib/server/errors';
 
 const MAX_IMPORT_ROWS = 1000;
 const MAX_IMPORT_BYTES = 5 * 1024 * 1024; // 5MB
@@ -225,39 +226,6 @@ function parseDate(dateStr: string): string | null {
 }
 
 /**
- * Generate warranty number in WRN-YYYY-NNNNN format.
- */
-async function generateWarrantyNumber(organizationId: string): Promise<string> {
-  const year = new Date().getFullYear();
-  const prefix = `WRN-${year}-`;
-
-  // Get the max warranty number for this year and org
-  const result = await db
-    .select({
-      maxNumber: sql<string>`MAX(${warranties.warrantyNumber})`,
-    })
-    .from(warranties)
-    .where(
-      and(
-        eq(warranties.organizationId, organizationId),
-        sql`${warranties.warrantyNumber} LIKE ${prefix + '%'}`
-      )
-    );
-
-  const maxNumber = result[0]?.maxNumber;
-  let nextSequence = 1;
-
-  if (maxNumber) {
-    const match = maxNumber.match(/WRN-\d{4}-(\d+)$/);
-    if (match) {
-      nextSequence = parseInt(match[1], 10) + 1;
-    }
-  }
-
-  return `${prefix}${nextSequence.toString().padStart(5, '0')}`;
-}
-
-/**
  * Generate multiple warranty numbers in WRN-YYYY-NNNNN format.
  * Single query to get max, then generates all numbers in memory.
  */
@@ -333,7 +301,7 @@ export const previewBulkWarrantyImport = typedPostFn(
     const { headers, rows } = parseCsv(csvContent);
 
     if (rows.length > MAX_IMPORT_ROWS) {
-      throw new Error(`CSV exceeds maximum of ${MAX_IMPORT_ROWS} rows`);
+      throw new ValidationError(`CSV exceeds maximum of ${MAX_IMPORT_ROWS} rows`);
     }
 
     if (rows.length === 0) {
@@ -711,7 +679,7 @@ export const bulkRegisterWarrantiesFromCsv = typedPostFn(
     const { rows, sendNotifications } = data;
 
     if (rows.length > MAX_IMPORT_ROWS) {
-      throw new Error(`Import exceeds maximum of ${MAX_IMPORT_ROWS} rows`);
+      throw new ValidationError(`Import exceeds maximum of ${MAX_IMPORT_ROWS} rows`);
     }
 
     if (rows.length === 0) {

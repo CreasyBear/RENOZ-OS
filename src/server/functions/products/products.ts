@@ -442,9 +442,10 @@ export const deleteProduct = createServerFn({ method: 'POST' })
 // ============================================================================
 
 /**
- * Search products using full-text search.
+ * Quick search products using full-text search.
+ * For advanced search with facets and analytics, use searchProducts from product-search.ts
  */
-export const searchProducts = createServerFn({ method: 'GET' })
+export const quickSearchProducts = createServerFn({ method: 'GET' })
   .inputValidator(
     z.object({
       q: z.string().min(2),

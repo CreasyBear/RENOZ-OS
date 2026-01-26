@@ -144,9 +144,7 @@ export { useOrgFormat } from "./hooks";
 // Rendering (basic, non-org-aware)
 export {
   renderEmail,
-  renderEmailToHtml,
-  htmlToPlaintext,
-  type RenderEmailOptions,
+  type RenderEmailResult,
   type BaseEmailProps,
 } from "./render";
 

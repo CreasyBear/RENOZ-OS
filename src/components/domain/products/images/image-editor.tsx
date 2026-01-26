@@ -21,7 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { updateProductImage } from "@/lib/server/functions/product-images";
+import { updateProductImage } from "@/server/functions/products/product-images";
 
 // Form schema
 const imageEditSchema = z.object({

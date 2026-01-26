@@ -24,6 +24,7 @@ import {
   substituteTemplateVariables,
   getSampleTemplateData,
 } from "@/lib/server/email-templates";
+import { NotFoundError } from "@/lib/server/errors";
 
 // ============================================================================
 // UTILITIES
@@ -110,7 +111,7 @@ export const renderEmailPreview = createServerFn({ method: "POST" })
       .limit(1);
 
     if (!template) {
-      throw new Error("Template not found");
+      throw new NotFoundError("Template not found", "emailTemplate");
     }
 
     // Build variables: start with sample data, overlay provided variables
@@ -177,7 +178,7 @@ export const sendTestEmail = createServerFn({ method: "POST" })
       .limit(1);
 
     if (!template) {
-      throw new Error("Template not found");
+      throw new NotFoundError("Template not found", "emailTemplate");
     }
 
     // Validate Resend API key is configured

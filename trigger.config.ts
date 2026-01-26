@@ -1,5 +1,4 @@
-// @ts-expect-error - defineConfig is available at runtime in trigger.dev v3
-import { defineConfig } from "@trigger.dev/sdk";
+import { defineConfig } from "@trigger.dev/sdk/v3";
 
 export default defineConfig({
   project: process.env.TRIGGER_PROJECT_ID || "renoz-crm",
@@ -17,6 +16,7 @@ export default defineConfig({
     },
   },
   build: {
-    external: [],
+    external: ["sharp", "canvas"],
   },
+  dirs: ["./src/trigger/jobs"],
 });

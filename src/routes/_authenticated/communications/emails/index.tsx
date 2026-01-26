@@ -1,20 +1,13 @@
 /**
- * Scheduled Emails Route (Container)
+ * Scheduled Emails Route
  *
- * Container for ScheduledEmailsList presenter.
- * Handles data fetching and mutation callbacks.
+ * Route for ScheduledEmailsList which is self-contained (fetches its own data).
+ * Provides edit and compose callbacks.
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
-import {
-  useScheduledEmails,
-  useCancelScheduledEmail,
-  type UseScheduledEmailsOptions,
-} from "@/hooks/communications";
 import { ScheduledEmailsList } from "@/components/domain/communications";
 import { ScheduleEmailDialog } from "@/components/domain/communications";
-import { toastSuccess, toastError } from "@/hooks";
-import { ErrorState } from "@/components/shared";
 import { RouteErrorFallback } from "@/components/layout";
 import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
 
@@ -36,42 +29,12 @@ export const Route = createFileRoute("/_authenticated/communications/emails/")({
 
 function ScheduledEmailsContainer() {
   const navigate = useNavigate();
-  const [statusFilter, _setStatusFilter] = useState<string | undefined>(undefined);
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
   const [composeOpen, setComposeOpen] = useState(false);
 
   // ============================================================================
-  // DATA FETCHING
-  // ============================================================================
-  const {
-    data: emailsData,
-    isLoading,
-    error,
-    refetch,
-  } = useScheduledEmails({
-    status: statusFilter as UseScheduledEmailsOptions["status"],
-  });
-
-  // ============================================================================
-  // MUTATIONS
-  // ============================================================================
-  const cancelMutation = useCancelScheduledEmail();
-
-  // ============================================================================
   // HANDLERS
   // ============================================================================
-  const handleCancel = useCallback(
-    async (id: string) => {
-      try {
-        await cancelMutation.mutateAsync({ data: { id } });
-        toastSuccess("Scheduled email cancelled");
-      } catch {
-        toastError("Failed to cancel email");
-      }
-    },
-    [cancelMutation]
-  );
-
   const handleEdit = useCallback((id: string) => {
     setEditingEmailId(id);
   }, []);
@@ -85,32 +48,14 @@ function ScheduledEmailsContainer() {
   }, [navigate]);
 
   // ============================================================================
-  // ERROR STATE
-  // ============================================================================
-  if (error) {
-    return (
-      <ErrorState
-        title="Failed to load scheduled emails"
-        message="There was an error loading your scheduled emails."
-        onRetry={() => refetch()}
-      />
-    );
-  }
-
-  // ============================================================================
   // RENDER
   // ============================================================================
-  const emails = emailsData?.items ?? [];
-
   return (
     <>
+      {/* ScheduledEmailsList is self-contained - fetches its own data */}
       <ScheduledEmailsList
-        emails={emails}
-        isLoading={isLoading}
-        onCancel={handleCancel}
         onEdit={handleEdit}
         onCompose={handleCompose}
-        isCancelling={cancelMutation.isPending}
       />
 
       {/* Schedule Email Dialog handled by parent */}

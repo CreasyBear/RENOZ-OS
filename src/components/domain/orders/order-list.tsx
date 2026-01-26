@@ -51,7 +51,7 @@ import {
 import { cn } from "@/lib/utils";
 import { FormatAmount } from "@/components/shared/format";
 import { format } from "date-fns";
-import { listOrders } from "@/lib/server/functions/orders";
+import { listOrders } from "@/server/functions/orders/orders";
 import type { OrderStatus, PaymentStatus } from "@/lib/schemas/orders";
 
 // ============================================================================
@@ -308,7 +308,7 @@ export const OrderList = memo(function OrderList({
                   </span>
                 </TableCell>
                 <TableCell>
-                  {format(new Date(order.orderDate), "dd/MM/yyyy")}
+                  {order.orderDate ? format(new Date(order.orderDate), "dd/MM/yyyy") : '-'}
                 </TableCell>
                 <TableCell>{getStatusBadge(order.status as OrderStatus)}</TableCell>
                 <TableCell className="text-right font-medium">
@@ -378,7 +378,7 @@ export const OrderList = memo(function OrderList({
                 <div>
                   <p className="font-medium">{order.orderNumber}</p>
                   <p className="text-sm text-muted-foreground">
-                    {format(new Date(order.orderDate), "dd/MM/yyyy")}
+                    {order.orderDate ? format(new Date(order.orderDate), "dd/MM/yyyy") : '-'}
                   </p>
                 </div>
                 {getStatusBadge(order.status as OrderStatus)}

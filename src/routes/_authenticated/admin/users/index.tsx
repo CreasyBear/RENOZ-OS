@@ -4,56 +4,21 @@
  * Lists all users in the organization with filtering, sorting, and bulk actions.
  * Provides access to user details, role management, and bulk operations.
  *
- * @see src/server/functions/users.ts for server functions
+ * @see src/hooks/users/use-users.ts for TanStack Query hooks
+ * @see src/server/functions/users/users.ts for server functions
  */
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState, useCallback } from 'react';
-import { useServerFn } from '@tanstack/react-start';
-import {
-  listUsers,
-  deactivateUser,
-  reactivateUser,
-  bulkUpdateUsers,
-  getUserStats,
-  exportUsers,
-} from '@/server/functions/users/users';
 import { z } from 'zod';
 import { useConfirmation } from '@/hooks';
-
-// Explicit types for loader data
-type UserRole = 'owner' | 'admin' | 'manager' | 'sales' | 'operations' | 'support' | 'viewer';
-type UserStatus = 'active' | 'invited' | 'suspended' | 'deactivated';
-
-interface UserItem {
-  id: string;
-  authId: string;
-  organizationId: string;
-  email: string;
-  name: string | null;
-  role: UserRole;
-  status: UserStatus;
-  type: string | null;
-  profile: Record<string, unknown> | null;
-  preferences: Record<string, unknown> | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface UsersData {
-  items: UserItem[];
-  pagination: {
-    page: number;
-    pageSize: number;
-    totalItems: number;
-    totalPages: number;
-  };
-}
-
-interface StatsData {
-  totalUsers: number;
-  byStatus: Record<string, number>;
-  byRole: Record<string, number>;
-}
+import {
+  useUsers,
+  useUserStats,
+  useDeactivateUser,
+  useReactivateUser,
+  useBulkUpdateUsers,
+  useExportUsers,
+} from '@/hooks/users/use-users';
 
 // Search params for filtering
 const userSearchSchema = z.object({
@@ -73,19 +38,9 @@ import { AdminTableSkeleton } from '@/components/skeletons/admin';
 
 export const Route = createFileRoute('/_authenticated/admin/users/')({
   validateSearch: userSearchSchema,
-  loaderDeps: ({ search }) => search,
-  loader: async ({ deps }) => {
-    const [usersData, stats] = await Promise.all([listUsers({ data: deps }), getUserStats()]);
-    return { users: usersData, stats };
-  },
   component: UsersAdminPage,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/admin" />
-  ),
-  pendingComponent: () => (
-    <div className="p-6">
-      <AdminTableSkeleton />
-    </div>
   ),
 });
 
@@ -109,24 +64,35 @@ const STATUS_COLORS: Record<string, string> = {
 function UsersAdminPage() {
   const confirm = useConfirmation();
   const navigate = Route.useNavigate();
-  const loaderData = Route.useLoaderData() as { users: UsersData; stats: StatsData };
-  const users = loaderData.users;
-  const stats = loaderData.stats;
   const search = Route.useSearch();
 
-  const deactivateFn = useServerFn(deactivateUser);
-  const reactivateFn = useServerFn(reactivateUser);
-  const bulkUpdateFn = useServerFn(bulkUpdateUsers);
-  const exportFn = useServerFn(exportUsers);
-
+  // Local state - must be declared before any early returns
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
-  const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  // Search state
   const [searchInput, setSearchInput] = useState(search.search ?? '');
 
-  // Update URL with new search params
+  // TanStack Query hooks for data fetching
+  const { data: usersData, isLoading: isLoadingUsers, error: usersError } = useUsers(search);
+  const { data: statsData, isLoading: isLoadingStats, error: statsError } = useUserStats();
+
+  // Mutation hooks
+  const deactivateMutation = useDeactivateUser();
+  const reactivateMutation = useReactivateUser();
+  const bulkUpdateMutation = useBulkUpdateUsers();
+  const exportMutation = useExportUsers();
+
+  // Combined loading state for mutations
+  const isLoading =
+    deactivateMutation.isPending ||
+    reactivateMutation.isPending ||
+    bulkUpdateMutation.isPending ||
+    exportMutation.isPending;
+
+  // Extract data with defaults
+  const users = usersData ?? { items: [], pagination: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 } };
+  const stats = statsData ?? { totalUsers: 0, byStatus: {}, byRole: {} };
+
+  // Update URL with new search params - must be defined before any early returns
   const updateSearch = useCallback(
     (updates: Partial<z.infer<typeof userSearchSchema>>) => {
       const newSearch = { ...search, ...updates, page: updates.page ?? 1 };
@@ -137,6 +103,25 @@ function UsersAdminPage() {
     },
     [navigate, search]
   );
+
+  // Handle loading state
+  if (isLoadingUsers || isLoadingStats) {
+    return (
+      <div className="p-6">
+        <AdminTableSkeleton />
+      </div>
+    );
+  }
+
+  // Handle error state
+  if (usersError || statsError) {
+    return (
+      <RouteErrorFallback
+        error={usersError || statsError || new Error('Unknown error')}
+        parentRoute="/admin"
+      />
+    );
+  }
 
   // Handle search submit
   const handleSearch = (e: React.FormEvent) => {
@@ -178,36 +163,32 @@ function UsersAdminPage() {
 
     if (!confirmed.confirmed) return;
 
-    setIsLoading(true);
-    try {
-      await deactivateFn({ data: { id: userId } });
-      setMessage({ type: 'success', text: 'User deactivated successfully' });
-      navigate({ to: '.', search: { ...search } });
-    } catch (err) {
-      setMessage({
-        type: 'error',
-        text: err instanceof Error ? err.message : 'Failed to deactivate user',
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    deactivateMutation.mutate(userId, {
+      onSuccess: () => {
+        setMessage({ type: 'success', text: 'User deactivated successfully' });
+      },
+      onError: (err) => {
+        setMessage({
+          type: 'error',
+          text: err instanceof Error ? err.message : 'Failed to deactivate user',
+        });
+      },
+    });
   };
 
   // Handle reactivate
-  const handleReactivate = async (userId: string) => {
-    setIsLoading(true);
-    try {
-      await reactivateFn({ data: { id: userId } });
-      setMessage({ type: 'success', text: 'User reactivated successfully' });
-      navigate({ to: '.', search: { ...search } });
-    } catch (err) {
-      setMessage({
-        type: 'error',
-        text: err instanceof Error ? err.message : 'Failed to reactivate user',
-      });
-    } finally {
-      setIsLoading(false);
-    }
+  const handleReactivate = (userId: string) => {
+    reactivateMutation.mutate(userId, {
+      onSuccess: () => {
+        setMessage({ type: 'success', text: 'User reactivated successfully' });
+      },
+      onError: (err) => {
+        setMessage({
+          type: 'error',
+          text: err instanceof Error ? err.message : 'Failed to reactivate user',
+        });
+      },
+    });
   };
 
   // Handle bulk role change
@@ -222,61 +203,59 @@ function UsersAdminPage() {
 
     if (!confirmed.confirmed) return;
 
-    setIsLoading(true);
-    try {
-      const result = await bulkUpdateFn({
-        data: {
-          userIds: Array.from(selectedUsers),
-          updates: { role: role as any },
+    bulkUpdateMutation.mutate(
+      {
+        userIds: Array.from(selectedUsers),
+        updates: { role: role as 'admin' | 'manager' | 'sales' | 'operations' | 'support' | 'viewer' },
+      },
+      {
+        onSuccess: (result) => {
+          setMessage({
+            type: 'success',
+            text: `Updated ${result.updated} user(s)${result.failed > 0 ? `, ${result.failed} failed` : ''}`,
+          });
+          setSelectedUsers(new Set());
         },
-      });
-      setMessage({
-        type: 'success',
-        text: `Updated ${result.updated} user(s)${result.failed > 0 ? `, ${result.failed} failed` : ''}`,
-      });
-      setSelectedUsers(new Set());
-      navigate({ to: '.', search: { ...search } });
-    } catch (err) {
-      setMessage({
-        type: 'error',
-        text: err instanceof Error ? err.message : 'Bulk update failed',
-      });
-    } finally {
-      setIsLoading(false);
-    }
+        onError: (err) => {
+          setMessage({
+            type: 'error',
+            text: err instanceof Error ? err.message : 'Bulk update failed',
+          });
+        },
+      }
+    );
   };
 
   // Handle export
-  const handleExport = async (format: 'csv' | 'json') => {
-    setIsLoading(true);
-    try {
-      const result = await exportFn({
-        data: {
-          format,
-          userIds: selectedUsers.size > 0 ? Array.from(selectedUsers) : undefined,
+  const handleExport = (format: 'csv' | 'json') => {
+    exportMutation.mutate(
+      {
+        format,
+        userIds: selectedUsers.size > 0 ? Array.from(selectedUsers) : undefined,
+      },
+      {
+        onSuccess: (result) => {
+          // Download file
+          const blob = new Blob([result.content], {
+            type: format === 'csv' ? 'text/csv' : 'application/json',
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `users-export-${new Date().toISOString().split('T')[0]}.${format}`;
+          a.click();
+          URL.revokeObjectURL(url);
+
+          setMessage({ type: 'success', text: `Exported ${result.count} user(s)` });
         },
-      });
-
-      // Download file
-      const blob = new Blob([result.content], {
-        type: format === 'csv' ? 'text/csv' : 'application/json',
-      });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `users-export-${new Date().toISOString().split('T')[0]}.${format}`;
-      a.click();
-      URL.revokeObjectURL(url);
-
-      setMessage({ type: 'success', text: `Exported ${result.count} user(s)` });
-    } catch (err) {
-      setMessage({
-        type: 'error',
-        text: err instanceof Error ? err.message : 'Export failed',
-      });
-    } finally {
-      setIsLoading(false);
-    }
+        onError: (err) => {
+          setMessage({
+            type: 'error',
+            text: err instanceof Error ? err.message : 'Export failed',
+          });
+        },
+      }
+    );
   };
 
   return (

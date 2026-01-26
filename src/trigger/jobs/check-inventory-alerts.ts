@@ -9,16 +9,17 @@
  *
  * @see src/server/functions/inventory/alerts.ts (original function removed)
  */
-import { task, schedules } from '@trigger.dev/sdk/v3';
+import { schedules } from '@trigger.dev/sdk/v3';
 import { and, eq, lt, gt, lte, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
   inventoryAlerts,
   inventory,
   products,
-  warehouseLocations,
+  organizations,
+  notifications,
+  users,
 } from 'drizzle/schema';
-import { organizations, notifications, users } from 'drizzle/schema';
 
 // ============================================================================
 // TYPES
@@ -136,7 +137,7 @@ async function checkAlertTriggered(
       }
       break;
 
-    case 'reorder_point':
+    case 'out_of_stock':
       if (threshold.minQuantity !== undefined) {
         const items = await db
           .select({
@@ -153,8 +154,8 @@ async function checkAlertTriggered(
           triggered = true;
           currentValue = items[0].quantity;
           thresholdValue = threshold.minQuantity;
-          severity = 'high';
-          message = `${items.length} item(s) at or below reorder point of ${threshold.minQuantity}`;
+          severity = 'critical';
+          message = `${items.length} item(s) out of stock or below available threshold of ${threshold.minQuantity}`;
           affectedItems = items.map((i) => ({
             id: i.id,
             productId: i.productId,
@@ -175,7 +176,7 @@ async function checkAlertTriggered(
 
   return {
     alertId: alert.id,
-    alertName: alert.name,
+    alertName: `${alert.alertType} alert`,
     alertType: alert.alertType,
     currentValue,
     thresholdValue,
@@ -231,8 +232,9 @@ async function notifyAlert(
  * Task that checks all inventory alerts across all organizations
  * and triggers notifications when conditions are met.
  */
-export const checkInventoryAlertsTask = task({
+export const checkInventoryAlertsTask = schedules.task({
   id: 'check-inventory-alerts',
+  cron: '*/30 * * * *',
   run: async () => {
     console.log('Starting inventory alerts check');
 
@@ -297,9 +299,3 @@ export const checkInventoryAlertsTask = task({
   },
 });
 
-// Schedule the task to run every 30 minutes
-export const checkInventoryAlertsSchedule = schedules.task({
-  id: 'check-inventory-alerts-schedule',
-  task: checkInventoryAlertsTask.id,
-  cron: '*/30 * * * *',
-});

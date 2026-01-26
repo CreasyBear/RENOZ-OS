@@ -87,7 +87,7 @@ export function useAttachments(
   options?: { limit?: number; offset?: number }
 ): UseQueryResult<ListAttachmentsResponse, Error> {
   return useQuery({
-    queryKey: queryKeys.files.list(entityType, entityId),
+    queryKey: queryKeys.files.list(entityType ?? '', entityId ?? ''),
     queryFn: () =>
       listAttachments({
         data: {

@@ -1,18 +1,42 @@
 /**
- * Dashboard Refresh Background Jobs
+ * Dashboard Refresh Background Tasks (Trigger.dev v3)
  *
- * Scheduled job for refreshing materialized views used by the dashboard.
- * Consolidated into a single job that refreshes all MVs with appropriate intervals.
+ * Scheduled tasks for refreshing materialized views used by the dashboard.
+ * Consolidated into a single task that refreshes all MVs with appropriate intervals.
  *
  * @see dashboard.prd.json DASH-PERF-BACKGROUND
  * @see docs/plans/2026-01-25-feat-dashboard-performance-infrastructure-plan.md
+ * @see https://trigger.dev/docs/v3/tasks
  */
-import { cronTrigger, eventTrigger } from '@trigger.dev/sdk';
-import { sql } from 'drizzle-orm';
-import { client, dashboardEvents } from '../client';
-import type { DashboardMvRefreshedPayload, DashboardCacheInvalidatedPayload } from '../client';
-import { db } from '@/lib/db';
-import { DashboardCache } from '@/lib/cache/dashboard-cache';
+import { task, schedules, logger } from "@trigger.dev/sdk/v3";
+import { sql } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { DashboardCache } from "@/lib/cache/dashboard-cache";
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+export interface DashboardMvRefreshedPayload {
+  views: string[];
+  organizationId?: string;
+}
+
+export interface DashboardCacheInvalidatedPayload {
+  organizationId: string;
+}
+
+export interface MvRefreshResult {
+  views: Record<string, { success: boolean; durationMs: number }>;
+  totalDuration: number;
+  refreshedAt: string;
+}
+
+export interface CacheInvalidationResult {
+  success: boolean;
+  organizationId: string;
+  invalidatedAt: string;
+}
 
 // ============================================================================
 // CONSTANTS
@@ -23,11 +47,11 @@ import { DashboardCache } from '@/lib/cache/dashboard-cache';
  * Prevents SQL injection by only allowing known view names.
  */
 const ALLOWED_MV_NAMES = [
-  'mv_daily_metrics',
-  'mv_daily_pipeline',
-  'mv_daily_jobs',
-  'mv_daily_warranty',
-  'mv_current_state',
+  "mv_daily_metrics",
+  "mv_daily_pipeline",
+  "mv_daily_jobs",
+  "mv_daily_warranty",
+  "mv_current_state",
 ] as const;
 
 type AllowedMvName = (typeof ALLOWED_MV_NAMES)[number];
@@ -37,11 +61,15 @@ type AllowedMvName = (typeof ALLOWED_MV_NAMES)[number];
  */
 const MV_REFRESH_CONFIG = {
   // Refresh every 5 minutes
-  frequent: ['mv_current_state'] as AllowedMvName[],
+  frequent: ["mv_current_state"] as AllowedMvName[],
   // Refresh every 15 minutes
-  standard: ['mv_daily_metrics', 'mv_daily_pipeline', 'mv_daily_jobs'] as AllowedMvName[],
+  standard: [
+    "mv_daily_metrics",
+    "mv_daily_pipeline",
+    "mv_daily_jobs",
+  ] as AllowedMvName[],
   // Refresh every hour
-  hourly: ['mv_daily_warranty'] as AllowedMvName[],
+  hourly: ["mv_daily_warranty"] as AllowedMvName[],
 } as const;
 
 // ============================================================================
@@ -59,7 +87,9 @@ function isValidViewName(viewName: string): viewName is AllowedMvName {
  * Refresh a materialized view concurrently (zero-lock).
  * Falls back to regular refresh if concurrent refresh fails.
  */
-async function refreshMaterializedView(viewName: AllowedMvName): Promise<{ success: boolean; durationMs: number }> {
+async function refreshMaterializedView(
+  viewName: AllowedMvName
+): Promise<{ success: boolean; durationMs: number }> {
   const startTime = Date.now();
 
   try {
@@ -68,33 +98,31 @@ async function refreshMaterializedView(viewName: AllowedMvName): Promise<{ succe
     return { success: true, durationMs: Date.now() - startTime };
   } catch (error) {
     // If CONCURRENTLY fails (e.g., no unique index), fall back to regular refresh
-    console.warn(`[DashboardRefresh] CONCURRENTLY failed for ${viewName}, using regular refresh`);
+    console.warn(
+      `[DashboardRefresh] CONCURRENTLY failed for ${viewName}, using regular refresh`
+    );
     await db.execute(sql.raw(`REFRESH MATERIALIZED VIEW ${viewName}`));
     return { success: true, durationMs: Date.now() - startTime };
   }
 }
 
 // ============================================================================
-// CRON JOB - Refresh Dashboard MVs (Every 5 Minutes)
+// TASK: Refresh Dashboard MVs (Every 5 Minutes)
 // ============================================================================
 
 /**
- * Unified Dashboard MV Refresh Job
+ * Unified Dashboard MV Refresh Task
  *
  * Runs every 5 minutes and refreshes MVs based on their configured intervals:
  * - mv_current_state: every run (5 min)
  * - mv_daily_metrics/pipeline/jobs: every 3rd run (~15 min)
  * - mv_daily_warranty: every 12th run (~60 min)
  */
-export const refreshDashboardMvsJob = client.defineJob({
-  id: 'refresh-dashboard-mvs',
-  name: 'Refresh Dashboard MVs',
-  version: '2.0.0',
-  trigger: cronTrigger({
-    cron: '*/5 * * * *', // Every 5 minutes
-  }),
-  run: async (_payload, io) => {
-    await io.logger.info('Starting dashboard MV refresh');
+export const refreshDashboardMvsTask = schedules.task({
+  id: "refresh-dashboard-mvs",
+  cron: "*/5 * * * *",
+  run: async (): Promise<MvRefreshResult> => {
+    logger.info("Starting dashboard MV refresh");
 
     // Get current minute to determine which MVs to refresh
     const minute = new Date().getMinutes();
@@ -113,27 +141,31 @@ export const refreshDashboardMvsJob = client.defineJob({
       viewsToRefresh.push(...MV_REFRESH_CONFIG.hourly);
     }
 
-    await io.logger.info(`Refreshing ${viewsToRefresh.length} MVs`, { views: viewsToRefresh });
+    logger.info(`Refreshing ${viewsToRefresh.length} MVs`, {
+      views: viewsToRefresh,
+    });
 
     const results: Record<string, { success: boolean; durationMs: number }> = {};
 
     for (const view of viewsToRefresh) {
       try {
-        const result = await io.runTask(`refresh-${view}`, async () => {
-          return await refreshMaterializedView(view);
-        });
+        const result = await refreshMaterializedView(view);
         results[view] = result;
-        await io.logger.info(`Refreshed ${view}`, { durationMs: result.durationMs });
+        logger.info(`Refreshed ${view}`, { durationMs: result.durationMs });
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        await io.logger.info(`Failed to refresh ${view}: ${errorMessage}`);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        logger.info(`Failed to refresh ${view}: ${errorMessage}`);
         results[view] = { success: false, durationMs: 0 };
       }
     }
 
-    const totalDuration = Object.values(results).reduce((sum, r) => sum + r.durationMs, 0);
+    const totalDuration = Object.values(results).reduce(
+      (sum, r) => sum + r.durationMs,
+      0
+    );
 
-    await io.logger.info('Dashboard MV refresh completed', {
+    logger.info("Dashboard MV refresh completed", {
       refreshedCount: viewsToRefresh.length,
       totalDuration,
     });
@@ -146,60 +178,59 @@ export const refreshDashboardMvsJob = client.defineJob({
   },
 });
 
+
 // ============================================================================
-// EVENT JOB - On-Demand MV Refresh
+// TASK: On-Demand MV Refresh
 // ============================================================================
 
 /**
- * On-Demand MV Refresh Job
+ * On-Demand MV Refresh Task
  *
  * Triggered by business events that require immediate MV refresh
  * (e.g., bulk order import, pipeline stage change).
  */
-export const onDemandMvRefreshJob = client.defineJob({
-  id: 'on-demand-mv-refresh',
-  name: 'On-Demand MV Refresh',
-  version: '1.0.0',
-  trigger: eventTrigger({
-    name: dashboardEvents.mvRefreshed,
-  }),
-  run: async (payload: DashboardMvRefreshedPayload, io) => {
+export const onDemandMvRefreshTask = task({
+  id: "on-demand-mv-refresh",
+  retry: {
+    maxAttempts: 2,
+  },
+  run: async (payload: DashboardMvRefreshedPayload): Promise<MvRefreshResult> => {
     const { views, organizationId } = payload;
 
-    await io.logger.info('Starting on-demand MV refresh', { views, organizationId });
+    logger.info("Starting on-demand MV refresh", { views, organizationId });
 
     // Filter to only valid view names
     const validViews = views.filter(isValidViewName);
     if (validViews.length !== views.length) {
-      const invalidViews = views.filter(v => !isValidViewName(v));
-      await io.logger.info(`Skipping invalid view names: ${invalidViews.join(', ')}`);
+      const invalidViews = views.filter((v) => !isValidViewName(v));
+      logger.info(`Skipping invalid view names: ${invalidViews.join(", ")}`);
     }
 
     const results: Record<string, { success: boolean; durationMs: number }> = {};
 
     for (const view of validViews) {
       try {
-        const result = await io.runTask(`refresh-${view}`, async () => {
-          return await refreshMaterializedView(view);
-        });
+        const result = await refreshMaterializedView(view);
         results[view] = result;
-        await io.logger.info(`Refreshed ${view}`, { durationMs: result.durationMs });
+        logger.info(`Refreshed ${view}`, { durationMs: result.durationMs });
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        await io.logger.info(`Failed to refresh ${view}: ${errorMessage}`);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        logger.info(`Failed to refresh ${view}: ${errorMessage}`);
         results[view] = { success: false, durationMs: 0 };
       }
     }
 
     // If organization specified, invalidate their cache
     if (organizationId) {
-      await io.runTask('invalidate-cache', async () => {
-        await DashboardCache.invalidateOrg(organizationId);
-      });
-      await io.logger.info('Invalidated cache for organization', { organizationId });
+      await DashboardCache.invalidateOrg(organizationId);
+      logger.info("Invalidated cache for organization", { organizationId });
     }
 
-    const totalDuration = Object.values(results).reduce((sum, r) => sum + r.durationMs, 0);
+    const totalDuration = Object.values(results).reduce(
+      (sum, r) => sum + r.durationMs,
+      0
+    );
 
     return {
       views: results,
@@ -210,31 +241,29 @@ export const onDemandMvRefreshJob = client.defineJob({
 });
 
 // ============================================================================
-// EVENT JOB - Cache Invalidation
+// TASK: Cache Invalidation
 // ============================================================================
 
 /**
- * Cache Invalidation Job
+ * Cache Invalidation Task
  *
  * Triggered when data changes require cache invalidation.
  */
-export const cacheInvalidationJob = client.defineJob({
-  id: 'dashboard-cache-invalidation',
-  name: 'Dashboard Cache Invalidation',
-  version: '1.0.0',
-  trigger: eventTrigger({
-    name: dashboardEvents.cacheInvalidated,
-  }),
-  run: async (payload: DashboardCacheInvalidatedPayload, io) => {
+export const cacheInvalidationTask = task({
+  id: "dashboard-cache-invalidation",
+  retry: {
+    maxAttempts: 2,
+  },
+  run: async (
+    payload: DashboardCacheInvalidatedPayload
+  ): Promise<CacheInvalidationResult> => {
     const { organizationId } = payload;
 
-    await io.logger.info('Invalidating cache', { organizationId });
+    logger.info("Invalidating cache", { organizationId });
 
-    await io.runTask('invalidate', async () => {
-      await DashboardCache.invalidateOrg(organizationId);
-    });
+    await DashboardCache.invalidateOrg(organizationId);
 
-    await io.logger.info('Cache invalidation completed');
+    logger.info("Cache invalidation completed");
 
     return {
       success: true,
@@ -245,20 +274,35 @@ export const cacheInvalidationJob = client.defineJob({
 });
 
 // ============================================================================
-// LEGACY EXPORTS - for backwards compatibility
+// LEGACY EXPORTS - for backward compatibility
 // ============================================================================
 
 /**
- * @deprecated Use refreshDashboardMvsJob instead
+ * @deprecated Use refreshDashboardMvsTask instead
  */
-export const refreshDailyMetricsJob = refreshDashboardMvsJob;
+export const refreshDashboardMvsJob = refreshDashboardMvsTask;
 
 /**
- * @deprecated Use refreshDashboardMvsJob instead
+ * @deprecated Use onDemandMvRefreshTask instead
  */
-export const refreshCurrentStateJob = refreshDashboardMvsJob;
+export const onDemandMvRefreshJob = onDemandMvRefreshTask;
 
 /**
- * @deprecated Use refreshDashboardMvsJob instead
+ * @deprecated Use cacheInvalidationTask instead
  */
-export const refreshWarrantyMetricsJob = refreshDashboardMvsJob;
+export const cacheInvalidationJob = cacheInvalidationTask;
+
+/**
+ * @deprecated Use refreshDashboardMvsTask instead
+ */
+export const refreshDailyMetricsJob = refreshDashboardMvsTask;
+
+/**
+ * @deprecated Use refreshDashboardMvsTask instead
+ */
+export const refreshCurrentStateJob = refreshDashboardMvsTask;
+
+/**
+ * @deprecated Use refreshDashboardMvsTask instead
+ */
+export const refreshWarrantyMetricsJob = refreshDashboardMvsTask;

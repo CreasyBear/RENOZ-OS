@@ -14,6 +14,7 @@ import { eq, and, gte, lte, sql, desc, asc, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { jobAssignments, jobPhotos, users, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
+import { NotFoundError, AuthError } from '@/lib/server/errors';
 import {
   createJobAssignmentSchema,
   listJobAssignmentsSchema,
@@ -219,7 +220,7 @@ export const getJobAssignment = createServerFn({ method: 'GET' })
         .limit(1);
 
       if (!jobWithRelations) {
-        throw new Error('Job assignment not found');
+        throw new NotFoundError('Job assignment not found', 'jobAssignment');
       }
 
       return toJobAssignmentResponse(
@@ -244,7 +245,7 @@ export const listJobAssignments = createServerFn({ method: 'GET' })
 
     try {
       if (data.organizationId !== ctx.organizationId) {
-        throw new Error('Access denied to job assignments');
+        throw new AuthError('Access denied to job assignments');
       }
 
       const filters: JobAssignmentFilters = jobAssignmentFiltersSchema.parse(data.filters ?? {});
@@ -389,7 +390,7 @@ export const updateJobAssignment = createServerFn({ method: 'POST' })
           .returning();
 
         if (!updatedJob) {
-          throw new Error('Job assignment not found');
+          throw new NotFoundError('Job assignment not found', 'jobAssignment');
         }
 
         // Fetch with related data for response
@@ -459,7 +460,7 @@ export const deleteJobAssignment = createServerFn({ method: 'POST' })
         .returning();
 
       if (!deletedJob) {
-        throw new Error('Job assignment not found');
+        throw new NotFoundError('Job assignment not found', 'jobAssignment');
       }
 
       const response: DeleteJobAssignmentResponse = {
@@ -506,7 +507,7 @@ export const startJobAssignment = createServerFn({ method: 'POST' })
         .returning();
 
       if (!startedJob) {
-        throw new Error('Job assignment not found');
+        throw new NotFoundError('Job assignment not found', 'jobAssignment');
       }
 
       return { success: true };
@@ -549,7 +550,7 @@ export const completeJobAssignment = createServerFn({ method: 'POST' })
         .returning();
 
       if (!completedJob) {
-        throw new Error('Job assignment not found');
+        throw new NotFoundError('Job assignment not found', 'jobAssignment');
       }
 
       return { success: true };
@@ -608,7 +609,7 @@ export const getJobPhotos = createServerFn({ method: 'GET' })
 
     try {
       if (data.organizationId !== ctx.organizationId) {
-        throw new Error('Access denied to job photos');
+        throw new AuthError('Access denied to job photos');
       }
 
       const photos = await db

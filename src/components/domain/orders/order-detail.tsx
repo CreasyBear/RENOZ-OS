@@ -70,7 +70,7 @@ import {
   updateOrderStatus,
   duplicateOrder,
   deleteOrder,
-} from "@/lib/server/functions/orders";
+} from "@/server/functions/orders/orders";
 import type { OrderStatus } from "@/lib/schemas/orders";
 
 // ============================================================================

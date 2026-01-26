@@ -6,16 +6,18 @@
  *
  * Security considerations:
  * - Plaintext token is returned ONLY on creation (never stored)
- * - Tokens are hashed using bcrypt before storage
- * - Validation uses constant-time comparison
+ * - Tokens are hashed using bcrypt (cost factor 12) for secure storage
+ * - Token prefix enables fast lookup before bcrypt verification
+ * - Validation uses constant-time bcrypt.compare
  * - Last used timestamp tracked for auditing
  *
  * @see drizzle/schema/api-tokens.ts for database schema
- * @see src/lib/schemas/api-tokens.ts for Zod schemas
+ * @see src/lib/schemas/auth.ts for Zod schemas
  */
 
+import bcrypt from "bcrypt";
 import { createServerFn } from "@tanstack/react-start";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { apiTokens } from "../../../drizzle/schema";
 import { withAuth } from "./protected";
@@ -27,6 +29,9 @@ import {
   type ApiTokenListItem,
   type ApiTokenScope,
 } from "@/lib/schemas/auth";
+
+/** bcrypt cost factor - 12 is recommended for 2024+ */
+const BCRYPT_ROUNDS = 12;
 
 // ============================================================================
 // CRYPTO UTILITIES
@@ -51,15 +56,19 @@ function getTokenPrefix(token: string): string {
 }
 
 /**
- * Hash a token using SHA-256 for storage.
- * Note: For production, consider bcrypt for additional security.
+ * Hash a token using bcrypt for secure storage.
+ * bcrypt includes salt automatically and is designed for password/secret storage.
  */
 async function hashToken(token: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(token);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  return bcrypt.hash(token, BCRYPT_ROUNDS);
+}
+
+/**
+ * Verify a token against a bcrypt hash.
+ * Uses constant-time comparison internally.
+ */
+async function verifyToken(token: string, hash: string): Promise<boolean> {
+  return bcrypt.compare(token, hash);
 }
 
 
@@ -228,6 +237,10 @@ export const revokeApiToken = createServerFn({ method: "POST" })
  * Validate an API token and return its context.
  * Used internally by API middleware - not exposed as a public server function.
  *
+ * Token validation uses a two-step process:
+ * 1. Look up candidates by token prefix (fast database lookup)
+ * 2. Verify the full token using bcrypt.compare (constant-time)
+ *
  * @param token - The plaintext token to validate
  * @returns Token context with userId, organizationId, and scopes
  * @throws AuthError if token is invalid, expired, or revoked
@@ -244,11 +257,11 @@ export async function validateApiToken(token: string): Promise<{
     throw new AuthError("Invalid API token format");
   }
 
-  // Hash the provided token
-  const hashedToken = await hashToken(token);
+  // Extract prefix for fast lookup
+  const prefix = getTokenPrefix(token);
 
-  // Find token by hash
-  const [foundToken] = await db
+  // Find candidate tokens by prefix (usually 1 match, rarely more)
+  const candidates = await db
     .select({
       id: apiTokens.id,
       hashedToken: apiTokens.hashedToken,
@@ -259,19 +272,28 @@ export async function validateApiToken(token: string): Promise<{
       revokedAt: apiTokens.revokedAt,
     })
     .from(apiTokens)
-    .where(eq(apiTokens.hashedToken, hashedToken))
-    .limit(1);
+    .where(
+      and(
+        eq(apiTokens.tokenPrefix, prefix),
+        isNull(apiTokens.revokedAt) // Only check non-revoked tokens
+      )
+    );
+
+  // Verify against candidates using bcrypt (constant-time)
+  let foundToken: (typeof candidates)[number] | null = null;
+  for (const candidate of candidates) {
+    const isValid = await verifyToken(token, candidate.hashedToken);
+    if (isValid) {
+      foundToken = candidate;
+      break;
+    }
+  }
 
   if (!foundToken) {
     throw new AuthError("Invalid API token");
   }
 
-  // Check if revoked
-  if (foundToken.revokedAt) {
-    throw new AuthError("API token has been revoked");
-  }
-
-  // Check if expired
+  // Check if expired (revoked already filtered in query)
   if (foundToken.expiresAt && foundToken.expiresAt < new Date()) {
     throw new AuthError("API token has expired");
   }

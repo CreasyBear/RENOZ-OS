@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
-import { getPriceHistory } from "@/lib/server/functions/product-pricing";
+import { getPriceHistory } from "@/server/functions/products/product-pricing";
 
 interface PriceHistoryEntry {
   id: string;

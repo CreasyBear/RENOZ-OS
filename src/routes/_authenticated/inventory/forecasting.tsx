@@ -9,7 +9,8 @@
  * - Forecast accuracy metrics
  */
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { TrendingUp, Package, RefreshCw, AlertTriangle } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { InventoryTabsSkeleton } from "@/components/skeletons/inventory";
@@ -28,10 +29,11 @@ import {
   type ForecastAccuracy,
 } from "@/components/domain/inventory";
 import {
-  getReorderRecommendations,
-  getProductForecast,
-  getForecastAccuracy,
-} from "@/server/functions/forecasting";
+  useReorderRecommendations,
+  useProductForecast,
+  useForecastAccuracy,
+} from "@/hooks/inventory";
+import { queryKeys } from "@/lib/query-keys";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -57,103 +59,60 @@ export const Route = createFileRoute("/_authenticated/inventory/forecasting" as 
 // ============================================================================
 
 function ForecastingPage() {
-  const [activeTab, setActiveTab] = useState<"recommendations" | "forecasts">(
-    "recommendations"
-  );
-
-  // Data state
-  const [recommendations, setRecommendations] = useState<ReorderRecommendation[]>([]);
+  const queryClient = useQueryClient();
+  const [activeTab, setActiveTab] = useState<"recommendations" | "forecasts">("recommendations");
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
-  const [forecastData, setForecastData] = useState<ForecastDataPoint[]>([]);
-  const [forecastAccuracy, setForecastAccuracy] = useState<ForecastAccuracy | null>(null);
   const [forecastPeriod, setForecastPeriod] = useState<ForecastPeriod>("weekly");
 
-  // Loading states
-  const [isLoadingRecs, setIsLoadingRecs] = useState(true);
-  const [isLoadingForecast, setIsLoadingForecast] = useState(false);
+  // Data hooks
+  const {
+    data: recsData,
+    isLoading: isLoadingRecs,
+  } = useReorderRecommendations({ urgencyFilter: "all", limit: 50 });
 
-  // Summary state
-  const [summary, setSummary] = useState<{
-    criticalCount: number;
-    highCount: number;
-    totalRecommendations: number;
-  } | null>(null);
-
-  // Fetch recommendations
-  const fetchRecommendations = useCallback(async () => {
-    try {
-      setIsLoadingRecs(true);
-      const data = (await getReorderRecommendations({
-        data: { urgencyFilter: "all", limit: 50 },
-      })) as any;
-
-      if (data?.recommendations) {
-        setRecommendations(data.recommendations);
-        setSummary(data.summary);
-      }
-    } catch (error) {
-      console.error("Failed to fetch recommendations:", error);
-      toast.error("Failed to load recommendations");
-    } finally {
-      setIsLoadingRecs(false);
-    }
-  }, []);
-
-  // Fetch forecast for a product
-  const fetchProductForecast = useCallback(
-    async (productId: string) => {
-      try {
-        setIsLoadingForecast(true);
-        const [forecastResult, accuracyResult] = await Promise.all([
-          getProductForecast({
-            data: { productId, period: forecastPeriod, days: 90 },
-          }) as any,
-          getForecastAccuracy({ data: { productId } }) as any,
-        ]);
-
-        if (forecastResult?.forecasts) {
-          setForecastData(
-            forecastResult.forecasts.map((f: any) => ({
-              date: f.forecastDate,
-              period: f.forecastPeriod,
-              forecastQuantity: f.demandQuantity,
-              actualQuantity: f.actualQuantity,
-              confidence: f.confidence,
-            }))
-          );
-        }
-
-        if (accuracyResult) {
-          setForecastAccuracy({
-            mape: accuracyResult.mape ?? 0,
-            bias: accuracyResult.bias ?? 0,
-            accuracy: 100 - (accuracyResult.mape ?? 0),
-            trend: accuracyResult.trend ?? "stable",
-          });
-        }
-      } catch (error) {
-        console.error("Failed to fetch forecast:", error);
-        toast.error("Failed to load forecast data");
-      } finally {
-        setIsLoadingForecast(false);
-      }
-    },
-    [forecastPeriod]
+  const {
+    data: productForecastData,
+    isLoading: isLoadingForecast,
+  } = useProductForecast(
+    selectedProductId ?? "",
+    { period: forecastPeriod, days: 90 },
+    !!selectedProductId
   );
 
-  // Initial fetch
-  useEffect(() => {
-    fetchRecommendations();
-  }, []);
+  const { data: accuracyData } = useForecastAccuracy(
+    { productId: selectedProductId ?? undefined },
+    !!selectedProductId
+  );
 
-  // Fetch forecast when product selected
-  useEffect(() => {
-    if (selectedProductId) {
-      fetchProductForecast(selectedProductId);
-    }
-  }, [selectedProductId, fetchProductForecast]);
+  // Transform data for components
+  const recommendations: ReorderRecommendation[] = recsData?.recommendations ?? [];
+  const summary = recsData?.summary ?? { criticalCount: 0, highCount: 0, totalRecommendations: 0 };
 
-  // Handle reorder
+  const forecastData: ForecastDataPoint[] = (productForecastData?.forecasts ?? []).map((f: any) => ({
+    date: f.forecastDate,
+    period: f.forecastPeriod,
+    forecastQuantity: Number(f.demandQuantity),
+    actualQuantity: f.actualQuantity,
+    confidence: f.confidenceLevel ? Number(f.confidenceLevel) : undefined,
+  }));
+
+  const forecastAccuracy: ForecastAccuracy | null = accuracyData?.summary
+    ? {
+        mape: accuracyData.summary.averageAccuracy ? 100 - accuracyData.summary.averageAccuracy : 0,
+        bias: 0,
+        accuracy: accuracyData.summary.averageAccuracy ?? 0,
+        trend: "stable" as const,
+      }
+    : null;
+
+  // Get selected product name
+  const selectedProduct = recommendations.find((r) => r.productId === selectedProductId);
+
+  // Handlers
+  const handleRefresh = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.reorderRecommendations({}) });
+  }, [queryClient]);
+
   const handleReorder = useCallback((_productId: string, quantity: number) => {
     toast.info("Create Order", {
       description: `Order ${quantity} units of product - Purchase order creation coming soon`,
@@ -166,18 +125,13 @@ function ForecastingPage() {
     });
   }, []);
 
-  // Get selected product name
-  const selectedProduct = recommendations.find(
-    (r) => r.productId === selectedProductId
-  );
-
   return (
     <PageLayout variant="full-width">
       <PageLayout.Header
         title="Demand Forecasting"
         description="Forecast demand and manage reorder recommendations"
         actions={
-          <Button variant="outline" onClick={fetchRecommendations}>
+          <Button variant="outline" onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
             Refresh
           </Button>
@@ -196,7 +150,7 @@ function ForecastingPage() {
                 </span>
               </div>
               <div className="text-2xl font-bold mt-2 text-red-600 tabular-nums">
-                {summary?.criticalCount ?? 0}
+                {summary.criticalCount}
               </div>
               <p className="text-xs text-muted-foreground">
                 Products at or below safety stock
@@ -213,7 +167,7 @@ function ForecastingPage() {
                 </span>
               </div>
               <div className="text-2xl font-bold mt-2 text-orange-600 tabular-nums">
-                {summary?.highCount ?? 0}
+                {summary.highCount}
               </div>
               <p className="text-xs text-muted-foreground">
                 Below reorder point
@@ -230,7 +184,7 @@ function ForecastingPage() {
                 </span>
               </div>
               <div className="text-2xl font-bold mt-2 tabular-nums">
-                {summary?.totalRecommendations ?? 0}
+                {summary.totalRecommendations}
               </div>
               <p className="text-xs text-muted-foreground">
                 Products need attention

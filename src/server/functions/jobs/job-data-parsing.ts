@@ -10,6 +10,7 @@ import { db } from '@/lib/db';
 import { jobAssignments } from 'drizzle/schema';
 import { eq, and } from 'drizzle-orm';
 import { withAuth } from '@/lib/server/protected';
+import { ValidationError } from '@/lib/server/errors';
 import { z } from 'zod';
 import {
   parseJobDate,
@@ -513,7 +514,7 @@ export const importParsedJobData = createServerFn({ method: 'POST' })
         const installerId = jobData.installerId as string | undefined;
 
         if (!customerId || !installerId) {
-          throw new Error('Missing required fields: customerId and installerId must be provided in job data');
+          throw new ValidationError('Missing required fields: customerId and installerId must be provided in job data');
         }
 
         const newJob = await db

@@ -9,7 +9,7 @@ import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { JobAssignmentSkeleton } from '@/components/skeletons/jobs';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useUnifiedJob } from '@/hooks/jobs';
+import { useJob } from '@/hooks/jobs';
 import { JobDocumentsTabContainer } from '../_components/job-documents-tab-container';
 import { JobTasksTabContainer } from '../_components/job-tasks-tab-container';
 import { JobMaterialsTabContainer } from '../_components/job-materials-tab-container';
@@ -35,7 +35,7 @@ function JobAssignmentDocumentsPage() {
   const navigate = useNavigate();
   const { assignmentId } = Route.useParams();
 
-  const { data: assignment } = useUnifiedJob(assignmentId);
+  const { data: assignment } = useJob(assignmentId);
 
   return (
     <PageLayout>

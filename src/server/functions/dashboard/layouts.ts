@@ -29,6 +29,7 @@ import {
   cloneDashboardLayoutSchema,
   type WidgetDefinition,
 } from '@/lib/schemas/dashboard/layouts';
+import { NotFoundError } from '@/lib/server/errors';
 
 // ============================================================================
 // DEFAULT WIDGET DEFINITIONS
@@ -216,7 +217,7 @@ export const getDashboardLayout = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!layout) {
-      throw new Error('Layout not found');
+      throw new NotFoundError('Layout not found', 'DashboardLayout');
     }
 
     return layout;
@@ -355,7 +356,7 @@ export const updateDashboardLayout = createServerFn({ method: 'POST' })
       .returning();
 
     if (!layout) {
-      throw new Error('Layout not found');
+      throw new NotFoundError('Layout not found', 'DashboardLayout');
     }
 
     return layout;
@@ -437,7 +438,7 @@ export const deleteDashboardLayout = createServerFn({ method: 'POST' })
       .returning();
 
     if (!layout) {
-      throw new Error('Layout not found');
+      throw new NotFoundError('Layout not found', 'DashboardLayout');
     }
 
     return { success: true };
@@ -477,7 +478,7 @@ export const setDefaultDashboardLayout = createServerFn({ method: 'POST' })
       .returning();
 
     if (!layout) {
-      throw new Error('Layout not found');
+      throw new NotFoundError('Layout not found', 'DashboardLayout');
     }
 
     return layout;
@@ -505,7 +506,7 @@ export const cloneDashboardLayout = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!source) {
-      throw new Error('Source layout not found');
+      throw new NotFoundError('Source layout not found', 'DashboardLayout');
     }
 
     // Create the clone

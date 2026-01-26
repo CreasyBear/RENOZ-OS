@@ -32,6 +32,7 @@ import {
   type MaterialCost,
   type LaborCost,
 } from '@/lib/schemas';
+import { NotFoundError } from '@/lib/server/errors';
 
 // ============================================================================
 // CONSTANTS
@@ -90,7 +91,7 @@ export const calculateJobCost = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!job.length) {
-      throw new Error('Job not found');
+      throw new NotFoundError('Job not found', 'jobAssignment');
     }
 
     // Get material costs
@@ -215,7 +216,7 @@ export const getJobProfitability = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!jobData.length) {
-      throw new Error('Job not found');
+      throw new NotFoundError('Job not found', 'jobAssignment');
     }
 
     const job = jobData[0];

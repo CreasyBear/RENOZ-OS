@@ -24,6 +24,8 @@ export interface RenderEmailResult {
 export interface BaseEmailProps {
   /** Support email for the footer */
   supportEmail?: string;
+  /** URL for unsubscribing from emails */
+  unsubscribeUrl?: string;
 }
 
 // ============================================================================

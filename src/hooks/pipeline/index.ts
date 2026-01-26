@@ -27,13 +27,16 @@
 export {
   useOpportunities,
   useOpportunitiesInfinite,
+  useOpportunitiesKanban,
   useOpportunity,
   useOpportunitySearch,
   type UseOpportunitiesOptions,
+  type UseOpportunitiesKanbanOptions,
   type UseOpportunityOptions,
   type UseOpportunitySearchOptions,
   type OpportunityListResult,
   type OpportunityDetailResult,
+  type OpportunityKanbanFilters,
 } from './use-opportunities';
 
 export {

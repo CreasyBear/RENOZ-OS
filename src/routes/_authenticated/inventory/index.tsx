@@ -25,7 +25,7 @@ import {
   defaultInventoryFilters,
 } from "@/components/domain/inventory";
 import { listInventory } from "@/server/functions/inventory";
-import { listLocations } from "@/server/functions/locations";
+import { listLocations } from "@/server/functions/inventory/locations";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -161,8 +161,7 @@ function InventoryPage() {
     (item: InventoryItem) => {
       // Navigate to item detail page
       navigate({
-        // @ts-expect-error - TanStack Router route typing
-        to: "/_authenticated/inventory/$itemId",
+        to: "/inventory/$itemId" as const,
         params: { itemId: item.id },
       });
     },

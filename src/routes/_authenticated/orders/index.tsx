@@ -19,7 +19,7 @@ import {
   type OrderFiltersState,
 } from "@/components/domain/orders";
 import { useDeleteOrder } from "@/hooks/orders";
-import { duplicateOrder } from "@/lib/server/functions/orders";
+import { duplicateOrder } from "@/server/functions/orders/orders";
 import { queryKeys } from "@/lib/query-keys";
 
 // ============================================================================

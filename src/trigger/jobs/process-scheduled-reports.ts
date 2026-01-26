@@ -1,30 +1,29 @@
 /**
- * Process Scheduled Reports Job
+ * Process Scheduled Reports Tasks (Trigger.dev v3)
  *
- * Background jobs for scheduled report processing:
- * 1. processScheduledReportsJob: Cron job that checks for due reports every 15 minutes
- * 2. generateReportJob: Event-triggered job that generates a single report
+ * Background tasks for scheduled report processing:
+ * 1. processScheduledReportsTask: Scheduled task that checks for due reports every 15 minutes
+ * 2. generateReportTask: Event-triggered task that generates a single report
  *
  * @see DASH-REPORTS-BACKGROUND
- * @see https://trigger.dev/docs/documentation/guides/scheduled-tasks
+ * @see https://trigger.dev/docs/v3/tasks
  */
-import { cronTrigger, eventTrigger } from '@trigger.dev/sdk';
-import { eq, and, lte, sql } from 'drizzle-orm';
-import { client } from '../client';
-import { db } from '@/lib/db';
-import { scheduledReports } from 'drizzle/schema/dashboard';
-import { orders } from 'drizzle/schema/orders/orders';
-import { customers } from 'drizzle/schema/customers/customers';
-import { opportunities } from 'drizzle/schema/pipeline';
+import { task, schedules, logger } from "@trigger.dev/sdk/v3";
+import { eq, and, lte, sql } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { scheduledReports } from "drizzle/schema/dashboard";
+import { orders } from "drizzle/schema/orders/orders";
+import { customers } from "drizzle/schema/customers/customers";
+import { opportunities } from "drizzle/schema/pipeline";
 
 // ============================================================================
 // EVENT NAMES
 // ============================================================================
 
 export const reportEvents = {
-  generate: 'report.generate',
-  generated: 'report.generated',
-  failed: 'report.failed',
+  generate: "report.generate",
+  generated: "report.generated",
+  failed: "report.failed",
 } as const;
 
 // ============================================================================
@@ -49,6 +48,24 @@ export interface ReportFailedPayload {
   reportId: string;
   organizationId: string;
   error: string;
+}
+
+// ============================================================================
+// RESULT TYPES
+// ============================================================================
+
+export interface ProcessScheduledReportsResult {
+  processed: number;
+  sent: number;
+  failed: number;
+}
+
+export interface GenerateReportResult {
+  success: boolean;
+  reportId: string;
+  filename: string;
+  format: string;
+  generatedAt: string;
 }
 
 // ============================================================================
@@ -81,7 +98,7 @@ async function calculateMetrics(
   for (const metricId of metricIds) {
     try {
       switch (metricId) {
-        case 'revenue': {
+        case "revenue": {
           const [result] = await db
             .select({
               total: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
@@ -100,7 +117,7 @@ async function calculateMetrics(
           break;
         }
 
-        case 'orders_count': {
+        case "orders_count": {
           const [result] = await db
             .select({
               count: sql<number>`COUNT(*)`,
@@ -118,7 +135,7 @@ async function calculateMetrics(
           break;
         }
 
-        case 'customer_count': {
+        case "customer_count": {
           const [result] = await db
             .select({
               count: sql<number>`COUNT(*)`,
@@ -136,7 +153,7 @@ async function calculateMetrics(
           break;
         }
 
-        case 'pipeline_value': {
+        case "pipeline_value": {
           const [result] = await db
             .select({
               total: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
@@ -153,7 +170,7 @@ async function calculateMetrics(
           break;
         }
 
-        case 'average_order_value': {
+        case "average_order_value": {
           const [result] = await db
             .select({
               avg: sql<number>`COALESCE(AVG(${orders.total}), 0)`,
@@ -172,9 +189,9 @@ async function calculateMetrics(
         }
 
         // Placeholder for metrics that require additional schema
-        case 'quote_win_rate':
-        case 'kwh_deployed':
-        case 'active_installations':
+        case "quote_win_rate":
+        case "kwh_deployed":
+        case "active_installations":
           results[metricId] = 0;
           break;
       }
@@ -192,15 +209,15 @@ async function calculateMetrics(
  */
 function formatMetricValue(metricId: string, value: number): string {
   switch (metricId) {
-    case 'revenue':
-    case 'pipeline_value':
-    case 'average_order_value':
-      return new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: 'AUD',
+    case "revenue":
+    case "pipeline_value":
+    case "average_order_value":
+      return new Intl.NumberFormat("en-AU", {
+        style: "currency",
+        currency: "AUD",
         maximumFractionDigits: 0,
       }).format(value);
-    case 'quote_win_rate':
+    case "quote_win_rate":
       return `${value.toFixed(1)}%`;
     default:
       return value.toLocaleString();
@@ -212,14 +229,14 @@ function formatMetricValue(metricId: string, value: number): string {
  */
 function getMetricLabel(metricId: string): string {
   const labels: Record<string, string> = {
-    revenue: 'Revenue',
-    orders_count: 'Orders',
-    customer_count: 'New Customers',
-    pipeline_value: 'Pipeline Value',
-    average_order_value: 'Average Order Value',
-    quote_win_rate: 'Quote Win Rate',
-    kwh_deployed: 'kWh Deployed',
-    active_installations: 'Active Installations',
+    revenue: "Revenue",
+    orders_count: "Orders",
+    customer_count: "New Customers",
+    pipeline_value: "Pipeline Value",
+    average_order_value: "Average Order Value",
+    quote_win_rate: "Quote Win Rate",
+    kwh_deployed: "kWh Deployed",
+    active_installations: "Active Installations",
   };
   return labels[metricId] ?? metricId;
 }
@@ -252,7 +269,7 @@ function generateHtmlReport(
         </tr>
       `;
     })
-    .join('');
+    .join("");
 
   return `
     <!DOCTYPE html>
@@ -274,8 +291,8 @@ function generateHtmlReport(
       <div class="container">
         <h1>${reportName}</h1>
         <p class="subtitle">
-          Report Period: ${dateFrom.toLocaleDateString('en-AU')} - ${dateTo.toLocaleDateString('en-AU')}<br>
-          Generated: ${new Date().toLocaleString('en-AU')}
+          Report Period: ${dateFrom.toLocaleDateString("en-AU")} - ${dateTo.toLocaleDateString("en-AU")}<br>
+          Generated: ${new Date().toLocaleString("en-AU")}
         </p>
 
         <table>
@@ -306,13 +323,13 @@ function generateCsvReport(
   metrics: Partial<MetricValues>,
   metricIds: string[]
 ): string {
-  const header = 'Metric,Value\n';
+  const header = "Metric,Value\n";
   const rows = metricIds
     .map((id) => {
       const value = metrics[id] ?? 0;
       return `"${getMetricLabel(id)}",${value}`;
     })
-    .join('\n');
+    .join("\n");
   return header + rows;
 }
 
@@ -328,19 +345,19 @@ function calculateReportDateRange(frequency: string): { from: Date; to: Date } {
   from.setHours(0, 0, 0, 0);
 
   switch (frequency) {
-    case 'daily':
+    case "daily":
       from.setDate(from.getDate() - 1);
       break;
-    case 'weekly':
+    case "weekly":
       from.setDate(from.getDate() - 7);
       break;
-    case 'biweekly':
+    case "biweekly":
       from.setDate(from.getDate() - 14);
       break;
-    case 'monthly':
+    case "monthly":
       from.setMonth(from.getMonth() - 1);
       break;
-    case 'quarterly':
+    case "quarterly":
       from.setMonth(from.getMonth() - 3);
       break;
     default:
@@ -357,24 +374,24 @@ function calculateNextRun(frequency: string): Date {
   const now = new Date();
 
   switch (frequency) {
-    case 'daily':
+    case "daily":
       now.setDate(now.getDate() + 1);
       now.setHours(8, 0, 0, 0);
       break;
-    case 'weekly':
+    case "weekly":
       now.setDate(now.getDate() + 7);
       now.setHours(8, 0, 0, 0);
       break;
-    case 'biweekly':
+    case "biweekly":
       now.setDate(now.getDate() + 14);
       now.setHours(8, 0, 0, 0);
       break;
-    case 'monthly':
+    case "monthly":
       now.setMonth(now.getMonth() + 1);
       now.setDate(1);
       now.setHours(8, 0, 0, 0);
       break;
-    case 'quarterly':
+    case "quarterly":
       now.setMonth(now.getMonth() + 3);
       now.setDate(1);
       now.setHours(8, 0, 0, 0);
@@ -388,11 +405,11 @@ function calculateNextRun(frequency: string): Date {
 }
 
 // ============================================================================
-// CRON JOB - Process Due Reports
+// TASK: Process Due Reports
 // ============================================================================
 
 /**
- * Process Scheduled Reports Job
+ * Process Scheduled Reports Task
  *
  * Runs every 15 minutes to check for reports that are due.
  * For each due report:
@@ -402,15 +419,11 @@ function calculateNextRun(frequency: string): Date {
  * 4. Send to recipients via email
  * 5. Update report record
  */
-export const processScheduledReportsJob = client.defineJob({
-  id: 'process-scheduled-reports',
-  name: 'Process Scheduled Reports',
-  version: '1.0.0',
-  trigger: cronTrigger({
-    cron: '*/15 * * * *', // Every 15 minutes
-  }),
-  run: async (_payload, io) => {
-    await io.logger.info('Checking for scheduled reports to process');
+export const processScheduledReportsTask = schedules.task({
+  id: "process-scheduled-reports",
+  cron: "*/15 * * * *",
+  run: async (): Promise<ProcessScheduledReportsResult> => {
+    logger.info("Checking for scheduled reports to process");
 
     // Get reports that are due (nextRunAt <= now and isActive)
     const now = new Date();
@@ -425,7 +438,7 @@ export const processScheduledReportsJob = client.defineJob({
       )
       .limit(10); // Process up to 10 reports per run
 
-    await io.logger.info(`Found ${dueReports.length} scheduled reports to process`);
+    logger.info(`Found ${dueReports.length} scheduled reports to process`);
 
     if (dueReports.length === 0) {
       return { processed: 0, sent: 0, failed: 0 };
@@ -435,108 +448,100 @@ export const processScheduledReportsJob = client.defineJob({
     let failed = 0;
 
     for (const report of dueReports) {
-      const taskId = `generate-report-${report.id}`;
-
       try {
-        await io.runTask(taskId, async () => {
-          await io.logger.info(`Processing scheduled report: ${report.name}`, {
-            reportId: report.id,
-            frequency: report.frequency,
-            format: report.format,
-          });
-
-          // Calculate date range based on frequency
-          const { from: dateFrom, to: dateTo } = calculateReportDateRange(report.frequency);
-
-          // Get metrics to include
-          const metricIds = report.metrics?.metrics ?? [];
-          if (metricIds.length === 0) {
-            throw new Error('No metrics configured for report');
-          }
-
-          // Calculate metrics
-          const metrics = await calculateMetrics(
-            report.organizationId,
-            dateFrom,
-            dateTo,
-            metricIds
-          );
-
-          await io.logger.info('Calculated metrics', {
-            metricCount: Object.keys(metrics).length,
-          });
-
-          // Generate report content based on format
-          let content: string;
-          let filename: string;
-
-          switch (report.format) {
-            case 'csv':
-              content = generateCsvReport(metrics, metricIds);
-              filename = `${report.name.replace(/\s+/g, '-')}-${dateTo.toISOString().split('T')[0]}.csv`;
-              break;
-            case 'html':
-            case 'pdf': // PDF generation would use HTML as base
-            default:
-              content = generateHtmlReport(
-                report.name,
-                dateFrom,
-                dateTo,
-                metrics,
-                metricIds,
-                {
-                  includeCharts: report.metrics?.includeCharts ?? true,
-                  includeTrends: report.metrics?.includeTrends ?? true,
-                }
-              );
-              filename = `${report.name.replace(/\s+/g, '-')}-${dateTo.toISOString().split('T')[0]}.html`;
-              break;
-          }
-
-          // TODO: Upload to Supabase Storage
-          // const { data: uploadData, error: uploadError } = await supabase.storage
-          //   .from('reports')
-          //   .upload(`${report.organizationId}/${filename}`, content, { contentType })
-
-          // TODO: Send email to recipients
-          // For each email in report.recipients.emails, send the report
-
-          const recipientCount = report.recipients?.emails?.length ?? 0;
-
-          await io.logger.info('Report generated successfully', {
-            reportId: report.id,
-            format: report.format,
-            filename,
-            contentLength: content.length,
-            recipientCount,
-          });
-
-          // Update report record
-          const nextRunAt = calculateNextRun(report.frequency);
-          await db
-            .update(scheduledReports)
-            .set({
-              lastRunAt: new Date(),
-              lastSuccessAt: new Date(),
-              nextRunAt,
-              lastError: null,
-              consecutiveFailures: '0',
-              updatedAt: new Date(),
-            })
-            .where(eq(scheduledReports.id, report.id));
-
-          return {
-            success: true,
-            reportId: report.id,
-            filename,
-            recipientCount,
-          };
+        logger.info(`Processing scheduled report: ${report.name}`, {
+          reportId: report.id,
+          frequency: report.frequency,
+          format: report.format,
         });
+
+        // Calculate date range based on frequency
+        const { from: dateFrom, to: dateTo } = calculateReportDateRange(
+          report.frequency
+        );
+
+        // Get metrics to include
+        const metricIds = report.metrics?.metrics ?? [];
+        if (metricIds.length === 0) {
+          throw new Error("No metrics configured for report");
+        }
+
+        // Calculate metrics
+        const metrics = await calculateMetrics(
+          report.organizationId,
+          dateFrom,
+          dateTo,
+          metricIds
+        );
+
+        logger.info("Calculated metrics", {
+          metricCount: Object.keys(metrics).length,
+        });
+
+        // Generate report content based on format
+        let content: string;
+        let filename: string;
+
+        switch (report.format) {
+          case "csv":
+            content = generateCsvReport(metrics, metricIds);
+            filename = `${report.name.replace(/\s+/g, "-")}-${dateTo.toISOString().split("T")[0]}.csv`;
+            break;
+          case "html":
+          case "pdf": // PDF generation would use HTML as base
+          default:
+            content = generateHtmlReport(
+              report.name,
+              dateFrom,
+              dateTo,
+              metrics,
+              metricIds,
+              {
+                includeCharts: report.metrics?.includeCharts ?? true,
+                includeTrends: report.metrics?.includeTrends ?? true,
+              }
+            );
+            filename = `${report.name.replace(/\s+/g, "-")}-${dateTo.toISOString().split("T")[0]}.html`;
+            break;
+        }
+
+        // TODO: Upload to Supabase Storage
+        // const { data: uploadData, error: uploadError } = await supabase.storage
+        //   .from('reports')
+        //   .upload(`${report.organizationId}/${filename}`, content, { contentType })
+
+        // TODO: Send email to recipients
+        // For each email in report.recipients.emails, send the report
+
+        const recipientCount = report.recipients?.emails?.length ?? 0;
+
+        logger.info("Report generated successfully", {
+          reportId: report.id,
+          format: report.format,
+          filename,
+          contentLength: content.length,
+          recipientCount,
+        });
+
+        // Update report record
+        const nextRunAt = calculateNextRun(report.frequency);
+        await db
+          .update(scheduledReports)
+          .set({
+            lastRunAt: new Date(),
+            lastSuccessAt: new Date(),
+            nextRunAt,
+            lastError: null,
+            consecutiveFailures: "0",
+            updatedAt: new Date(),
+          })
+          .where(eq(scheduledReports.id, report.id));
 
         sent++;
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        await io.logger.error(`Failed to process report ${report.id}`, {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        logger.error(`Failed to process report ${report.id}`, {
           error: errorMessage,
         });
 
@@ -565,27 +570,26 @@ export const processScheduledReportsJob = client.defineJob({
   },
 });
 
+
 // ============================================================================
-// EVENT JOB - Generate Single Report (On-Demand)
+// TASK: Generate Single Report (On-Demand)
 // ============================================================================
 
 /**
- * Generate Report Job
+ * Generate Report Task
  *
  * Triggered when a user clicks "Run Now" on a scheduled report.
  * Generates the report immediately regardless of schedule.
  */
-export const generateReportJob = client.defineJob({
-  id: 'generate-report',
-  name: 'Generate Report',
-  version: '1.0.0',
-  trigger: eventTrigger({
-    name: reportEvents.generate,
-  }),
-  run: async (payload: GenerateReportPayload, io) => {
+export const generateReportTask = task({
+  id: "generate-report",
+  retry: {
+    maxAttempts: 3,
+  },
+  run: async (payload: GenerateReportPayload): Promise<GenerateReportResult> => {
     const { reportId, organizationId, isManualTrigger } = payload;
 
-    await io.logger.info('Starting on-demand report generation', {
+    logger.info("Starting on-demand report generation", {
       reportId,
       organizationId,
       isManualTrigger,
@@ -608,26 +612,33 @@ export const generateReportJob = client.defineJob({
     }
 
     // Calculate date range based on frequency
-    const { from: dateFrom, to: dateTo } = calculateReportDateRange(report.frequency);
+    const { from: dateFrom, to: dateTo } = calculateReportDateRange(
+      report.frequency
+    );
 
     // Get metrics to include
     const metricIds = report.metrics?.metrics ?? [];
     if (metricIds.length === 0) {
-      throw new Error('No metrics configured for report');
+      throw new Error("No metrics configured for report");
     }
 
     // Calculate metrics
-    await io.logger.info('Calculating metrics', { metricIds });
-    const metrics = await calculateMetrics(organizationId, dateFrom, dateTo, metricIds);
+    logger.info("Calculating metrics", { metricIds });
+    const metrics = await calculateMetrics(
+      organizationId,
+      dateFrom,
+      dateTo,
+      metricIds
+    );
 
     // Generate report content
     let content: string;
     let filename: string;
 
     switch (report.format) {
-      case 'csv':
+      case "csv":
         content = generateCsvReport(metrics, metricIds);
-        filename = `${report.name.replace(/\s+/g, '-')}-${dateTo.toISOString().split('T')[0]}.csv`;
+        filename = `${report.name.replace(/\s+/g, "-")}-${dateTo.toISOString().split("T")[0]}.csv`;
         break;
       default:
         content = generateHtmlReport(
@@ -641,7 +652,7 @@ export const generateReportJob = client.defineJob({
             includeTrends: report.metrics?.includeTrends ?? true,
           }
         );
-        filename = `${report.name.replace(/\s+/g, '-')}-${dateTo.toISOString().split('T')[0]}.html`;
+        filename = `${report.name.replace(/\s+/g, "-")}-${dateTo.toISOString().split("T")[0]}.html`;
         break;
     }
 
@@ -658,7 +669,7 @@ export const generateReportJob = client.defineJob({
       })
       .where(eq(scheduledReports.id, reportId));
 
-    await io.logger.info('Report generated successfully', {
+    logger.info("Report generated successfully", {
       reportId,
       filename,
       contentLength: content.length,
@@ -673,3 +684,17 @@ export const generateReportJob = client.defineJob({
     };
   },
 });
+
+// ============================================================================
+// LEGACY EXPORTS - for backward compatibility
+// ============================================================================
+
+/**
+ * @deprecated Use processScheduledReportsTask instead
+ */
+export const processScheduledReportsJob = processScheduledReportsTask;
+
+/**
+ * @deprecated Use generateReportTask instead
+ */
+export const generateReportJob = generateReportTask;

@@ -30,6 +30,7 @@ import {
   type KbArticleResponse,
   type ListArticlesResponse,
 } from '@/lib/schemas/support/knowledge-base';
+import { NotFoundError } from '@/lib/server/errors';
 
 // ============================================================================
 // HELPERS
@@ -172,7 +173,7 @@ export const getCategory = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!category) {
-      throw new Error('Category not found');
+      throw new NotFoundError('Category not found', 'KbCategory');
     }
 
     return toCategoryResponse(category);
@@ -228,7 +229,7 @@ export const updateCategory = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing) {
-      throw new Error('Category not found');
+      throw new NotFoundError('Category not found', 'KbCategory');
     }
 
     const [updated] = await db
@@ -357,7 +358,7 @@ export const getArticle = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!result) {
-      throw new Error('Article not found');
+      throw new NotFoundError('Article not found', 'KbArticle');
     }
 
     // Increment views if requested
@@ -487,7 +488,7 @@ export const updateArticle = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing) {
-      throw new Error('Article not found');
+      throw new NotFoundError('Article not found', 'KbArticle');
     }
 
     // Handle publishedAt
@@ -583,7 +584,7 @@ export const recordArticleFeedback = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!article) {
-      throw new Error('Article not found');
+      throw new NotFoundError('Article not found', 'KbArticle');
     }
 
     // Update feedback count

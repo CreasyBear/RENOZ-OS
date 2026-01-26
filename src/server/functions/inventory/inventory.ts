@@ -192,7 +192,7 @@ const _listInventory = cache(
 export const listInventory = createServerFn({ method: 'GET' })
   .inputValidator(inventoryListQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
     return _listInventory(data, ctx.organizationId);
   });
 
@@ -270,7 +270,7 @@ const _getInventoryItem = cache(
 export const getInventoryItem = createServerFn({ method: 'GET' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
     return _getInventoryItem(data.id, ctx.organizationId);
   });
 
@@ -846,7 +846,7 @@ export const receiveInventory = createServerFn({ method: 'POST' })
 export const listMovements = createServerFn({ method: 'GET' })
   .inputValidator(movementListQuerySchema)
   .handler(async ({ data }): Promise<ListMovementsResult> => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
     const { page = 1, pageSize = 50, sortBy, sortOrder, ...filters } = data;
     const limit = pageSize;
 
@@ -936,7 +936,7 @@ export const listMovements = createServerFn({ method: 'GET' })
  * Get inventory dashboard metrics.
  */
 export const getInventoryDashboard = createServerFn({ method: 'GET' }).handler(async () => {
-  const ctx = await withAuth();
+  const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
   // Get inventory metrics
   const [metrics] = await db

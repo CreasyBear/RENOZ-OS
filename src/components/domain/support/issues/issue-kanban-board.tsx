@@ -158,7 +158,9 @@ export function IssueKanbanBoard({
     const grouped: Record<IssueStatus, IssueKanbanItem[]> = {
       open: [],
       in_progress: [],
+      pending: [],
       on_hold: [],
+      escalated: [],
       resolved: [],
       closed: [],
     };

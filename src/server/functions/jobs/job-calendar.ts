@@ -27,6 +27,7 @@ import {
   type CalendarKanbanTask,
   type ListCalendarTasksForKanbanResponse,
 } from '@/lib/schemas';
+import { NotFoundError } from '@/lib/server/errors';
 
 // ============================================================================
 // HELPERS
@@ -213,7 +214,7 @@ export const rescheduleJob = createServerFn({ method: 'POST' })
     });
 
     if (!existingJob) {
-      throw new Error('Job not found');
+      throw new NotFoundError('Job not found', 'jobAssignment');
     }
 
     // Update the job with new date/time
@@ -241,7 +242,7 @@ export const rescheduleJob = createServerFn({ method: 'POST' })
     });
 
     if (!installer || !customer) {
-      throw new Error('Installer or customer not found');
+      throw new NotFoundError('Installer or customer not found', 'user');
     }
 
     const event = toCalendarEvent(updatedJob, installer, customer);

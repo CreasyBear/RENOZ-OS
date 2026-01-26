@@ -59,7 +59,7 @@ function EditCustomerPage() {
   const [hasInitialized, setHasInitialized] = useState(false)
 
   // Fetch customer data using centralized hook
-  const { data: customer, isLoading: isLoadingCustomer, error } = useCustomer(customerId)
+  const { data: customer, isLoading: isLoadingCustomer, error } = useCustomer({ id: customerId })
 
   // Fetch available tags using centralized hook
   const { data: tagsData } = useCustomerTags()

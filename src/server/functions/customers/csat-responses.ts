@@ -17,6 +17,7 @@ import { issues } from 'drizzle/schema/support/issues';
 import { users } from 'drizzle/schema/users';
 import { customers } from 'drizzle/schema/customers';
 import { withAuth } from '@/lib/server/protected';
+import { NotFoundError, ConflictError, ValidationError, RateLimitError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { nanoid } from 'nanoid';
 import {
@@ -117,7 +118,7 @@ export const submitInternalFeedback = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!issue) {
-      throw new Error('Issue not found');
+      throw new NotFoundError('Issue not found', 'issue');
     }
 
     // Check if feedback already exists
@@ -128,7 +129,7 @@ export const submitInternalFeedback = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (existing) {
-      throw new Error('Feedback already submitted for this issue');
+      throw new ConflictError('Feedback already submitted for this issue');
     }
 
     // Insert feedback
@@ -454,7 +455,7 @@ export const generateFeedbackToken = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!issue) {
-      throw new Error('Issue not found');
+      throw new NotFoundError('Issue not found', 'issue');
     }
 
     // Generate token
@@ -586,7 +587,7 @@ export const submitPublicFeedback = createServerFn({ method: 'POST' })
 
     // Rate limit by token
     if (!checkRateLimit(data.token)) {
-      throw new Error('Too many requests. Please try again later.');
+      throw new RateLimitError('Too many requests. Please try again later.');
     }
 
     // Find the token
@@ -604,17 +605,17 @@ export const submitPublicFeedback = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing) {
-      throw new Error('Invalid feedback link');
+      throw new NotFoundError('Invalid feedback link', 'feedbackToken');
     }
 
     // Check if already used
     if (existing.tokenUsedAt || existing.rating > 0) {
-      throw new Error('Feedback has already been submitted');
+      throw new ConflictError('Feedback has already been submitted');
     }
 
     // Check if expired
     if (existing.tokenExpiresAt && new Date() > existing.tokenExpiresAt) {
-      throw new Error('This feedback link has expired');
+      throw new ValidationError('This feedback link has expired');
     }
 
     // Try to match email to customer

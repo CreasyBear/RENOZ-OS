@@ -24,7 +24,7 @@ import {
 import { cn } from '@/lib/utils'
 import { getNavRoutes } from '@/lib/routing'
 import { useCurrentUser } from '@/hooks'
-import { hasPermission, type PermissionAction } from '@/lib/auth/permissions'
+import { hasPermission, type PermissionAction, type Role } from '@/lib/auth/permissions'
 
 // ============================================================================
 // TYPES
@@ -137,10 +137,10 @@ export function CommandPalette({ open: controlledOpen, onOpenChange }: CommandPa
     const navRoutes = getNavRoutes()
 
     // Filter routes based on user permissions
-    const filteredRoutes = user
+    const filteredRoutes = user?.role
       ? navRoutes.filter((route) => {
           if (!route.requiredPermission) return true
-          return hasPermission(user.role, route.requiredPermission)
+          return hasPermission(user.role as Role, route.requiredPermission)
         })
       : navRoutes
 
@@ -157,10 +157,10 @@ export function CommandPalette({ open: controlledOpen, onOpenChange }: CommandPa
   // Build action items filtered by permissions
   const actionItems = useMemo((): CommandItem[] => {
     // Filter actions based on user permissions
-    const filteredActions = user
+    const filteredActions = user?.role
       ? QUICK_ACTIONS.filter((action) => {
           if (!action.requiredPermission) return true
-          return hasPermission(user.role, action.requiredPermission)
+          return hasPermission(user.role as Role, action.requiredPermission)
         })
       : QUICK_ACTIONS
 

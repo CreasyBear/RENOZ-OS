@@ -51,7 +51,7 @@ export function useDashboardMetrics(options: UseDashboardMetricsOptions = {}) {
   const { enabled = true, ...filters } = options;
 
   return useQuery({
-    queryKey: queryKeys.dashboard.metrics.summary(filters),
+    queryKey: queryKeys.dashboard.metrics.summary(filters as Record<string, unknown>),
     queryFn: () => getDashboardMetrics({ data: filters }),
     enabled,
     staleTime: 30 * 1000, // 30 seconds - metrics refresh frequently
@@ -69,7 +69,11 @@ export function useMetricsComparison({
   enabled = true,
 }: UseMetricsComparisonOptions) {
   return useQuery({
-    queryKey: queryKeys.dashboard.metrics.comparison({ dateFrom, dateTo, comparisonType }),
+    queryKey: queryKeys.dashboard.metrics.comparison({
+      startDate: dateFrom,
+      endDate: dateTo,
+      comparisonType: comparisonType === 'none' ? 'previous_period' : comparisonType,
+    }),
     queryFn: () =>
       getMetricsComparison({
         data: { dateFrom, dateTo, comparisonType },
@@ -99,12 +103,11 @@ export function useEnhancedComparison({
 }: UseEnhancedComparisonOptions) {
   return useQuery({
     queryKey: queryKeys.dashboard.metrics.enhanced({
-      dateFrom,
-      dateTo,
-      comparisonPeriod,
+      startDate: dateFrom,
+      endDate: dateTo,
+      comparisonType: comparisonPeriod,
       metrics,
-      includeTrend,
-      includeSignificance,
+      includeTrends: includeTrend,
       includeInsights,
     }),
     queryFn: () =>

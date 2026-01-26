@@ -26,6 +26,7 @@ import {
   getExtensionByIdSchema,
 } from '@/lib/schemas/warranty/extensions';
 import { typedGetFn, typedPostFn } from '@/lib/server/typed-server-fn';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
 // TYPES
@@ -101,12 +102,12 @@ export const extendWarranty = typedPostFn(
       .limit(1);
 
     if (!warranty) {
-      throw new Error('Warranty not found');
+      throw new NotFoundError('Warranty not found', 'warranty');
     }
 
     // Validate warranty is in a state that can be extended
     if (warranty.status === 'voided') {
-      throw new Error('Cannot extend a voided warranty');
+      throw new ValidationError('Cannot extend a voided warranty');
     }
 
     // 2. Calculate new expiry date
@@ -197,7 +198,7 @@ export const listWarrantyExtensions = typedGetFn(
       .limit(1);
 
     if (!warranty) {
-      throw new Error('Warranty not found');
+      throw new NotFoundError('Warranty not found', 'warranty');
     }
 
     // Fetch extensions
@@ -443,32 +444,19 @@ async function triggerWarrantyExtendedNotification(params: {
     return;
   }
 
-  // Fetch product details
-  const [product] = await db
-    .select({
-      id: products.id,
-      name: products.name,
-    })
-    .from(products)
-    .where(eq(products.id, params.productId))
-    .limit(1);
+  // Note: Product details are passed via params.productId, no additional fetch needed
 
   // Build event payload
   const payload: WarrantyExtendedPayload = {
     warrantyId: params.warrantyId,
     warrantyNumber: params.warrantyNumber,
-    extensionId: params.extensionId,
     organizationId: params.organizationId,
     customerId: params.customerId,
-    customerEmail: customer.email ?? undefined,
-    customerName: customer.name ?? undefined,
     productId: params.productId,
-    productName: product?.name ?? 'Unknown Product',
-    extensionType: params.extensionType,
-    extensionMonths: params.extensionMonths,
-    previousExpiryDate: params.previousExpiryDate.toISOString(),
+    oldExpiryDate: params.previousExpiryDate.toISOString(),
     newExpiryDate: params.newExpiryDate.toISOString(),
-    price: params.price,
+    extensionMonths: params.extensionMonths,
+    reason: params.extensionType,
   };
 
   // Send event to trigger.dev

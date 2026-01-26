@@ -26,6 +26,7 @@ import {
   approvalStatusEnum,
   approvalRejectionReasonEnum,
 } from '@/lib/schemas/approvals';
+import { NotFoundError, AuthError } from '@/lib/server/errors';
 
 // ============================================================================
 // INPUT SCHEMAS
@@ -214,7 +215,7 @@ export const getApprovalDetails = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!result[0]) {
-      throw new Error('Approval not found');
+      throw new NotFoundError('Approval not found', 'approval');
     }
 
     return result[0];
@@ -341,7 +342,7 @@ export const approvePurchaseOrderAtLevel = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!approval[0]) {
-      throw new Error('Approval not found or already processed');
+      throw new NotFoundError('Approval not found or already processed', 'approval');
     }
 
     // Verify user is the assigned approver or escalation target
@@ -349,7 +350,7 @@ export const approvePurchaseOrderAtLevel = createServerFn({ method: 'POST' })
       approval[0].approverId !== ctx.user.id &&
       approval[0].escalatedTo !== ctx.user.id
     ) {
-      throw new Error('You are not authorized to approve this request');
+      throw new AuthError('You are not authorized to approve this request');
     }
 
     // Update approval record
@@ -413,7 +414,7 @@ export const rejectPurchaseOrderAtLevel = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!approval[0]) {
-      throw new Error('Approval not found or already processed');
+      throw new NotFoundError('Approval not found or already processed', 'approval');
     }
 
     // Verify user is the assigned approver or escalation target
@@ -421,7 +422,7 @@ export const rejectPurchaseOrderAtLevel = createServerFn({ method: 'POST' })
       approval[0].approverId !== ctx.user.id &&
       approval[0].escalatedTo !== ctx.user.id
     ) {
-      throw new Error('You are not authorized to reject this request');
+      throw new AuthError('You are not authorized to reject this request');
     }
 
     // Update approval record with rejection reason
@@ -551,7 +552,7 @@ export const escalateApproval = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!approval[0]) {
-      throw new Error('Approval not found or already processed');
+      throw new NotFoundError('Approval not found or already processed', 'approval');
     }
 
     // Update with escalation
@@ -662,7 +663,7 @@ export const delegateApproval = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!approval[0]) {
-      throw new Error('Approval not found or you are not the assigned approver');
+      throw new NotFoundError('Approval not found or you are not the assigned approver', 'approval');
     }
 
     // Update approval with delegation
@@ -705,7 +706,7 @@ export const evaluateApprovalRules = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!po[0]) {
-      throw new Error('Purchase order not found');
+      throw new NotFoundError('Purchase order not found', 'purchaseOrder');
     }
 
     const orderAmount = Number(po[0].totalAmount);

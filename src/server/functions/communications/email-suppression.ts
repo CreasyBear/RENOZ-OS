@@ -13,6 +13,7 @@ import { db } from "@/lib/db";
 import { emailSuppression } from "drizzle/schema";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { NotFoundError } from "@/lib/server/errors";
 import {
   suppressionListFiltersSchema,
   checkSuppressionSchema,
@@ -298,7 +299,7 @@ export const removeSuppression = createServerFn({ method: "POST" })
       .returning({ id: emailSuppression.id });
 
     if (!updated) {
-      throw new Error("Suppression record not found or already removed");
+      throw new NotFoundError("Suppression record not found or already removed", "email_suppression");
     }
 
     return { success: true };

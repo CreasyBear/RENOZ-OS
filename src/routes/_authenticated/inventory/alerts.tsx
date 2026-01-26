@@ -9,13 +9,12 @@
  * - Alert history
  */
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { Plus, Bell, Settings, History } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { InventoryTabsSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { toast } from "@/hooks";
 import {
   Dialog,
   DialogContent,
@@ -32,14 +31,16 @@ import {
   type AlertRule,
 } from "@/components/domain/inventory";
 import {
-  listAlerts,
-  createAlert,
-  updateAlert,
-  deleteAlert,
-  getTriggeredAlerts,
-} from "@/server/functions/alerts";
-import { listLocations } from "@/server/functions/locations";
-import { listProducts } from "@/lib/server/functions/products";
+  useAlerts,
+  useTriggeredAlerts,
+  useCreateAlert,
+  useUpdateAlert,
+  useDeleteAlert,
+  useToggleAlertActive,
+  useAcknowledgeAlert,
+  useLocations,
+} from "@/hooks/inventory";
+import { useProducts } from "@/hooks/products";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -61,217 +62,110 @@ export const Route = createFileRoute("/_authenticated/inventory/alerts" as any)(
 });
 
 // ============================================================================
-// TYPES
-// ============================================================================
-
-interface Product {
-  id: string;
-  name: string;
-  sku: string;
-}
-
-interface Location {
-  id: string;
-  name: string;
-  code: string;
-}
-
-// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
 function AlertsPage() {
-  const [activeTab, setActiveTab] = useState<"active" | "rules" | "history">(
-    "active"
-  );
-
-  // Data state
-  const [alertRules, setAlertRules] = useState<AlertRule[]>([]);
-  const [triggeredAlerts, setTriggeredAlerts] = useState<InventoryAlert[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
-
-  // Loading states
-  const [isLoadingRules, setIsLoadingRules] = useState(true);
-  const [isLoadingTriggered, setIsLoadingTriggered] = useState(true);
-
-  // Dialog state
+  const [activeTab, setActiveTab] = useState<"active" | "rules" | "history">("active");
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingAlert, setEditingAlert] = useState<AlertRule | null>(null);
 
-  // Fetch alert rules
-  const fetchAlertRules = useCallback(async () => {
-    try {
-      setIsLoadingRules(true);
-      const data = (await listAlerts({
-        data: { page: 1, pageSize: 100 },
-      })) as any;
-      if (data?.alerts) {
-        setAlertRules(
-          data.alerts.map((a: any) => ({
-            id: a.id,
-            alertType: a.alertType,
-            name: a.name,
-            productId: a.productId,
-            locationId: a.locationId,
-            thresholdValue: a.thresholdValue,
-            thresholdPercentage: a.thresholdPercentage,
-            isActive: a.isActive,
-            notifyEmail: a.notifyEmail ?? false,
-            notifyInApp: a.notifyInApp ?? true,
-            triggeredCount: a.triggeredCount ?? 0,
-            lastTriggeredAt: a.lastTriggeredAt ? new Date(a.lastTriggeredAt) : null,
-            createdAt: new Date(a.createdAt),
-          }))
-        );
-      }
-    } catch (error) {
-      console.error("Failed to fetch alert rules:", error);
-      toast.error("Failed to load alert rules");
-    } finally {
-      setIsLoadingRules(false);
-    }
-  }, []);
+  // Data hooks
+  const { data: alertsData, isLoading: isLoadingRules } = useAlerts({ pageSize: 100 });
+  const { data: triggeredData, isLoading: isLoadingTriggered } = useTriggeredAlerts();
+  const { data: productsData } = useProducts({ pageSize: 100 });
+  const { locations: locationsData } = useLocations({ autoFetch: true });
 
-  // Fetch triggered alerts
-  const fetchTriggeredAlerts = useCallback(async () => {
-    try {
-      setIsLoadingTriggered(true);
-      const data = (await getTriggeredAlerts()) as any;
-      if (data?.alerts) {
-        setTriggeredAlerts(
-          data.alerts.map((a: any) => ({
-            id: a.alert.id,
-            type: a.alert.alertType,
-            severity: a.severity === "critical" ? "critical" : a.severity === "high" ? "warning" : "info",
-            title: a.alert.name,
-            message: a.message,
-            productId: a.product?.id,
-            productName: a.product?.name,
-            locationId: a.location?.id,
-            locationName: a.location?.name,
-            threshold: a.thresholdValue,
-            currentValue: a.currentValue,
-            createdAt: new Date(),
-            acknowledged: false,
-          }))
-        );
-      }
-    } catch (error) {
-      console.error("Failed to fetch triggered alerts:", error);
-    } finally {
-      setIsLoadingTriggered(false);
-    }
-  }, []);
+  // Mutation hooks
+  const createAlertMutation = useCreateAlert();
+  const updateAlertMutation = useUpdateAlert();
+  const deleteAlertMutation = useDeleteAlert();
+  const toggleActiveMutation = useToggleAlertActive();
+  const acknowledgeMutation = useAcknowledgeAlert();
 
-  // Fetch products and locations for form
-  const fetchFormData = useCallback(async () => {
-    try {
-      const [productsData, locationsData] = await Promise.all([
-        listProducts({ data: { page: 1, pageSize: 100 } }) as any,
-        listLocations({ data: { page: 1, pageSize: 100 } }) as any,
-      ]);
+  // Transform data for components
+  const alertRules: AlertRule[] = (alertsData?.alerts ?? []).map((a: any) => ({
+    id: a.id,
+    alertType: a.alertType,
+    name: a.name,
+    productId: a.productId,
+    locationId: a.locationId,
+    thresholdValue: a.thresholdValue,
+    thresholdPercentage: a.thresholdPercentage,
+    isActive: a.isActive,
+    notifyEmail: a.notifyEmail ?? false,
+    notifyInApp: a.notifyInApp ?? true,
+    triggeredCount: a.triggeredCount ?? 0,
+    lastTriggeredAt: a.lastTriggeredAt ? new Date(a.lastTriggeredAt) : null,
+    createdAt: new Date(a.createdAt),
+  }));
 
-      if (productsData?.products) {
-        setProducts(
-          productsData.products.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            sku: p.sku,
-          }))
-        );
-      }
+  const triggeredAlerts: InventoryAlert[] = (triggeredData?.alerts ?? []).map((a: any) => ({
+    id: a.alert?.id ?? a.id,
+    alertType: a.alert?.alertType ?? a.alertType ?? "low_stock",
+    severity: a.severity === "critical" ? "critical" : a.severity === "high" ? "warning" : "info",
+    productId: a.product?.id,
+    productName: a.product?.name,
+    locationId: a.location?.id,
+    locationName: a.location?.name,
+    message: a.message ?? `Alert triggered for ${a.product?.name ?? "unknown product"}`,
+    value: a.currentValue,
+    threshold: a.thresholdValue,
+    triggeredAt: a.triggeredAt ? new Date(a.triggeredAt) : new Date(),
+    acknowledgedAt: a.acknowledgedAt ? new Date(a.acknowledgedAt) : undefined,
+    acknowledgedBy: a.acknowledgedBy,
+  }));
 
-      if (locationsData?.locations) {
-        setLocations(
-          locationsData.locations.map((l: any) => ({
-            id: l.id,
-            name: l.name,
-            code: l.code,
-          }))
-        );
-      }
-    } catch (error) {
-      console.error("Failed to fetch form data:", error);
-    }
-  }, []);
+  const products = (productsData?.products ?? []).map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    sku: p.sku,
+  }));
 
-  // Initial fetch
-  useEffect(() => {
-    fetchAlertRules();
-    fetchTriggeredAlerts();
-    fetchFormData();
-  }, []);
+  const locations = (locationsData ?? []).map((l: any) => ({
+    id: l.id,
+    name: l.name,
+    code: l.locationCode ?? l.code ?? "",
+  }));
 
-  // Handle create alert
+  // Handlers
   const handleCreateAlert = useCallback(
     async (data: any) => {
-      try {
-        await createAlert({ data });
-        toast.success("Alert created");
-        setShowCreateDialog(false);
-        fetchAlertRules();
-      } catch (error: any) {
-        toast.error(error.message || "Failed to create alert");
-        throw error;
-      }
+      await createAlertMutation.mutateAsync(data);
+      setShowCreateDialog(false);
     },
-    [fetchAlertRules]
+    [createAlertMutation]
   );
 
-  // Handle edit alert
   const handleEditAlert = useCallback(
     async (data: any) => {
       if (!editingAlert) return;
-      try {
-        await updateAlert({
-          data: { id: editingAlert.id, data },
-        });
-        toast.success("Alert updated");
-        setEditingAlert(null);
-        fetchAlertRules();
-      } catch (error: any) {
-        toast.error(error.message || "Failed to update alert");
-        throw error;
-      }
+      await updateAlertMutation.mutateAsync({ id: editingAlert.id, data });
+      setEditingAlert(null);
     },
-    [editingAlert, fetchAlertRules]
+    [editingAlert, updateAlertMutation]
   );
 
-  // Handle delete alert
   const handleDeleteAlert = useCallback(
     async (alert: AlertRule) => {
-      try {
-        await deleteAlert({ data: { id: alert.id } });
-        toast.success("Alert deleted");
-        fetchAlertRules();
-      } catch (error: any) {
-        toast.error(error.message || "Failed to delete alert");
-      }
+      await deleteAlertMutation.mutateAsync(alert.id);
     },
-    [fetchAlertRules]
+    [deleteAlertMutation]
   );
 
-  // Handle toggle active
   const handleToggleActive = useCallback(
     async (alertId: string, isActive: boolean) => {
-      try {
-        await updateAlert({
-          data: { id: alertId, data: { isActive } },
-        });
-        toast.success(isActive ? "Alert enabled" : "Alert disabled");
-        fetchAlertRules();
-      } catch (error: any) {
-        toast.error(error.message || "Failed to update alert");
-      }
+      await toggleActiveMutation.mutateAsync({ alertId, isActive });
     },
-    [fetchAlertRules]
+    [toggleActiveMutation]
   );
 
-  // Handle acknowledge alert
-  const handleAcknowledgeAlert = useCallback((_alertId: string) => {
-    toast.info("Acknowledge", { description: "Alert acknowledgement coming soon" });
-  }, []);
+  const handleAcknowledgeAlert = useCallback(
+    async (alertId: string) => {
+      await acknowledgeMutation.mutateAsync(alertId);
+    },
+    [acknowledgeMutation]
+  );
 
   return (
     <PageLayout variant="full-width">

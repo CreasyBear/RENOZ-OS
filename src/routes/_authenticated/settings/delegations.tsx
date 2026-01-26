@@ -203,7 +203,7 @@ function DelegationsPage() {
   const handleCancelDelegation = async (delegation: DelegationItem) => {
     const confirmed = await confirm.confirm({
       title: 'Cancel Delegation',
-      description: `Are you sure you want to cancel the delegation to ${delegation.delegateName}? They will no longer be able to act on your behalf.`,
+      description: `Are you sure you want to cancel the delegation to ${delegation.delegate.name}? They will no longer be able to act on your behalf.`,
       confirmLabel: 'Cancel Delegation',
       variant: 'destructive',
     });

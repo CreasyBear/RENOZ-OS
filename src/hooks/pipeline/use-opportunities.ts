@@ -21,6 +21,16 @@ import type { Opportunity } from '@/lib/schemas/pipeline';
 type OpportunityListResult = Awaited<ReturnType<typeof listOpportunities>>;
 type OpportunityDetailResult = Awaited<ReturnType<typeof getOpportunity>>;
 
+// Extended filter options for kanban view (supports arrays and ranges)
+export interface OpportunityKanbanFilters {
+  search?: string;
+  stages?: Array<'new' | 'qualified' | 'proposal' | 'negotiation' | 'won' | 'lost'>;
+  assignedTo?: string;
+  minValue?: number;
+  maxValue?: number;
+  includeWonLost?: boolean;
+}
+
 // ============================================================================
 // LIST HOOKS
 // ============================================================================
@@ -50,6 +60,50 @@ export function useOpportunities(options: UseOpportunitiesOptions = {}) {
           customerId: filters.customerId,
         },
       }),
+    enabled,
+    staleTime: 30 * 1000, // 30 seconds
+  });
+}
+
+// ============================================================================
+// KANBAN BOARD HOOK
+// ============================================================================
+
+export interface UseOpportunitiesKanbanOptions extends OpportunityKanbanFilters {
+  enabled?: boolean;
+}
+
+/**
+ * Fetch opportunities for kanban board view with extended filters.
+ * Loads all opportunities (up to 200) for drag-and-drop functionality.
+ * Supports stage array filter, value range filter, and won/lost toggle.
+ */
+export function useOpportunitiesKanban(options: UseOpportunitiesKanbanOptions = {}) {
+  const { enabled = true, ...filters } = options;
+
+  return useQuery({
+    queryKey: queryKeys.opportunities.list(filters),
+    queryFn: async () => {
+      const result = await listOpportunities({
+        data: {
+          page: 1,
+          pageSize: 200, // Load all for kanban view
+          sortBy: 'createdAt',
+          sortOrder: 'desc',
+          search: filters.search || undefined,
+          stages: filters.stages && filters.stages.length > 0 ? filters.stages : undefined,
+          assignedTo: filters.assignedTo || undefined,
+          minValue: filters.minValue ?? undefined,
+          maxValue: filters.maxValue ?? undefined,
+          includeWonLost: filters.includeWonLost,
+        },
+      });
+      return result as {
+        items: Opportunity[];
+        pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
+        metrics: { totalValue: number; weightedValue: number };
+      };
+    },
     enabled,
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -140,4 +194,9 @@ export function useOpportunitySearch({ query, limit = 10, enabled = true }: UseO
 // TYPE EXPORTS
 // ============================================================================
 
-export type { OpportunityListResult, OpportunityDetailResult, Opportunity, OpportunityFilters };
+export type {
+  OpportunityListResult,
+  OpportunityDetailResult,
+  Opportunity,
+  OpportunityFilters,
+};

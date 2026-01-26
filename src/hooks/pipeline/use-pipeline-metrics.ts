@@ -60,24 +60,53 @@ export function usePipelineMetrics({ assignedTo, customerId, enabled = true }: U
 // ============================================================================
 
 export interface UsePipelineForecastOptions {
+  /** Number of months for date range (used if startDate/endDate not provided) */
   months?: number;
+  /** Start date in YYYY-MM-DD format */
+  startDate?: string;
+  /** End date in YYYY-MM-DD format */
+  endDate?: string;
+  /** Grouping: 'week', 'month', 'quarter', 'rep', or 'customer' */
+  groupBy?: 'week' | 'month' | 'quarter' | 'rep' | 'customer';
+  /** Include weighted values in response */
+  includeWeighted?: boolean;
   enabled?: boolean;
 }
 
 /**
- * Fetch pipeline forecast data
+ * Fetch pipeline forecast data.
+ * Supports both months-based and explicit date range inputs.
  */
-export function usePipelineForecast({ months = 6, enabled = true }: UsePipelineForecastOptions = {}) {
-  const endDate = new Date();
-  const startDate = new Date();
-  startDate.setMonth(startDate.getMonth() - months);
+export function usePipelineForecast(options: UsePipelineForecastOptions = {}) {
+  const {
+    months = 6,
+    startDate: inputStartDate,
+    endDate: inputEndDate,
+    groupBy = 'month',
+    includeWeighted = true,
+    enabled = true,
+  } = options;
+
+  // Use explicit dates if provided, otherwise calculate from months
+  let startDate = inputStartDate;
+  let endDate = inputEndDate;
+
+  if (!startDate || !endDate) {
+    const end = new Date();
+    const start = new Date();
+    start.setMonth(start.getMonth() - months);
+    startDate = start.toISOString().split('T')[0];
+    endDate = end.toISOString().split('T')[0];
+  }
 
   return useQuery({
-    queryKey: [...queryKeys.pipeline.all, 'forecast', months] as const,
+    queryKey: queryKeys.reports.pipelineForecast(startDate, endDate, groupBy),
     queryFn: () => getPipelineForecast({
       data: {
-        startDate: startDate.toISOString().split('T')[0],
-        endDate: endDate.toISOString().split('T')[0],
+        startDate,
+        endDate,
+        groupBy,
+        includeWeighted,
       },
     }),
     enabled,
@@ -90,24 +119,45 @@ export function usePipelineForecast({ months = 6, enabled = true }: UsePipelineF
 // ============================================================================
 
 export interface UsePipelineVelocityOptions {
+  /** Number of months for date range (used if dateFrom/dateTo not provided) */
   months?: number;
+  /** Start date in YYYY-MM-DD format */
+  dateFrom?: string;
+  /** End date in YYYY-MM-DD format */
+  dateTo?: string;
   enabled?: boolean;
 }
 
 /**
- * Fetch pipeline velocity metrics (average time in each stage)
+ * Fetch pipeline velocity metrics (average time in each stage).
+ * Supports both months-based and explicit date range inputs.
  */
-export function usePipelineVelocity({ months = 3, enabled = true }: UsePipelineVelocityOptions = {}) {
-  const dateTo = new Date();
-  const dateFrom = new Date();
-  dateFrom.setMonth(dateFrom.getMonth() - months);
+export function usePipelineVelocity(options: UsePipelineVelocityOptions = {}) {
+  const {
+    months = 3,
+    dateFrom: inputDateFrom,
+    dateTo: inputDateTo,
+    enabled = true,
+  } = options;
+
+  // Use explicit dates if provided, otherwise calculate from months
+  let dateFrom = inputDateFrom;
+  let dateTo = inputDateTo;
+
+  if (!dateFrom || !dateTo) {
+    const to = new Date();
+    const from = new Date();
+    from.setMonth(from.getMonth() - months);
+    dateFrom = from.toISOString().split('T')[0];
+    dateTo = to.toISOString().split('T')[0];
+  }
 
   return useQuery({
-    queryKey: [...queryKeys.pipeline.all, 'velocity', months] as const,
+    queryKey: queryKeys.reports.pipelineVelocity(dateFrom, dateTo),
     queryFn: () => getPipelineVelocity({
       data: {
-        dateFrom: dateFrom.toISOString().split('T')[0],
-        dateTo: dateTo.toISOString().split('T')[0],
+        dateFrom,
+        dateTo,
       },
     }),
     enabled,
@@ -120,24 +170,49 @@ export function usePipelineVelocity({ months = 3, enabled = true }: UsePipelineV
 // ============================================================================
 
 export interface UseRevenueAttributionOptions {
+  /** Number of months for date range (used if dateFrom/dateTo not provided) */
   months?: number;
+  /** Start date in YYYY-MM-DD format */
+  dateFrom?: string;
+  /** End date in YYYY-MM-DD format */
+  dateTo?: string;
+  /** Grouping: 'rep', 'customer', 'source', or 'month' */
+  groupBy?: 'rep' | 'customer' | 'source' | 'month';
   enabled?: boolean;
 }
 
 /**
- * Fetch revenue attribution data (source tracking)
+ * Fetch revenue attribution data (source tracking).
+ * Supports both months-based and explicit date range inputs.
  */
-export function useRevenueAttribution({ months = 12, enabled = true }: UseRevenueAttributionOptions = {}) {
-  const dateTo = new Date();
-  const dateFrom = new Date();
-  dateFrom.setMonth(dateFrom.getMonth() - months);
+export function useRevenueAttribution(options: UseRevenueAttributionOptions = {}) {
+  const {
+    months = 12,
+    dateFrom: inputDateFrom,
+    dateTo: inputDateTo,
+    groupBy = 'month',
+    enabled = true,
+  } = options;
+
+  // Use explicit dates if provided, otherwise calculate from months
+  let dateFrom = inputDateFrom;
+  let dateTo = inputDateTo;
+
+  if (!dateFrom || !dateTo) {
+    const to = new Date();
+    const from = new Date();
+    from.setMonth(from.getMonth() - months);
+    dateFrom = from.toISOString().split('T')[0];
+    dateTo = to.toISOString().split('T')[0];
+  }
 
   return useQuery({
-    queryKey: [...queryKeys.pipeline.all, 'revenue-attribution', months] as const,
+    queryKey: queryKeys.reports.revenueAttribution(dateFrom, dateTo),
     queryFn: () => getRevenueAttribution({
       data: {
-        dateFrom: dateFrom.toISOString().split('T')[0],
-        dateTo: dateTo.toISOString().split('T')[0],
+        dateFrom,
+        dateTo,
+        groupBy,
       },
     }),
     enabled,

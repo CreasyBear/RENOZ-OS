@@ -9,20 +9,22 @@
  * - Quick receive mode
  */
 import { createFileRoute } from "@tanstack/react-router";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { History, Plus } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { FormSkeleton } from "@/components/skeletons/shared/form-skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { toast } from "@/hooks";
-import { ReceivingForm } from "@/components/domain/inventory";
 import {
+  ReceivingForm,
   ReceivingHistory,
   type ReceivingRecord,
 } from "@/components/domain/inventory";
-import { receiveInventory, listMovements } from "@/server/functions/inventory";
-import { listLocations } from "@/server/functions/locations";
-import { listProducts } from "@/lib/server/functions/products";
+import {
+  useLocations,
+  useMovements,
+  useReceiveInventory,
+} from "@/hooks/inventory";
+import { useProducts } from "@/hooks/products";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -66,130 +68,70 @@ interface Location {
 
 function ReceivingPage() {
   const [activeTab, setActiveTab] = useState<"receive" | "history">("receive");
+  const [productSearch, setProductSearch] = useState("");
 
-  // Data state
-  const [products, setProducts] = useState<Product[]>([]);
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [receivingHistory, setReceivingHistory] = useState<ReceivingRecord[]>([]);
+  // Data hooks - using TanStack Query via hooks
+  const {
+    data: productsData,
+    isLoading: isLoadingProducts,
+  } = useProducts({ search: productSearch, pageSize: 50 });
 
-  // Loading states
-  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
-  const [isLoadingLocations, setIsLoadingLocations] = useState(true);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+  const { locations: locationsData, isLoading: isLoadingLocations } = useLocations({
+    autoFetch: true,
+  });
 
-  // Fetch products
-  const fetchProducts = useCallback(async (search?: string) => {
-    try {
-      setIsLoadingProducts(true);
-      const data = await listProducts({
-        data: { page: 1, pageSize: 50, search },
-      });
-      if (data?.products) {
-        setProducts(
-          data.products.map((p: any) => ({
-            id: p.id,
-            sku: p.sku,
-            name: p.name,
-            costPrice: p.costPrice,
-          }))
-        );
-      }
-    } catch (error) {
-      console.error("Failed to fetch products:", error);
-    } finally {
-      setIsLoadingProducts(false);
-    }
-  }, []);
+  const {
+    data: historyData,
+    isLoading: isLoadingHistory,
+  } = useMovements({ movementType: "receive", page: 1, pageSize: 50, sortOrder: 'desc' });
 
-  // Fetch locations
-  const fetchLocations = useCallback(async () => {
-    try {
-      setIsLoadingLocations(true);
-      const data = await listLocations({ data: { page: 1, pageSize: 100 } });
-      if (data?.locations) {
-        setLocations(
-          data.locations.map((l: any) => ({
-            id: l.id,
-            code: l.code,
-            name: l.name,
-          }))
-        );
-      }
-    } catch (error) {
-      console.error("Failed to fetch locations:", error);
-    } finally {
-      setIsLoadingLocations(false);
-    }
-  }, []);
+  // Mutation hook
+  const receiveMutation = useReceiveInventory();
 
-  // Fetch receiving history (movements with type "receive")
-  const fetchHistory = useCallback(async () => {
-    try {
-      setIsLoadingHistory(true);
-      const data = await listMovements({
-        data: { page: 1, pageSize: 50, movementType: "receive" },
-      }) as any;
-      if (data?.movements) {
-        // We need to map movement data to ReceivingRecord format
-        // This is a simplified version - in production you'd join with products/locations
-        setReceivingHistory(
-          data.movements.map((m: any) => ({
-            id: m.id,
-            createdAt: new Date(m.createdAt),
-            productId: m.productId,
-            productName: m.productId, // TODO: Join with product
-            productSku: "", // TODO: Join with product
-            locationId: m.locationId,
-            locationName: m.locationId, // TODO: Join with location
-            quantity: m.quantity,
-            unitCost: m.unitCost ?? 0,
-            totalCost: m.totalCost ?? 0,
-            referenceType: m.referenceType,
-            referenceId: m.referenceId,
-            lotNumber: m.metadata?.lotNumber,
-            batchNumber: m.metadata?.batchNumber,
-            notes: m.notes,
-          }))
-        );
-      }
-    } catch (error) {
-      console.error("Failed to fetch history:", error);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  }, []);
+  // Transform data for components
+  const products: Product[] = (productsData?.products ?? []).map((p: any) => ({
+    id: p.id,
+    sku: p.sku,
+    name: p.name,
+    costPrice: p.costPrice,
+  }));
 
-  // Initial fetch
-  useEffect(() => {
-    fetchProducts();
-    fetchLocations();
-    fetchHistory();
-  }, []);
+  const locations: Location[] = locationsData.map((l: any) => ({
+    id: l.id,
+    code: l.code,
+    name: l.name,
+  }));
+
+  const receivingHistory: ReceivingRecord[] = (historyData?.movements ?? []).map((m: any) => ({
+    id: m.id,
+    createdAt: new Date(m.createdAt),
+    productId: m.productId,
+    productName: m.product?.name ?? m.productId,
+    productSku: m.product?.sku ?? "",
+    locationId: m.locationId,
+    locationName: m.location?.name ?? m.locationId,
+    quantity: m.quantity,
+    unitCost: m.unitCost ?? 0,
+    totalCost: m.totalCost ?? 0,
+    referenceType: m.referenceType,
+    referenceId: m.referenceId,
+    lotNumber: m.metadata?.lotNumber,
+    batchNumber: m.metadata?.batchNumber,
+    notes: m.notes,
+  }));
 
   // Handle receive submission
   const handleReceive = useCallback(
     async (data: any) => {
-      try {
-        await receiveInventory({ data });
-        toast.success("Inventory received", {
-          description: `${data.quantity} units added to inventory`,
-        });
-        fetchHistory();
-      } catch (error: any) {
-        toast.error(error.message || "Failed to receive inventory");
-        throw error;
-      }
+      await receiveMutation.mutateAsync(data);
     },
-    [fetchHistory]
+    [receiveMutation]
   );
 
   // Handle product search
-  const handleProductSearch = useCallback(
-    (query: string) => {
-      fetchProducts(query);
-    },
-    [fetchProducts]
-  );
+  const handleProductSearch = useCallback((query: string) => {
+    setProductSearch(query);
+  }, []);
 
   // Get default location (first one or marked as default)
   const defaultLocation = locations.find((l) => l.code === "MAIN") ?? locations[0];

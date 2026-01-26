@@ -43,7 +43,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { getOrderShipments } from "@/lib/server/functions/order-shipments";
+import { getOrderShipments } from "@/server/functions/orders/order-shipments";
 import type { ShipmentStatus } from "@/lib/schemas/orders";
 
 // ============================================================================

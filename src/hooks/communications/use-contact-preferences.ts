@@ -47,7 +47,7 @@ export function usePreferenceHistory(options: UsePreferenceHistoryOptions = {}) 
   const { contactId, customerId, limit = 50, offset = 0, enabled = true } = options;
 
   return useQuery({
-    queryKey: queryKeys.communications.preferenceHistory({ contactId, customerId }),
+    queryKey: queryKeys.communications.preferenceHistory(contactId ?? '', { customerId }),
     queryFn: () => getPreferenceHistory({ data: { contactId, customerId, limit, offset } }),
     enabled: enabled && (!!contactId || !!customerId),
     staleTime: 5 * 60 * 1000, // 5 minutes - history doesn't change often
@@ -69,7 +69,7 @@ export function useUpdateContactPreferences() {
       });
       // Also invalidate preference history since an update creates a new history entry
       queryClient.invalidateQueries({
-        queryKey: queryKeys.communications.preferenceHistory({ contactId: variables.data.contactId }),
+        queryKey: queryKeys.communications.preferenceHistory(variables.data.contactId),
       });
     },
   });

@@ -105,7 +105,7 @@ function TemplatesContainer() {
             category: values.category,
             subject: values.subject,
             bodyHtml: values.bodyHtml,
-            isActive: values.isActive,
+            // Note: isActive not in create schema, templates are active by default
           },
         });
         toastSuccess("Template created");
@@ -156,7 +156,7 @@ function TemplatesContainer() {
   const handleClone = useCallback(
     async (id: string, newName: string) => {
       try {
-        await cloneMutation.mutateAsync({ data: { templateId: id, newName } });
+        await cloneMutation.mutateAsync({ data: { id, newName } });
         toastSuccess("Template cloned");
       } catch {
         toastError("Failed to clone template");
@@ -185,8 +185,9 @@ function TemplatesContainer() {
   // ============================================================================
   // RENDER
   // ============================================================================
-  const templates = templatesData?.items ?? [];
-  const versions = versionsData?.versions ?? [];
+  // Server functions return arrays directly, not {items: [...]} or {versions: [...]}
+  const templates = templatesData ?? [];
+  const versions = versionsData ?? [];
 
   return (
     <div className="container py-6 max-w-5xl">

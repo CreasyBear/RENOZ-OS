@@ -57,7 +57,7 @@ import {
   getAmendment,
   approveAmendment,
   rejectAmendment,
-} from "@/lib/server/functions/order-amendments";
+} from "@/server/functions/orders/order-amendments";
 import type { AmendmentChanges, ItemChange, FinancialImpact, AmendmentStatus } from "@/lib/schemas/orders";
 
 // ============================================================================
@@ -178,7 +178,7 @@ export const AmendmentReviewDialog = memo(function AmendmentReviewDialog({
   const changes = amendment?.changes as AmendmentChanges | undefined;
   const itemChanges = changes?.itemChanges || [];
   const financialImpact = changes?.financialImpact as FinancialImpact | undefined;
-  const isPending = amendment?.status === "pending";
+  const isPending = amendment?.status === "requested";
 
   const isPendingMutation = approveMutation.isPending || rejectMutation.isPending;
 

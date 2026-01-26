@@ -26,6 +26,7 @@ import {
   type IssueTemplateResponse,
   type ListIssueTemplatesResponse,
 } from '@/lib/schemas/support/issue-templates';
+import { NotFoundError } from '@/lib/server/errors';
 
 // ============================================================================
 // HELPERS
@@ -173,7 +174,7 @@ export const getIssueTemplate = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!result) {
-      throw new Error('Template not found');
+      throw new NotFoundError('Template not found', 'issueTemplate');
     }
 
     return toTemplateResponse(result);
@@ -305,7 +306,7 @@ export const updateIssueTemplate = createServerFn({ method: 'POST' })
       .returning();
 
     if (!template) {
-      throw new Error('Template not found');
+      throw new NotFoundError('Template not found', 'issueTemplate');
     }
 
     // Get assignee details
@@ -356,7 +357,7 @@ export const deleteIssueTemplate = createServerFn({ method: 'POST' })
       .returning({ id: issueTemplates.id });
 
     if (!template) {
-      throw new Error('Template not found');
+      throw new NotFoundError('Template not found', 'issueTemplate');
     }
 
     return { success: true };

@@ -10,7 +10,7 @@
  * - Location assignment
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { Package, MapPin, AlertTriangle, Loader2 } from "lucide-react";
 import { RouteErrorFallback } from "@/components/layout";
 import { InventoryTableSkeleton } from "@/components/skeletons/inventory";
@@ -36,8 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { toast } from "@/hooks";
-import { useOnlineStatus, useOfflineQueue } from "@/hooks";
+import { toast, useOnlineStatus, useOfflineQueue } from "@/hooks";
 import {
   BarcodeScanner,
   QuantityInput,
@@ -46,9 +45,8 @@ import {
   MobilePageHeader,
   type ScannedItem,
 } from "@/components/mobile/inventory-actions";
-import { receiveInventory } from "@/server/functions/inventory";
-import { listLocations } from "@/server/functions/locations";
-import { listProducts } from "@/lib/server/functions/products";
+import { useLocations, useReceiveInventory } from "@/hooks/inventory";
+import { useProductSearch } from "@/hooks/products";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -87,9 +85,26 @@ function MobileReceivingPage() {
   const [quantity, setQuantity] = useState(1);
   const [unitCost, setUnitCost] = useState(0);
   const [locationId, setLocationId] = useState("");
-  const [locations, setLocations] = useState<Array<{ id: string; name: string; code: string }>>([]);
-  const [isLoadingLocations, setIsLoadingLocations] = useState(true);
-  // Persist offline queue to localStorage using useOfflineQueue hook
+  const [barcodeSearch, setBarcodeSearch] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
+  // Data hooks - using TanStack Query via hooks
+  const { locations: locationsData, isLoading: isLoadingLocations } = useLocations({
+    autoFetch: true,
+  });
+
+  // Product search hook - triggered by barcode scan
+  const { data: productSearchData } = useProductSearch(
+    barcodeSearch,
+    { limit: 1 },
+    barcodeSearch.length >= 2
+  );
+
+  // Mutation hook
+  const receiveMutation = useReceiveInventory();
+
+  // Persist offline queue to localStorage
   const {
     queue: pendingItems,
     addToQueue,
@@ -97,80 +112,39 @@ function MobileReceivingPage() {
     isSyncing,
     queueLength,
   } = useOfflineQueue<ReceiveEntry>("mobile-receiving-queue");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
-  // Load locations
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadLocations() {
-      try {
-        setIsLoadingLocations(true);
-        const data = (await (listLocations as any)({
-          data: { page: 1, pageSize: 100 },
-        })) as any;
-        if (!cancelled && data?.locations) {
-          setLocations(
-            data.locations.map((l: any) => ({
-              id: l.id,
-              name: l.name,
-              code: l.locationCode ?? l.code ?? "",
-            }))
-          );
-        }
-      } catch (error) {
-        if (!cancelled) {
-          console.error("Failed to load locations:", error);
-          toast.error("Failed to load locations", {
-            action: {
-              label: "Retry",
-              onClick: () => loadLocations(),
-            },
-          });
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoadingLocations(false);
-        }
-      }
-    }
-    loadLocations();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Transform locations data
+  const locations = locationsData.map((l: any) => ({
+    id: l.id,
+    name: l.name,
+    code: l.code ?? "",
+  }));
 
   // Handle barcode scan
   const handleScan = useCallback(async (barcode: string) => {
-    try {
-      // Look up product by barcode/SKU
-      const data = (await listProducts({
-        data: { search: barcode, page: 1, pageSize: 1 },
-      })) as any;
-
-      if (data?.products?.length > 0) {
-        const product = data.products[0];
-        setScannedItem({
-          barcode,
-          productId: product.id,
-          productName: product.name,
-          productSku: product.sku,
-        });
-        setUnitCost(Number(product.basePrice ?? product.unitCost ?? 0));
-        setQuantity(1);
-        toast.success(`Found: ${product.name}`);
-      } else {
-        toast.error("Product not found", {
-          description: `No product with barcode/SKU: ${barcode}`,
-        });
-      }
-    } catch (error) {
-      console.error("Failed to lookup product:", error);
-      toast.error("Lookup failed");
-    }
+    setBarcodeSearch(barcode);
   }, []);
+
+  // Effect to handle product search result
+  // When productSearchData changes and we have a barcode search, update scannedItem
+  if (productSearchData?.products?.length && barcodeSearch && !scannedItem) {
+    const product = productSearchData.products[0];
+    setScannedItem({
+      barcode: barcodeSearch,
+      productId: product.id,
+      productName: product.name,
+      productSku: product.sku,
+    });
+    setUnitCost(Number(product.basePrice ?? product.costPrice ?? 0));
+    setQuantity(1);
+    setBarcodeSearch("");
+    toast.success(`Found: ${product.name}`);
+  } else if (barcodeSearch && productSearchData?.products?.length === 0) {
+    toast.error("Product not found", {
+      description: `No product with barcode/SKU: ${barcodeSearch}`,
+    });
+    setBarcodeSearch("");
+  }
 
   // Add to pending items (offline queue)
   const handleAddToPending = useCallback(() => {
@@ -219,13 +193,11 @@ function MobileReceivingPage() {
 
     try {
       setIsSubmitting(true);
-      await receiveInventory({
-        data: {
-          productId: scannedItem.productId,
-          locationId,
-          quantity,
-          unitCost,
-        },
+      await receiveMutation.mutateAsync({
+        productId: scannedItem.productId,
+        locationId,
+        quantity,
+        unitCost,
       });
 
       toast.success("Inventory received", {
@@ -240,18 +212,16 @@ function MobileReceivingPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }, [scannedItem, quantity, unitCost, locationId]);
+  }, [scannedItem, quantity, unitCost, locationId, receiveMutation]);
 
   // Sync pending items using useOfflineQueue
   const handleSync = useCallback(async () => {
     const result = await syncQueue(async (item) => {
-      await receiveInventory({
-        data: {
-          productId: item.product.productId!,
-          locationId: item.locationId,
-          quantity: item.quantity,
-          unitCost: item.unitCost,
-        },
+      await receiveMutation.mutateAsync({
+        productId: item.product.productId!,
+        locationId: item.locationId,
+        quantity: item.quantity,
+        unitCost: item.unitCost,
       });
     });
 
@@ -260,7 +230,7 @@ function MobileReceivingPage() {
     } else {
       toast.warning(`Synced ${result.success} items, ${result.failed} failed`);
     }
-  }, [syncQueue]);
+  }, [syncQueue, receiveMutation]);
 
   return (
     <div className="min-h-dvh bg-muted/30">

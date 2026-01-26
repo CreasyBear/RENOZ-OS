@@ -58,8 +58,8 @@ import {
 import { cn } from "@/lib/utils";
 import { FormatAmount } from "@/components/shared/format";
 import { toastSuccess, toastError } from "@/hooks";
-import { listOrders, updateOrderStatus } from "@/lib/server/functions/orders";
-import { listShipments } from "@/lib/server/functions/order-shipments";
+import { listOrders, updateOrderStatus } from "@/server/functions/orders/orders";
+import { listShipments } from "@/server/functions/orders/order-shipments";
 import type { OrderStatus, ShipmentStatus } from "@/lib/schemas/orders";
 
 // ============================================================================
@@ -409,7 +409,11 @@ export const FulfillmentDashboard = memo(function FulfillmentDashboard({
         </CardHeader>
         <CardContent>
           <PickingQueueTable
-            orders={confirmedOrders?.orders ?? []}
+            orders={(confirmedOrders?.orders ?? []).map(order => ({
+              ...order,
+              total: order.total ?? 0,
+              status: order.status as "draft" | "confirmed" | "picking" | "picked" | "shipped" | "delivered" | "cancelled"
+            }))}
             isLoading={loadingConfirmed}
             onStartPicking={(id) => startPickingMutation.mutate(id)}
             onCompletePicking={(id) => completePickingMutation.mutate(id)}
@@ -439,7 +443,11 @@ export const FulfillmentDashboard = memo(function FulfillmentDashboard({
         </CardHeader>
         <CardContent>
           <ShippingQueueTable
-            orders={pickedOrders?.orders ?? []}
+            orders={(pickedOrders?.orders ?? []).map(order => ({
+              ...order,
+              total: order.total ?? 0,
+              status: order.status as "draft" | "confirmed" | "picking" | "picked" | "shipped" | "delivered" | "cancelled"
+            }))}
             isLoading={loadingPicked}
             onShipOrder={onShipOrder}
             onViewOrder={onViewOrder}

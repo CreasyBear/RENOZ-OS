@@ -258,12 +258,20 @@ function IssueDetailPage() {
             {/* SLA Status Card */}
             {issue.slaMetrics && (
               <SlaStatusCard
-                responseDueAt={issue.slaMetrics.responseDueAt}
-                resolutionDueAt={issue.slaMetrics.resolutionDueAt}
-                responseBreached={issue.slaMetrics.responseBreached}
-                resolutionBreached={issue.slaMetrics.resolutionBreached}
-                isResponseAtRisk={issue.slaMetrics.isResponseAtRisk}
-                isResolutionAtRisk={issue.slaMetrics.isResolutionAtRisk}
+                slaData={{
+                  status: 'active',
+                  isPaused: false,
+                  responseDueAt: issue.slaMetrics.responseDueAt ? new Date(issue.slaMetrics.responseDueAt as string) : null,
+                  resolutionDueAt: issue.slaMetrics.resolutionDueAt ? new Date(issue.slaMetrics.resolutionDueAt as string) : null,
+                  responseBreached: issue.slaMetrics.responseBreached ?? false,
+                  resolutionBreached: issue.slaMetrics.resolutionBreached ?? false,
+                  isResponseAtRisk: issue.slaMetrics.isResponseAtRisk ?? false,
+                  isResolutionAtRisk: issue.slaMetrics.isResolutionAtRisk ?? false,
+                  responseTimeRemaining: null,
+                  resolutionTimeRemaining: null,
+                  responsePercentComplete: null,
+                  resolutionPercentComplete: null,
+                }}
               />
             )}
 

@@ -406,12 +406,23 @@ export const generateInsights = createServerFn({ method: 'POST' })
     const dateToStr = data.dateTo.toISOString().split('T')[0];
 
     // Get comparison data to analyze
+    // Cast metrics to the expected type (metricKeySchema enum values)
     const comparisonData = await getEnhancedComparison({
       data: {
         dateFrom: dateFromStr,
         dateTo: dateToStr,
         comparisonPeriod: data.comparisonPeriod || 'previous_period',
-        metrics: data.metrics,
+        metrics: data.metrics as (
+          | 'revenue'
+          | 'kwh_deployed'
+          | 'quote_win_rate'
+          | 'active_installations'
+          | 'warranty_claims'
+          | 'pipeline_value'
+          | 'customer_count'
+          | 'orders_count'
+          | 'average_order_value'
+        )[] | undefined,
         includeTrend: true,
         includeSignificance: true,
         includeInsights: false, // We generate our own insights

@@ -31,6 +31,7 @@ import {
   addresses,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
+import { ServerError } from '@/lib/server/errors';
 import { generatePresignedUploadUrl, generatePresignedDownloadUrl } from '@/lib/storage';
 import {
   generateWarrantyCertificateSchema,
@@ -165,7 +166,7 @@ async function uploadCertificateToStorage(
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to upload certificate: ${response.statusText}`);
+    throw new ServerError(`Failed to upload certificate: ${response.statusText}`);
   }
 
   // Generate presigned download URL for the uploaded file

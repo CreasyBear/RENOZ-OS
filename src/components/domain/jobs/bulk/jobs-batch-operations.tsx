@@ -189,7 +189,7 @@ export function JobsBatchOperations({
             case 'status_update':
               return {
                 id: `status_${jobId}`,
-                type: 'update',
+                type: 'update' as const,
                 data: {
                   id: jobId,
                   status: operationParams.newStatus,
@@ -199,7 +199,7 @@ export function JobsBatchOperations({
             case 'reschedule':
               return {
                 id: `reschedule_${jobId}`,
-                type: 'reschedule',
+                type: 'reschedule' as const,
                 data: {
                   jobId,
                   newScheduledDate: operationParams.newDate,
@@ -210,7 +210,7 @@ export function JobsBatchOperations({
             case 'assign_installer':
               return {
                 id: `assign_${jobId}`,
-                type: 'assign',
+                type: 'assign' as const,
                 data: {
                   jobId,
                   installerId: operationParams.installerId,
@@ -220,7 +220,7 @@ export function JobsBatchOperations({
             case 'start_jobs':
               return {
                 id: `start_${jobId}`,
-                type: 'update',
+                type: 'update' as const,
                 data: {
                   id: jobId,
                   status: 'in_progress',
@@ -230,7 +230,7 @@ export function JobsBatchOperations({
             case 'complete_jobs':
               return {
                 id: `complete_${jobId}`,
-                type: 'update',
+                type: 'update' as const,
                 data: {
                   id: jobId,
                   status: 'completed',

@@ -12,6 +12,7 @@ import { eq, and, inArray, sql } from 'drizzle-orm';
 import { withAuth } from '@/lib/server/protected';
 import { z } from 'zod';
 import { processJobOperations } from '@/lib/job-batch-processing';
+import { NotFoundError, ConflictError } from '@/lib/server/errors';
 
 // ============================================================================
 // SCHEMAS
@@ -118,7 +119,7 @@ export const bulkUpdateJobStatuses = createServerFn({ method: 'POST' })
       );
 
     if (existingJobs.length !== data.jobIds.length) {
-      throw new Error('Some jobs not found or access denied');
+      throw new NotFoundError('Some jobs not found or access denied', 'JobAssignment');
     }
 
     // Perform bulk update
@@ -171,7 +172,7 @@ export const bulkRescheduleJobs = createServerFn({ method: 'POST' })
       );
 
     if (existingJobs.length !== data.jobIds.length) {
-      throw new Error('Some jobs not found or access denied');
+      throw new NotFoundError('Some jobs not found or access denied', 'JobAssignment');
     }
 
     // Perform bulk reschedule
@@ -218,7 +219,7 @@ export const bulkAssignJobs = createServerFn({ method: 'POST' })
       .where(and(eq(users.organizationId, ctx.organizationId), eq(users.id, data.installerId)));
 
     if (!installer.length) {
-      throw new Error('Installer not found or access denied');
+      throw new NotFoundError('Installer not found or access denied', 'User');
     }
 
     // Validate permissions and that jobs belong to organization
@@ -233,7 +234,7 @@ export const bulkAssignJobs = createServerFn({ method: 'POST' })
       );
 
     if (existingJobs.length !== data.jobIds.length) {
-      throw new Error('Some jobs not found or access denied');
+      throw new NotFoundError('Some jobs not found or access denied', 'JobAssignment');
     }
 
     // Perform bulk assignment
@@ -359,7 +360,7 @@ export const bulkImportJobs = createServerFn({ method: 'POST' })
               results.imported.push(jobData.jobNumber);
               continue;
             } else {
-              throw new Error('Job already exists');
+              throw new ConflictError('Job already exists');
             }
           }
 

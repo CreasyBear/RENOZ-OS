@@ -15,6 +15,7 @@ import { db } from '@/lib/db';
 import { customers, customerTags, customerTagAssignments } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { NotFoundError } from '@/lib/server/errors';
 
 // ============================================================================
 // SCHEMAS
@@ -314,7 +315,7 @@ export const getSegmentAnalytics = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!tagResult[0]) {
-      throw new Error('Segment not found');
+      throw new NotFoundError('Segment not found', 'customer_tag');
     }
 
     // Get customer metrics for this segment

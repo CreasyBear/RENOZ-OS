@@ -62,7 +62,7 @@ export function useJobs(options: UseJobsOptions = {}) {
           organizationId,
           filters: {
             installerIds: filters?.installerIds,
-            statuses: filters?.statuses as UpdateJobAssignmentInput['status'][],
+            statuses: filters?.statuses as ('scheduled' | 'in_progress' | 'on_hold' | 'completed' | 'cancelled')[] | undefined,
             dateFrom: filters?.dateFrom,
             dateTo: filters?.dateTo,
             search: filters?.search,
@@ -103,12 +103,16 @@ export function useJob(jobId: string, enabled = true) {
 export interface CreateJobInput {
   title: string;
   description?: string;
-  customerId?: string;
-  scheduledDate?: string;
+  customerId: string;
+  installerId: string;
+  jobNumber?: string;
+  scheduledDate: string;
   scheduledTime?: string;
   estimatedDuration?: number;
-  priority?: 'low' | 'medium' | 'high' | 'urgent';
-  installerIds?: string[];
+  jobType?: 'installation' | 'service' | 'warranty' | 'inspection' | 'commissioning';
+  orderId?: string;
+  internalNotes?: string;
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -127,7 +131,18 @@ export function useCreateJob() {
       return createJobAssignment({
         data: {
           organizationId,
-          data: input,
+          customerId: input.customerId,
+          installerId: input.installerId,
+          jobNumber: input.jobNumber ?? '', // Will be auto-generated if empty
+          title: input.title,
+          description: input.description,
+          scheduledDate: input.scheduledDate,
+          scheduledTime: input.scheduledTime,
+          estimatedDuration: input.estimatedDuration,
+          jobType: input.jobType,
+          orderId: input.orderId,
+          internalNotes: input.internalNotes,
+          metadata: input.metadata as { notes?: string; weatherConditions?: string; accessInstructions?: string; equipmentRequired?: string[] },
         },
       });
     },
@@ -214,5 +229,47 @@ export function useBatchJobOperations() {
       queryClient.invalidateQueries({ queryKey: queryKeys.jobAssignments.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.jobCalendar.all });
     },
+  });
+}
+
+// ============================================================================
+// JOB ASSIGNMENTS FOR KANBAN SELECTOR
+// ============================================================================
+
+export interface UseJobAssignmentsForKanbanOptions {
+  enabled?: boolean;
+  limit?: number;
+}
+
+/**
+ * Fetch job assignments for kanban job selector dropdown.
+ * Returns a simplified list suitable for dropdown selection.
+ */
+export function useJobAssignmentsForKanban(options: UseJobAssignmentsForKanbanOptions = {}) {
+  const { enabled = true, limit = 200 } = options;
+  const { currentOrg } = useCurrentOrg();
+  const organizationId = currentOrg?.id;
+  const listAssignmentsFn = useServerFn(listJobAssignments);
+
+  return useQuery({
+    queryKey: queryKeys.jobAssignments.kanbanSelector({ organizationId }),
+    queryFn: async () => {
+      if (!organizationId) {
+        return { jobs: [] as Array<{ id: string; jobNumber: string; title: string }> };
+      }
+      return listAssignmentsFn({
+        data: {
+          organizationId,
+          filters: {
+            limit,
+            offset: 0,
+            sortBy: 'scheduledDate',
+            sortOrder: 'asc',
+          },
+        },
+      });
+    },
+    enabled: enabled && !!organizationId,
+    staleTime: 60 * 1000, // 1 minute
   });
 }

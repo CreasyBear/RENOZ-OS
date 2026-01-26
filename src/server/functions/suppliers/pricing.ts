@@ -14,6 +14,7 @@ import { db } from "@/lib/db";
 import { containsPattern } from "@/lib/db/utils";
 import { priceLists, priceAgreements } from "drizzle/schema/suppliers";
 import { withAuth } from "@/lib/server/protected";
+import { NotFoundError } from '@/lib/server/errors';
 import { PERMISSIONS } from "@/lib/auth/permissions";
 import {
   createPriceListSchema,
@@ -183,7 +184,7 @@ export const getPriceList = createServerFn({ method: "GET" })
       .limit(1);
 
     if (!price) {
-      throw new Error("Price list item not found");
+      throw new NotFoundError("Price list item not found", "priceList");
     }
 
     return price;
@@ -215,7 +216,7 @@ export const updatePriceList = createServerFn({ method: "POST" })
         .limit(1);
 
       if (!currentPrice) {
-        throw new Error("Price list item not found");
+        throw new NotFoundError("Price list item not found", "priceList");
       }
 
       const basePrice = data.basePrice !== undefined ? Number(data.basePrice) : Number(currentPrice.basePrice);
@@ -252,7 +253,7 @@ export const updatePriceList = createServerFn({ method: "POST" })
       .returning();
 
     if (!result) {
-      throw new Error("Price list item not found or update failed");
+      throw new NotFoundError("Price list item not found or update failed", "priceList");
     }
 
     return result;
@@ -275,7 +276,7 @@ export const deletePriceList = createServerFn({ method: "POST" })
       .returning();
 
     if (!result) {
-      throw new Error("Price list item not found or deletion failed");
+      throw new NotFoundError("Price list item not found or deletion failed", "priceList");
     }
 
     return { success: true, deletedItem: result };
@@ -509,7 +510,7 @@ export const getPriceAgreement = createServerFn({ method: "GET" })
       .limit(1);
 
     if (!agreement) {
-      throw new Error("Price agreement not found");
+      throw new NotFoundError("Price agreement not found", "priceAgreement");
     }
 
     return agreement;
@@ -555,7 +556,7 @@ export const updatePriceAgreement = createServerFn({ method: "POST" })
       .returning();
 
     if (!result) {
-      throw new Error("Price agreement not found or update failed");
+      throw new NotFoundError("Price agreement not found or update failed", "priceAgreement");
     }
 
     return result;
@@ -578,7 +579,7 @@ export const deletePriceAgreement = createServerFn({ method: "POST" })
       .returning();
 
     if (!result) {
-      throw new Error("Price agreement not found or deletion failed");
+      throw new NotFoundError("Price agreement not found or deletion failed", "priceAgreement");
     }
 
     return { success: true, deletedAgreement: result };

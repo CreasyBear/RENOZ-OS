@@ -29,6 +29,7 @@ import { checkRateLimit, getClientIdentifier, RATE_LIMITS } from '@/lib/server/r
 import { logAuditEvent } from '@/server/functions/_shared/audit-logs';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 import { client, userEvents, type InvitationSentPayload, type BatchInvitationSentPayload } from '@/trigger/client';
+import { NotFoundError, ConflictError, ValidationError, ServerError } from '@/lib/server/errors';
 
 // ============================================================================
 // HELPER: Generate secure invitation token
@@ -47,7 +48,7 @@ function getServerSupabase() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceKey) {
-    throw new Error('Supabase environment variables not configured');
+    throw new ServerError('Supabase environment variables not configured');
   }
 
   return createClient(url, serviceKey);
@@ -130,7 +131,7 @@ export const sendInvitation = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (existingUser.length > 0) {
-      throw new Error('User with this email already exists in the organization');
+      throw new ConflictError('User with this email already exists in the organization');
     }
 
     // Check for pending invitation
@@ -147,7 +148,7 @@ export const sendInvitation = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (existingInvitation.length > 0) {
-      throw new Error('A pending invitation already exists for this email');
+      throw new ConflictError('A pending invitation already exists for this email');
     }
 
     // Generate secure token
@@ -326,7 +327,7 @@ export const getInvitationByToken = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!invitation) {
-      throw new Error('Invalid invitation');
+      throw new NotFoundError('Invalid invitation', 'invitation');
     }
 
     // Check if expired
@@ -337,11 +338,11 @@ export const getInvitationByToken = createServerFn({ method: 'GET' })
         .set({ status: 'expired' })
         .where(eq(userInvitations.token, data.token));
 
-      throw new Error('Invitation has expired');
+      throw new ValidationError('Invitation has expired');
     }
 
     if (invitation.status !== 'pending') {
-      throw new Error(`Invitation is ${invitation.status}`);
+      throw new ValidationError(`Invitation is ${invitation.status}`);
     }
 
     return {
@@ -385,7 +386,7 @@ export const acceptInvitation = createServerFn({ method: 'POST' })
         .limit(1);
 
       if (!invitation) {
-        throw new Error('Invalid or expired invitation');
+        throw new NotFoundError('Invalid or expired invitation', 'invitation');
       }
 
       // Check expiry
@@ -394,7 +395,7 @@ export const acceptInvitation = createServerFn({ method: 'POST' })
           .update(userInvitations)
           .set({ status: 'expired', version: sql`version + 1` })
           .where(eq(userInvitations.id, invitation.id));
-        throw new Error('Invitation has expired');
+        throw new ValidationError('Invitation has expired');
       }
 
       // Mark as processing immediately to prevent race condition
@@ -416,7 +417,7 @@ export const acceptInvitation = createServerFn({ method: 'POST' })
 
       // If no rows returned, another request beat us to it
       if (updateResult.length === 0) {
-        throw new Error('Invitation has already been accepted');
+        throw new ConflictError('Invitation has already been accepted');
       }
 
       // Create Supabase auth user (external system - cannot rollback)
@@ -431,7 +432,7 @@ export const acceptInvitation = createServerFn({ method: 'POST' })
         // Note: The invitation is already marked as accepted, which prevents retries
         // This is intentional - we don't want to allow multiple Supabase user creations
         // If this fails, admin will need to cancel and resend the invitation
-        throw new Error(`Failed to create account: ${authError.message}`);
+        throw new ServerError(`Failed to create account: ${authError.message}`);
       }
 
       // Create application user
@@ -505,11 +506,11 @@ export const cancelInvitation = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!invitation) {
-      throw new Error('Invitation not found');
+      throw new NotFoundError('Invitation not found', 'invitation');
     }
 
     if (invitation.status !== 'pending') {
-      throw new Error(`Cannot cancel invitation that is ${invitation.status}`);
+      throw new ValidationError(`Cannot cancel invitation that is ${invitation.status}`);
     }
 
     // Cancel
@@ -559,11 +560,11 @@ export const resendInvitation = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!invitation) {
-      throw new Error('Invitation not found');
+      throw new NotFoundError('Invitation not found', 'invitation');
     }
 
     if (invitation.status === 'accepted') {
-      throw new Error('Cannot resend accepted invitation');
+      throw new ValidationError('Cannot resend accepted invitation');
     }
 
     // Generate new token and extend expiry

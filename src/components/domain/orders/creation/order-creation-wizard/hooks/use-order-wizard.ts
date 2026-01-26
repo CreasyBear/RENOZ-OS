@@ -61,8 +61,8 @@ export function useOrderWizard({ onComplete }: UseOrderWizardOptions) {
           customerId: state.customer.id,
           status: 'draft',
           paymentStatus: 'pending',
-          orderDate: new Date(),
-          dueDate: state.dueDate || undefined,
+          orderDate: new Date().toISOString().split('T')[0],
+          dueDate: state.dueDate ? (typeof state.dueDate === 'string' ? state.dueDate : state.dueDate.toISOString().split('T')[0]) : undefined,
           shippingAddress: state.shippingAddress.street1
             ? {
                 street1: state.shippingAddress.street1,

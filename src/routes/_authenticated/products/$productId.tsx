@@ -41,7 +41,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
-import { getProduct } from "@/lib/server/functions/products";
+import { getProduct } from "@/server/functions/products/products";
 import { ProductOverviewTab } from "@/components/domain/products/tabs/overview-tab";
 import { ProductPricingTab } from "@/components/domain/products/tabs/pricing-tab";
 import { ProductInventoryTab } from "@/components/domain/products/tabs/inventory-tab";

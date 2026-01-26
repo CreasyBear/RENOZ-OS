@@ -26,6 +26,7 @@ import {
 } from '@/lib/schemas/automation-jobs';
 import { withAuth, withInternalAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { NotFoundError } from '@/lib/server/errors';
 
 // ============================================================================
 // INTERNAL FUNCTIONS (For Trigger.dev tasks - server-to-server only)
@@ -74,7 +75,7 @@ export const trackJobProgressInternal = createServerFn({ method: 'POST' })
     });
 
     if (!existingJob) {
-      throw new Error(`Job not found: ${data.jobId}`);
+      throw new NotFoundError(`Job not found: ${data.jobId}`, 'job');
     }
 
     const updates: Partial<typeof jobs.$inferInsert> = {
@@ -123,7 +124,7 @@ export const completeJobInternal = createServerFn({ method: 'POST' })
     });
 
     if (!existingJob) {
-      throw new Error(`Job not found: ${data.jobId}`);
+      throw new NotFoundError(`Job not found: ${data.jobId}`, 'job');
     }
 
     const existingMetadata = (existingJob.metadata || {}) as JobMetadata;
@@ -191,7 +192,7 @@ export const getJobStatus = createServerFn({ method: 'GET' })
     });
 
     if (!job) {
-      throw new Error('Job not found');
+      throw new NotFoundError('Job not found', 'job');
     }
 
     return job;

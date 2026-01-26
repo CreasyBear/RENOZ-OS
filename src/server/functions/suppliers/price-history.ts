@@ -14,6 +14,7 @@ import { db } from '@/lib/db';
 import { priceChangeHistory, supplierPriceLists } from 'drizzle/schema/suppliers';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
 // INPUT SCHEMAS
@@ -187,7 +188,7 @@ export const getPriceChangeRecord = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!result[0]) {
-      throw new Error('Price change record not found');
+      throw new NotFoundError('Price change record not found', 'priceChangeRecord');
     }
 
     return result[0];
@@ -263,7 +264,7 @@ export const approvePriceChange = createServerFn({ method: 'POST' })
       .returning();
 
     if (!result[0]) {
-      throw new Error('Price change request not found or not pending');
+      throw new NotFoundError('Price change request not found or not pending', 'priceChangeRequest');
     }
 
     return result[0];
@@ -291,7 +292,7 @@ export const applyPriceChange = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!changeRecord[0]) {
-      throw new Error('Price change record not found or not approved');
+      throw new NotFoundError('Price change record not found or not approved', 'priceChangeRecord');
     }
 
     const record = changeRecord[0];
@@ -352,7 +353,7 @@ export const cancelPriceChangeRequest = createServerFn({ method: 'POST' })
       .returning();
 
     if (!result[0]) {
-      throw new Error('Price change request not found, not pending, or not owned by you');
+      throw new ValidationError('Price change request not found, not pending, or not owned by you');
     }
 
     return result[0];

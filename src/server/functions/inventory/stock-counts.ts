@@ -44,7 +44,7 @@ type StockCountItemRecord = typeof stockCountItems.$inferSelect;
 export const listStockCounts = createServerFn({ method: 'GET' })
   .inputValidator(stockCountListQuerySchema)
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
     const { page = 1, pageSize = 20, sortBy, sortOrder, ...filters } = data;
     const limit = pageSize;
 
@@ -100,7 +100,7 @@ export const listStockCounts = createServerFn({ method: 'GET' })
 export const getStockCount = createServerFn({ method: 'GET' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
     const [count] = await db
       .select()
@@ -728,7 +728,7 @@ export const cancelStockCount = createServerFn({ method: 'POST' })
 export const getCountVarianceAnalysis = createServerFn({ method: 'GET' })
   .inputValidator(z.object({ id: z.string().uuid() }))
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
     const [count] = await db
       .select()
@@ -815,7 +815,7 @@ export const getCountHistory = createServerFn({ method: 'GET' })
     })
   )
   .handler(async ({ data }) => {
-    const ctx = await withAuth();
+    const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
     const conditions = [
       eq(stockCounts.organizationId, ctx.organizationId),

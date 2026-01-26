@@ -82,9 +82,9 @@ interface BulkWarrantyImportDialogProps {
       serialNumber?: string;
       registrationDate: string;
       warrantyPolicyId: string;
-      policyType: string;
+      policyType: 'battery_performance' | 'inverter_manufacturer' | 'installation_workmanship';
     }>;
-    sendNotifications: boolean;
+    sendNotifications?: boolean;
   }) => Promise<BulkRegisterResult>;
   /** From route container (mutation). */
   onResetPreview?: () => void;

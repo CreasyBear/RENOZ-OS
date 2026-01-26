@@ -16,6 +16,7 @@ import { eq, and, sql, ilike, desc, asc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
 import { withAuth } from '@/lib/server/protected';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { scheduledReports } from 'drizzle/schema/dashboard';
 import {
@@ -126,7 +127,7 @@ export const getScheduledReport = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!report) {
-      throw new Error('Scheduled report not found');
+      throw new NotFoundError('Scheduled report not found', 'scheduledReport');
     }
 
     return report;
@@ -158,7 +159,7 @@ export const getScheduledReportStatus = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!report) {
-      throw new Error('Scheduled report not found');
+      throw new NotFoundError('Scheduled report not found', 'scheduledReport');
     }
 
     // TODO: Get actual last run status from job history
@@ -242,7 +243,7 @@ export const updateScheduledReport = createServerFn({ method: 'POST' })
       .returning();
 
     if (!report) {
-      throw new Error('Scheduled report not found');
+      throw new NotFoundError('Scheduled report not found', 'scheduledReport');
     }
 
     return report;
@@ -267,7 +268,7 @@ export const deleteScheduledReport = createServerFn({ method: 'POST' })
       .returning();
 
     if (!report) {
-      throw new Error('Scheduled report not found');
+      throw new NotFoundError('Scheduled report not found', 'scheduledReport');
     }
 
     return { success: true };
@@ -293,7 +294,7 @@ export const executeScheduledReport = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!report) {
-      throw new Error('Scheduled report not found');
+      throw new NotFoundError('Scheduled report not found', 'scheduledReport');
     }
 
     // TODO: Trigger report generation job via Trigger.dev
@@ -395,13 +396,13 @@ export const generateReport = createServerFn({ method: 'POST' })
     const endDate = new Date(data.dateTo);
 
     if (endDate < startDate) {
-      throw new Error('End date must be after start date');
+      throw new ValidationError('End date must be after start date');
     }
 
     // Calculate max allowed range (1 year)
     const maxRangeMs = 365 * 24 * 60 * 60 * 1000;
     if (endDate.getTime() - startDate.getTime() > maxRangeMs) {
-      throw new Error('Date range cannot exceed 1 year');
+      throw new ValidationError('Date range cannot exceed 1 year');
     }
 
     // TODO: Trigger actual report generation via Trigger.dev background job

@@ -23,6 +23,12 @@ import { idParamSchema } from '@/lib/schemas';
 import { logAuditEvent } from '../_shared/audit-logs';
 import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from 'drizzle/schema';
 import { buildSafeCSV } from '@/lib/utils/csv-sanitize';
+import {
+  NotFoundError,
+  ValidationError,
+  AuthError,
+  ServerError,
+} from '@/lib/server/errors';
 
 // ============================================================================
 // HELPER: Get server-side Supabase admin client
@@ -33,7 +39,7 @@ function getServerSupabaseAdmin() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceKey) {
-    throw new Error('Supabase environment variables not configured');
+    throw new ServerError('Supabase environment variables not configured');
   }
 
   return createClient(url, serviceKey);
@@ -203,7 +209,7 @@ export const getUser = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!user) {
-      throw new Error('User not found');
+      throw new NotFoundError('User not found', 'user');
     }
 
     // Get user's groups
@@ -249,12 +255,12 @@ export const updateUser = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existingUser) {
-      throw new Error('User not found');
+      throw new NotFoundError('User not found', 'user');
     }
 
     // Prevent demoting organization owners
     if (existingUser.role === 'owner' && updates.role && updates.role !== 'owner') {
-      throw new Error('Cannot demote the organization owner');
+      throw new ValidationError('Cannot demote the organization owner');
     }
 
     // Build update object
@@ -354,17 +360,17 @@ export const deactivateUser = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existingUser) {
-      throw new Error('User not found');
+      throw new NotFoundError('User not found', 'user');
     }
 
     // Prevent deactivating organization owners
     if (existingUser.role === 'owner') {
-      throw new Error('Cannot deactivate the organization owner');
+      throw new ValidationError('Cannot deactivate the organization owner');
     }
 
     // Prevent self-deactivation
     if (existingUser.id === ctx.user.id) {
-      throw new Error('Cannot deactivate your own account');
+      throw new ValidationError('Cannot deactivate your own account');
     }
 
     // Soft delete (note: deletedBy is not in schema, we track it in audit log)
@@ -415,11 +421,11 @@ export const reactivateUser = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existingUser) {
-      throw new Error('User not found');
+      throw new NotFoundError('User not found', 'user');
     }
 
     if (existingUser.status !== 'deactivated') {
-      throw new Error('User is not deactivated');
+      throw new ValidationError('User is not deactivated');
     }
 
     // Reactivate
@@ -467,7 +473,7 @@ export const transferOwnership = createServerFn({ method: 'POST' })
 
     // Only the current owner can transfer ownership
     if (ctx.role !== 'owner') {
-      throw new Error('Only the organization owner can transfer ownership');
+      throw new AuthError('Only the organization owner can transfer ownership');
     }
 
     // Verify new owner exists, is active, and belongs to the same organization
@@ -490,15 +496,15 @@ export const transferOwnership = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!newOwner) {
-      throw new Error('Target user not found in your organization');
+      throw new NotFoundError('Target user not found in your organization', 'user');
     }
 
     if (newOwner.status !== 'active') {
-      throw new Error('Cannot transfer ownership to an inactive user');
+      throw new ValidationError('Cannot transfer ownership to an inactive user');
     }
 
     if (newOwner.id === ctx.user.id) {
-      throw new Error('You are already the owner');
+      throw new ValidationError('You are already the owner');
     }
 
     // Use transaction for atomic ownership transfer
@@ -584,7 +590,7 @@ export const bulkUpdateUsers = createServerFn({ method: 'POST' })
 
     // Can't update to owner role via bulk
     if (updates.role === ('owner' as string)) {
-      throw new Error('Cannot bulk assign owner role');
+      throw new ValidationError('Cannot bulk assign owner role');
     }
 
     // Verify all users belong to organization and aren't owners
@@ -602,13 +608,13 @@ export const bulkUpdateUsers = createServerFn({ method: 'POST' })
     // Check for owners in the list
     const ownerInList = targetUsers.find((u) => u.role === 'owner');
     if (ownerInList) {
-      throw new Error('Cannot bulk update organization owner');
+      throw new ValidationError('Cannot bulk update organization owner');
     }
 
     // Check for self in list
     const selfInList = targetUsers.find((u) => u.id === ctx.user.id);
     if (selfInList && updates.role) {
-      throw new Error('Cannot change your own role via bulk update');
+      throw new ValidationError('Cannot change your own role via bulk update');
     }
 
     const validUserIds = targetUsers.map((u) => u.id);

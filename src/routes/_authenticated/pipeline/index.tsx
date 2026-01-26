@@ -7,8 +7,7 @@
  * @see _Initiation/_prd/2-domains/pipeline/wireframes/pipeline-kanban-board.wireframe.md
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useCallback, useMemo } from "react";
 import { Plus, Download } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { PipelineKanbanSkeleton } from "@/components/skeletons/pipeline";
@@ -20,10 +19,13 @@ import {
   PipelineFilters,
   type PipelineFiltersState,
 } from "@/components/domain/pipeline";
-import { usePipelineMetrics, useUpdateOpportunityStage } from "@/hooks/pipeline";
-import { listOpportunities } from "@/server/functions/pipeline";
-import { queryKeys } from "@/lib/query-keys";
-import type { OpportunityStage, Opportunity } from "@/lib/schemas/pipeline";
+import {
+  usePipelineMetrics,
+  useUpdateOpportunityStage,
+  useOpportunitiesKanban,
+  type OpportunityKanbanFilters,
+} from "@/hooks/pipeline";
+import type { OpportunityStage } from "@/lib/schemas/pipeline";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -64,36 +66,21 @@ function PipelinePage() {
     includeWonLost: true, // Show all stages on board
   });
 
-  // Fetch opportunities
-  // Note: Using inline query because useOpportunities hook doesn't support all filter options
-  // (stages array, minValue, maxValue, includeWonLost). Hook enhancement needed for full migration.
+  // Convert filter state to hook options
+  const kanbanFilters = useMemo<OpportunityKanbanFilters>(() => ({
+    search: filters.search || undefined,
+    stages: filters.stages.length > 0 ? filters.stages : undefined,
+    assignedTo: filters.assignedTo || undefined,
+    minValue: filters.minValue ?? undefined,
+    maxValue: filters.maxValue ?? undefined,
+    includeWonLost: filters.includeWonLost,
+  }), [filters]);
+
+  // Fetch opportunities using centralized hook
   const {
     data: opportunitiesData,
     isLoading: isLoadingOpportunities,
-  } = useQuery({
-    queryKey: queryKeys.opportunities.list(filters),
-    queryFn: async () => {
-      const result = await listOpportunities({
-        data: {
-          page: 1,
-          pageSize: 200, // Load all for kanban view
-          sortBy: "createdAt",
-          sortOrder: "desc",
-          search: filters.search || undefined,
-          stages: filters.stages.length > 0 ? filters.stages : undefined,
-          assignedTo: filters.assignedTo || undefined,
-          minValue: filters.minValue ?? undefined,
-          maxValue: filters.maxValue ?? undefined,
-          includeWonLost: filters.includeWonLost,
-        },
-      });
-      return result as {
-        items: Opportunity[];
-        pagination: { page: number; pageSize: number; totalItems: number; totalPages: number };
-        metrics: { totalValue: number; weightedValue: number };
-      };
-    },
-  });
+  } = useOpportunitiesKanban(kanbanFilters);
 
   // Fetch metrics using centralized hook
   const { data: metricsData, isLoading: isLoadingMetrics } = usePipelineMetrics();

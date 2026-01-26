@@ -4,13 +4,12 @@
  * Form for inviting new users to the organization.
  * Part of USER-INVITATION-UI story - basic implementation.
  *
- * @see src/server/functions/invitations.ts for server functions
+ * @see src/hooks/users/use-users.ts for TanStack Query hooks
  */
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
-import { useServerFn } from '@tanstack/react-start';
-import { sendInvitation } from '@/server/functions/users/invitations';
 
+import { useSendInvitation } from '@/hooks/users/use-users';
 import { RouteErrorFallback } from '@/components/layout';
 import { AdminFormSkeleton } from '@/components/skeletons/admin';
 
@@ -36,9 +35,8 @@ const ROLE_OPTIONS = [
 ] as const;
 
 function InviteUserPage() {
-  const sendInvitationFn = useServerFn(sendInvitation);
+  const sendInvitation = useSendInvitation();
 
-  const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Form state
@@ -48,16 +46,13 @@ function InviteUserPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
     setMessage(null);
 
     try {
-      await sendInvitationFn({
-        data: {
-          email,
-          role,
-          personalMessage: personalMessage || undefined,
-        },
+      await sendInvitation.mutateAsync({
+        email,
+        role,
+        personalMessage: personalMessage || undefined,
       });
       setMessage({ type: 'success', text: `Invitation sent to ${email}` });
       // Reset form
@@ -69,8 +64,6 @@ function InviteUserPage() {
         type: 'error',
         text: err instanceof Error ? err.message : 'Failed to send invitation',
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -191,10 +184,10 @@ function InviteUserPage() {
           </Link>
           <button
             type="submit"
-            disabled={isLoading || !email}
+            disabled={sendInvitation.isPending || !email}
             className="inline-flex items-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none disabled:opacity-50"
           >
-            {isLoading ? 'Sending...' : 'Send Invitation'}
+            {sendInvitation.isPending ? 'Sending...' : 'Send Invitation'}
           </button>
         </div>
       </form>

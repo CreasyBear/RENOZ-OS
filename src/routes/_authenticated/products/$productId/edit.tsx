@@ -10,7 +10,7 @@ import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { FormSkeleton } from "@/components/skeletons/shared/form-skeleton";
 import { ProductForm, type ProductFormValues } from "@/components/domain/products/product-form";
-import { getProduct, updateProduct, getCategoryTree, type CategoryWithChildren } from "@/lib/server/functions/products";
+import { getProduct, updateProduct, getCategoryTree, type CategoryWithChildren } from "@/server/functions/products/products";
 
 export const Route = createFileRoute("/_authenticated/products/$productId/edit")({
   loader: async ({ params }) => {

@@ -50,6 +50,7 @@ import type {
   SlaConfiguration,
   BusinessHoursConfig as BusinessHoursConfigType,
 } from '@/lib/sla/types';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
 // SLA CONFIGURATION CRUD
@@ -141,7 +142,7 @@ export const getSlaConfiguration = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!config) {
-      throw new Error('SLA configuration not found');
+      throw new NotFoundError('SLA configuration not found', 'slaConfiguration');
     }
 
     return config;
@@ -172,7 +173,7 @@ export const updateSlaConfiguration = createServerFn({ method: 'POST' })
       .returning();
 
     if (!config) {
-      throw new Error('SLA configuration not found');
+      throw new NotFoundError('SLA configuration not found', 'slaConfiguration');
     }
 
     return config;
@@ -187,7 +188,7 @@ export const getDefaultSlaConfiguration = createServerFn({ method: 'GET' })
     const ctx = await withAuth();
 
     if (!data.domain) {
-      throw new Error('Domain is required');
+      throw new ValidationError('Domain is required');
     }
 
     // First try to find the org's default
@@ -250,7 +251,7 @@ export const startSlaTracking = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!config) {
-      throw new Error('SLA configuration not found');
+      throw new NotFoundError('SLA configuration not found', 'slaConfiguration');
     }
 
     // Get business hours if configured
@@ -349,7 +350,7 @@ export const pauseSla = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing) {
-      throw new Error('SLA tracking not found');
+      throw new NotFoundError('SLA tracking not found', 'slaTracking');
     }
 
     // Calculate pause update
@@ -392,7 +393,7 @@ export const resumeSla = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing) {
-      throw new Error('SLA tracking not found');
+      throw new NotFoundError('SLA tracking not found', 'slaTracking');
     }
 
     // Calculate resume update
@@ -436,7 +437,7 @@ export const recordSlaResponse = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing) {
-      throw new Error('SLA tracking not found');
+      throw new NotFoundError('SLA tracking not found', 'slaTracking');
     }
 
     const respondedAt = data.respondedAt ?? new Date();
@@ -481,7 +482,7 @@ export const recordSlaResolution = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!existing) {
-      throw new Error('SLA tracking not found');
+      throw new NotFoundError('SLA tracking not found', 'slaTracking');
     }
 
     const resolvedAt = data.resolvedAt ?? new Date();
@@ -526,7 +527,7 @@ export const getSlaState = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!tracking) {
-      throw new Error('SLA tracking not found');
+      throw new NotFoundError('SLA tracking not found', 'slaTracking');
     }
 
     // Get configuration
@@ -537,7 +538,7 @@ export const getSlaState = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!config) {
-      throw new Error('SLA configuration not found');
+      throw new NotFoundError('SLA configuration not found', 'slaConfiguration');
     }
 
     // Compute state snapshot

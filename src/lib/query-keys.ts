@@ -204,7 +204,9 @@ export interface SlaConfigurationFilters {
 export interface SupplierFilters {
   search?: string
   status?: string
-  type?: string
+  supplierType?: string
+  ratingMin?: number
+  ratingMax?: number
   page?: number
   pageSize?: number
   sortBy?: string
@@ -552,10 +554,52 @@ export const queryKeys = {
     lowStock: () => [...queryKeys.inventory.all, 'lowStock'] as const,
     items: (filters?: { organizationId?: string }) =>
       [...queryKeys.inventory.all, 'items', filters ?? {}] as const,
-    alerts: () => [...queryKeys.inventory.all, 'alerts'] as const,
     movements: (filters?: Record<string, unknown>) =>
       [...queryKeys.inventory.all, 'movements', filters ?? {}] as const,
     movementsAll: () => [...queryKeys.inventory.all, 'movements'] as const,
+
+    // Alerts
+    alertsAll: () => [...queryKeys.inventory.all, 'alerts'] as const,
+    alerts: (filters?: Record<string, unknown>) =>
+      [...queryKeys.inventory.alertsAll(), 'list', filters ?? {}] as const,
+    alert: (id: string) =>
+      [...queryKeys.inventory.alertsAll(), 'detail', id] as const,
+    triggeredAlerts: () =>
+      [...queryKeys.inventory.alertsAll(), 'triggered'] as const,
+    alertAnalytics: () =>
+      [...queryKeys.inventory.alertsAll(), 'analytics'] as const,
+
+    // Dashboard
+    dashboard: () => [...queryKeys.inventory.all, 'dashboard'] as const,
+
+    // Forecasting
+    forecastingAll: () => [...queryKeys.inventory.all, 'forecasting'] as const,
+    reorderRecommendations: (filters?: Record<string, unknown>) =>
+      [...queryKeys.inventory.forecastingAll(), 'reorder', filters ?? {}] as const,
+    productForecast: (productId: string, filters?: Record<string, unknown>) =>
+      [...queryKeys.inventory.forecastingAll(), 'product', productId, filters ?? {}] as const,
+    forecastAccuracy: (productId?: string) =>
+      [...queryKeys.inventory.forecastingAll(), 'accuracy', productId ?? ''] as const,
+
+    // Valuation
+    valuationAll: () => [...queryKeys.inventory.all, 'valuation'] as const,
+    valuation: (filters?: Record<string, unknown>) =>
+      [...queryKeys.inventory.valuationAll(), 'report', filters ?? {}] as const,
+    aging: (filters?: Record<string, unknown>) =>
+      [...queryKeys.inventory.valuationAll(), 'aging', filters ?? {}] as const,
+    turnover: (filters?: Record<string, unknown>) =>
+      [...queryKeys.inventory.valuationAll(), 'turnover', filters ?? {}] as const,
+
+    // Stock counts
+    stockCountsAll: () => [...queryKeys.inventory.all, 'stockCounts'] as const,
+    stockCounts: (filters?: Record<string, unknown>) =>
+      [...queryKeys.inventory.stockCountsAll(), 'list', filters ?? {}] as const,
+    stockCount: (id: string) =>
+      [...queryKeys.inventory.stockCountsAll(), 'detail', id] as const,
+    stockCountItems: (countId: string) =>
+      [...queryKeys.inventory.stockCountsAll(), 'items', countId] as const,
+    stockCountVariances: (countId: string) =>
+      [...queryKeys.inventory.stockCountsAll(), 'variances', countId] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -621,6 +665,13 @@ export const queryKeys = {
       [...queryKeys.users.lists(), filters ?? {}] as const,
     details: () => [...queryKeys.users.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.users.details(), id] as const,
+    stats: () => [...queryKeys.users.all, 'stats'] as const,
+    invitations: {
+      all: () => [...queryKeys.users.all, 'invitations'] as const,
+      lists: () => [...queryKeys.users.invitations.all(), 'list'] as const,
+      list: (filters?: { page?: number; pageSize?: number; status?: string }) =>
+        [...queryKeys.users.invitations.lists(), filters ?? {}] as const,
+    },
   },
 
   // -------------------------------------------------------------------------
@@ -1308,8 +1359,10 @@ export const queryKeys = {
       [...queryKeys.locations.lists(), filters ?? {}] as const,
     detail: (id: string) => [...queryKeys.locations.all, 'detail', id] as const,
     tree: () => [...queryKeys.locations.all, 'tree'] as const,
+    hierarchy: (rootId?: string) => [...queryKeys.locations.all, 'hierarchy', rootId] as const,
     contents: (locationId: string, filters?: Record<string, unknown>) =>
       [...queryKeys.locations.all, 'contents', locationId, filters ?? {}] as const,
+    utilization: () => [...queryKeys.locations.all, 'utilization'] as const,
   },
 
   // -------------------------------------------------------------------------

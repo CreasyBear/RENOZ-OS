@@ -12,7 +12,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { ImageGallery, type GalleryImage } from "../images/image-gallery";
 import { ImageUploader } from "../images/image-uploader";
 import { ImageEditor, type EditableImage } from "../images/image-editor";
-import { listProductImages, getImageStats } from "@/lib/server/functions/product-images";
+import { listProductImages, getImageStats } from "@/server/functions/products/product-images";
 
 interface ProductImagesTabProps {
   productId: string;

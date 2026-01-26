@@ -1,16 +1,15 @@
 /**
- * Send Campaign Job
+ * Send Campaign Job (Trigger.dev v3)
  *
- * Trigger.dev task for sending campaign emails in configurable batches.
+ * Tasks for sending campaign emails in configurable batches.
  * Respects rate limits and handles failures gracefully.
  *
  * @see DOM-COMMS-003c
+ * @see https://trigger.dev/docs/v3/tasks
  */
 
-import { eventTrigger } from "@trigger.dev/sdk";
-import { z } from "zod";
+import { task, schedules, logger, wait } from "@trigger.dev/sdk/v3";
 import { Resend } from "resend";
-import { client } from "../client";
 import { eq, and, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import {
@@ -24,7 +23,10 @@ import {
   prepareEmailForTracking,
   TRACKING_BASE_URL,
 } from "@/lib/server/email-tracking";
-import { createEmailActivitiesBatch, type EmailActivityInput } from "@/lib/server/activity-bridge";
+import {
+  createEmailActivitiesBatch,
+  type EmailActivityInput,
+} from "@/lib/server/activity-bridge";
 import { checkSuppressionBatchDirect } from "@/server/functions/communications/email-suppression";
 import { generateUnsubscribeUrl } from "@/lib/server/unsubscribe-tokens";
 import { createHash } from "crypto";
@@ -32,6 +34,30 @@ import { substituteTemplateVariables } from "@/lib/email/sanitize";
 
 // Initialize Resend client
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+export interface SendCampaignPayload {
+  campaignId: string;
+  batchSize?: number;
+  batchDelayMs?: number;
+}
+
+export interface PauseCampaignPayload {
+  campaignId: string;
+}
+
+export interface SendCampaignResult {
+  campaignId: string;
+  status: string;
+  stats: {
+    sent: number;
+    failed: number;
+    batches: number;
+  };
+}
 
 // ============================================================================
 // PRIVACY HELPERS (INT-RES-004)
@@ -72,7 +98,9 @@ const DEFAULT_BATCH_DELAY_MS = 5000; // 5 seconds between batches
 /**
  * Get template content based on template type
  */
-function getTemplateContent(templateType: string): { subject: string; body: string } {
+function getTemplateContent(
+  templateType: string
+): { subject: string; body: string } {
   const templates: Record<string, { subject: string; body: string }> = {
     welcome: {
       subject: "Welcome to {{company_name}}, {{first_name}}!",
@@ -134,31 +162,28 @@ function getTemplateContent(templateType: string): { subject: string; body: stri
 }
 
 // ============================================================================
-// JOB DEFINITION
+// TASK DEFINITIONS
 // ============================================================================
 
 /**
- * Send Campaign Job
+ * Send Campaign Task
  *
  * Triggered when a campaign is ready to send.
  * Processes recipients in batches with rate limiting.
  */
-export const sendCampaignJob = client.defineJob({
+export const sendCampaignTask = task({
   id: "send-campaign",
-  name: "Send Campaign Emails",
-  version: "1.0.0",
-  trigger: eventTrigger({
-    name: "campaign.send",
-    schema: z.object({
-      campaignId: z.string().uuid(),
-      batchSize: z.number().min(1).max(100).optional(),
-      batchDelayMs: z.number().min(1000).max(60000).optional(),
-    }),
-  }),
-  run: async (payload, io) => {
-    const { campaignId, batchSize = DEFAULT_BATCH_SIZE, batchDelayMs = DEFAULT_BATCH_DELAY_MS } = payload;
+  retry: {
+    maxAttempts: 3,
+  },
+  run: async (payload: SendCampaignPayload): Promise<SendCampaignResult> => {
+    const {
+      campaignId,
+      batchSize = DEFAULT_BATCH_SIZE,
+      batchDelayMs = DEFAULT_BATCH_DELAY_MS,
+    } = payload;
 
-    await io.logger.info(`Starting campaign send: ${campaignId}`, {
+    logger.info(`Starting campaign send: ${campaignId}`, {
       batchSize,
       batchDelayMs,
     });
@@ -175,7 +200,9 @@ export const sendCampaignJob = client.defineJob({
     }
 
     if (!["scheduled", "draft", "paused"].includes(campaign.status)) {
-      throw new Error(`Campaign ${campaignId} cannot be sent (status: ${campaign.status})`);
+      throw new Error(
+        `Campaign ${campaignId} cannot be sent (status: ${campaign.status})`
+      );
     }
 
     // Update campaign status to sending
@@ -190,7 +217,10 @@ export const sendCampaignJob = client.defineJob({
     // Get template content
     const template = getTemplateContent(campaign.templateType);
     const campaignData = (campaign.templateData ?? {}) as CampaignTemplateData;
-    const campaignVariables = (campaignData.variables ?? {}) as Record<string, string | number | boolean>;
+    const campaignVariables = (campaignData.variables ?? {}) as Record<
+      string,
+      string | number | boolean
+    >;
 
     // Track stats
     let totalSent = 0;
@@ -218,11 +248,13 @@ export const sendCampaignJob = client.defineJob({
 
       if (recipients.length === 0) {
         hasMore = false;
-        await io.logger.info(`No more recipients to process`);
+        logger.info(`No more recipients to process`);
         break;
       }
 
-      await io.logger.info(`Processing batch ${batchNumber} with ${recipients.length} recipients`);
+      logger.info(
+        `Processing batch ${batchNumber} with ${recipients.length} recipients`
+      );
 
       // INT-RES-004: Check suppression list for all recipients in batch
       const suppressionResults = await checkSuppressionBatchDirect(
@@ -240,17 +272,18 @@ export const sendCampaignJob = client.defineJob({
 
       // Process each recipient in the batch
       for (const recipient of recipients) {
-        const taskId = `send-to-${recipient.id}`;
-
         // INT-RES-004: Check if recipient is suppressed
         const suppression = suppressionMap.get(recipient.email.toLowerCase());
         if (suppression?.suppressed) {
           // INT-RES-004: Log with hashed email for privacy
-          await io.logger.info(`Skipping suppressed email: ${hashEmail(recipient.email)} (reason: ${suppression.reason})`, {
-            recipientId: recipient.id,
-            reason: suppression.reason,
-            emailHash: hashEmail(recipient.email),
-          });
+          logger.info(
+            `Skipping suppressed email: ${hashEmail(recipient.email)} (reason: ${suppression.reason})`,
+            {
+              recipientId: recipient.id,
+              reason: suppression.reason,
+              emailHash: hashEmail(recipient.email),
+            }
+          );
 
           // Mark recipient as skipped
           await db
@@ -266,123 +299,138 @@ export const sendCampaignJob = client.defineJob({
         }
 
         try {
-          await io.runTask(taskId, async () => {
-            // INT-RES-007: Generate secure unsubscribe URL for this recipient
-            const unsubscribeUrl = generateUnsubscribeUrl({
-              contactId: recipient.contactId || recipient.id, // Use contactId if available
-              email: recipient.email,
-              channel: "email",
+          // INT-RES-007: Generate secure unsubscribe URL for this recipient
+          const unsubscribeUrl = generateUnsubscribeUrl({
+            contactId: recipient.contactId || recipient.id, // Use contactId if available
+            email: recipient.email,
+            channel: "email",
+            organizationId: campaign.organizationId,
+          });
+
+          // Merge recipient-specific data with campaign data
+          const recipientData = (recipient.recipientData ?? {}) as Record<
+            string,
+            unknown
+          >;
+          const variables: Record<string, string | number | boolean> = {
+            ...campaignVariables,
+            first_name: recipient.name?.split(" ")[0] || "there",
+            email: recipient.email,
+            unsubscribe_url: unsubscribeUrl, // INT-RES-007: Add unsubscribe URL to template variables
+            ...(Object.fromEntries(
+              Object.entries(recipientData).filter(
+                ([, v]) =>
+                  typeof v === "string" ||
+                  typeof v === "number" ||
+                  typeof v === "boolean"
+              )
+            ) as Record<string, string | number | boolean>),
+          };
+
+          // Check for subject/body override
+          const subject = campaignData.subjectOverride
+            ? substituteTemplateVariables(
+                String(campaignData.subjectOverride),
+                variables
+              )
+            : substituteTemplateVariables(template.subject, variables);
+          const bodyHtml = campaignData.bodyOverride
+            ? substituteTemplateVariables(
+                String(campaignData.bodyOverride),
+                variables
+              )
+            : substituteTemplateVariables(template.body, variables);
+
+          // Create email history record
+          const [emailRecord] = await db
+            .insert(emailHistory)
+            .values({
               organizationId: campaign.organizationId,
-            });
-
-            // Merge recipient-specific data with campaign data
-            const recipientData = (recipient.recipientData ?? {}) as Record<string, unknown>;
-            const variables: Record<string, string | number | boolean> = {
-              ...campaignVariables,
-              first_name: recipient.name?.split(" ")[0] || "there",
-              email: recipient.email,
-              unsubscribe_url: unsubscribeUrl, // INT-RES-007: Add unsubscribe URL to template variables
-              ...Object.fromEntries(
-                Object.entries(recipientData).filter(([, v]) =>
-                  typeof v === "string" || typeof v === "number" || typeof v === "boolean"
-                )
-              ) as Record<string, string | number | boolean>,
-            };
-
-            // Check for subject/body override
-            const subject = campaignData.subjectOverride
-              ? substituteTemplateVariables(String(campaignData.subjectOverride), variables)
-              : substituteTemplateVariables(template.subject, variables);
-            const bodyHtml = campaignData.bodyOverride
-              ? substituteTemplateVariables(String(campaignData.bodyOverride), variables)
-              : substituteTemplateVariables(template.body, variables);
-
-            // Create email history record
-            const [emailRecord] = await db
-              .insert(emailHistory)
-              .values({
-                organizationId: campaign.organizationId,
-                senderId: campaign.createdById,
-                fromAddress: `noreply@${TRACKING_BASE_URL.replace(/https?:\/\//, "").split("/")[0]}`,
-                toAddress: recipient.email,
-                customerId: recipient.contactId, // Link to contact's customer if available
-                subject,
-                bodyHtml,
-                status: "pending",
-              } as NewEmailHistory)
-              .returning();
-
-            // Prepare email with tracking
-            const { html: trackedHtml } = prepareEmailForTracking(
+              senderId: campaign.createdById,
+              fromAddress: `noreply@${TRACKING_BASE_URL.replace(/https?:\/\//, "").split("/")[0]}`,
+              toAddress: recipient.email,
+              customerId: recipient.contactId, // Link to contact's customer if available
+              subject,
               bodyHtml,
-              emailRecord.id
-            );
+              status: "pending",
+            } as NewEmailHistory)
+            .returning();
 
-            // Update email history with tracked HTML
-            await db
-              .update(emailHistory)
-              .set({ bodyHtml: trackedHtml })
-              .where(eq(emailHistory.id, emailRecord.id));
+          // Prepare email with tracking
+          const { html: trackedHtml } = prepareEmailForTracking(
+            bodyHtml,
+            emailRecord.id
+          );
 
-            // Get sender email from environment
-            const fromEmail = process.env.EMAIL_FROM || "noreply@resend.dev";
-            const fromName = process.env.EMAIL_FROM_NAME || "Renoz CRM";
-            const fromAddress = `${fromName} <${fromEmail}>`;
+          // Update email history with tracked HTML
+          await db
+            .update(emailHistory)
+            .set({ bodyHtml: trackedHtml })
+            .where(eq(emailHistory.id, emailRecord.id));
 
-            // Send the email via Resend with List-Unsubscribe headers
-            const { data: sendResult, error: sendError } = await resend.emails.send({
+          // Get sender email from environment
+          const fromEmail = process.env.EMAIL_FROM || "noreply@resend.dev";
+          const fromName = process.env.EMAIL_FROM_NAME || "Renoz CRM";
+          const fromAddress = `${fromName} <${fromEmail}>`;
+
+          // Send the email via Resend with List-Unsubscribe headers
+          const { data: sendResult, error: sendError } =
+            await resend.emails.send({
               from: fromAddress,
               to: [recipient.email],
               subject,
               html: trackedHtml,
               headers: {
                 // INT-RES-007: CAN-SPAM compliant unsubscribe headers
-                'List-Unsubscribe': `<${unsubscribeUrl}>`,
-                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+                "List-Unsubscribe": `<${unsubscribeUrl}>`,
+                "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
               },
             });
 
-            if (sendError) {
-              throw new Error(sendError.message || "Failed to send email via Resend");
-            }
+          if (sendError) {
+            throw new Error(
+              sendError.message || "Failed to send email via Resend"
+            );
+          }
 
-            await io.logger.info(`Sent email to recipient (emailHistoryId: ${emailRecord.id}, resendMessageId: ${sendResult?.id})`);
+          logger.info(
+            `Sent email to recipient (emailHistoryId: ${emailRecord.id}, resendMessageId: ${sendResult?.id})`
+          );
 
-            // Update recipient status to sent
-            await db
-              .update(campaignRecipients)
-              .set({
-                status: "sent",
-                sentAt: new Date(),
-                emailHistoryId: emailRecord.id,
-              })
-              .where(eq(campaignRecipients.id, recipient.id));
+          // Update recipient status to sent
+          await db
+            .update(campaignRecipients)
+            .set({
+              status: "sent",
+              sentAt: new Date(),
+              emailHistoryId: emailRecord.id,
+            })
+            .where(eq(campaignRecipients.id, recipient.id));
 
-            // Update email history status with Resend message ID for webhook correlation
-            await db
-              .update(emailHistory)
-              .set({
-                status: "sent",
-                sentAt: new Date(),
-                resendMessageId: sendResult?.id,
-              })
-              .where(eq(emailHistory.id, emailRecord.id));
+          // Update email history status with Resend message ID for webhook correlation
+          await db
+            .update(emailHistory)
+            .set({
+              status: "sent",
+              sentAt: new Date(),
+              resendMessageId: sendResult?.id,
+            })
+            .where(eq(emailHistory.id, emailRecord.id));
 
-            // Collect activity input for batch insert (PERF-001)
-            activityInputs.push({
-              emailId: emailRecord.id,
-              organizationId: campaign.organizationId,
-              userId: campaign.createdById,
-              customerId: recipient.contactId, // Link to contact's customer if available
-              subject,
-              recipientEmail: recipient.email,
-              recipientName: recipient.name,
-            });
-
-            totalSent++;
+          // Collect activity input for batch insert (PERF-001)
+          activityInputs.push({
+            emailId: emailRecord.id,
+            organizationId: campaign.organizationId,
+            userId: campaign.createdById,
+            customerId: recipient.contactId, // Link to contact's customer if available
+            subject,
+            recipientEmail: recipient.email,
+            recipientName: recipient.name,
           });
+
+          totalSent++;
         } catch (error) {
-          await io.logger.error(`Failed to send to ${recipient.email}`, {
+          logger.error(`Failed to send to ${recipient.email}`, {
             error: error instanceof Error ? error.message : String(error),
           });
 
@@ -392,7 +440,8 @@ export const sendCampaignJob = client.defineJob({
             .set({
               status: "failed",
               failedAt: new Date(),
-              errorMessage: error instanceof Error ? error.message : "Unknown error",
+              errorMessage:
+                error instanceof Error ? error.message : "Unknown error",
             })
             .where(eq(campaignRecipients.id, recipient.id));
 
@@ -404,9 +453,11 @@ export const sendCampaignJob = client.defineJob({
       if (activityInputs.length > 0) {
         const batchResult = await createEmailActivitiesBatch(activityInputs);
         if (!batchResult.success) {
-          await io.logger.error(`Failed to batch create activities: ${batchResult.error}`);
+          logger.error(
+            `Failed to batch create activities: ${batchResult.error}`
+          );
         } else {
-          await io.logger.info(`Created ${batchResult.count} activity records in batch`);
+          logger.info(`Created ${batchResult.count} activity records in batch`);
         }
       }
 
@@ -427,12 +478,14 @@ export const sendCampaignJob = client.defineJob({
       totalFailed = 0;
       totalSkipped = 0;
 
-      await io.logger.info(`Batch ${batchNumber} complete: ${batchSent} sent, ${batchFailed} failed, ${batchSkipped} skipped (suppressed)`);
+      logger.info(
+        `Batch ${batchNumber} complete: ${batchSent} sent, ${batchFailed} failed, ${batchSkipped} skipped (suppressed)`
+      );
 
       // Delay between batches to respect rate limits
       if (hasMore && recipients.length === batchSize) {
-        await io.logger.info(`Waiting ${batchDelayMs}ms before next batch...`);
-        await io.wait(`batch-delay-${batchNumber}`, batchDelayMs);
+        logger.info(`Waiting ${batchDelayMs}ms before next batch...`);
+        await wait.for({ seconds: batchDelayMs / 1000 });
       }
     }
 
@@ -452,7 +505,7 @@ export const sendCampaignJob = client.defineJob({
       })
       .where(eq(emailCampaigns.id, campaignId));
 
-    await io.logger.info(`Campaign ${campaignId} complete`, {
+    logger.info(`Campaign ${campaignId} complete`, {
       totalSent: finalCampaign?.sentCount ?? 0,
       totalFailed: finalCampaign?.failedCount ?? 0,
       batches: batchNumber,
@@ -470,29 +523,19 @@ export const sendCampaignJob = client.defineJob({
   },
 });
 
-// ============================================================================
-// PAUSE/RESUME CAMPAIGN JOB
-// ============================================================================
-
 /**
- * Pause Campaign Job
+ * Pause Campaign Task
  *
  * Pauses a running campaign.
  */
-export const pauseCampaignJob = client.defineJob({
+export const pauseCampaignTask = task({
   id: "pause-campaign",
-  name: "Pause Campaign",
-  version: "1.0.0",
-  trigger: eventTrigger({
-    name: "campaign.pause",
-    schema: z.object({
-      campaignId: z.string().uuid(),
-    }),
-  }),
-  run: async (payload, io) => {
+  run: async (
+    payload: PauseCampaignPayload
+  ): Promise<{ campaignId: string; status: string }> => {
     const { campaignId } = payload;
 
-    await io.logger.info(`Pausing campaign: ${campaignId}`);
+    logger.info(`Pausing campaign: ${campaignId}`);
 
     const [updated] = await db
       .update(emailCampaigns)
@@ -506,33 +549,27 @@ export const pauseCampaignJob = client.defineJob({
       .returning();
 
     if (!updated) {
-      throw new Error(`Campaign ${campaignId} not found or not currently sending`);
+      throw new Error(
+        `Campaign ${campaignId} not found or not currently sending`
+      );
     }
 
-    await io.logger.info(`Campaign ${campaignId} paused`);
+    logger.info(`Campaign ${campaignId} paused`);
 
     return { campaignId, status: "paused" };
   },
 });
 
-// ============================================================================
-// SCHEDULED CAMPAIGN PROCESSOR
-// ============================================================================
-
 /**
- * Process Scheduled Campaigns Job
+ * Process Scheduled Campaigns Task
  *
  * Runs periodically to check for campaigns due to send.
  */
-export const processScheduledCampaignsJob = client.defineJob({
+export const processScheduledCampaignsTask = schedules.task({
   id: "process-scheduled-campaigns",
-  name: "Process Scheduled Campaigns",
-  version: "1.0.0",
-  trigger: eventTrigger({
-    name: "campaigns.process-scheduled",
-  }),
-  run: async (_payload, io) => {
-    await io.logger.info("Checking for scheduled campaigns to send");
+  cron: "*/5 * * * *",
+  run: async (): Promise<{ processed: number; campaignIds: string[] }> => {
+    logger.info("Checking for scheduled campaigns to send");
 
     // Find campaigns that are scheduled and due
     const dueCampaigns = await db
@@ -546,21 +583,23 @@ export const processScheduledCampaignsJob = client.defineJob({
       )
       .limit(10); // Process up to 10 campaigns per run
 
-    await io.logger.info(`Found ${dueCampaigns.length} scheduled campaigns to process`);
+    logger.info(`Found ${dueCampaigns.length} scheduled campaigns to process`);
 
     for (const campaign of dueCampaigns) {
-      // Trigger the send job for each campaign
-      await io.sendEvent(`trigger-campaign-${campaign.id}`, {
-        name: "campaign.send",
-        payload: { campaignId: campaign.id },
-      });
-
-      await io.logger.info(`Triggered send for campaign ${campaign.id}`);
+      // Trigger the send task for each campaign
+      await sendCampaignTask.trigger({ campaignId: campaign.id });
+      logger.info(`Triggered send for campaign ${campaign.id}`);
     }
 
     return {
       processed: dueCampaigns.length,
-      campaignIds: dueCampaigns.map(c => c.id),
+      campaignIds: dueCampaigns.map((c) => c.id),
     };
   },
 });
+
+
+// Legacy exports for backward compatibility
+export const sendCampaignJob = sendCampaignTask;
+export const pauseCampaignJob = pauseCampaignTask;
+export const processScheduledCampaignsJob = processScheduledCampaignsTask;

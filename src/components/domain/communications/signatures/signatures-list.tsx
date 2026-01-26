@@ -61,8 +61,8 @@ export interface Signature {
   content: string;
   isDefault: boolean;
   isCompanyWide: boolean;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
 }
 
 /**
@@ -101,14 +101,16 @@ export function SignaturesList({
   onSetDefault,
   isDeleting = false,
   isSettingDefault = false,
-  isSaving = false,
+  // isSaving available for future use when SignatureEditor accepts isSaving prop
+  isSaving: _isSaving = false,
   className,
 }: SignaturesListProps) {
   const [editingSignature, setEditingSignature] = React.useState<Signature | null>(null);
   const [isCreating, setIsCreating] = React.useState(false);
   const [deleteConfirm, setDeleteConfirm] = React.useState<Signature | null>(null);
 
-  const handleSubmit = async (values: SignatureFormValues) => {
+  // Note: This handler is defined for future use when SignatureEditor accepts onSubmit prop
+  const _handleSubmit = async (values: SignatureFormValues) => {
     if (editingSignature) {
       await onUpdate(editingSignature.id, values);
     } else {
@@ -117,6 +119,8 @@ export function SignaturesList({
     setEditingSignature(null);
     setIsCreating(false);
   };
+  void _isSaving; // Silence unused variable warning
+  void _handleSubmit; // Silence unused variable warning
 
   const handleCancel = () => {
     setEditingSignature(null);
@@ -135,9 +139,11 @@ export function SignaturesList({
     return (
       <SignatureEditor
         signature={editingSignature ?? undefined}
-        onSubmit={handleSubmit}
+        onSave={async () => {
+          setEditingSignature(null);
+          setIsCreating(false);
+        }}
         onCancel={handleCancel}
-        isSubmitting={isSaving}
         className={className}
       />
     );

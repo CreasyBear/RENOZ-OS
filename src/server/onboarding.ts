@@ -8,7 +8,7 @@
 import { createServerFn } from "@tanstack/react-start"
 import { eq, sql } from "drizzle-orm"
 import { db } from "~/lib/db"
-import { organizations, customers, products, opportunities } from "../../drizzle/schema"
+import { organizations, customers, products, opportunities, type OrganizationSettings } from "../../drizzle/schema"
 import { withAuth } from "~/lib/server/protected"
 
 // ============================================================================
@@ -48,7 +48,7 @@ export const getOnboardingProgress = createServerFn({ method: "GET" }).handler(
       .where(eq(organizations.id, ctx.organizationId))
       .limit(1)
 
-    const settings = (org?.settings ?? {}) as Record<string, unknown>
+    const settings = (org?.settings ?? {}) as OrganizationSettings
     const dismissed = Boolean(settings.onboardingChecklistDismissed)
 
     // If already dismissed, skip expensive existence checks
@@ -112,10 +112,10 @@ export const dismissWelcomeChecklist = createServerFn({
     .where(eq(organizations.id, ctx.organizationId))
     .limit(1)
 
-  const currentSettings = (org?.settings ?? {}) as Record<string, unknown>
+  const currentSettings = (org?.settings ?? {}) as OrganizationSettings
 
   // Merge with new dismissed state
-  const newSettings = {
+  const newSettings: OrganizationSettings = {
     ...currentSettings,
     onboardingChecklistDismissed: true,
     onboardingChecklistDismissedAt: new Date().toISOString(),

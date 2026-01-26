@@ -45,7 +45,7 @@ import {
   createPriceTier,
   updatePriceTier,
   deletePriceTier,
-} from "@/lib/server/functions/product-pricing";
+} from "@/server/functions/products/product-pricing";
 
 // Tier form schema
 const tierFormSchema = z.object({

@@ -61,6 +61,7 @@ import {
 } from '@/lib/db/pagination';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { NotFoundError, ConflictError } from '@/lib/server/errors';
 
 // ============================================================================
 // CUSTOMER CRUD
@@ -256,7 +257,7 @@ export const getCustomerById = createServerFn({ method: 'GET' })
     });
 
     if (!customer) {
-      throw new Error('Customer not found');
+      throw new NotFoundError('Customer not found', 'customer');
     }
 
     return customer;
@@ -329,7 +330,7 @@ export const updateCustomer = createServerFn({ method: 'POST' })
         .returning();
 
       if (result.length === 0) {
-        throw new Error('Customer not found');
+        throw new NotFoundError('Customer not found', 'customer');
       }
 
       await enqueueSearchIndexOutbox(
@@ -380,7 +381,7 @@ export const deleteCustomer = createServerFn({ method: 'POST' })
         .returning();
 
       if (result.length === 0) {
-        throw new Error('Customer not found');
+        throw new NotFoundError('Customer not found', 'customer');
       }
 
       await enqueueSearchIndexOutbox(
@@ -465,7 +466,7 @@ export const updateContact = createServerFn({ method: 'POST' })
       .returning();
 
     if (result.length === 0) {
-      throw new Error('Contact not found');
+      throw new NotFoundError('Contact not found', 'contact');
     }
 
     return result[0];
@@ -487,7 +488,7 @@ export const deleteContact = createServerFn({ method: 'POST' })
       .returning();
 
     if (result.length === 0) {
-      throw new Error('Contact not found');
+      throw new NotFoundError('Contact not found', 'contact');
     }
 
     return { success: true, id: result[0].id };
@@ -554,7 +555,7 @@ export const updateAddress = createServerFn({ method: 'POST' })
       .returning();
 
     if (result.length === 0) {
-      throw new Error('Address not found');
+      throw new NotFoundError('Address not found', 'address');
     }
 
     return result[0];
@@ -576,7 +577,7 @@ export const deleteAddress = createServerFn({ method: 'POST' })
       .returning();
 
     if (result.length === 0) {
-      throw new Error('Address not found');
+      throw new NotFoundError('Address not found', 'address');
     }
 
     return { success: true, id: result[0].id };
@@ -706,7 +707,7 @@ export const updateCustomerTag = createServerFn({ method: 'POST' })
       .returning();
 
     if (result.length === 0) {
-      throw new Error('Tag not found');
+      throw new NotFoundError('Tag not found', 'customerTag');
     }
 
     return result[0];
@@ -728,7 +729,7 @@ export const deleteCustomerTag = createServerFn({ method: 'POST' })
       .returning();
 
     if (result.length === 0) {
-      throw new Error('Tag not found');
+      throw new NotFoundError('Tag not found', 'customerTag');
     }
 
     return { success: true, id: result[0].id };
@@ -758,7 +759,7 @@ export const assignCustomerTag = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (existing.length > 0) {
-      throw new Error('Tag already assigned to this customer');
+      throw new ConflictError('Tag already assigned to this customer');
     }
 
     const result = await db
@@ -805,7 +806,7 @@ export const unassignCustomerTag = createServerFn({ method: 'POST' })
       .returning();
 
     if (result.length === 0) {
-      throw new Error('Tag assignment not found');
+      throw new NotFoundError('Tag assignment not found', 'customerTagAssignment');
     }
 
     // Decrement usage count
@@ -981,7 +982,7 @@ export const updateCustomerPriority = createServerFn({ method: 'POST' })
       .returning();
 
     if (result.length === 0) {
-      throw new Error('Customer priority settings not found');
+      throw new NotFoundError('Customer priority settings not found', 'customerPriority');
     }
 
     return result[0];
@@ -1138,135 +1139,174 @@ export const mergeCustomers = createServerFn({ method: 'POST' })
       );
 
     if (existingCustomers.length !== allCustomerIds.length) {
-      throw new Error('One or more customers not found');
+      throw new NotFoundError('One or more customers not found', 'customer');
     }
 
     const primary = existingCustomers.find((c) => c.id === primaryCustomerId);
     if (!primary) {
-      throw new Error('Primary customer not found');
+      throw new NotFoundError('Primary customer not found', 'customer');
     }
 
-    // Move contacts to primary customer
-    await db
-      .update(contacts)
-      .set({ customerId: primaryCustomerId })
-      .where(inArray(contacts.customerId, duplicateCustomerIds));
+    // Wrap entire merge operation in transaction for atomicity
+    await db.transaction(async (tx) => {
+      // Move contacts to primary customer (defense-in-depth: org filter)
+      await tx
+        .update(contacts)
+        .set({ customerId: primaryCustomerId })
+        .where(and(
+          inArray(contacts.customerId, duplicateCustomerIds),
+          eq(contacts.organizationId, ctx.organizationId)
+        ));
 
-    // Move addresses to primary customer
-    await db
-      .update(addresses)
-      .set({ customerId: primaryCustomerId })
-      .where(inArray(addresses.customerId, duplicateCustomerIds));
+      // Move addresses to primary customer (defense-in-depth: org filter)
+      await tx
+        .update(addresses)
+        .set({ customerId: primaryCustomerId })
+        .where(and(
+          inArray(addresses.customerId, duplicateCustomerIds),
+          eq(addresses.organizationId, ctx.organizationId)
+        ));
 
-    // Move activities to primary customer
-    await db
-      .update(customerActivities)
-      .set({ customerId: primaryCustomerId })
-      .where(inArray(customerActivities.customerId, duplicateCustomerIds));
+      // Move activities to primary customer (defense-in-depth: org filter)
+      await tx
+        .update(customerActivities)
+        .set({ customerId: primaryCustomerId })
+        .where(and(
+          inArray(customerActivities.customerId, duplicateCustomerIds),
+          eq(customerActivities.organizationId, ctx.organizationId)
+        ));
 
-    // Move tag assignments (with conflict handling)
-    const duplicateAssignments = await db
-      .select()
-      .from(customerTagAssignments)
-      .where(inArray(customerTagAssignments.customerId, duplicateCustomerIds));
+      // Move tag assignments (with conflict handling)
+      const duplicateAssignments = await tx
+        .select()
+        .from(customerTagAssignments)
+        .where(and(
+          inArray(customerTagAssignments.customerId, duplicateCustomerIds),
+          eq(customerTagAssignments.organizationId, ctx.organizationId)
+        ));
 
-    if (duplicateAssignments.length > 0) {
-      await db
-        .insert(customerTagAssignments)
-        .values(
-          duplicateAssignments.map((assignment) => ({
-            customerId: primaryCustomerId,
-            tagId: assignment.tagId,
-            organizationId: ctx.organizationId,
-            assignedBy: ctx.user.id,
-            notes: assignment.notes,
-          }))
-        )
-        .onConflictDoNothing();
-    }
+      if (duplicateAssignments.length > 0) {
+        await tx
+          .insert(customerTagAssignments)
+          .values(
+            duplicateAssignments.map((assignment) => ({
+              customerId: primaryCustomerId,
+              tagId: assignment.tagId,
+              organizationId: ctx.organizationId,
+              assignedBy: ctx.user.id,
+              notes: assignment.notes,
+            }))
+          )
+          .onConflictDoNothing();
+      }
 
-    // Delete old assignments
-    await db
-      .delete(customerTagAssignments)
-      .where(inArray(customerTagAssignments.customerId, duplicateCustomerIds));
+      // Delete old assignments (defense-in-depth: org filter)
+      await tx
+        .delete(customerTagAssignments)
+        .where(and(
+          inArray(customerTagAssignments.customerId, duplicateCustomerIds),
+          eq(customerTagAssignments.organizationId, ctx.organizationId)
+        ));
 
-    // Move health metrics to primary
-    await db
-      .update(customerHealthMetrics)
-      .set({ customerId: primaryCustomerId })
-      .where(inArray(customerHealthMetrics.customerId, duplicateCustomerIds));
+      // Move health metrics to primary (defense-in-depth: org filter)
+      await tx
+        .update(customerHealthMetrics)
+        .set({ customerId: primaryCustomerId })
+        .where(and(
+          inArray(customerHealthMetrics.customerId, duplicateCustomerIds),
+          eq(customerHealthMetrics.organizationId, ctx.organizationId)
+        ));
 
-    // Move priority settings (keep primary's if exists)
-    const primaryHasPriority = await db
-      .select()
-      .from(customerPriorities)
-      .where(eq(customerPriorities.customerId, primaryCustomerId))
-      .limit(1);
-
-    if (primaryHasPriority.length === 0) {
-      // Move first duplicate's priority to primary
-      const duplicatePriority = await db
+      // Move priority settings (keep primary's if exists)
+      const primaryHasPriority = await tx
         .select()
         .from(customerPriorities)
-        .where(inArray(customerPriorities.customerId, duplicateCustomerIds))
+        .where(and(
+          eq(customerPriorities.customerId, primaryCustomerId),
+          eq(customerPriorities.organizationId, ctx.organizationId)
+        ))
         .limit(1);
 
-      if (duplicatePriority.length > 0) {
-        await db
-          .update(customerPriorities)
-          .set({ customerId: primaryCustomerId })
-          .where(eq(customerPriorities.id, duplicatePriority[0].id));
-      }
-    }
+      if (primaryHasPriority.length === 0) {
+        // Move first duplicate's priority to primary
+        const duplicatePriority = await tx
+          .select()
+          .from(customerPriorities)
+          .where(and(
+            inArray(customerPriorities.customerId, duplicateCustomerIds),
+            eq(customerPriorities.organizationId, ctx.organizationId)
+          ))
+          .limit(1);
 
-    // Delete remaining duplicate priorities
-    await db
-      .delete(customerPriorities)
-      .where(inArray(customerPriorities.customerId, duplicateCustomerIds));
-
-    // Apply field resolutions if provided (merge specific fields)
-    if (fieldResolutions) {
-      const duplicates = existingCustomers.filter((c) => duplicateCustomerIds.includes(c.id));
-      const updates: Partial<typeof primary> = {};
-
-      for (const [field, resolution] of Object.entries(fieldResolutions)) {
-        if (resolution === 'duplicate' && duplicates.length > 0) {
-          // Use first duplicate's value
-          const duplicateValue = duplicates[0][field as keyof typeof primary];
-          if (duplicateValue !== undefined) {
-            (updates as Record<string, unknown>)[field] = duplicateValue;
-          }
-        } else if (resolution === 'merge') {
-          // Merge arrays (for tags) or concatenate strings
-          const primaryValue = primary[field as keyof typeof primary];
-          const duplicateValues = duplicates
-            .map((d) => d[field as keyof typeof primary])
-            .filter(Boolean);
-
-          if (Array.isArray(primaryValue)) {
-            const merged = [...new Set([...primaryValue, ...duplicateValues.flat()])];
-            (updates as Record<string, unknown>)[field] = merged;
-          }
+        if (duplicatePriority.length > 0) {
+          await tx
+            .update(customerPriorities)
+            .set({ customerId: primaryCustomerId })
+            .where(and(
+              eq(customerPriorities.id, duplicatePriority[0].id),
+              eq(customerPriorities.organizationId, ctx.organizationId)
+            ));
         }
-        // "primary" resolution keeps primary value (no action needed)
       }
 
-      if (Object.keys(updates).length > 0) {
-        await db
-          .update(customers)
-          .set({ ...updates, updatedBy: ctx.user.id })
-          .where(eq(customers.id, primaryCustomerId));
-      }
-    }
+      // Delete remaining duplicate priorities (defense-in-depth: org filter)
+      await tx
+        .delete(customerPriorities)
+        .where(and(
+          inArray(customerPriorities.customerId, duplicateCustomerIds),
+          eq(customerPriorities.organizationId, ctx.organizationId)
+        ));
 
-    // Soft-delete duplicate customers
-    await db
-      .update(customers)
-      .set({
-        deletedAt: new Date(),
-        updatedBy: ctx.user.id,
-      })
-      .where(inArray(customers.id, duplicateCustomerIds));
+      // Apply field resolutions if provided (merge specific fields)
+      if (fieldResolutions) {
+        const duplicates = existingCustomers.filter((c) => duplicateCustomerIds.includes(c.id));
+        const updates: Partial<typeof primary> = {};
+
+        for (const [field, resolution] of Object.entries(fieldResolutions)) {
+          if (resolution === 'duplicate' && duplicates.length > 0) {
+            // Use first duplicate's value
+            const duplicateValue = duplicates[0][field as keyof typeof primary];
+            if (duplicateValue !== undefined) {
+              (updates as Record<string, unknown>)[field] = duplicateValue;
+            }
+          } else if (resolution === 'merge') {
+            // Merge arrays (for tags) or concatenate strings
+            const primaryValue = primary[field as keyof typeof primary];
+            const duplicateValues = duplicates
+              .map((d) => d[field as keyof typeof primary])
+              .filter(Boolean);
+
+            if (Array.isArray(primaryValue)) {
+              const merged = [...new Set([...primaryValue, ...duplicateValues.flat()])];
+              (updates as Record<string, unknown>)[field] = merged;
+            }
+          }
+          // "primary" resolution keeps primary value (no action needed)
+        }
+
+        if (Object.keys(updates).length > 0) {
+          await tx
+            .update(customers)
+            .set({ ...updates, updatedBy: ctx.user.id })
+            .where(and(
+              eq(customers.id, primaryCustomerId),
+              eq(customers.organizationId, ctx.organizationId)
+            ));
+        }
+      }
+
+      // Soft-delete duplicate customers (defense-in-depth: org filter)
+      await tx
+        .update(customers)
+        .set({
+          deletedAt: new Date(),
+          updatedBy: ctx.user.id,
+        })
+        .where(and(
+          inArray(customers.id, duplicateCustomerIds),
+          eq(customers.organizationId, ctx.organizationId)
+        ));
+    });
 
     return {
       success: true,

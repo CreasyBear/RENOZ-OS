@@ -348,7 +348,7 @@ export function useRecognitionSummary(options: UseRecognitionSummaryOptions) {
   const fn = useServerFn(getRecognitionSummary);
 
   return useQuery({
-    queryKey: queryKeys.financial.recognitionSummary(dateFrom, dateTo),
+    queryKey: queryKeys.financial.recognitionSummary(dateFrom.toISOString(), dateTo.toISOString()),
     queryFn: () => fn({ data: { dateFrom, dateTo, groupBy } }),
     enabled,
     staleTime: 60 * 1000,
@@ -498,6 +498,122 @@ export function usePaymentSchedule(orderId: string, enabled = true) {
     queryFn: () => fn({ data: { orderId } }),
     enabled: enabled && !!orderId,
     staleTime: 30 * 1000,
+  });
+}
+
+// ============================================================================
+// CUSTOMER STATEMENT HOOKS
+// ============================================================================
+
+// Statements imports
+import {
+  generateStatement,
+  listStatements,
+  markStatementSent,
+  getStatementHistory,
+  getStatement,
+} from '@/server/functions/financial/statements';
+
+export interface UseStatementsOptions {
+  customerId: string;
+  page?: number;
+  pageSize?: number;
+  enabled?: boolean;
+}
+
+/**
+ * List statement history for a customer.
+ */
+export function useStatements(options: UseStatementsOptions) {
+  const { enabled = true, customerId, page = 1, pageSize = 10 } = options;
+  const listFn = useServerFn(listStatements);
+
+  return useQuery({
+    queryKey: queryKeys.financial.statements(customerId),
+    queryFn: () => listFn({ data: { customerId, page, pageSize } }),
+    enabled: enabled && !!customerId && customerId !== 'placeholder-customer-id',
+    staleTime: 30 * 1000,
+  });
+}
+
+/**
+ * Get single statement by ID.
+ */
+export function useStatement(statementId: string, enabled = true) {
+  const getFn = useServerFn(getStatement);
+
+  return useQuery({
+    queryKey: [...queryKeys.financial.all, 'statement', statementId],
+    queryFn: () => getFn({ data: { id: statementId } }),
+    enabled: enabled && !!statementId,
+    staleTime: 60 * 1000,
+  });
+}
+
+/**
+ * Get statement history for a customer.
+ */
+export function useStatementHistory(
+  customerId: string,
+  options: { page?: number; pageSize?: number; dateFrom?: Date; dateTo?: Date } = {},
+  enabled = true
+) {
+  const getHistoryFn = useServerFn(getStatementHistory);
+  const { page = 1, pageSize = 10, dateFrom, dateTo } = options;
+
+  return useQuery({
+    queryKey: [...queryKeys.financial.statements(customerId), 'history', { page, pageSize, dateFrom, dateTo }],
+    queryFn: () => getHistoryFn({ data: { customerId, page, pageSize, dateFrom, dateTo } }),
+    enabled: enabled && !!customerId,
+    staleTime: 30 * 1000,
+  });
+}
+
+export interface GenerateStatementInput {
+  customerId: string;
+  dateFrom: string;
+  dateTo: string;
+}
+
+/**
+ * Generate a new statement for a customer.
+ */
+export function useGenerateStatement() {
+  const queryClient = useQueryClient();
+  const generateFn = useServerFn(generateStatement);
+
+  return useMutation({
+    mutationFn: (input: GenerateStatementInput) =>
+      generateFn({
+        data: {
+          customerId: input.customerId,
+          startDate: input.dateFrom,
+          endDate: input.dateTo,
+        },
+      }),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.financial.statements(variables.customerId),
+      });
+    },
+  });
+}
+
+/**
+ * Mark a statement as sent via email.
+ */
+export function useMarkStatementSent() {
+  const queryClient = useQueryClient();
+  const markSentFn = useServerFn(markStatementSent);
+
+  return useMutation({
+    mutationFn: (data: { statementId: string; sentToEmail: string; customerId: string }) =>
+      markSentFn({ data: { statementId: data.statementId, sentToEmail: data.sentToEmail } }),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.financial.statements(variables.customerId),
+      });
+    },
   });
 }
 

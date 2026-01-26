@@ -32,7 +32,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/shared/empty-state";
-import { getProductMovements } from "@/lib/server/functions/product-inventory";
+import { getProductMovements } from "@/server/functions/products/product-inventory";
 
 interface InventoryHistoryProps {
   productId: string;

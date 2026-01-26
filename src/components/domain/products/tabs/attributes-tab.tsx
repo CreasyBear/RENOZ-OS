@@ -35,7 +35,7 @@ import {
   getProductAttributeValues,
   deleteProductAttribute,
   checkRequiredAttributes,
-} from "@/lib/server/functions/product-attributes";
+} from "@/server/functions/products/product-attributes";
 
 interface ProductAttributesTabProps {
   productId: string;

@@ -19,6 +19,7 @@ import { Plus } from 'lucide-react';
 // ROUTE DEFINITION
 // ============================================================================
 
+// @ts-expect-error - Template placeholder for domain name
 export const Route = createFileRoute('/_authenticated/DOMAIN_NAME/')({
   component: DomainPage,
   errorComponent: ({ error }) => (
@@ -43,6 +44,7 @@ function DomainPage() {
         title="Domain Name"
         description="Brief description of this page"
         actions={
+          // @ts-expect-error - Template placeholder for domain name
           <Button onClick={() => navigate({ to: '/DOMAIN_NAME/create' })}>
             <Plus className="mr-2 h-4 w-4" />
             Add Item

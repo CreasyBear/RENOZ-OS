@@ -73,15 +73,15 @@ export interface Template {
   bodyHtml: string;
   isActive: boolean;
   version: number;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date | string;
+  updatedAt: Date | string;
 }
 
 export interface TemplateVersion {
   id: string;
   name: string;
   version: number;
-  createdAt: string;
+  createdAt: Date | string;
   updatedBy: string | null;
 }
 
@@ -162,7 +162,8 @@ export function TemplatesList({
   onFetchVersions,
   isDeleting = false,
   isCloning = false,
-  isSaving = false,
+  // isSaving available for future use when TemplateEditor accepts isSaving prop
+  isSaving: _isSaving = false,
   className,
 }: TemplatesListProps) {
   const [editingTemplate, setEditingTemplate] =
@@ -189,7 +190,8 @@ export function TemplatesList({
     );
   }, [templates, searchQuery]);
 
-  const handleSubmit = async (values: TemplateFormValues) => {
+  // Note: This handler is defined for future use when TemplateEditor accepts onSubmit prop
+  const _handleSubmit = async (values: TemplateFormValues) => {
     if (editingTemplate) {
       await onUpdate(editingTemplate.id, values);
     } else {
@@ -198,6 +200,8 @@ export function TemplatesList({
     setEditingTemplate(null);
     setIsCreating(false);
   };
+  void _isSaving; // Silence unused variable warning
+  void _handleSubmit; // Silence unused variable warning
 
   const handleCancel = () => {
     setEditingTemplate(null);
@@ -229,12 +233,14 @@ export function TemplatesList({
     return (
       <TemplateEditor
         template={editingTemplate ?? undefined}
-        onSubmit={handleSubmit}
+        onSave={async () => {
+          setEditingTemplate(null);
+          setIsCreating(false);
+        }}
         onCancel={handleCancel}
         onViewHistory={
           editingTemplate ? () => setVersionHistory(editingTemplate) : undefined
         }
-        isSubmitting={isSaving}
         className={className}
       />
     );

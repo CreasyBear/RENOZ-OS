@@ -128,11 +128,11 @@ export function OrderSummary({ className, showValidation = true }: OrderSummaryP
 
           {/* Order-level Discount */}
           {template.includeDiscounts &&
-            (formData.discountPercent > 0 || formData.discountAmount > 0) && (
+            ((formData.discountPercent ?? 0) > 0 || (formData.discountAmount ?? 0) > 0) && (
               <div className="text-muted-foreground flex items-center justify-between">
                 <span className="text-sm">
                   Discount
-                  {formData.discountPercent > 0 && ` (${formData.discountPercent}%)`}
+                  {(formData.discountPercent ?? 0) > 0 && ` (${formData.discountPercent}%)`}
                 </span>
                 <span className="font-mono text-sm">
                   -{formatCurrency(calculations.discountAmount)}

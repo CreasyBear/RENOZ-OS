@@ -137,9 +137,32 @@ function OpportunityDetailPage() {
   };
 
   // Handle update from form
-  const handleUpdate = async (updates: UpdateOpportunity) => {
+  // OpportunityForm passes Partial<OpportunityData> with nullable fields
+  // Convert to UpdateOpportunity format (undefined instead of null for optional strings)
+  const handleUpdate = async (updates: {
+    title?: string;
+    description?: string | null;
+    stage?: string;
+    probability?: number | null;
+    value?: number;
+    expectedCloseDate?: Date | string | null;
+    tags?: string[] | null;
+  }) => {
     try {
-      await updateMutation.mutateAsync({ id: opportunityId, ...updates });
+      const updatePayload: UpdateOpportunity = {
+        ...updates,
+        // Convert null to undefined for optional fields
+        description: updates.description ?? undefined,
+        stage: updates.stage as OpportunityStage | undefined,
+        probability: updates.probability ?? undefined,
+        // Convert Date to ISO string if needed
+        expectedCloseDate: updates.expectedCloseDate instanceof Date
+          ? updates.expectedCloseDate.toISOString().split('T')[0]
+          : updates.expectedCloseDate ?? undefined,
+        // Tags schema doesn't accept null, only undefined
+        tags: updates.tags ?? undefined,
+      };
+      await updateMutation.mutateAsync({ id: opportunityId, ...updatePayload });
       toastSuccess("Opportunity updated successfully.");
       setIsEditing(false);
     } catch {

@@ -369,3 +369,72 @@ export interface BatchInvitationSentPayload {
     expiresAt: string
   }>
 }
+
+// ============================================================================
+// DOCUMENT EVENTS
+// ============================================================================
+
+/**
+ * Document generation events triggered from server functions
+ */
+export const documentEvents = {
+  generateQuote: 'document.generate_quote',
+  generateInvoice: 'document.generate_invoice',
+  generated: 'document.generated',
+  failed: 'document.failed',
+} as const
+
+/**
+ * Generate quote document event payload
+ */
+export interface GenerateQuoteDocumentPayload {
+  orderId: string
+  orderNumber: string
+  organizationId: string
+  customerId: string
+  /** Optional: regenerate existing document */
+  regenerate?: boolean
+  /** Optional: ID of existing document to regenerate */
+  existingDocumentId?: string
+}
+
+/**
+ * Generate invoice document event payload
+ */
+export interface GenerateInvoiceDocumentPayload {
+  orderId: string
+  orderNumber: string
+  organizationId: string
+  customerId: string
+  /** Due date for the invoice */
+  dueDate: string
+  /** Optional: regenerate existing document */
+  regenerate?: boolean
+  /** Optional: ID of existing document to regenerate */
+  existingDocumentId?: string
+}
+
+/**
+ * Document generated event payload
+ */
+export interface DocumentGeneratedPayload {
+  documentId: string
+  documentType: 'quote' | 'invoice'
+  orderId: string
+  orderNumber: string
+  organizationId: string
+  storagePath: string
+  fileSize: number
+  checksum: string
+}
+
+/**
+ * Document failed event payload
+ */
+export interface DocumentFailedPayload {
+  orderId: string
+  orderNumber: string
+  organizationId: string
+  documentType: 'quote' | 'invoice'
+  error: string
+}

@@ -14,7 +14,7 @@ import { containsPattern } from '@/lib/db/utils';
 import { creditNotes, customers, orders } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { NotFoundError, ValidationError, ConflictError } from '@/lib/server/errors';
+import { NotFoundError, ValidationError, ConflictError, ServerError } from '@/lib/server/errors';
 import {
   idParamSchema,
   createCreditNoteSchema,
@@ -191,7 +191,7 @@ export const createCreditNote = createServerFn({ method: 'POST' })
     }
 
     // This should never be reached, but TypeScript needs it
-    throw new Error('Failed to generate unique credit note number after retries');
+    throw new ServerError('Failed to generate unique credit note number after retries');
   });
 
 // ============================================================================

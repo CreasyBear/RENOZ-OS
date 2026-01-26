@@ -49,7 +49,7 @@ import { EmptyState } from "@/components/shared/empty-state";
 import {
   setCustomerPrice,
   deleteCustomerPrice,
-} from "@/lib/server/functions/product-pricing";
+} from "@/server/functions/products/product-pricing";
 
 // Customer price form schema
 const customerPriceFormSchema = z.object({

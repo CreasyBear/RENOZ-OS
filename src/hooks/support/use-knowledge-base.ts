@@ -100,7 +100,7 @@ export function useUpdateKbCategory() {
   return useMutation({
     mutationFn: (data: UpdateCategoryInput) => updateCategory({ data }),
     onSuccess: (result) => {
-      queryClient.setQueryData(queryKeys.support.categoryDetail(result.id), result);
+      queryClient.setQueryData(queryKeys.support.kbCategoryDetail(result.id), result);
       queryClient.invalidateQueries({ queryKey: queryKeys.support.kbCategoryList() });
     },
   });
@@ -208,7 +208,7 @@ export function useUpdateKbArticle() {
   return useMutation({
     mutationFn: (data: UpdateArticleInput) => updateArticle({ data }),
     onSuccess: (result) => {
-      queryClient.setQueryData(queryKeys.support.articleDetail(result.id), result);
+      queryClient.setQueryData(queryKeys.support.kbArticleDetail(result.id), result);
       queryClient.invalidateQueries({ queryKey: queryKeys.support.kbArticleList() });
     },
   });

@@ -85,7 +85,7 @@ interface TimelineResponse {
   totalCount: number;
 }
 
-interface Filters {
+interface Filters extends Record<string, unknown> {
   type: OpportunityActivityType | "all";
   status: "all" | "completed" | "pending";
   dateFrom: string;

@@ -53,22 +53,3 @@ export function containsPattern(value: string): string {
   return `%${escapeLike(value)}%`;
 }
 
-/**
- * Escapes and creates a starts-with pattern.
- *
- * @param value - The user input to escape
- * @returns The escaped string with trailing % wildcard
- */
-export function startsWithPattern(value: string): string {
-  return `${escapeLike(value)}%`;
-}
-
-/**
- * Escapes and creates an ends-with pattern.
- *
- * @param value - The user input to escape
- * @returns The escaped string with leading % wildcard
- */
-export function endsWithPattern(value: string): string {
-  return `%${escapeLike(value)}`;
-}

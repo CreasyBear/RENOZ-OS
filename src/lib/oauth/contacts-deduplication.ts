@@ -41,6 +41,7 @@ export interface DeduplicationConfig {
 }
 
 export const DEFAULT_DEDUPLICATION_CONFIG: DeduplicationConfig = {
+  enabled: true,
   similarityThreshold: 0.85,
   autoMerge: false,
   conflictResolution: 'most_complete',

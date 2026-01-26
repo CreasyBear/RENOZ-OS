@@ -42,6 +42,7 @@ import {
   type RecognitionSummary,
   type DeferredRevenueBalance,
 } from '@/lib/schemas';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
 // CONSTANTS
@@ -115,7 +116,7 @@ export const recognizeRevenue = createServerFn()
       );
 
     if (!order) {
-      throw new Error('Order not found');
+      throw new NotFoundError('Order not found', 'order');
     }
 
     // Determine amount to recognize
@@ -171,7 +172,7 @@ export const createDeferredRevenue = createServerFn()
       );
 
     if (!order) {
-      throw new Error('Order not found');
+      throw new NotFoundError('Order not found', 'order');
     }
 
     // Create deferred revenue record
@@ -232,14 +233,14 @@ export const releaseDeferredRevenue = createServerFn()
         );
 
       if (!deferred) {
-        throw new Error('Deferred revenue record not found');
+        throw new NotFoundError('Deferred revenue record not found', 'deferredRevenue');
       }
 
       // Determine amount to release
       const releaseAmount = amount ?? deferred.remainingAmount;
 
       if (releaseAmount > deferred.remainingAmount) {
-        throw new Error(
+        throw new ValidationError(
           `Cannot release ${releaseAmount}. Only ${deferred.remainingAmount} remaining.`
         );
       }
@@ -323,7 +324,7 @@ export const syncRecognitionToXero = createServerFn()
       );
 
     if (!recognition) {
-      throw new Error('Recognition record not found');
+      throw new NotFoundError('Recognition record not found', 'revenueRecognition');
     }
 
     // Check if already synced
@@ -337,7 +338,7 @@ export const syncRecognitionToXero = createServerFn()
 
     // Check if manual override required
     if (recognition.state === 'manual_override') {
-      throw new Error('Recognition requires manual override. Please resolve in Xero.');
+      throw new ValidationError('Recognition requires manual override. Please resolve in Xero.');
     }
 
     // Update to syncing

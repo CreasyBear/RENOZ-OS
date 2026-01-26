@@ -14,6 +14,7 @@ import { db } from '@/lib/db';
 import { userSessions } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { NotFoundError } from '@/lib/server/errors';
 import { idParamSchema } from '@/lib/schemas';
 import { getRequest } from '@tanstack/react-start/server';
 import { UAParser } from 'ua-parser-js';
@@ -173,7 +174,7 @@ export const terminateSession = createServerFn({ method: 'POST' })
       .limit(1);
 
     if (!session) {
-      throw new Error('Session not found');
+      throw new NotFoundError('Session not found', 'session');
     }
 
     // Delete the session

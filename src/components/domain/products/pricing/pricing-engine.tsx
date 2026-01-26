@@ -38,7 +38,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { resolvePrice } from "@/lib/server/functions/product-pricing";
+import { resolvePrice } from "@/server/functions/products/product-pricing";
 
 // Price calculation form schema
 const priceCalcSchema = z.object({

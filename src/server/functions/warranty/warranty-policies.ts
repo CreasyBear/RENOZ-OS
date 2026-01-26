@@ -20,6 +20,7 @@ import {
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { tasks } from '@trigger.dev/sdk/v3';
+import { NotFoundError, ConflictError, ValidationError } from '@/lib/server/errors';
 import { typedGetFn, typedPostFn } from '@/lib/server/typed-server-fn';
 import type { WarrantyRegisteredPayload } from '@/trigger/client';
 import {
@@ -95,7 +96,7 @@ export const updateWarrantyPolicy = typedPostFn(
       .returning();
 
     if (!policy) {
-      throw new Error('Warranty policy not found');
+      throw new NotFoundError('Warranty policy not found', 'warrantyPolicy');
     }
 
     return policy;
@@ -154,7 +155,7 @@ export const getWarrantyPolicy = typedGetFn(
       .limit(1);
 
     if (!policy) {
-      throw new Error('Warranty policy not found');
+      throw new NotFoundError('Warranty policy not found', 'warrantyPolicy');
     }
 
     return policy;
@@ -181,7 +182,7 @@ export const deleteWarrantyPolicy = typedPostFn(
       .returning();
 
     if (!policy) {
-      throw new Error('Warranty policy not found');
+      throw new NotFoundError('Warranty policy not found', 'warrantyPolicy');
     }
 
     return policy;
@@ -201,7 +202,7 @@ export const getDefaultWarrantyPolicy = typedGetFn(
     const ctx = await withAuth();
 
     if (!data.type) {
-      throw new Error('Policy type is required');
+      throw new ValidationError('Policy type is required');
     }
 
     // First try to find the org's default for this type
@@ -261,7 +262,7 @@ export const setDefaultWarrantyPolicy = typedPostFn(
       .limit(1);
 
     if (!targetPolicy) {
-      throw new Error('Warranty policy not found');
+      throw new NotFoundError('Warranty policy not found', 'warrantyPolicy');
     }
 
     // Clear existing default for this type
@@ -314,7 +315,7 @@ export const resolveWarrantyPolicy = typedGetFn(
         .limit(1);
 
       if (!product) {
-        throw new Error('Product not found');
+        throw new NotFoundError('Product not found', 'product');
       }
 
       // If product has a direct policy, use it
@@ -377,7 +378,7 @@ export const resolveWarrantyPolicy = typedGetFn(
         .limit(1);
 
       if (!category) {
-        throw new Error('Category not found');
+        throw new NotFoundError('Category not found', 'category');
       }
 
       if (category.defaultWarrantyPolicyId) {
@@ -466,7 +467,7 @@ export const assignWarrantyPolicyToProduct = typedPostFn(
         .limit(1);
 
       if (!policy) {
-        throw new Error('Warranty policy not found');
+        throw new NotFoundError('Warranty policy not found', 'warrantyPolicy');
       }
     }
 
@@ -477,7 +478,7 @@ export const assignWarrantyPolicyToProduct = typedPostFn(
       .returning();
 
     if (!product) {
-      throw new Error('Product not found');
+      throw new NotFoundError('Product not found', 'product');
     }
 
     return product;
@@ -506,7 +507,7 @@ export const assignDefaultWarrantyPolicyToCategory = typedPostFn(
         .limit(1);
 
       if (!policy) {
-        throw new Error('Warranty policy not found');
+        throw new NotFoundError('Warranty policy not found', 'warrantyPolicy');
       }
     }
 
@@ -519,7 +520,7 @@ export const assignDefaultWarrantyPolicyToCategory = typedPostFn(
       .returning();
 
     if (!category) {
-      throw new Error('Category not found');
+      throw new NotFoundError('Category not found', 'category');
     }
 
     return category;
@@ -547,7 +548,7 @@ export const seedDefaultWarrantyPolicies = typedPostFn(
       .limit(1);
 
     if (existing.length > 0) {
-      throw new Error('Warranty policies already exist for this organization');
+      throw new ConflictError('Warranty policies already exist for this organization');
     }
 
     // Get or create warranty SLA configuration
@@ -790,7 +791,7 @@ export async function triggerWarrantyRegistrationNotification(params: {
     policyName: policy.name,
     durationMonths: policy.durationMonths,
     cycleLimit: policy.cycleLimit ?? undefined,
-    registrationDate: params.registrationDate.toISOString(),
+    startDate: params.registrationDate.toISOString(),
     expiryDate: params.expiryDate.toISOString(),
     slaResponseHours: slaConfig?.responseTargetValue ?? 24,
     slaResolutionDays: slaConfig?.resolutionTargetValue ?? 5,

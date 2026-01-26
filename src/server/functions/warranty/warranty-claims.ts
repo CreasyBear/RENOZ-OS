@@ -52,6 +52,7 @@ import {
   getWarrantyClaimSchema,
   assignClaimSchema,
 } from '@/lib/schemas/warranty/claims';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
 // HELPERS
@@ -144,7 +145,7 @@ async function startSlaTrackingForClaim(
     .limit(1);
 
   if (!config) {
-    throw new Error('SLA configuration not found');
+    throw new NotFoundError('SLA configuration not found', 'slaConfiguration');
   }
 
   // Get business hours if configured
@@ -258,12 +259,12 @@ export const createWarrantyClaim = typedPostFn(
       .limit(1);
 
     if (!warranty) {
-      throw new Error('Warranty not found');
+      throw new NotFoundError('Warranty not found', 'warranty');
     }
 
     // Check warranty is active
     if (warranty.warranty.status !== 'active' && warranty.warranty.status !== 'expiring_soon') {
-      throw new Error(`Cannot submit claim for warranty with status: ${warranty.warranty.status}`);
+      throw new ValidationError(`Cannot submit claim for warranty with status: ${warranty.warranty.status}`);
     }
 
     // Generate claim number
@@ -275,8 +276,6 @@ export const createWarrantyClaim = typedPostFn(
 
     // Create the claim first (need ID for SLA tracking)
     let slaTrackingId: string | null = null;
-    let responseDueAt: Date | null = null;
-    let resolutionDueAt: Date | null = null;
 
     // Create the claim first
     const [claim] = await db
@@ -307,8 +306,6 @@ export const createWarrantyClaim = typedPostFn(
         slaConfig.id
       );
       slaTrackingId = slaEntry.id;
-      responseDueAt = slaEntry.responseDueAt;
-      resolutionDueAt = slaEntry.resolutionDueAt;
 
       // Update claim with SLA tracking ID
       await db.update(warrantyClaims).set({ slaTrackingId }).where(eq(warrantyClaims.id, claim.id));
@@ -327,14 +324,11 @@ export const createWarrantyClaim = typedPostFn(
       customerId: warranty.warranty.customerId,
       customerEmail,
       customerName: warranty.customer.name,
+      productId: warranty.product.id,
       productName: warranty.product.name,
-      productSerial: warranty.warranty.productSerial ?? undefined,
       claimType: data.claimType,
       description: data.description,
-      cycleCountAtClaim: claim.cycleCountAtClaim ?? undefined,
       submittedAt: now.toISOString(),
-      slaResponseDueAt: responseDueAt?.toISOString(),
-      slaResolutionDueAt: resolutionDueAt?.toISOString(),
     };
 
     await client.sendEvent({
@@ -370,7 +364,7 @@ export const updateClaimStatus = typedPostFn(
       .limit(1);
 
     if (!existingClaim) {
-      throw new Error('Warranty claim not found');
+      throw new NotFoundError('Warranty claim not found', 'warrantyClaim');
     }
 
     // Validate status transition
@@ -384,7 +378,7 @@ export const updateClaimStatus = typedPostFn(
 
     const currentStatus = existingClaim.status;
     if (!validTransitions[currentStatus]?.includes(data.status)) {
-      throw new Error(`Invalid status transition from '${currentStatus}' to '${data.status}'`);
+      throw new ValidationError(`Invalid status transition from '${currentStatus}' to '${data.status}'`);
     }
 
     // Update SLA tracking if status implies waiting (pause) or resuming
@@ -447,11 +441,11 @@ export const approveClaim = typedPostFn(
       .limit(1);
 
     if (!existingClaim) {
-      throw new Error('Warranty claim not found');
+      throw new NotFoundError('Warranty claim not found', 'warrantyClaim');
     }
 
     if (existingClaim.status !== 'submitted' && existingClaim.status !== 'under_review') {
-      throw new Error(`Cannot approve claim with status: ${existingClaim.status}`);
+      throw new ValidationError(`Cannot approve claim with status: ${existingClaim.status}`);
     }
 
     // Check SLA breach status
@@ -515,11 +509,11 @@ export const denyClaim = typedPostFn(
       .limit(1);
 
     if (!existingClaim) {
-      throw new Error('Warranty claim not found');
+      throw new NotFoundError('Warranty claim not found', 'warrantyClaim');
     }
 
     if (existingClaim.status !== 'submitted' && existingClaim.status !== 'under_review') {
-      throw new Error(`Cannot deny claim with status: ${existingClaim.status}`);
+      throw new ValidationError(`Cannot deny claim with status: ${existingClaim.status}`);
     }
 
     // Update SLA tracking to resolved (even though denied) using unified engine
@@ -611,11 +605,11 @@ export const resolveClaim = typedPostFn(
       .limit(1);
 
     if (!existingClaim) {
-      throw new Error('Warranty claim not found');
+      throw new NotFoundError('Warranty claim not found', 'warrantyClaim');
     }
 
     if (existingClaim.claim.status !== 'approved') {
-      throw new Error(
+      throw new ValidationError(
         `Cannot resolve claim with status: ${existingClaim.claim.status}. Must be approved first.`
       );
     }
@@ -706,13 +700,10 @@ export const resolveClaim = typedPostFn(
       customerId: existingClaim.warranty.customerId,
       customerEmail,
       customerName: existingClaim.customer.name,
-      productName: existingClaim.product.name,
-      claimType: claim.claimType,
+      resolution: data.resolutionNotes ?? 'Resolved',
       resolutionType: data.resolutionType,
-      resolutionNotes: data.resolutionNotes,
-      cost: data.cost,
       resolvedAt: now.toISOString(),
-      resolvedByUserName: ctx.user.name ?? ctx.user.email,
+      resolutionNotes: data.resolutionNotes,
     };
 
     await client.sendEvent({
@@ -872,7 +863,7 @@ export const getWarrantyClaim = typedGetFn(
       .limit(1);
 
     if (!result) {
-      throw new Error('Warranty claim not found');
+      throw new NotFoundError('Warranty claim not found', 'warrantyClaim');
     }
 
     // Get approver info if approved
@@ -928,7 +919,7 @@ export const assignClaim = typedPostFn(
       .limit(1);
 
     if (!existingClaim) {
-      throw new Error('Warranty claim not found');
+      throw new NotFoundError('Warranty claim not found', 'warrantyClaim');
     }
 
     // Validate assigned user exists in org if not null
@@ -940,7 +931,7 @@ export const assignClaim = typedPostFn(
         .limit(1);
 
       if (!assignedUser) {
-        throw new Error('Assigned user not found in organization');
+        throw new NotFoundError('Assigned user not found in organization', 'user');
       }
     }
 

@@ -12,6 +12,7 @@ import { eq, and, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { userOnboarding } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
+import { ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
 // ONBOARDING STEPS CONFIGURATION
@@ -167,7 +168,7 @@ export const completeOnboardingStep = createServerFn({ method: 'POST' })
     const stepConfig = allSteps.find((s) => s.key === data.stepKey);
 
     if (!stepConfig) {
-      throw new Error(`Invalid step key: ${data.stepKey}`);
+      throw new ValidationError(`Invalid step key: ${data.stepKey}`);
     }
 
     // Check if record exists
@@ -228,7 +229,7 @@ export const dismissOnboardingStep = createServerFn({ method: 'POST' })
     const stepConfig = allSteps.find((s) => s.key === data.stepKey);
 
     if (!stepConfig) {
-      throw new Error(`Invalid step key: ${data.stepKey}`);
+      throw new ValidationError(`Invalid step key: ${data.stepKey}`);
     }
 
     // Check if record exists

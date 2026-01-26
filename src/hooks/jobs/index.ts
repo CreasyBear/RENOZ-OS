@@ -24,11 +24,12 @@ export {
   useUpdateJob,
   useDeleteJob,
   useBatchJobOperations,
+  useJobAssignmentsForKanban,
   // Alias for backward compatibility
   useBatchJobOperations as useProcessJobBatchOperations,
 } from './use-jobs';
 
-export type { UseJobsOptions, CreateJobInput } from './use-jobs';
+export type { UseJobsOptions, CreateJobInput, UseJobAssignmentsForKanbanOptions } from './use-jobs';
 
 // ============================================================================
 // JOB SCHEDULING (Calendar, Timeline, OAuth)
@@ -140,6 +141,22 @@ export {
   useApplyChecklistToJob,
   useUpdateChecklistItem,
 } from './use-job-templates-config';
+
+// ============================================================================
+// JOB DOCUMENTS
+// ============================================================================
+
+export {
+  useJobDocuments,
+  useUploadJobDocument,
+  useDeleteJobDocument,
+} from './use-job-documents';
+
+export type {
+  UseJobDocumentsOptions,
+  UploadJobDocumentInput,
+  DeleteJobDocumentInput,
+} from './use-job-documents';
 
 // ============================================================================
 // VIEW SYNCHRONIZATION

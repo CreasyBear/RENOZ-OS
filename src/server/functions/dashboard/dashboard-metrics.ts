@@ -438,6 +438,7 @@ async function getMetricsHybrid(
  */
 export const getDashboardMetrics = createServerFn({ method: 'GET' })
   .inputValidator(getDashboardMetricsSchema)
+  // Type annotation removed to avoid Zod schema inference conflicts with metadata Record<string, unknown>
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.dashboard.read });
     const { from, to, preset } = calculateDateRange(data);

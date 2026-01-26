@@ -32,12 +32,32 @@ export interface UseCampaignsOptions {
   enabled?: boolean;
 }
 
+// Type for getCampaigns response (server function has @ts-expect-error breaking inference)
+interface CampaignsResponse {
+  items: Array<{
+    id: string;
+    organizationId: string;
+    name: string;
+    description: string | null;
+    templateType: string;
+    templateData: Record<string, unknown>;
+    recipientCriteria: Record<string, unknown>;
+    status: 'draft' | 'scheduled' | 'sending' | 'sent' | 'paused' | 'cancelled' | 'failed';
+    scheduledAt: Date | null;
+    sentAt: Date | null;
+    createdById: string;
+    createdAt: Date;
+    updatedAt: Date;
+  }>;
+  total: number;
+}
+
 export function useCampaigns(options: UseCampaignsOptions = {}) {
   const { status, limit = 50, offset = 0, enabled = true } = options;
 
-  return useQuery({
+  return useQuery<CampaignsResponse>({
     queryKey: queryKeys.communications.campaignsList({ status, limit, offset }),
-    queryFn: () => getCampaigns({ data: { status, limit, offset } }),
+    queryFn: () => getCampaigns({ data: { status, limit, offset } }) as Promise<CampaignsResponse>,
     enabled,
     staleTime: 30 * 1000, // 30 seconds
   });

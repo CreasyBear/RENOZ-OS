@@ -11,6 +11,7 @@ import { db } from '@/lib/db';
 import { emailHistory, users, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { NotFoundError } from '@/lib/server/errors';
 import { z } from 'zod';
 
 // ============================================================================
@@ -76,7 +77,7 @@ export const getCustomerCommunications = createServerFn({ method: 'GET' })
       .limit(1);
 
     if (!customer) {
-      throw new Error('Customer not found');
+      throw new NotFoundError('Customer not found', 'customer');
     }
 
     // Fetch email communications for this customer

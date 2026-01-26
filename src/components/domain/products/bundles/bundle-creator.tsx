@@ -39,8 +39,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ComponentSelector } from "./component-selector";
-import { createProduct } from "@/lib/server/functions/products";
-import { setBundleComponents } from "@/lib/server/functions/product-bundles";
+import { createProduct } from "@/server/functions/products/products";
+import { setBundleComponents } from "@/server/functions/products/product-bundles";
 
 // Form schema
 const bundleFormSchema = z.object({

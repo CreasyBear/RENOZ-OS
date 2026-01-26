@@ -36,7 +36,7 @@ import {
 } from './sidebar-provider'
 import { toast } from '@/hooks'
 import { useCurrentUser } from '@/hooks'
-import { hasPermission } from '@/lib/auth/permissions'
+import { hasPermission, type Role } from '@/lib/auth/permissions'
 
 // ============================================================================
 // TYPES
@@ -97,7 +97,7 @@ export function Sidebar({
     const allRoutes = getNavRoutes()
 
     // If no user yet, show all routes (loading state)
-    if (!user) {
+    if (!user?.role) {
       return allRoutes
     }
 
@@ -108,7 +108,7 @@ export function Sidebar({
         return true
       }
       // Check if user has the required permission
-      return hasPermission(user.role, route.requiredPermission)
+      return hasPermission(user.role as Role, route.requiredPermission)
     })
   }, [user])
 

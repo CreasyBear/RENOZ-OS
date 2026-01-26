@@ -125,7 +125,7 @@ const LineItemRow = React.memo(function LineItemRow({
     }).format(amount / 100); // Convert cents to dollars for display
   };
 
-  const lineItemErrors = errors.lineItems?.[index];
+  const lineItemErrors = errors.lineItems && Array.isArray(errors.lineItems) ? errors.lineItems[index] : undefined;
 
   return (
     <TableRow
