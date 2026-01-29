@@ -10,8 +10,6 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import {
   FileText,
   Mail,
@@ -24,9 +22,9 @@ import {
   Loader2,
 } from "lucide-react";
 import {
-  createCampaign,
-  populateCampaignRecipients,
-} from "@/lib/server/email-campaigns";
+  useCreateCampaign,
+  usePopulateCampaignRecipients,
+} from "@/hooks/communications/use-campaigns";
 import { RecipientFilterBuilder, type RecipientCriteria } from "./recipient-filter-builder";
 import { CampaignPreviewPanel } from "./campaign-preview-panel";
 import { DateTimePicker } from "../date-time-picker";
@@ -205,7 +203,8 @@ export function CampaignWizard({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [recipientCount, setRecipientCount] = useState(0);
-  const queryClient = useQueryClient();
+  const createCampaignMutation = useCreateCampaign();
+  const populateRecipientsMutation = usePopulateCampaignRecipients();
 
   // Reset form when dialog closes
   useEffect(() => {
@@ -265,27 +264,22 @@ export function CampaignWizard({
       }
 
       // Create the campaign
-      const campaign = (await createCampaign({
-        data: {
-          name: formData.name,
-          description: formData.description || undefined,
-          templateType: formData.templateType as "newsletter",
-          templateData: formData.templateData,
-          recipientCriteria: formData.recipientCriteria,
-          scheduledAt,
-        },
+      const campaign = (await createCampaignMutation.mutateAsync({
+        name: formData.name,
+        description: formData.description || undefined,
+        templateType: formData.templateType as "newsletter",
+        templateData: formData.templateData,
+        recipientCriteria: formData.recipientCriteria,
+        scheduledAt,
       })) as { id: string };
 
       // Populate recipients
-      await populateCampaignRecipients({
-        data: { campaignId: campaign.id },
+      await populateRecipientsMutation.mutateAsync({
+        campaignId: campaign.id,
       });
 
       // If not scheduled, trigger send immediately via event
       // For now we just create the campaign - actual sending is triggered separately
-
-      // Invalidate campaigns query
-      queryClient.invalidateQueries({ queryKey: queryKeys.communications.campaigns() });
 
       // Call success callback
       onSuccess?.(campaign.id);

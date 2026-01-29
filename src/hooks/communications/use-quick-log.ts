@@ -8,8 +8,10 @@
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
-import { createQuickLog } from '@/lib/server/quick-log';
+import type { QuickLogInput } from '@/lib/schemas/communications/quick-log';
+import { createQuickLog } from '@/server/functions/communications/quick-log';
 
 // ============================================================================
 // MUTATION HOOKS
@@ -17,9 +19,10 @@ import { createQuickLog } from '@/lib/server/quick-log';
 
 export function useCreateQuickLog() {
   const queryClient = useQueryClient();
+  const createQuickLogFn = useServerFn(createQuickLog);
 
   return useMutation({
-    mutationFn: createQuickLog,
+    mutationFn: (input: QuickLogInput) => createQuickLogFn({ data: input }),
     onSuccess: (_, variables) => {
       // Invalidate activities queries
       queryClient.invalidateQueries({
@@ -27,23 +30,23 @@ export function useCreateQuickLog() {
       });
 
       // If a call was logged, also invalidate scheduled calls
-      if (variables.data.type === 'call') {
+      if (variables.type === 'call') {
         queryClient.invalidateQueries({
           queryKey: queryKeys.communications.scheduledCalls(),
         });
       }
 
       // Invalidate customer-specific activities if customerId provided
-      if (variables.data.customerId) {
+      if (variables.customerId) {
         queryClient.invalidateQueries({
-          queryKey: queryKeys.activities.byCustomer(variables.data.customerId),
+          queryKey: queryKeys.activities.byCustomer(variables.customerId),
         });
       }
 
       // Invalidate opportunity-specific activities if opportunityId provided
-      if (variables.data.opportunityId) {
+      if (variables.opportunityId) {
         queryClient.invalidateQueries({
-          queryKey: queryKeys.activities.byOpportunity(variables.data.opportunityId),
+          queryKey: queryKeys.activities.byOpportunity(variables.opportunityId),
         });
       }
     },

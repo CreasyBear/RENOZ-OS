@@ -140,7 +140,7 @@ function WarrantyPoliciesSettingsPage() {
   };
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Warranty Policies"
         description="Define and manage warranty coverage for batteries, inverters, and installations"

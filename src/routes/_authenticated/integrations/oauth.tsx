@@ -7,7 +7,7 @@
 
 import { useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { RouteErrorFallback } from '@/components/layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SettingsCardsSkeleton } from '@/components/skeletons/settings';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,7 +25,14 @@ export const Route = createFileRoute('/_authenticated/integrations/oauth')({
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/integrations" />
   ),
-  pendingComponent: () => <SettingsCardsSkeleton sections={4} />,
+  pendingComponent: () => (
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="OAuth Integrations" description="Loading..." />
+      <PageLayout.Content>
+        <SettingsCardsSkeleton sections={4} />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 function OAuthIntegrationsPage() {
@@ -33,7 +40,12 @@ function OAuthIntegrationsPage() {
   const { currentOrg, isLoading } = useCurrentOrg();
 
   return (
-    <div className="container mx-auto space-y-8 py-8">
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="OAuth Integrations"
+        description="Seamlessly connect and synchronize with Google Workspace and Microsoft 365 services."
+      />
+      <PageLayout.Content>
       {/* Header */}
       <div className="space-y-4">
         <div className="flex items-center space-x-2">
@@ -249,6 +261,7 @@ function OAuthIntegrationsPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+      </PageLayout.Content>
+    </PageLayout>
   );
 }

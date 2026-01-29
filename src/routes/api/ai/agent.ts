@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * AI Agent Dispatch Endpoint
  *
@@ -11,8 +13,8 @@
 
 import { withAuth } from '@/lib/server/protected';
 import { checkRateLimit, createRateLimitResponse } from '@/lib/ai/ratelimit';
-import { checkBudget, createBudgetExceededResponse } from '@/lib/ai/utils/budget';
-import { estimateCost } from '@/lib/ai/utils/cost';
+import { checkBudget, createBudgetExceededResponse } from '@/server/functions/ai/utils/budget';
+import { estimateCost } from '@/server/functions/ai/utils/cost';
 import { queueAgentTask } from '@/trigger/jobs/ai-agent-task';
 
 // ============================================================================

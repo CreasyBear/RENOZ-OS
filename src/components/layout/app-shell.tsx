@@ -30,8 +30,6 @@ import { KeyboardShortcutsModal } from './keyboard-shortcuts-modal'
 import {
   SidebarProvider,
   useSidebar,
-  SIDEBAR_WIDTH,
-  SIDEBAR_WIDTH_COLLAPSED,
 } from './sidebar-provider'
 
 // ============================================================================
@@ -48,17 +46,18 @@ interface AppShellProps {
 
 function AppShellInner({ children }: AppShellProps) {
   const [aiSidebarOpen, setAiSidebarOpen] = useState(false)
+  const sidebar = useSidebar()
+  
+  // Guard against context issues (e.g., during HMR)
+  if (!sidebar) {
+    return <div className="flex min-h-screen">{children}</div>
+  }
+  
   const {
-    isCollapsed,
-    collapsible,
     isMobile,
     openMobile,
     setOpenMobile,
-  } = useSidebar()
-
-  // Calculate main content padding based on sidebar state
-  const showCollapsedSidebar = collapsible === 'icon' && isCollapsed
-  const sidebarWidth = showCollapsedSidebar ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH
+  } = sidebar
 
   // Mobile sidebar width (18rem as per spec)
   const MOBILE_SIDEBAR_WIDTH = '18rem'
@@ -104,21 +103,7 @@ function AppShellInner({ children }: AppShellProps) {
       </div>
 
       {/* Main content area */}
-      <div
-        className="flex flex-1 flex-col transition-all duration-200"
-        style={{
-          // Only add padding on desktop
-          paddingLeft: isMobile ? 0 : `var(--sidebar-width, 0)`,
-        }}
-      >
-        {/* CSS to set sidebar width variable on md+ screens */}
-        {!isMobile && (
-          <style>{`
-            :root {
-              --sidebar-width: ${sidebarWidth};
-            }
-          `}</style>
-        )}
+      <div className="flex flex-1 flex-col transition-all duration-200">
 
         {/* Header */}
         <Header

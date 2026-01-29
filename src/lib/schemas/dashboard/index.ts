@@ -2,7 +2,7 @@
  * Dashboard Domain Schemas
  *
  * Barrel export for all dashboard-related Zod validation schemas.
- * Dashboard is the canonical owner of targets, scheduled-reports, and layouts.
+ * Targets and scheduled reports are proxied from reports domain.
  *
  * @see drizzle/schema/dashboard/
  * @see sprint-plan-db-implementation.md S9-T04

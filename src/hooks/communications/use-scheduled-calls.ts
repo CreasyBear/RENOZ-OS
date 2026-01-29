@@ -8,7 +8,15 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import type {
+  ScheduleCallInput,
+  UpdateScheduledCallInput,
+  CancelScheduledCallInput,
+  RescheduleCallInput,
+  CompleteCallInput,
+} from '@/lib/schemas/communications/scheduled-calls';
 import {
   getScheduledCalls,
   getScheduledCallById,
@@ -17,7 +25,7 @@ import {
   cancelScheduledCall,
   rescheduleCall,
   completeCall,
-} from '@/lib/server/scheduled-calls';
+} from '@/server/functions/communications/scheduled-calls';
 
 // ============================================================================
 // QUERY HOOKS
@@ -107,9 +115,10 @@ export function useUpcomingCalls(options: UseUpcomingCallsOptions = {}) {
 
 export function useScheduleCall() {
   const queryClient = useQueryClient();
+  const scheduleCallFn = useServerFn(scheduleCall);
 
   return useMutation({
-    mutationFn: scheduleCall,
+    mutationFn: (input: ScheduleCallInput) => scheduleCallFn({ data: input }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.scheduledCalls(),
@@ -120,15 +129,16 @@ export function useScheduleCall() {
 
 export function useUpdateScheduledCall() {
   const queryClient = useQueryClient();
+  const updateCallFn = useServerFn(updateScheduledCall);
 
   return useMutation({
-    mutationFn: updateScheduledCall,
+    mutationFn: (input: UpdateScheduledCallInput) => updateCallFn({ data: input }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.scheduledCalls(),
       });
       queryClient.invalidateQueries({
-        queryKey: queryKeys.communications.scheduledCallDetail(variables.data.id),
+        queryKey: queryKeys.communications.scheduledCallDetail(variables.id),
       });
     },
   });
@@ -136,15 +146,16 @@ export function useUpdateScheduledCall() {
 
 export function useCancelCall() {
   const queryClient = useQueryClient();
+  const cancelCallFn = useServerFn(cancelScheduledCall);
 
   return useMutation({
-    mutationFn: cancelScheduledCall,
+    mutationFn: (input: CancelScheduledCallInput) => cancelCallFn({ data: input }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.scheduledCalls(),
       });
       queryClient.invalidateQueries({
-        queryKey: queryKeys.communications.scheduledCallDetail(variables.data.id),
+        queryKey: queryKeys.communications.scheduledCallDetail(variables.id),
       });
     },
   });
@@ -152,9 +163,10 @@ export function useCancelCall() {
 
 export function useRescheduleCall() {
   const queryClient = useQueryClient();
+  const rescheduleCallFn = useServerFn(rescheduleCall);
 
   return useMutation({
-    mutationFn: rescheduleCall,
+    mutationFn: (input: RescheduleCallInput) => rescheduleCallFn({ data: input }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.scheduledCalls(),
@@ -165,15 +177,16 @@ export function useRescheduleCall() {
 
 export function useCompleteCall() {
   const queryClient = useQueryClient();
+  const completeCallFn = useServerFn(completeCall);
 
   return useMutation({
-    mutationFn: completeCall,
+    mutationFn: (input: CompleteCallInput) => completeCallFn({ data: input }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.scheduledCalls(),
       });
       queryClient.invalidateQueries({
-        queryKey: queryKeys.communications.scheduledCallDetail(variables.data.id),
+        queryKey: queryKeys.communications.scheduledCallDetail(variables.id),
       });
       // Also invalidate customer activities since completing a call logs an activity
       queryClient.invalidateQueries({

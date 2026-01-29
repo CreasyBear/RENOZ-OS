@@ -48,7 +48,7 @@ export const Route = createFileRoute("/_authenticated/settings/email" as any)({
 
 function EmailSettingsSkeleton() {
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Email Settings"
         description="Manage email delivery, suppression list, and domain verification"
@@ -76,7 +76,7 @@ function EmailSettingsPage() {
   const domainQuery = useDomainVerification();
 
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Email Settings"
         description="Manage email delivery, suppression list, and domain verification"

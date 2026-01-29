@@ -77,58 +77,10 @@ interface BulkCommunicationsProps {
   segments?: Segment[]
   templates?: Template[]
   campaigns?: Campaign[]
+  isLoading?: boolean
   onSendCampaign?: (campaign: Partial<Campaign>) => void
   className?: string
 }
-
-// ============================================================================
-// MOCK DATA
-// ============================================================================
-
-const MOCK_SEGMENTS: Segment[] = [
-  { id: '1', name: 'High-Value Active', customerCount: 245 },
-  { id: '2', name: 'At Risk - Low Engagement', customerCount: 78 },
-  { id: '3', name: 'New Prospects', customerCount: 156 },
-  { id: '4', name: 'Enterprise Accounts', customerCount: 42 },
-]
-
-const MOCK_TEMPLATES: Template[] = [
-  { id: '1', name: 'Welcome Email', subject: 'Welcome to {{company_name}}!', preview: 'Welcome email for new customers' },
-  { id: '2', name: 'Quote Follow-up', subject: 'Following up on your quote', preview: 'Follow-up template for pending quotes' },
-  { id: '3', name: 'Reactivation Offer', subject: 'We miss you! Here\'s a special offer', preview: 'Win-back campaign for lapsed customers' },
-]
-
-const MOCK_CAMPAIGNS: Campaign[] = [
-  {
-    id: '1',
-    name: 'Q1 Reactivation Campaign',
-    audienceType: 'segment',
-    audienceCount: 78,
-    templateId: '3',
-    scheduleType: 'now',
-    status: 'sent',
-    sent: 78,
-    delivered: 75,
-    opened: 42,
-    clicked: 18,
-    createdAt: '2024-01-15T10:00:00Z',
-  },
-  {
-    id: '2',
-    name: 'Enterprise Welcome Series',
-    audienceType: 'segment',
-    audienceCount: 42,
-    templateId: '1',
-    scheduleType: 'scheduled',
-    scheduledAt: '2024-01-22T09:00:00Z',
-    status: 'scheduled',
-    sent: 0,
-    delivered: 0,
-    opened: 0,
-    clicked: 0,
-    createdAt: '2024-01-18T14:00:00Z',
-  },
-]
 
 // ============================================================================
 // STEP COMPONENTS
@@ -451,10 +403,10 @@ export function BulkCommunications({
   const [scheduledDate, setScheduledDate] = useState('')
   const [scheduledTime, setScheduledTime] = useState('')
 
-  // Use mock data
-  const segments = propSegments ?? MOCK_SEGMENTS
-  const templates = propTemplates ?? MOCK_TEMPLATES
-  const campaigns = propCampaigns ?? MOCK_CAMPAIGNS
+  // Use provided data or empty arrays
+  const segments = propSegments ?? []
+  const templates = propTemplates ?? []
+  const campaigns = propCampaigns ?? []
 
   const resetWizard = () => {
     setCurrentStep(1)

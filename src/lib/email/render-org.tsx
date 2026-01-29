@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Organization-Aware Email Rendering
  *

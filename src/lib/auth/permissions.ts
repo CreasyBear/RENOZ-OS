@@ -211,6 +211,70 @@ export const PERMISSIONS = {
     update: 'support.update',
     delete: 'support.delete',
   },
+
+  // Category domain
+  category: {
+    read: 'category.read',
+    create: 'category.create',
+    update: 'category.update',
+    delete: 'category.delete',
+  },
+
+  // Win/Loss Reason domain
+  winLossReason: {
+    read: 'win_loss_reason.read',
+    create: 'win_loss_reason.create',
+    update: 'win_loss_reason.update',
+    delete: 'win_loss_reason.delete',
+  },
+
+  // Warranty Policy domain
+  warrantyPolicy: {
+    read: 'warranty_policy.read',
+    create: 'warranty_policy.create',
+    update: 'warranty_policy.update',
+    delete: 'warranty_policy.delete',
+  },
+
+  // Knowledge Base domain
+  knowledgeBase: {
+    read: 'knowledge_base.read',
+    create: 'knowledge_base.create',
+    update: 'knowledge_base.update',
+    delete: 'knowledge_base.delete',
+  },
+
+  // Job Template domain
+  jobTemplate: {
+    read: 'job_template.read',
+    create: 'job_template.create',
+    update: 'job_template.update',
+    delete: 'job_template.delete',
+  },
+
+  // Issue Template domain
+  issueTemplate: {
+    read: 'issue_template.read',
+    create: 'issue_template.create',
+    update: 'issue_template.update',
+    delete: 'issue_template.delete',
+  },
+
+  // Email domain
+  email: {
+    read: 'email.read',
+    create: 'email.create',
+    update: 'email.update',
+    delete: 'email.delete',
+  },
+
+  // Delegation domain
+  delegation: {
+    read: 'delegation.read',
+    create: 'delegation.create',
+    update: 'delegation.update',
+    delete: 'delegation.delete',
+  },
 } as const
 
 // ============================================================================
@@ -254,6 +318,14 @@ export type PermissionAction =
   | typeof PERMISSIONS.warranty[keyof typeof PERMISSIONS.warranty]
   | typeof PERMISSIONS.financial[keyof typeof PERMISSIONS.financial]
   | typeof PERMISSIONS.support[keyof typeof PERMISSIONS.support]
+  | typeof PERMISSIONS.category[keyof typeof PERMISSIONS.category]
+  | typeof PERMISSIONS.winLossReason[keyof typeof PERMISSIONS.winLossReason]
+  | typeof PERMISSIONS.warrantyPolicy[keyof typeof PERMISSIONS.warrantyPolicy]
+  | typeof PERMISSIONS.knowledgeBase[keyof typeof PERMISSIONS.knowledgeBase]
+  | typeof PERMISSIONS.jobTemplate[keyof typeof PERMISSIONS.jobTemplate]
+  | typeof PERMISSIONS.issueTemplate[keyof typeof PERMISSIONS.issueTemplate]
+  | typeof PERMISSIONS.email[keyof typeof PERMISSIONS.email]
+  | typeof PERMISSIONS.delegation[keyof typeof PERMISSIONS.delegation]
 
 /**
  * Permission definition with optional description
@@ -314,6 +386,12 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.inventory.manage,
     PERMISSIONS.inventory.count,
     PERMISSIONS.inventory.forecast,
+    // Jobs
+    PERMISSIONS.job.read,
+    PERMISSIONS.job.create,
+    PERMISSIONS.job.update,
+    PERMISSIONS.job.delete,
+    PERMISSIONS.job.assign,
     // Opportunity
     PERMISSIONS.opportunity.create,
     PERMISSIONS.opportunity.read,
@@ -433,6 +511,12 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.inventory.manage,
     PERMISSIONS.inventory.count,
     PERMISSIONS.inventory.forecast,
+    // Jobs
+    PERMISSIONS.job.read,
+    PERMISSIONS.job.create,
+    PERMISSIONS.job.update,
+    PERMISSIONS.job.delete,
+    PERMISSIONS.job.assign,
     // Opportunity
     PERMISSIONS.opportunity.create,
     PERMISSIONS.opportunity.read,
@@ -544,6 +628,12 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.inventory.manage,
     PERMISSIONS.inventory.count,
     PERMISSIONS.inventory.forecast,
+    // Jobs
+    PERMISSIONS.job.read,
+    PERMISSIONS.job.create,
+    PERMISSIONS.job.update,
+    PERMISSIONS.job.delete,
+    PERMISSIONS.job.assign,
     // Opportunity
     PERMISSIONS.opportunity.create,
     PERMISSIONS.opportunity.read,
@@ -639,6 +729,12 @@ export const ROLE_PERMISSIONS: RolePermissions = {
     PERMISSIONS.inventory.manage,
     PERMISSIONS.inventory.count,
     PERMISSIONS.inventory.forecast,
+    // Jobs
+    PERMISSIONS.job.read,
+    PERMISSIONS.job.create,
+    PERMISSIONS.job.update,
+    PERMISSIONS.job.delete,
+    PERMISSIONS.job.assign,
     // Reports (operations only)
     PERMISSIONS.report.viewOperations,
     // Dashboard (read only)

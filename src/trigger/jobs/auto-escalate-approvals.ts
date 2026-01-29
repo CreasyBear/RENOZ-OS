@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Auto-Escalate Overdue Approvals Job
  *

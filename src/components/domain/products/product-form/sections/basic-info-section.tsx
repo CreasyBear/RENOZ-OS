@@ -120,12 +120,12 @@ export function BasicInfoSection({ control, errors, categories }: BasicInfoSecti
             name="categoryId"
             control={control}
             render={({ field }) => (
-              <Select value={field.value ?? ''} onValueChange={(v) => field.onChange(v || null)}>
+              <Select value={field.value ?? '__NONE__'} onValueChange={(v) => field.onChange(v !== '__NONE__' ? v : null)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No Category</SelectItem>
+                  <SelectItem value="__NONE__">No Category</SelectItem>
                   {categories?.map((cat) => (
                     <SelectItem key={cat.id} value={cat.id}>
                       {cat.name}

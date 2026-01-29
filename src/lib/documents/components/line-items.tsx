@@ -1,86 +1,136 @@
 /**
- * PDF Line Items Component
+ * PDF Line Items Component - Apple/Linear Style
  *
- * Displays a table of line items with description, quantity, price, and total.
+ * Clean, minimal table with generous spacing and subtle borders.
  */
 
 import { Text, View, StyleSheet } from "@react-pdf/renderer";
 import { useOrgDocument } from "../context";
-import { colors, fontSize, spacing, FONT_FAMILY, FONT_WEIGHTS } from "./theme";
+import {
+  colors,
+  fontSize,
+  spacing,
+  lineHeight,
+  FONT_FAMILY,
+  FONT_WEIGHTS,
+} from "./theme";
 import { formatCurrencyForPdf } from "./theme";
 import type { DocumentLineItem } from "../types";
 
 // ============================================================================
-// STYLES
+// STYLES - Clean, Minimal
 // ============================================================================
 
 const styles = StyleSheet.create({
   container: {
     marginTop: spacing.xl,
   },
+
+  // Table Header - Clean, minimal
   headerRow: {
     flexDirection: "row",
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.border.dark,
-    paddingBottom: spacing.xs,
-    marginBottom: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.sm,
   },
+  headerCell: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.muted,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+
+  // Table Body Rows - Clean with subtle divider
   row: {
     flexDirection: "row",
-    paddingVertical: spacing.xs,
-    alignItems: "flex-start",
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.border.light,
   },
-  rowAlt: {
-    backgroundColor: colors.background.light,
+  rowLast: {
+    borderBottomWidth: 0,
   },
+
   // Column widths
   colDescription: {
-    flex: 3,
+    flex: 4,
     paddingRight: spacing.md,
   },
   colQuantity: {
     flex: 0.8,
+    textAlign: "center",
   },
   colPrice: {
-    flex: 1,
-  },
-  colTotal: {
-    flex: 1,
+    flex: 1.2,
     textAlign: "right",
   },
-  // Text styles
-  headerText: {
-    fontSize: fontSize.sm,
+  colTotal: {
+    flex: 1.2,
+    textAlign: "right",
+  },
+
+  // Cell content styles
+  description: {
+    fontSize: fontSize.base,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.medium,
     color: colors.text.primary,
-  },
-  cellText: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.regular,
-    color: colors.text.primary,
-  },
-  description: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.regular,
-    color: colors.text.primary,
+    lineHeight: lineHeight.normal,
   },
   sku: {
     fontSize: fontSize.xs,
     fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.regular,
+    fontWeight: FONT_WEIGHTS.medium,
     color: colors.text.muted,
-    marginTop: 2,
+    marginTop: spacing.xs,
   },
   notes: {
     fontSize: fontSize.xs,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.regular,
-    color: colors.text.secondary,
+    color: colors.text.muted,
     fontStyle: "italic",
-    marginTop: 2,
+    marginTop: spacing.xs,
+    lineHeight: lineHeight.normal,
+  },
+
+  // Number cells
+  quantity: {
+    fontSize: fontSize.base,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.secondary,
+    textAlign: "center",
+  },
+  price: {
+    fontSize: fontSize.base,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.secondary,
+    textAlign: "right",
+  },
+  total: {
+    fontSize: fontSize.base,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.primary,
+    textAlign: "right",
+  },
+
+  // Empty state
+  emptyState: {
+    paddingVertical: spacing.xl,
+    alignItems: "center",
+  },
+  emptyText: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.muted,
+    fontStyle: "italic",
   },
 });
 
@@ -89,69 +139,78 @@ const styles = StyleSheet.create({
 // ============================================================================
 
 export interface LineItemsProps {
-  /** Array of line items to display */
   lineItems: DocumentLineItem[];
-  /** Column labels */
   labels?: {
     description?: string;
     quantity?: string;
     price?: string;
     total?: string;
   };
-  /** Show SKU under description */
   showSku?: boolean;
-  /** Show notes under description */
   showNotes?: boolean;
-  /** Use alternating row colors */
-  alternateRows?: boolean;
 }
 
 // ============================================================================
 // COMPONENT
 // ============================================================================
 
-/**
- * Line items table for documents
- *
- * @example
- * <LineItems
- *   lineItems={order.lineItems}
- *   labels={{ description: "Description", quantity: "Qty", price: "Unit Price", total: "Amount" }}
- * />
- */
 export function LineItems({
   lineItems,
   labels = {},
   showSku = false,
   showNotes = false,
-  alternateRows = false,
 }: LineItemsProps) {
   const { locale, currency } = useOrgDocument();
 
   const {
     description: descLabel = "Description",
     quantity: qtyLabel = "Qty",
-    price: priceLabel = "Unit Price",
-    total: totalLabel = "Amount",
+    price: priceLabel = "Price",
+    total: totalLabel = "Total",
   } = labels;
+
+  const hasSkus = showSku && lineItems.some((item) => item.sku);
+  const hasNotes = showNotes && lineItems.some((item) => item.notes);
+
+  if (lineItems.length === 0) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.row}>
+          <View style={styles.colDescription}>
+            <Text style={styles.headerCell}>{descLabel}</Text>
+          </View>
+          <View style={styles.colQuantity}>
+            <Text style={styles.headerCell}>{qtyLabel}</Text>
+          </View>
+          <View style={styles.colPrice}>
+            <Text style={styles.headerCell}>{priceLabel}</Text>
+          </View>
+          <View style={styles.colTotal}>
+            <Text style={styles.headerCell}>{totalLabel}</Text>
+          </View>
+        </View>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyText}>No items</Text>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* Header Row */}
+      {/* Table Header */}
       <View style={styles.headerRow}>
         <View style={styles.colDescription}>
-          <Text style={styles.headerText}>{descLabel}</Text>
+          <Text style={styles.headerCell}>{descLabel}</Text>
         </View>
         <View style={styles.colQuantity}>
-          <Text style={styles.headerText}>{qtyLabel}</Text>
+          <Text style={styles.headerCell}>{qtyLabel}</Text>
         </View>
         <View style={styles.colPrice}>
-          <Text style={styles.headerText}>{priceLabel}</Text>
+          <Text style={styles.headerCell}>{priceLabel}</Text>
         </View>
         <View style={styles.colTotal}>
-          <Text style={[styles.headerText, { textAlign: "right" }]}>
-            {totalLabel}
-          </Text>
+          <Text style={styles.headerCell}>{totalLabel}</Text>
         </View>
       </View>
 
@@ -159,32 +218,30 @@ export function LineItems({
       {lineItems.map((item, index) => (
         <View
           key={item.id}
-          wrap={false}
-          style={
-            alternateRows && index % 2 === 1
-              ? [styles.row, styles.rowAlt]
-              : styles.row
-          }
+          wrap={true}
+          style={[
+            styles.row,
+            index === lineItems.length - 1 ? styles.rowLast : {},
+          ]}
         >
           <View style={styles.colDescription}>
             <Text style={styles.description}>{item.description}</Text>
-            {showSku && item.sku && (
-              <Text style={styles.sku}>SKU: {item.sku}</Text>
-            )}
-            {showNotes && item.notes && (
-              <Text style={styles.notes}>{item.notes}</Text>
-            )}
+            {hasSkus && item.sku && <Text style={styles.sku}>{item.sku}</Text>}
+            {hasNotes && item.notes && <Text style={styles.notes}>{item.notes}</Text>}
           </View>
+
           <View style={styles.colQuantity}>
-            <Text style={styles.cellText}>{item.quantity}</Text>
+            <Text style={styles.quantity}>{item.quantity}</Text>
           </View>
+
           <View style={styles.colPrice}>
-            <Text style={styles.cellText}>
+            <Text style={styles.price}>
               {formatCurrencyForPdf(item.unitPrice, currency, locale)}
             </Text>
           </View>
+
           <View style={styles.colTotal}>
-            <Text style={[styles.cellText, { textAlign: "right" }]}>
+            <Text style={styles.total}>
               {formatCurrencyForPdf(item.total, currency, locale)}
             </Text>
           </View>

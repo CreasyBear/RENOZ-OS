@@ -58,7 +58,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     id: "count",
     label: "Create Stock Count",
     icon: ClipboardList,
-    href: "/inventory/counts/new",
+    href: "/inventory/counts",
     description: "Start cycle count",
   },
   {

@@ -62,11 +62,9 @@ function ScheduledCallsContainer() {
     async (id: string, outcome: string, notes?: string) => {
       try {
         await completeMutation.mutateAsync({
-          data: {
-            id,
-            outcome: outcome as "answered" | "no_answer" | "voicemail" | "busy" | "wrong_number" | "callback_requested" | "completed_successfully",
-            outcomeNotes: notes,
-          }
+          id,
+          outcome: outcome as "answered" | "no_answer" | "voicemail" | "busy" | "wrong_number" | "callback_requested" | "completed_successfully",
+          outcomeNotes: notes,
         });
         toastSuccess("Call marked as complete");
         setSelectedCallForOutcome(null);
@@ -80,7 +78,7 @@ function ScheduledCallsContainer() {
   const handleCancel = useCallback(
     async (id: string) => {
       try {
-        await cancelMutation.mutateAsync({ data: { id } });
+        await cancelMutation.mutateAsync({ id });
         toastSuccess("Call cancelled");
       } catch {
         toastError("Failed to cancel call");
@@ -92,7 +90,7 @@ function ScheduledCallsContainer() {
   const handleReschedule = useCallback(
     async (id: string, newDate: Date) => {
       try {
-        await rescheduleMutation.mutateAsync({ data: { id, newScheduledAt: newDate } });
+        await rescheduleMutation.mutateAsync({ id, newScheduledAt: newDate });
         toastSuccess("Call rescheduled");
       } catch {
         toastError("Failed to reschedule call");

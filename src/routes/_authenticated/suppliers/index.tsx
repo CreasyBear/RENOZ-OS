@@ -145,12 +145,12 @@ function SuppliersPage() {
   };
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Suppliers"
         description="Manage your supplier relationships"
         actions={
-          <Button onClick={() => navigate({ to: '/suppliers' })}>
+          <Button onClick={() => navigate({ to: '/suppliers/create' })}>
             <Plus className="mr-2 h-4 w-4" />
             Add Supplier
           </Button>

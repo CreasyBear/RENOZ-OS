@@ -1,12 +1,13 @@
 /**
  * Pricing Table Component
  *
- * Data table for displaying supplier price lists.
+ * Data table for displaying supplier price lists with sorting.
  * Shows price, quantity tiers, discounts, and validity periods.
  *
  * @see SUPP-PRICING-MANAGEMENT story
  */
 
+import { useState, useMemo, useCallback } from 'react';
 import { Link } from '@tanstack/react-router';
 import {
   Table,
@@ -25,7 +26,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MoreHorizontal, Star, Package, Percent, Clock } from 'lucide-react';
+import { MoreHorizontal, Star, Package, Percent, Clock, ChevronUp, ChevronDown } from 'lucide-react';
 import { formatCurrency } from '@/lib/formatters';
 import {
   type PriceListRow,
@@ -36,6 +37,9 @@ import {
 // ============================================================================
 // TYPES
 // ============================================================================
+
+type SortField = 'productName' | 'supplierName' | 'effectivePrice' | 'minQuantity' | 'discountPercent' | 'effectiveDate' | 'status';
+type SortDirection = 'asc' | 'desc';
 
 interface PricingTableProps {
   items: PriceListRow[];
@@ -73,6 +77,42 @@ function formatQuantityRange(min: number, max: number | null): string {
     return String(min);
   }
   return `${min}-${max}`;
+}
+
+// ============================================================================
+// SORT HEADER COMPONENT
+// ============================================================================
+
+function SortHeader({
+  label,
+  field,
+  currentSort,
+  onSort,
+  align = 'left',
+}: {
+  label: string;
+  field: SortField;
+  currentSort: { field: SortField; direction: SortDirection };
+  onSort: (field: SortField) => void;
+  align?: 'left' | 'center' | 'right';
+}) {
+  const isActive = currentSort.field === field;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className={`h-8 px-2 -ml-2 font-medium ${align === 'right' ? 'ml-auto' : ''} ${align === 'center' ? 'mx-auto' : ''}`}
+      onClick={() => onSort(field)}
+    >
+      {label}
+      {isActive &&
+        (currentSort.direction === 'asc' ? (
+          <ChevronUp className="ml-1 h-4 w-4" />
+        ) : (
+          <ChevronDown className="ml-1 h-4 w-4" />
+        ))}
+    </Button>
+  );
 }
 
 // ============================================================================
@@ -120,6 +160,55 @@ function PricingTable({
   onDelete,
   onSetPreferred,
 }: PricingTableProps) {
+  const [sort, setSort] = useState<{ field: SortField; direction: SortDirection }>({
+    field: 'effectiveDate',
+    direction: 'desc',
+  });
+
+  const handleSort = useCallback((field: SortField) => {
+    setSort((current) => ({
+      field,
+      direction: current.field === field && current.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  }, []);
+
+  // Sort items
+  const sortedItems = useMemo(() => {
+    const sorted = [...items];
+    sorted.sort((a, b) => {
+      let comparison = 0;
+      switch (sort.field) {
+        case 'productName':
+          comparison = (a.productName || '').localeCompare(b.productName || '');
+          break;
+        case 'supplierName':
+          comparison = (a.supplierName || '').localeCompare(b.supplierName || '');
+          break;
+        case 'effectivePrice':
+          comparison = a.effectivePrice - b.effectivePrice;
+          break;
+        case 'minQuantity':
+          comparison = a.minQuantity - b.minQuantity;
+          break;
+        case 'discountPercent':
+          comparison = (a.discountPercent ?? 0) - (b.discountPercent ?? 0);
+          break;
+        case 'effectiveDate':
+          const dateA = a.effectiveDate ? new Date(a.effectiveDate).getTime() : 0;
+          const dateB = b.effectiveDate ? new Date(b.effectiveDate).getTime() : 0;
+          comparison = dateA - dateB;
+          break;
+        case 'status':
+          comparison = a.status.localeCompare(b.status);
+          break;
+        default:
+          comparison = 0;
+      }
+      return sort.direction === 'asc' ? comparison : -comparison;
+    });
+    return sorted;
+  }, [items, sort]);
+
   if (isLoading) {
     return <TableSkeleton />;
   }
@@ -133,18 +222,32 @@ function PricingTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Product</TableHead>
-            <TableHead>Supplier</TableHead>
-            <TableHead className="text-right">Price</TableHead>
-            <TableHead className="text-center">Qty Range</TableHead>
-            <TableHead className="text-center">Discount</TableHead>
-            <TableHead>Valid Period</TableHead>
-            <TableHead className="text-center">Status</TableHead>
+            <TableHead>
+              <SortHeader label="Product" field="productName" currentSort={sort} onSort={handleSort} />
+            </TableHead>
+            <TableHead>
+              <SortHeader label="Supplier" field="supplierName" currentSort={sort} onSort={handleSort} />
+            </TableHead>
+            <TableHead className="text-right">
+              <SortHeader label="Price" field="effectivePrice" currentSort={sort} onSort={handleSort} align="right" />
+            </TableHead>
+            <TableHead className="text-center">
+              <SortHeader label="Qty Range" field="minQuantity" currentSort={sort} onSort={handleSort} align="center" />
+            </TableHead>
+            <TableHead className="text-center">
+              <SortHeader label="Discount" field="discountPercent" currentSort={sort} onSort={handleSort} align="center" />
+            </TableHead>
+            <TableHead>
+              <SortHeader label="Valid Period" field="effectiveDate" currentSort={sort} onSort={handleSort} />
+            </TableHead>
+            <TableHead className="text-center">
+              <SortHeader label="Status" field="status" currentSort={sort} onSort={handleSort} align="center" />
+            </TableHead>
             <TableHead className="w-[60px]"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {items.map((item) => (
+          {sortedItems.map((item) => (
             <TableRow key={item.id}>
               <TableCell>
                 <div className="flex items-center gap-2">

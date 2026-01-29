@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Warranty Extension Server Functions
  *

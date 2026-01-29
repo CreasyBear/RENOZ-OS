@@ -105,7 +105,7 @@ function AnalyticsPage() {
         totalValue: valuationData.totalValue ?? 0,
         totalUnits: (valuationData as any).totalUnits ?? (valuationData.byProduct?.reduce((sum: number, p: any) => sum + (p.totalQuantity ?? 0), 0) ?? 0),
         averageUnitCost: (valuationData as any).averageUnitCost ?? 0,
-        categoriesCount: (valuationData as any).byCategory?.length ?? 0,
+        totalSkus: valuationData.totalSkus ?? (valuationData.byProduct?.length ?? 0),
         locationsCount: valuationData.byLocation?.length ?? 0,
         costMethod: "fifo",
       }
@@ -166,13 +166,23 @@ function AnalyticsPage() {
     risk: item.risk ?? "low",
   }));
 
+  const asNumber = (value: unknown) => {
+    const num = Number(value ?? 0);
+    return Number.isFinite(num) ? num : 0;
+  };
+
   // Transform turnover data (API returns different shape than component expects)
   const turnoverDataAny = turnoverData as any;
   const turnoverSummary: TurnoverSummary | null = turnoverData
     ? {
-        turnoverRatio: turnoverDataAny.turnover?.turnoverRate ?? turnoverDataAny.turnoverRatio ?? 0,
-        averageDaysOnHand: turnoverDataAny.turnover?.daysOnHand ?? turnoverDataAny.daysOnHand ?? 0,
-        annualizedTurnover: (turnoverDataAny.turnover?.turnoverRate ?? turnoverDataAny.turnoverRatio ?? 0) * 4,
+        turnoverRatio: asNumber(
+          turnoverDataAny.turnover?.turnoverRate ?? turnoverDataAny.turnoverRatio
+        ),
+        averageDaysOnHand: asNumber(
+          turnoverDataAny.turnover?.daysOnHand ?? turnoverDataAny.daysOnHand
+        ),
+        annualizedTurnover:
+          asNumber(turnoverDataAny.turnover?.turnoverRate ?? turnoverDataAny.turnoverRatio) * 4,
         periodStart: new Date(turnoverDataAny.periodStart ?? Date.now() - 90 * 24 * 60 * 60 * 1000),
         periodEnd: new Date(turnoverDataAny.periodEnd ?? Date.now()),
         industryBenchmark: 6,
@@ -182,18 +192,18 @@ function AnalyticsPage() {
   const turnoverByCategory: CategoryTurnover[] = (turnoverDataAny?.byCategory ?? turnoverDataAny?.byProduct ?? []).map((c: any) => ({
     categoryId: c.categoryId ?? c.productId ?? c.id,
     categoryName: c.categoryName ?? c.productName ?? c.name ?? "Unknown",
-    turnoverRatio: c.turnoverRatio ?? c.turnoverRate ?? 0,
-    daysOnHand: c.daysOnHand ?? 0,
-    cogs: c.cogs ?? 0,
-    averageInventory: c.averageInventory ?? 0,
+    turnoverRatio: asNumber(c.turnoverRatio ?? c.turnoverRate),
+    daysOnHand: asNumber(c.daysOnHand),
+    cogs: asNumber(c.cogs),
+    averageInventory: asNumber(c.averageInventory),
     trend: c.trend ?? "stable",
-    trendPercentage: c.trendPercentage ?? 0,
+    trendPercentage: asNumber(c.trendPercentage),
   }));
 
   const turnoverTrends: TurnoverTrend[] = (turnoverDataAny?.trends ?? []).map((t: any) => ({
     period: t.period ?? "",
-    turnoverRatio: t.turnoverRatio ?? 0,
-    daysOnHand: t.daysOnHand ?? 0,
+    turnoverRatio: asNumber(t.turnoverRatio),
+    daysOnHand: asNumber(t.daysOnHand),
   }));
 
   // Transform movement data with useMemo for complex calculations
@@ -229,7 +239,7 @@ function AnalyticsPage() {
         totalValueOut += val;
       }
 
-      const type = m.movementType ?? "adjustment";
+      const type = m.movementType ?? "adjust";
       if (!typeCounts[type]) {
         typeCounts[type] = { count: 0, units: 0, value: 0 };
       }

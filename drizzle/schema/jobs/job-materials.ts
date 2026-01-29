@@ -14,6 +14,9 @@ import {
   uuid,
   text,
   integer,
+  boolean,
+  jsonb,
+  timestamp,
   index,
   pgPolicy,
 } from "drizzle-orm/pg-core";
@@ -27,7 +30,9 @@ import {
 import { organizations } from "../settings/organizations";
 import { users } from "../users/users";
 import { jobAssignments } from "./job-assignments";
+import { jobTasks } from "./job-tasks";
 import { products } from "../products/products";
+import { projects } from "./projects";
 
 // ============================================================================
 // JOB MATERIALS TABLE
@@ -58,6 +63,14 @@ export const jobMaterials = pgTable(
       .notNull()
       .references(() => jobAssignments.id, { onDelete: "cascade" }),
 
+    // SPRINT-03: Project-centric linking
+    projectId: uuid("project_id").references(() => projects.id, {
+      onDelete: "cascade",
+    }),
+    taskId: uuid("task_id").references(() => jobTasks.id, {
+      onDelete: "set null",
+    }),
+
     // Link to product catalog (RESTRICT prevents deleting products in use)
     productId: uuid("product_id")
       .notNull()
@@ -72,6 +85,16 @@ export const jobMaterials = pgTable(
 
     // Notes for installation instructions or special handling
     notes: text("notes"),
+
+    // Enhanced tracking for warranty and evidence (Story 029)
+    serialNumbers: jsonb("serial_numbers").$type<string[]>().default([]),
+    installedLocation: text("installed_location"),
+    installedAt: timestamp("installed_at", { withTimezone: true }),
+    photos: jsonb("photos").$type<string[]>().default([]),
+
+    // Status tracking
+    isInstalled: boolean("is_installed").default(false),
+    installedBy: uuid("installed_by").references(() => users.id),
 
     // Optimistic locking
     version: integer("version").notNull().default(1),
@@ -99,6 +122,10 @@ export const jobMaterials = pgTable(
       table.createdAt.desc(),
       table.id.desc()
     ),
+
+    // SPRINT-03: Project/task indexes
+    projectIdx: index("idx_job_materials_project").on(table.projectId),
+    taskIdx: index("idx_job_materials_task").on(table.taskId),
 
     // Standard CRUD RLS policies for org isolation
     selectPolicy: pgPolicy("job_materials_select_policy", {
@@ -144,6 +171,14 @@ export const jobMaterialsRelations = relations(jobMaterials, ({ one }) => ({
   job: one(jobAssignments, {
     fields: [jobMaterials.jobId],
     references: [jobAssignments.id],
+  }),
+  project: one(projects, {
+    fields: [jobMaterials.projectId],
+    references: [projects.id],
+  }),
+  task: one(jobTasks, {
+    fields: [jobMaterials.taskId],
+    references: [jobTasks.id],
   }),
   product: one(products, {
     fields: [jobMaterials.productId],

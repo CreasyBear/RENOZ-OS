@@ -2,23 +2,23 @@
  * Supabase Browser Client
  *
  * Client-side Supabase instance for use in React components.
- * Uses the anon key which has limited permissions defined by RLS policies.
+ * Uses @supabase/ssr for proper cookie-based session handling.
  *
  * @example
  * ```ts
- * import { supabase } from '~/lib/supabase/client'
+ * import { createClient, supabase } from '~/lib/supabase/client'
  *
- * // Auth operations
+ * // Factory function (recommended for components)
+ * const client = createClient()
+ *
+ * // Or use the singleton for convenience
  * const { data, error } = await supabase.auth.signInWithPassword({
  *   email: 'user@example.com',
  *   password: 'password'
  * })
- *
- * // Database queries (respects RLS)
- * const { data: customers } = await supabase.from('customers').select('*')
  * ```
  */
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -32,16 +32,18 @@ if (!supabaseAnonKey) {
 }
 
 /**
- * Browser Supabase client instance.
- * Uses anon key - all queries are subject to RLS policies.
+ * Create a Supabase browser client.
+ * Uses @supabase/ssr for proper cookie-based session handling.
  */
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-})
+export function createClient() {
+  return createBrowserClient(supabaseUrl, supabaseAnonKey)
+}
+
+/**
+ * Browser Supabase client singleton.
+ * For backwards compatibility - prefer createClient() for new code.
+ */
+export const supabase = createClient()
 
 /**
  * Get the current authenticated user from the browser session.

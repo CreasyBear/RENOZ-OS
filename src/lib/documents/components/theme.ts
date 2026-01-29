@@ -1,227 +1,238 @@
 /**
- * PDF Document Theme
+ * PDF Document Theme - Apple/Linear Inspired Design
  *
- * Centralized styling tokens for PDF documents.
- * Provides consistent colors, spacing, and typography across all templates.
+ * Ultra-minimal, premium aesthetic with:
+ * - Generous white space
+ * - Rounded corners (8-12px)
+ * - Subtle borders instead of harsh lines
+ * - Pill-style badges
+ * - Soft grey palette
  *
- * @see src/lib/email/context.tsx for the email equivalent
+ * @see https://linear.app/design for inspiration
  */
 import { StyleSheet } from "@react-pdf/renderer";
 import { FONT_FAMILY, FONT_WEIGHTS } from "../fonts";
 
-// Re-export font constants for convenience
+// Re-export font constants
 export { FONT_FAMILY, FONT_WEIGHTS };
 
 // ============================================================================
-// COLOR TOKENS
+// COLOR TOKENS - Soft, Sophisticated Palette
 // ============================================================================
 
-/**
- * Color palette for PDF documents
- *
- * Using a neutral palette that works well in print and digital formats.
- * Brand colors are applied through the OrgDocumentProvider context.
- */
 export const colors = {
-  // Text colors
+  // Primary - Almost black, not harsh
+  primary: {
+    900: "#1C1C1E", // Soft black
+    800: "#2C2C2E", // Dark grey
+    700: "#3A3A3C", // Medium dark
+    600: "#48484A", // Medium
+  },
+
+  // Text colors - Softer than pure black
   text: {
-    primary: "#18181B", // Zinc-900
-    secondary: "#52525B", // Zinc-600
-    muted: "#71717A", // Zinc-500
-    inverse: "#FFFFFF",
+    primary: "#1C1C1E", // Soft black for headings
+    secondary: "#636366", // Medium grey for body
+    muted: "#8E8E93", // Light grey for captions
+    inverse: "#FFFFFF", // White
+    placeholder: "#C7C7CC", // Very light grey
   },
 
   // Background colors
   background: {
     white: "#FFFFFF",
-    light: "#F4F4F5", // Zinc-100
-    muted: "#E4E4E7", // Zinc-200
+    subtle: "#F2F2F7", // iOS system grey6
+    muted: "#E5E5EA", // iOS system grey5
+    card: "#FAFAFA", // Nearly white for cards
   },
 
-  // Border colors
+  // Border colors - Hairline, subtle
   border: {
-    light: "#E4E4E7", // Zinc-200
-    medium: "#A1A1AA", // Zinc-400
-    dark: "#18181B", // Zinc-900
+    light: "#E5E5EA", // iOS grey5
+    medium: "#D1D1D6", // iOS grey4
+    dark: "#C7C7CC", // iOS grey3
   },
 
-  // Status colors
+  // Semantic - iOS-style colors
   status: {
-    success: "#16A34A", // Green-600
-    warning: "#CA8A04", // Yellow-600
-    error: "#DC2626", // Red-600
-    info: "#2563EB", // Blue-600
+    success: "#34C759", // iOS green
+    successLight: "#E8F5E9",
+    warning: "#FF9500", // iOS orange
+    warningLight: "#FFF3E0",
+    error: "#FF3B30", // iOS red
+    errorLight: "#FFEBEE",
+    info: "#007AFF", // iOS blue
+    infoLight: "#E3F2FD",
   },
-
-  // Watermark color (semi-transparent)
-  watermark: "rgba(22, 163, 74, 0.15)", // Green at 15% opacity
 } as const;
 
 // ============================================================================
-// SPACING TOKENS
+// SPACING - Generous but Intentional
 // ============================================================================
 
-/**
- * Spacing scale for consistent layouts
- * Based on 4px grid
- */
 export const spacing = {
   xs: 4,
   sm: 8,
   md: 12,
   lg: 16,
-  xl: 20,
-  "2xl": 24,
-  "3xl": 32,
-  "4xl": 40,
+  xl: 24,
+  "2xl": 32,
+  "3xl": 48,
+  "4xl": 64,
 } as const;
 
-/**
- * Page margins for standard documents
- */
+// Modern page margins
 export const pageMargins = {
   top: 40,
-  bottom: 60,
-  left: 40,
-  right: 40,
-  // Alternative sizing presets
-  default: 40,
-  compact: 30,
-  comfortable: 50,
+  bottom: 40,
+  left: 48,
+  right: 48,
 } as const;
 
 // ============================================================================
-// TYPOGRAPHY TOKENS
+// TYPOGRAPHY - Clean, Modern
 // ============================================================================
 
-/**
- * Font size scale
- */
 export const fontSize = {
-  xs: 8,
-  sm: 9,
-  base: 10,
-  md: 11,
-  lg: 12,
-  xl: 14,
-  "2xl": 16,
-  "3xl": 20,
-  "4xl": 24,
+  xs: 9,
+  sm: 10,
+  base: 11,
+  md: 12,
+  lg: 14,
+  xl: 16,
+  "2xl": 20,
+  "3xl": 24,
+  "4xl": 32,
 } as const;
 
-/**
- * Line height multipliers
- */
 export const lineHeight = {
   tight: 1.2,
+  snug: 1.3,
   normal: 1.4,
-  relaxed: 1.6,
+  relaxed: 1.5,
+  loose: 1.6,
+} as const;
+
+export const letterSpacing = {
+  tight: -0.01,
+  normal: 0,
+  wide: 0.02,
+} as const;
+
+// ============================================================================
+// BORDER RADIUS - Very rounded
+// ============================================================================
+
+export const borderRadius = {
+  sm: 6,
+  md: 8,
+  lg: 12,
+  xl: 16,
+  full: 9999,
 } as const;
 
 // ============================================================================
 // COMMON STYLES
 // ============================================================================
 
-/**
- * Pre-defined reusable styles
- */
 export const commonStyles = StyleSheet.create({
-  // Page styles
+  // Page foundation
   page: {
-    padding: pageMargins.default,
+    paddingTop: pageMargins.top,
+    paddingBottom: pageMargins.bottom,
+    paddingLeft: pageMargins.left,
+    paddingRight: pageMargins.right,
     backgroundColor: colors.background.white,
-    color: colors.text.primary,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.regular,
     fontSize: fontSize.base,
   },
 
-  // Typography styles
-  title: {
-    fontSize: fontSize["3xl"],
+  // Typography
+  display: {
+    fontSize: fontSize["4xl"],
     fontWeight: FONT_WEIGHTS.bold,
     color: colors.text.primary,
-    marginBottom: spacing.md,
+    letterSpacing: letterSpacing.tight,
+    lineHeight: lineHeight.tight,
   },
 
-  subtitle: {
-    fontSize: fontSize.xl,
+  h1: {
+    fontSize: fontSize["3xl"],
     fontWeight: FONT_WEIGHTS.semibold,
     color: colors.text.primary,
-    marginBottom: spacing.sm,
+    lineHeight: lineHeight.snug,
+    letterSpacing: letterSpacing.tight,
   },
 
-  heading: {
-    fontSize: fontSize.lg,
+  h2: {
+    fontSize: fontSize["2xl"],
+    fontWeight: FONT_WEIGHTS.semibold,
+    color: colors.text.primary,
+    lineHeight: lineHeight.normal,
+  },
+
+  h3: {
+    fontSize: fontSize.xl,
     fontWeight: FONT_WEIGHTS.medium,
     color: colors.text.primary,
-    marginBottom: spacing.xs,
-  },
-
-  label: {
-    fontSize: fontSize.sm,
-    fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.secondary,
-    marginBottom: spacing.xs,
+    lineHeight: lineHeight.normal,
   },
 
   body: {
     fontSize: fontSize.base,
     fontWeight: FONT_WEIGHTS.regular,
-    color: colors.text.primary,
-    lineHeight: lineHeight.normal,
+    color: colors.text.secondary,
+    lineHeight: lineHeight.relaxed,
   },
 
-  small: {
+  bodySmall: {
     fontSize: fontSize.sm,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.muted,
+    lineHeight: lineHeight.normal,
   },
 
-  // Layout styles
-  row: {
-    flexDirection: "row",
+  label: {
+    fontSize: fontSize.xs,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.muted,
+    textTransform: "uppercase",
+    letterSpacing: letterSpacing.wide,
   },
 
-  rowBetween: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  // Cards
+  card: {
+    backgroundColor: colors.background.card,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    borderWidth: 0.5,
+    borderColor: colors.border.light,
   },
 
-  rowEnd: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
+  cardSubtle: {
+    backgroundColor: colors.background.subtle,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
   },
 
-  column: {
-    flexDirection: "column",
-  },
-
-  flex1: {
-    flex: 1,
-  },
-
-  // Divider
+  // Divider - Hairline
   divider: {
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.border.dark,
-    marginVertical: spacing.sm,
+    height: 0.5,
+    backgroundColor: colors.border.light,
+    marginVertical: spacing.lg,
   },
 
-  // Table header row
-  tableHeader: {
-    flexDirection: "row",
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.border.dark,
-    paddingBottom: spacing.xs,
-    marginBottom: spacing.xs,
-  },
-
-  // Table row
+  // Table styles - Clean
   tableRow: {
     flexDirection: "row",
-    paddingVertical: spacing.xs,
-    alignItems: "flex-start",
+    paddingVertical: spacing.md,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.border.light,
+  },
+
+  tableRowLast: {
+    borderBottomWidth: 0,
   },
 });
 
@@ -229,14 +240,6 @@ export const commonStyles = StyleSheet.create({
 // UTILITY FUNCTIONS
 // ============================================================================
 
-/**
- * Format currency for PDF display
- *
- * @param amount - Numeric amount
- * @param currency - Currency code (e.g., "AUD", "USD")
- * @param locale - Locale for formatting (e.g., "en-AU")
- * @param maximumFractionDigits - Decimal places (default 2)
- */
 export function formatCurrencyForPdf(
   amount: number,
   currency: string,
@@ -251,33 +254,23 @@ export function formatCurrencyForPdf(
   }).format(amount);
 }
 
-/**
- * Format date for PDF display
- *
- * @param date - Date to format
- * @param locale - Locale for formatting
- * @param options - Intl.DateTimeFormatOptions
- */
 export function formatDateForPdf(
   date: Date | string,
   locale: string,
-  options: Intl.DateTimeFormatOptions = {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  },
+  format: "short" | "medium" | "long" | "full" = "medium",
 ): string {
   const dateObj = typeof date === "string" ? new Date(date) : date;
-  return new Intl.DateTimeFormat(locale, options).format(dateObj);
+
+  const options: Record<string, Intl.DateTimeFormatOptions> = {
+    short: { year: "numeric", month: "short", day: "numeric" },
+    medium: { year: "numeric", month: "long", day: "numeric" },
+    long: { year: "numeric", month: "long", day: "numeric" },
+    full: { year: "numeric", month: "long", day: "numeric", weekday: "long" },
+  };
+
+  return new Intl.DateTimeFormat(locale, options[format]).format(dateObj);
 }
 
-/**
- * Format number for PDF display
- *
- * @param value - Number to format
- * @param locale - Locale for formatting
- * @param maximumFractionDigits - Decimal places
- */
 export function formatNumberForPdf(
   value: number,
   locale: string,

@@ -1,11 +1,10 @@
 /**
- * Quote PDF Template
+ * Quote PDF Template - Apple/Linear Style
  *
- * Generates professional quote documents with organization branding.
- * Uses comprehensive document types for full data support.
+ * Clean, minimal quote with elegant acceptance section.
  */
 
-import { Document, Page, StyleSheet, View } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
   DocumentHeader,
   AddressColumns,
@@ -17,6 +16,10 @@ import {
   pageMargins,
   colors,
   spacing,
+  borderRadius,
+  fontSize,
+  FONT_FAMILY,
+  FONT_WEIGHTS,
 } from "../../components";
 import { OrgDocumentProvider, useOrgDocument } from "../../context";
 import type { QuoteDocumentData, DocumentOrganization } from "../../types";
@@ -36,10 +39,99 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
+
+  addressesSection: {
+    marginTop: spacing.xl,
+    marginBottom: spacing.xl,
+  },
+
+  // Validity card
+  validityCard: {
+    backgroundColor: colors.background.subtle,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginTop: spacing.xl,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  validityLabel: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.muted,
+  },
+  validityValue: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.semibold,
+    color: colors.text.primary,
+  },
+
+  // Acceptance section
+  acceptanceSection: {
+    marginTop: spacing["2xl"],
+    paddingTop: spacing.xl,
+    borderTopWidth: 0.5,
+    borderTopColor: colors.border.light,
+  },
+  acceptanceTitle: {
+    fontSize: fontSize.lg,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.md,
+  },
+  acceptanceText: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.secondary,
+    lineHeight: 1.5,
+    marginBottom: spacing.lg,
+  },
+  signatureRow: {
+    flexDirection: "row",
+    gap: spacing.xl,
+  },
+  signatureBlock: {
+    flex: 1,
+  },
+  signatureLine: {
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.border.dark,
+    height: 48,
+    marginBottom: spacing.xs,
+  },
+  signatureLabel: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.muted,
+  },
+  dateBlock: {
+    width: 100,
+  },
+
+  // QR Section
   qrSection: {
     marginTop: spacing.xl,
     flexDirection: "row",
     justifyContent: "flex-end",
+  },
+  qrBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.background.subtle,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  qrText: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.secondary,
   },
 });
 
@@ -48,27 +140,23 @@ const styles = StyleSheet.create({
 // ============================================================================
 
 export interface QuotePdfTemplateProps {
-  /** Quote document data */
   data: QuoteDocumentData;
-  /** Optional QR code data URL (pre-generated) */
   qrCodeDataUrl?: string;
 }
 
 export interface QuotePdfDocumentProps extends QuotePdfTemplateProps {
-  /** Organization data for branding */
   organization: DocumentOrganization;
 }
 
 // ============================================================================
-// INTERNAL COMPONENT (uses context)
+// INTERNAL COMPONENT
 // ============================================================================
 
 function QuoteContent({ data, qrCodeDataUrl }: QuotePdfTemplateProps) {
-  const { organization } = useOrgDocument();
-
+  const { organization, locale } = useOrgDocument();
   const { order } = data;
 
-  // Build "from" address from organization
+  // Build addresses
   const fromAddress = {
     name: organization.name,
     addressLine1: organization.address?.addressLine1,
@@ -83,7 +171,6 @@ function QuoteContent({ data, qrCodeDataUrl }: QuotePdfTemplateProps) {
     taxId: organization.taxId,
   };
 
-  // Build "to" address from billing address (preferred) or customer address (fallback)
   const customerAddress = order.billingAddress ?? order.customer.address;
   const toAddress = {
     name: order.customer.name,
@@ -96,80 +183,117 @@ function QuoteContent({ data, qrCodeDataUrl }: QuotePdfTemplateProps) {
     email: order.customer.email,
     phone: order.customer.phone,
     taxId: order.customer.taxId,
-    // Include contact name from address if different from customer name
     contactName: customerAddress?.contactName,
     contactPhone: customerAddress?.contactPhone,
   };
 
-  // Resolve notes: document notes take precedence, fall back to order customer notes
   const resolvedNotes = data.notes ?? order.customerNotes;
+
+  // Calculate days until expiry
+  const daysUntilExpiry = Math.ceil(
+    (new Date(data.validUntil).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+  );
 
   return (
     <Page size="A4" style={styles.page}>
       <View style={styles.content}>
-        {/* Header with logo and document info */}
+        {/* Header */}
         <DocumentHeader
-          title="QUOTE"
+          title="Quote"
           documentNumber={data.documentNumber}
           date={data.issueDate}
           validUntil={data.validUntil}
+          reference={data.reference}
         />
 
-        {/* From/To addresses */}
-        <AddressColumns from={fromAddress} to={toAddress} />
+        {/* Addresses */}
+        <View style={styles.addressesSection}>
+          <AddressColumns
+            from={fromAddress}
+            to={toAddress}
+            labels={{ from: "From", to: "Quote To" }}
+          />
+        </View>
 
-        {/* Line items table - pass full DocumentLineItem objects */}
+        {/* Validity Card */}
+        <View style={styles.validityCard}>
+          <Text style={styles.validityLabel}>Quote valid until</Text>
+          <Text style={styles.validityValue}>
+            {new Intl.DateTimeFormat(locale, {
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+            }).format(new Date(data.validUntil))}
+            {daysUntilExpiry <= 7 && daysUntilExpiry >= 0 &&
+              ` · ${daysUntilExpiry} days left`}
+          </Text>
+        </View>
+
+        {/* Line Items */}
         <LineItems
           lineItems={order.lineItems}
           showSku={order.lineItems.some((item) => item.sku)}
           showNotes={order.lineItems.some((item) => item.notes)}
-          alternateRows
         />
 
-        {/* Totals summary with all financial details */}
+        {/* Summary */}
         <Summary
           subtotal={order.subtotal}
           discountAmount={order.discount}
           discountPercent={order.discountPercent}
           taxRate={order.taxRate}
           taxAmount={order.taxAmount}
+          taxRegistrationNumber={organization.taxId}
           shippingAmount={order.shippingAmount}
           total={order.total}
         />
 
-        {/* Footer with terms and notes */}
-        <DocumentFooter terms={data.terms} notes={resolvedNotes} />
+        {/* Acceptance Section */}
+        <View style={styles.acceptanceSection}>
+          <Text style={styles.acceptanceTitle}>Acceptance</Text>
+          <Text style={styles.acceptanceText}>
+            Please sign below to accept this quote. By accepting, you agree to
+            the terms and conditions. Work will commence upon receipt of signed
+            acceptance and any required deposit.
+          </Text>
+          <View style={styles.signatureRow}>
+            <View style={styles.signatureBlock}>
+              <View style={styles.signatureLine} />
+              <Text style={styles.signatureLabel}>Authorized Signature</Text>
+            </View>
+            <View style={styles.dateBlock}>
+              <View style={styles.signatureLine} />
+              <Text style={styles.signatureLabel}>Date</Text>
+            </View>
+          </View>
+        </View>
 
-        {/* QR Code for quick access */}
+        {/* QR Code */}
         {qrCodeDataUrl && (
           <View style={styles.qrSection}>
-            <QRCode dataUrl={qrCodeDataUrl} size={60} />
+            <View style={styles.qrBox}>
+              <QRCode dataUrl={qrCodeDataUrl} size={80} />
+              <Text style={styles.qrText}>Scan to view</Text>
+            </View>
           </View>
         )}
       </View>
 
-      {/* Page numbers */}
-      <PageNumber />
+      {/* Footer */}
+      <DocumentFooter
+        terms={data.terms}
+        notes={resolvedNotes}
+      />
+
+      <PageNumber documentNumber={data.documentNumber} />
     </Page>
   );
 }
 
 // ============================================================================
-// EXPORTED COMPONENT
+// EXPORTED COMPONENTS
 // ============================================================================
 
-/**
- * Quote PDF Template
- *
- * Renders a complete quote document with organization branding.
- * Must be used with renderPdfToBuffer or similar PDF rendering function.
- *
- * @example
- * const qrCode = await generateQRCode(`https://app.example.com/quotes/${quoteId}`);
- * const { buffer } = await renderPdfToBuffer(
- *   <QuotePdfDocument organization={org} data={quoteData} qrCodeDataUrl={qrCode} />
- * );
- */
 export function QuotePdfDocument({
   organization,
   data,
@@ -181,7 +305,7 @@ export function QuotePdfDocument({
         title={`Quote ${data.documentNumber}`}
         author={organization.name}
         subject={`Quote for ${data.order.customer.name}`}
-        creator="Renoz CRM"
+        creator="Renoz"
       >
         <QuoteContent data={data} qrCodeDataUrl={qrCodeDataUrl} />
       </Document>
@@ -189,12 +313,9 @@ export function QuotePdfDocument({
   );
 }
 
-/**
- * Quote PDF Template (for use within existing Document/Provider)
- *
- * Use this when you need to control the Document wrapper yourself,
- * or when rendering multiple quotes in a single PDF.
- */
-export function QuotePdfTemplate({ data, qrCodeDataUrl }: QuotePdfTemplateProps) {
+export function QuotePdfTemplate({
+  data,
+  qrCodeDataUrl,
+}: QuotePdfTemplateProps) {
   return <QuoteContent data={data} qrCodeDataUrl={qrCodeDataUrl} />;
 }

@@ -206,6 +206,12 @@ export const activityEntityTypes = [
   "user",
   "email",
   "call",
+  "project",
+  "workstream",
+  "task",
+  "purchase_order",
+  "shipment",
+  "quote",
 ] as const;
 
 export type ActivityEntityType = (typeof activityEntityTypes)[number];

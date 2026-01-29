@@ -30,6 +30,8 @@ import { useState, useCallback, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { PipelineColumn } from "./pipeline-column";
+import { PipelineColumnVirtualized } from "./pipeline-column-virtualized";
+import { PipelineColumnSummary } from "./pipeline-column-summary";
 import { OpportunityCard } from "./opportunities/opportunity-card";
 import { WonLostDialog } from "./won-lost-dialog";
 import type { Opportunity, OpportunityStage } from "@/lib/schemas/pipeline";
@@ -63,6 +65,12 @@ const STAGES: OpportunityStage[] = [
   "lost",
 ];
 
+/** Threshold for using virtualization - columns with more items use virtual scrolling */
+const VIRTUALIZATION_THRESHOLD = 30;
+
+/** Threshold for showing summary mode option - columns with many more items show summary as default */
+const SUMMARY_THRESHOLD = 50;
+
 // ============================================================================
 // COMPONENT
 // ============================================================================
@@ -84,6 +92,20 @@ export function PipelineBoard({
     opportunity: Opportunity;
     targetStage: "won" | "lost";
   } | null>(null);
+
+  // Track which columns are in summary mode (user override)
+  const [summaryModeColumns, setSummaryModeColumns] = useState<
+    Set<OpportunityStage>
+  >(() => new Set());
+
+  // Force a column out of summary mode (for "View All" button)
+  const showColumnDetails = useCallback((stage: OpportunityStage) => {
+    setSummaryModeColumns((prev) => {
+      const next = new Set(prev);
+      next.delete(stage);
+      return next;
+    });
+  }, []);
 
   // Configure sensors for drag detection
   const sensors = useSensors(
@@ -228,16 +250,58 @@ export function PipelineBoard({
             role="region"
             aria-label="Pipeline board"
           >
-            {STAGES.map((stage) => (
-              <PipelineColumn
-                key={stage}
-                stage={stage}
-                opportunities={opportunitiesByStage[stage]}
-                isOver={overId === stage}
-                onAddOpportunity={onAddOpportunity}
-                onEditOpportunity={onEditOpportunity}
-              />
-            ))}
+            {STAGES.map((stage) => {
+              const stageOpportunities = opportunitiesByStage[stage];
+              const itemCount = stageOpportunities.length;
+              const isSummaryMode = summaryModeColumns.has(stage);
+
+              // Determine which view to render
+              // 1. Summary mode (user override or very large)
+              // 2. Virtualized (large lists)
+              // 3. Regular (small lists)
+              const shouldShowSummary =
+                isSummaryMode ||
+                (itemCount > SUMMARY_THRESHOLD && !isSummaryMode);
+              const shouldVirtualize =
+                !shouldShowSummary && itemCount > VIRTUALIZATION_THRESHOLD;
+
+              if (shouldShowSummary) {
+                return (
+                  <PipelineColumnSummary
+                    key={stage}
+                    stage={stage}
+                    opportunities={stageOpportunities}
+                    isOver={overId === stage}
+                    onAddOpportunity={onAddOpportunity}
+                    onViewAll={() => showColumnDetails(stage)}
+                  />
+                );
+              }
+
+              if (shouldVirtualize) {
+                return (
+                  <PipelineColumnVirtualized
+                    key={stage}
+                    stage={stage}
+                    opportunities={stageOpportunities}
+                    isOver={overId === stage}
+                    onAddOpportunity={onAddOpportunity}
+                    onEditOpportunity={onEditOpportunity}
+                  />
+                );
+              }
+
+              return (
+                <PipelineColumn
+                  key={stage}
+                  stage={stage}
+                  opportunities={stageOpportunities}
+                  isOver={overId === stage}
+                  onAddOpportunity={onAddOpportunity}
+                  onEditOpportunity={onEditOpportunity}
+                />
+              );
+            })}
           </div>
           <ScrollBar orientation="horizontal" />
         </ScrollArea>

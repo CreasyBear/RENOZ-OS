@@ -1,76 +1,37 @@
 /**
- * Dashboard Grid Route (Container)
+ * Dashboard Route - Simple Business Overview
  *
- * ARCHITECTURE: Container Component - Route that handles ALL data fetching
- * and state management, passing data to pure presenter components.
- *
- * This route manages:
- * - User's dashboard layout (widgets, positions)
- * - Dashboard metrics data
- * - Widget customization mode (drag-and-drop reordering)
- * - Widget catalog (adding widgets)
- * - Date range filtering via URL search params
- *
- * Container/Presenter Pattern:
- * - Container (this file): Data fetching, state, handlers
- * - Presenters: DashboardGrid, WidgetCatalog (pure UI)
- *
- * @see src/hooks/dashboard/
- * @see src/components/domain/dashboard/
+ * Top-down view of the business with aggregated metrics and revenue charts.
+ * No widget system, no customization - just the essential data.
  */
 
 import { createFileRoute } from '@tanstack/react-router';
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { z } from 'zod';
-import { RouteErrorFallback } from '@/components/layout';
-import { FinancialDashboardSkeleton } from '@/components/skeletons/financial';
-import { arrayMove } from '@dnd-kit/sortable';
-import type { DragEndEvent } from '@dnd-kit/core';
 import {
-  Settings2,
-  Plus,
-  BarChart3,
-  LineChart,
-  PieChart,
-  Activity,
-  Bell,
-  CheckSquare,
-  Zap,
   TrendingUp,
-  Users,
-  Package,
   DollarSign,
-  ShieldCheck,
+  ShoppingCart,
+  Users,
+  Zap,
+  ArrowRight,
 } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { formatCurrency } from '@/lib/formatters';
 import { PageLayout } from '@/components/layout';
-import { Button } from '@/components/ui/button';
-import {
-  DashboardDndProvider,
-  DashboardGrid,
-  WidgetCatalog,
-  DashboardProvider,
-  DateRangeSelector,
-  useDashboardDateRange,
-  type WidgetConfig as GridWidgetConfig,
-  type WidgetDefinition as CatalogWidgetDefinition,
-} from '@/components/domain/dashboard';
-import {
-  useUserLayout,
-  useDashboardMetrics,
-  useSaveDashboardLayout,
-  useAvailableWidgets,
-} from '@/hooks/dashboard';
-import type {
-  WidgetConfig as SchemaWidgetConfig,
-  WidgetDefinition as SchemaWidgetDefinition,
-  DashboardLayoutConfig,
-  DashboardFilters,
-} from '@/lib/schemas/dashboard/layouts';
-
-// ============================================================================
-// ROUTE SEARCH PARAMS
-// ============================================================================
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DateRangeSelector } from '@/components/domain/dashboard';
+import { getPresetRange, type DateRange } from '@/lib/utils/date-presets';
+import { useDashboardMetrics } from '@/hooks/dashboard';
+import { useOrders } from '@/hooks/orders/use-orders';
+import { useInventoryLowStock } from '@/hooks/inventory/use-inventory';
+import { Link } from '@tanstack/react-router';
+import { UpcomingCallsWidget } from '@/components/domain/communications';
+import { WelcomeChecklist } from '@/components/domain/dashboard/welcome-checklist';
+import { ActivityFeedWidget } from '@/components/domain/dashboard/widgets/activity-feed-widget';
+import { useActivityFeed, useFlattenedActivities } from '@/hooks/activities/use-activities';
+import type { ActivityWithUser } from '@/lib/schemas/activities';
+import { AlertTriangle, Loader2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const searchSchema = z.object({
   dateRange: z.string().optional(),
@@ -81,392 +42,105 @@ const searchSchema = z.object({
 type DashboardSearchParams = z.infer<typeof searchSchema>;
 
 export const Route = createFileRoute('/_authenticated/dashboard/')({
-  component: DashboardGridPage,
-  errorComponent: ({ error }) => (
-    <RouteErrorFallback error={error} parentRoute="/" />
-  ),
-  pendingComponent: () => <FinancialDashboardSkeleton />,
+  component: DashboardPage,
   validateSearch: (search: Record<string, unknown>): DashboardSearchParams => {
     return searchSchema.parse(search);
   },
 });
 
-// ============================================================================
-// WIDGET TYPE TO ICON MAPPING
-// ============================================================================
+function DashboardPage() {
+  const [dateRange, setDateRange] = useState<DateRange>(() => {
+    const range = getPresetRange('30d');
+    return range || { from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), to: new Date() };
+  });
+  const [preset, setPreset] = useState<string>('30d');
 
-const widgetTypeIcons: Record<string, LucideIcon> = {
-  kpi_cards: TrendingUp,
-  revenue_chart: DollarSign,
-  orders_chart: BarChart3,
-  customers_chart: Users,
-  inventory_chart: Package,
-  pipeline_chart: PieChart,
-  recent_activities: Activity,
-  upcoming_tasks: CheckSquare,
-  alerts: Bell,
-  quick_actions: Zap,
-  kwh_deployed_chart: LineChart,
-  warranty_claims_chart: ShieldCheck,
-  target_progress: TrendingUp,
-};
-
-// ============================================================================
-// TYPE: Database widget (type is string)
-// ============================================================================
-
-interface DbWidgetConfig {
-  id: string;
-  type: string;
-  title: string;
-  position: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
-  settings: {
-    metric?: string;
-    chartType?: 'line' | 'bar' | 'pie' | 'area';
-    dateRange?: '7d' | '30d' | '90d' | '365d' | 'custom';
-    showTrend?: boolean;
-    showTarget?: boolean;
-    refreshInterval?: number;
-  };
-}
-
-interface DbLayoutConfig {
-  widgets: DbWidgetConfig[];
-  gridColumns: number;
-  theme: 'light' | 'dark' | 'system';
-  compactMode: boolean;
-}
-
-// ============================================================================
-// HELPER: Transform database widget to grid widget
-// ============================================================================
-
-function transformWidgetToGridFormat(widget: DbWidgetConfig, index: number): GridWidgetConfig {
-  return {
-    id: widget.id,
-    type: widget.type,
-    position: index,
-  };
-}
-
-// ============================================================================
-// HELPER: Transform available widget to catalog format
-// ============================================================================
-
-function transformToCatalogWidget(widget: SchemaWidgetDefinition): CatalogWidgetDefinition {
-  const Icon = widgetTypeIcons[widget.type] || BarChart3;
-  return {
-    type: widget.type,
-    name: widget.name,
-    description: widget.description,
-    icon: Icon,
-  };
-}
-
-// ============================================================================
-// MAIN COMPONENT (CONTAINER) - Wrapper with Provider
-// ============================================================================
-
-function DashboardGridPage() {
-  return (
-    <DashboardProvider>
-      <DashboardGridContent />
-    </DashboardProvider>
-  );
-}
-
-// ============================================================================
-// INNER COMPONENT (CONTAINER) - Uses DashboardContext
-// ============================================================================
-
-function DashboardGridContent() {
-  // Get date range from dashboard context
-  const { dateRange, preset, setDateRange, setPreset } = useDashboardDateRange();
-
-  // Convert DateRange to API format (ISO strings)
   const dateFrom = dateRange.from.toISOString().split('T')[0];
   const dateTo = dateRange.to.toISOString().split('T')[0];
 
-  // ============================================================================
-  // LOCAL UI STATE
-  // ============================================================================
+  const handlePresetChange = (newPreset: string) => {
+    setPreset(newPreset);
+    const range = getPresetRange(newPreset);
+    if (range) setDateRange(range);
+  };
 
-  const [isCustomizing, setIsCustomizing] = useState(false);
-  const [isCatalogOpen, setIsCatalogOpen] = useState(false);
-
-  // ============================================================================
-  // DATA FETCHING: TanStack Query hooks
-  // ============================================================================
-
-  // User's current dashboard layout
-  const {
-    data: userLayoutData,
-    isLoading: isLayoutLoading,
-    error: layoutError,
-  } = useUserLayout();
-
-  // Dashboard metrics with date filtering (data used for future widget rendering)
-  const {
-    isLoading: isMetricsLoading,
-    error: metricsError,
-  } = useDashboardMetrics({
+  // Fetch metrics
+  const { data: metrics, isLoading: isMetricsLoading } = useDashboardMetrics({
     dateFrom,
     dateTo,
   });
 
-  // Available widgets for catalog
-  const {
-    data: availableWidgetsData,
-    isLoading: isWidgetsLoading,
-  } = useAvailableWidgets();
+  // Fetch recent orders
+  const { data: ordersData, isLoading: isOrdersLoading } = useOrders({
+    page: 1,
+    pageSize: 5,
+    sortBy: 'createdAt',
+    sortOrder: 'desc',
+  });
 
-  // Mutation hooks
-  const saveLayoutMutation = useSaveDashboardLayout();
+  // Fetch low stock alerts
+  const { data: lowStockData, isLoading: isLowStockLoading } = useInventoryLowStock();
 
-  // ============================================================================
-  // DATA TRANSFORMATION
-  // ============================================================================
+  // Fetch recent activities
+  const activityQuery = useActivityFeed({ pageSize: 5 });
+  const activities = useFlattenedActivities(activityQuery) as ActivityWithUser[];
 
-  // Extract layout and cast to database type (which has string type for widgets)
-  const currentDbLayout = userLayoutData?.layout?.layout as DbLayoutConfig | undefined;
-  const currentFilters = userLayoutData?.layout?.filters as DashboardFilters | undefined;
-  const currentLayoutId = userLayoutData?.layout?.id;
+  // Extract metrics
+  const summary = metrics?.summary;
 
-  // Transform layout widgets to grid format
-  const widgets = useMemo<GridWidgetConfig[]>(() => {
-    if (!currentDbLayout?.widgets) {
-      return [];
-    }
-    return currentDbLayout.widgets.map((widget, index) => transformWidgetToGridFormat(widget, index));
-  }, [currentDbLayout]);
-
-  // Transform available widgets to catalog format
-  const catalogWidgets = useMemo<CatalogWidgetDefinition[]>(() => {
-    if (!availableWidgetsData) {
-      return [];
-    }
-    return availableWidgetsData.map((widget) => transformToCatalogWidget(widget));
-  }, [availableWidgetsData]);
-
-  // Filter out widgets already in layout
-  const availableCatalogWidgets = useMemo(() => {
-    const existingTypes = new Set(widgets.map((w) => w.type));
-    return catalogWidgets.filter((w) => !existingTypes.has(w.type));
-  }, [catalogWidgets, widgets]);
-
-  // Combined loading state
-  const isLoading = isLayoutLoading || isMetricsLoading;
-
-  // Combined error (prioritize layout error)
-  const error = layoutError || metricsError;
-
-  // ============================================================================
-  // HANDLERS (all wrapped in useCallback)
-  // ============================================================================
-
-  /**
-   * Update widget order and save to server
-   */
-  const handleReorder = useCallback(
-    (newOrder: string[]) => {
-      if (!currentLayoutId || !currentDbLayout) {
-        return;
-      }
-
-      // Rebuild widgets array in new order
-      const currentWidgets = currentDbLayout.widgets;
-      const reorderedWidgets = newOrder
-        .map((id) => currentWidgets.find((w) => w.id === id))
-        .filter((w): w is DbWidgetConfig => w !== undefined)
-        .map((widget, index) => ({
-          ...widget,
-          position: {
-            ...widget.position,
-            y: Math.floor(index / 4), // Simple grid position
-            x: (index % 4) * 3, // 4 columns
-          },
-        }));
-
-      // Cast to schema type for the mutation
-      const layoutToSave: DashboardLayoutConfig = {
-        ...currentDbLayout,
-        widgets: reorderedWidgets as unknown as SchemaWidgetConfig[],
-      };
-
-      // Save the updated layout
-      saveLayoutMutation.mutate({
-        layout: layoutToSave,
-        filters: currentFilters,
-      });
+  const kpis = useMemo(() => [
+    {
+      label: 'Revenue',
+      value: summary?.revenue?.current ?? 0,
+      change: summary?.revenue?.change,
+      format: formatCurrency,
+      icon: DollarSign,
     },
-    [currentLayoutId, currentDbLayout, currentFilters, saveLayoutMutation]
-  );
-
-  /**
-   * Handle drag-and-drop reorder of widgets
-   */
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-
-      if (!over || active.id === over.id || !currentLayoutId || !currentDbLayout) {
-        return;
-      }
-
-      const oldIndex = widgets.findIndex((w) => w.id === active.id);
-      const newIndex = widgets.findIndex((w) => w.id === over.id);
-
-      if (oldIndex === -1 || newIndex === -1) {
-        return;
-      }
-
-      // Reorder widgets
-      const reorderedWidgets = arrayMove(widgets, oldIndex, newIndex);
-      const newOrder = reorderedWidgets.map((w) => w.id);
-
-      // Update layout with new order
-      handleReorder(newOrder);
+    {
+      label: 'Pipeline',
+      value: summary?.pipelineValue?.current ?? 0,
+      change: summary?.pipelineValue?.change,
+      format: formatCurrency,
+      icon: TrendingUp,
     },
-    [widgets, currentLayoutId, currentDbLayout, handleReorder]
-  );
-
-  /**
-   * Add a widget to the layout
-   */
-  const handleAddWidget = useCallback(
-    (widgetType: string) => {
-      if (!currentDbLayout) {
-        return;
-      }
-
-      // Find widget definition
-      const widgetDef = availableWidgetsData?.find((w) => w.type === widgetType);
-      if (!widgetDef) {
-        return;
-      }
-
-      // Create new widget config
-      const existingWidgets = currentDbLayout.widgets;
-      const newWidget: DbWidgetConfig = {
-        id: `${widgetType}-${Date.now()}`,
-        type: widgetType,
-        title: widgetDef.name,
-        position: {
-          x: 0,
-          y: existingWidgets.length, // Add to bottom
-          width: widgetDef.minWidth || 3,
-          height: widgetDef.minHeight || 2,
-        },
-        settings: widgetDef.defaultSettings || {},
-      };
-
-      // Build updated widgets array
-      const updatedWidgets = [...existingWidgets, newWidget];
-
-      // Cast to schema type for the mutation
-      const layoutToSave: DashboardLayoutConfig = {
-        ...currentDbLayout,
-        widgets: updatedWidgets as unknown as SchemaWidgetConfig[],
-      };
-
-      // Save with new widget
-      saveLayoutMutation.mutate({
-        layout: layoutToSave,
-        filters: currentFilters,
-      });
-
-      // Close catalog
-      setIsCatalogOpen(false);
+    {
+      label: 'Orders',
+      value: summary?.ordersCount?.current ?? 0,
+      change: summary?.ordersCount?.change,
+      format: (v: number) => v.toString(),
+      icon: ShoppingCart,
     },
-    [currentDbLayout, currentFilters, availableWidgetsData, saveLayoutMutation]
-  );
-
-  /**
-   * Remove a widget from the layout (reserved for future use)
-   * Not yet exposed in UI but kept for upcoming widget removal feature
-   */
-  const handleRemoveWidget = useCallback(
-    (widgetId: string) => {
-      if (!currentDbLayout) {
-        return;
-      }
-
-      const updatedWidgets = currentDbLayout.widgets.filter((w) => w.id !== widgetId);
-
-      // Cast to schema type for the mutation
-      const layoutToSave: DashboardLayoutConfig = {
-        ...currentDbLayout,
-        widgets: updatedWidgets as unknown as SchemaWidgetConfig[],
-      };
-
-      saveLayoutMutation.mutate({
-        layout: layoutToSave,
-        filters: currentFilters,
-      });
+    {
+      label: 'Customers',
+      value: summary?.customerCount?.current ?? 0,
+      change: summary?.customerCount?.change,
+      format: (v: number) => v.toString(),
+      icon: Users,
     },
-    [currentDbLayout, currentFilters, saveLayoutMutation]
-  );
+    {
+      label: 'kWh Deployed',
+      value: summary?.kwhDeployed?.current ?? 0,
+      change: summary?.kwhDeployed?.change,
+      format: (v: number) => `${v.toLocaleString()} kWh`,
+      icon: Zap,
+    },
+    {
+      label: 'Active Installations',
+      value: summary?.activeInstallations?.current ?? 0,
+      change: summary?.activeInstallations?.change,
+      format: (v: number) => v.toString(),
+      icon: TrendingUp,
+    },
+  ], [summary]);
 
-  // Silence unused variable warning - handler is reserved for future widget removal UI
-  void handleRemoveWidget;
-
-  /**
-   * Toggle customization mode
-   */
-  const handleToggleCustomize = useCallback(() => {
-    setIsCustomizing((prev) => !prev);
-  }, []);
-
-  /**
-   * Open widget catalog
-   */
-  const handleOpenCatalog = useCallback(() => {
-    setIsCatalogOpen(true);
-  }, []);
-
-  /**
-   * Close widget catalog
-   */
-  const handleCloseCatalog = useCallback(() => {
-    setIsCatalogOpen(false);
-  }, []);
-
-  // ============================================================================
-  // RENDER
-  // ============================================================================
+  const recentOrders = ordersData?.orders?.slice(0, 5) ?? [];
+  const lowStockItems = lowStockData?.items?.slice(0, 5) ?? [];
 
   return (
     <PageLayout variant="full-width">
       <PageLayout.Header
         title="Dashboard"
-        description="Your personalized dashboard with customizable widgets"
-        actions={
-          <div className="flex items-center gap-2">
-            {isCustomizing && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleOpenCatalog}
-              >
-                <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-                Add Widget
-              </Button>
-            )}
-            <Button
-              variant={isCustomizing ? 'default' : 'outline'}
-              size="sm"
-              onClick={handleToggleCustomize}
-            >
-              <Settings2 className="mr-2 h-4 w-4" aria-hidden="true" />
-              {isCustomizing ? 'Done' : 'Customize'}
-            </Button>
-          </div>
-        }
+        description="Business overview and key metrics"
       />
 
       {/* Date Range Selector */}
@@ -475,34 +149,301 @@ function DashboardGridContent() {
           value={dateRange}
           preset={preset}
           onChange={setDateRange}
-          onPresetChange={setPreset}
+          onPresetChange={handlePresetChange}
           showPresetLabel
         />
       </div>
 
       <PageLayout.Content>
-        {/* DnD Provider wraps the grid */}
-        <DashboardDndProvider onDragEnd={handleDragEnd}>
-          <DashboardGrid
-            widgets={widgets}
-            isCustomizing={isCustomizing}
-            isLoading={isLoading}
-            error={error instanceof Error ? error : error ? new Error('Failed to load dashboard') : null}
-            onReorder={handleReorder}
-          />
-        </DashboardDndProvider>
+        <WelcomeChecklist className="mb-6" />
 
-        {/* Widget Catalog Drawer */}
-        <WidgetCatalog
-          availableWidgets={availableCatalogWidgets}
-          isOpen={isCatalogOpen}
-          onClose={handleCloseCatalog}
-          onAddWidget={handleAddWidget}
-          isLoading={isWidgetsLoading}
-        />
+        {/* KPI Cards */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 mb-6">
+          {kpis.map((kpi) => (
+            <KpiCard
+              key={kpi.label}
+              label={kpi.label}
+              value={kpi.format(kpi.value)}
+              change={kpi.change}
+              icon={kpi.icon}
+              isLoading={isMetricsLoading}
+            />
+          ))}
+        </div>
+
+        {/* Revenue Chart Placeholder */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Revenue Trend
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isMetricsLoading ? (
+              <div className="h-48 flex items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <SimpleRevenueChart data={metrics?.charts?.revenueTrend ?? []} />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Three Column Layout */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Activity Feed */}
+          <DashboardActivityWidget
+            activities={activities}
+            isLoading={activityQuery.isLoading}
+            error={activityQuery.error}
+          />
+
+          {/* Upcoming Calls */}
+          <UpcomingCallsWidget limit={5} />
+
+          {/* Recent Orders */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">Recent Orders</CardTitle>
+                <Link
+                  to="/orders"
+                  className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
+                >
+                  View all
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isOrdersLoading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="h-12 bg-muted rounded animate-pulse" />
+                  ))}
+                </div>
+              ) : recentOrders.length > 0 ? (
+                <div className="divide-y">
+                  {recentOrders.map((order) => (
+                    <Link
+                      key={order.id}
+                      to="/orders/$orderId"
+                      params={{ orderId: order.id }}
+                      className="flex items-center justify-between py-3 hover:bg-muted/50 -mx-2 px-2 rounded transition-colors"
+                    >
+                      <div>
+                        <p className="text-sm font-medium">
+                          {order.customer?.name || 'Unknown Customer'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatCurrency(order.total ?? 0, { cents: false, showCents: true })}
+                        </p>
+                      </div>
+                      <OrderStatusBadge status={order.status} />
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  No recent orders
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Low Stock Alerts */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base text-amber-600">Low Stock Alerts</CardTitle>
+                <Link
+                  to="/inventory/alerts"
+                  className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
+                >
+                  View all
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLowStockLoading ? (
+                <div className="space-y-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="h-12 bg-muted rounded animate-pulse" />
+                  ))}
+                </div>
+              ) : lowStockItems.length > 0 ? (
+                <div className="space-y-2">
+                  {lowStockItems.map((item) => (
+                    <Link
+                      key={item.id}
+                      to="/inventory/$itemId"
+                      params={{ itemId: item.id }}
+                      className="flex items-center gap-3 rounded-lg bg-amber-50 p-3 hover:bg-amber-100 transition-colors"
+                    >
+                      <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {item.product?.name || 'Unknown Product'}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.quantityOnHand} in stock
+                        </p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground py-4 text-center">
+                  No low stock alerts
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </PageLayout.Content>
     </PageLayout>
   );
 }
 
-export default DashboardGridPage;
+// ============================================================================
+// ACTIVITY WIDGET (Presenter)
+// ============================================================================
+
+interface DashboardActivityWidgetProps {
+  /** @source useActivityFeed() in DashboardPage container */
+  activities: ActivityWithUser[];
+  /** @source useActivityFeed() isLoading in DashboardPage container */
+  isLoading?: boolean;
+  /** @source useActivityFeed() error in DashboardPage container */
+  error?: Error | null;
+}
+
+function DashboardActivityWidget({
+  activities,
+  isLoading,
+  error,
+}: DashboardActivityWidgetProps) {
+  return (
+    <ActivityFeedWidget
+      activities={activities}
+      isLoading={isLoading}
+      error={error}
+      title="Recent Activity"
+      description="Latest actions across your organization"
+      maxItems={5}
+      compact
+    />
+  );
+}
+
+// ============================================================================
+// SUB-COMPONENTS
+// ============================================================================
+
+function KpiCard({
+  label,
+  value,
+  change,
+  icon: Icon,
+  isLoading,
+}: {
+  label: string;
+  value: string;
+  change?: number;
+  icon: React.ComponentType<{ className?: string }>;
+  isLoading?: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-4">
+          <div className="h-16 bg-muted rounded animate-pulse" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-muted-foreground">{label}</span>
+          <Icon className="h-4 w-4 text-muted-foreground" />
+        </div>
+        <div className="mt-2 flex items-baseline gap-2">
+          <span className="text-2xl font-semibold">{value}</span>
+          {change !== undefined && change !== 0 && (
+            <span
+              className={cn(
+                'text-xs font-medium',
+                change > 0 ? 'text-green-600' : 'text-red-600'
+              )}
+            >
+              {change > 0 ? '+' : ''}{change.toFixed(1)}%
+            </span>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function SimpleRevenueChart({ data }: { data: Array<{ date: string; label?: string; value: number }> }) {
+  if (!data || data.length === 0) {
+    return (
+      <div className="h-48 flex items-center justify-center text-muted-foreground">
+        No revenue data for selected period
+      </div>
+    );
+  }
+
+  const maxValue = Math.max(...data.map((d) => d.value), 1);
+
+  return (
+    <div className="h-48 flex items-end gap-2">
+      {data.map((point, i) => {
+        const height = (point.value / maxValue) * 100;
+        return (
+          <div
+            key={i}
+            className="flex-1 flex flex-col items-center gap-1"
+            title={`${point.label || point.date}: ${formatCurrency(point.value)}`}
+          >
+            <div
+              className="w-full bg-primary/20 rounded-t hover:bg-primary/30 transition-colors"
+              style={{ height: `${height}%`, minHeight: '4px' }}
+            />
+            <span className="text-xs text-muted-foreground truncate w-full text-center">
+              {point.label || new Date(point.date).getDate()}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function OrderStatusBadge({ status }: { status: string }) {
+  const styles: Record<string, string> = {
+    pending: 'bg-yellow-100 text-yellow-800',
+    processing: 'bg-blue-100 text-blue-800',
+    completed: 'bg-green-100 text-green-800',
+    confirmed: 'bg-blue-100 text-blue-800',
+    shipped: 'bg-green-100 text-green-800',
+    draft: 'bg-gray-100 text-gray-800',
+    cancelled: 'bg-red-100 text-red-800',
+  };
+
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize',
+        styles[status] || 'bg-gray-100 text-gray-800'
+      )}
+    >
+      {status}
+    </span>
+  );
+}

@@ -2,10 +2,11 @@
  * Issue List Page
  *
  * Displays all issues with filtering, sorting, and pagination.
- * Provides a table/list view alongside the kanban board.
  *
- * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-008
- * @see src/routes/_authenticated/support/issues-board.tsx for Kanban view
+ * LAYOUT: full-width
+ *
+ * @see UI_UX_STANDARDIZATION_PRD.md
+ * @see _Initiation/_prd/2-domains/support/support.prd.json
  */
 import { createFileRoute, useNavigate, Link } from '@tanstack/react-router';
 import { RouteErrorFallback } from '@/components/layout';
@@ -75,7 +76,7 @@ export const Route = createFileRoute('/_authenticated/support/issues/')({
     <RouteErrorFallback error={error} parentRoute="/support/issues" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Issues"
         description="Manage support issues and track resolution"
@@ -303,7 +304,7 @@ function IssuesListPage() {
   }
 
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title={
           <div className="flex items-center gap-2">

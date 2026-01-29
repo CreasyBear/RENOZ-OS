@@ -15,8 +15,7 @@
  */
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
-import { useServerFn } from '@tanstack/react-start';
-import { getInvitationByToken, acceptInvitation } from '@/server/functions/users/invitations';
+import { useInvitationByToken, useAcceptInvitation } from '@/hooks/users/use-invitations';
 import { z } from 'zod';
 
 // Search params for the token
@@ -69,8 +68,9 @@ function AcceptInvitationPage() {
   const navigate = useNavigate();
   const { token } = Route.useSearch();
 
-  const fetchInvitation = useServerFn(getInvitationByToken);
-  const submitAcceptance = useServerFn(acceptInvitation);
+  // Use hooks instead of direct server function imports
+  const { data: invitationData, isLoading: isLoadingInvitation, error: invitationError } = useInvitationByToken(token);
+  const acceptInvitation = useAcceptInvitation();
 
   const [pageState, setPageState] = useState<PageState>('loading');
   const [invitation, setInvitation] = useState<InvitationDetails | null>(null);
@@ -83,28 +83,25 @@ function AcceptInvitationPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [errors, setErrors] = useState<FormErrors>({});
 
-  // Fetch invitation details on mount
+  // Handle invitation data loading
   useEffect(() => {
-    const loadInvitation = async () => {
-      try {
-        const result = await fetchInvitation({ data: { token } });
-        setInvitation({
-          email: result.email,
-          role: result.role,
-          personalMessage: result.personalMessage,
-          organizationName: result.organizationName,
-          inviterName: result.inviterName,
-          expiresAt: new Date(result.expiresAt),
-        });
-        setPageState('ready');
-      } catch (err) {
-        setPageState('invalid');
-        setErrorMessage(err instanceof Error ? err.message : 'Invalid or expired invitation');
-      }
-    };
-
-    loadInvitation();
-  }, [token, fetchInvitation]);
+    if (isLoadingInvitation) {
+      setPageState('loading');
+    } else if (invitationError) {
+      setPageState('invalid');
+      setErrorMessage(invitationError instanceof Error ? invitationError.message : 'Invalid or expired invitation');
+    } else if (invitationData) {
+      setInvitation({
+        email: invitationData.email,
+        role: invitationData.role,
+        personalMessage: invitationData.personalMessage,
+        organizationName: invitationData.organizationName,
+        inviterName: invitationData.inviterName,
+        expiresAt: new Date(invitationData.expiresAt),
+      });
+      setPageState('ready');
+    }
+  }, [isLoadingInvitation, invitationError, invitationData]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,21 +128,19 @@ function AcceptInvitationPage() {
     setPageState('submitting');
 
     try {
-      const result = await submitAcceptance({
-        data: {
-          token,
-          firstName: validation.data.firstName,
-          lastName: validation.data.lastName,
-          password: validation.data.password,
-          confirmPassword: validation.data.confirmPassword,
-        },
+      const result = await acceptInvitation.mutateAsync({
+        token,
+        firstName: validation.data.firstName,
+        lastName: validation.data.lastName,
+        password: validation.data.password,
+        confirmPassword: validation.data.confirmPassword,
       });
 
       if (result.success) {
         setPageState('success');
         // Redirect to login after 2 seconds
         setTimeout(() => {
-          navigate({ to: '/login' });
+          navigate({ to: '/login', search: { redirect: undefined } });
         }, 2000);
       }
     } catch (err) {
@@ -235,6 +230,7 @@ function AcceptInvitationPage() {
             </p>
             <Link
               to="/login"
+              search={{ redirect: undefined }}
               className="flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none"
             >
               Go to Sign in
@@ -272,6 +268,7 @@ function AcceptInvitationPage() {
           <div className="mt-6">
             <Link
               to="/login"
+              search={{ redirect: undefined }}
               className="flex w-full justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none"
             >
               Sign in now
@@ -496,7 +493,11 @@ function AcceptInvitationPage() {
 
           <div className="text-center text-sm text-gray-500">
             Already have an account?{' '}
-            <Link to="/login" className="font-medium text-indigo-600 hover:text-indigo-500">
+            <Link
+              to="/login"
+              search={{ redirect: undefined }}
+              className="font-medium text-indigo-600 hover:text-indigo-500"
+            >
               Sign in
             </Link>
           </div>

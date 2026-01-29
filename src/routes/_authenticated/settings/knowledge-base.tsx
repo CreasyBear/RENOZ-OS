@@ -10,7 +10,7 @@
 import { useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { Plus, BookOpen, FolderTree } from 'lucide-react';
-import { RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { SettingsTreeSkeleton } from '@/components/skeletons/settings';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,7 +36,14 @@ export const Route = createFileRoute('/_authenticated/settings/knowledge-base')(
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/settings" />
   ),
-  pendingComponent: () => <SettingsTreeSkeleton />,
+  pendingComponent: () => (
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="Knowledge Base Settings" description="Manage categories for your knowledge base articles" />
+      <PageLayout.Content>
+        <SettingsTreeSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 function KnowledgeBaseSettingsPage() {
@@ -116,11 +123,12 @@ function KnowledgeBaseSettingsPage() {
   };
 
   return (
-    <div className="container max-w-4xl space-y-6 py-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Knowledge Base Settings</h1>
-        <p className="text-muted-foreground">Manage categories for your knowledge base articles</p>
-      </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="Knowledge Base Settings"
+        description="Manage categories for your knowledge base articles"
+      />
+      <PageLayout.Content className="space-y-6">
 
       {/* Quick Stats */}
       <div className="grid gap-4 md:grid-cols-3">
@@ -213,6 +221,7 @@ function KnowledgeBaseSettingsPage() {
         isSubmitting={createCategoryMutation.isPending || updateCategoryMutation.isPending}
         onSubmit={handleSubmitCategory}
       />
-    </div>
+      </PageLayout.Content>
+    </PageLayout>
   );
 }

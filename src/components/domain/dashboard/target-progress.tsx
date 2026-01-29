@@ -10,7 +10,7 @@
  * - Overall summary with achieved/total counts
  *
  * @see DASH-TARGETS-UI acceptance criteria
- * @see src/lib/schemas/dashboard/targets.ts for types
+ * @see src/lib/schemas/reports/targets.ts for types
  */
 
 import { memo, useMemo } from 'react';
@@ -30,7 +30,7 @@ import type {
   TargetProgress as TargetProgressType,
   TargetProgressResponse,
   TargetMetric,
-} from '@/lib/schemas/dashboard/targets';
+} from '@/lib/schemas/reports/targets';
 
 // ============================================================================
 // TYPES

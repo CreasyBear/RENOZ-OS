@@ -33,7 +33,11 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
               password.
             </p>
             <div className="mt-4">
-              <Link to="/login" className="text-primary text-sm font-medium hover:underline">
+              <Link
+                to="/login"
+                search={{ redirect: undefined }}
+                className="text-primary text-sm font-medium hover:underline"
+              >
                 ← Back to login
               </Link>
             </div>
@@ -81,7 +85,11 @@ export function ForgotPasswordForm({ className, ...props }: React.ComponentProps
               </div>
               <div className="mt-4 text-center text-sm">
                 Already have an account?{' '}
-                <Link to="/login" className="underline underline-offset-4">
+                <Link
+                  to="/login"
+                  search={{ redirect: undefined }}
+                  className="underline underline-offset-4"
+                >
                   Login
                 </Link>
               </div>

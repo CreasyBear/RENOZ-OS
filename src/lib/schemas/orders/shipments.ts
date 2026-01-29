@@ -8,7 +8,7 @@
  */
 
 import { z } from 'zod';
-import { quantitySchema } from '../_shared/patterns';
+import { quantitySchema, optionalEmailSchema } from '../_shared/patterns';
 
 // ============================================================================
 // COMMON TYPES
@@ -39,7 +39,7 @@ export const shipmentAddressSchema = z.object({
   postcode: z.string().min(1, 'Postcode is required').max(20),
   country: z.string().min(2, 'Country is required').max(2).default('AU'),
   phone: z.string().max(50).optional(),
-  email: z.string().email().optional(),
+  email: optionalEmailSchema,
   instructions: z.string().max(1000).optional(),
 });
 

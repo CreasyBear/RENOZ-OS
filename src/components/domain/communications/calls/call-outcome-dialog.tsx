@@ -12,8 +12,6 @@ import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import {
   CheckCircle,
   Loader2,
@@ -48,7 +46,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
-import { completeCall } from "@/lib/server/scheduled-calls";
+import { useCompleteCall } from "@/hooks/communications/use-scheduled-calls";
 import { toast } from "sonner";
 
 // ============================================================================
@@ -148,39 +146,13 @@ export function CallOutcomeDialog({
   onSuccess,
 }: CallOutcomeDialogProps) {
   const [open, setOpen] = React.useState(defaultOpen);
-  const queryClient = useQueryClient();
+  const completeMutation = useCompleteCall();
 
   const form = useForm<CallOutcomeFormValues>({
     resolver: zodResolver(callOutcomeSchema),
     defaultValues: {
       outcome: "completed_successfully",
       outcomeNotes: "",
-    },
-  });
-
-  const completeMutation = useMutation({
-    mutationFn: async (values: CallOutcomeFormValues) => {
-      return completeCall({
-        data: {
-          id: callId,
-          outcome: values.outcome,
-          outcomeNotes: values.outcomeNotes,
-        },
-      });
-    },
-    onSuccess: () => {
-      toast.success("Call outcome logged successfully");
-      queryClient.invalidateQueries({ queryKey: queryKeys.communications.scheduledCalls() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.communications.upcomingCalls() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.activities.all });
-      handleOpenChange(false);
-      form.reset();
-      onSuccess?.();
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to log call outcome"
-      );
     },
   });
 
@@ -193,7 +165,26 @@ export function CallOutcomeDialog({
   };
 
   const onSubmit = (values: CallOutcomeFormValues) => {
-    completeMutation.mutate(values);
+    completeMutation.mutate(
+      {
+        id: callId,
+        outcome: values.outcome,
+        outcomeNotes: values.outcomeNotes,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Call outcome logged successfully");
+          handleOpenChange(false);
+          form.reset();
+          onSuccess?.();
+        },
+        onError: (error) => {
+          toast.error(
+            error instanceof Error ? error.message : "Failed to log call outcome"
+          );
+        },
+      }
+    );
   };
 
   const selectedOutcome = form.watch("outcome");

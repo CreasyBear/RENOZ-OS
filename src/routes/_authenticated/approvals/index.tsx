@@ -181,7 +181,7 @@ function ApprovalsPage() {
   // ============================================================================
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Approvals"
         description="Review and approve purchase orders, amendments, and other procurement requests"

@@ -3,8 +3,13 @@
  *
  * Button that triggers a scan for duplicate customers across the database.
  * Shows progress and results count, then opens review queue.
+ *
+ * Uses useDuplicateScan hook for real duplicate detection via pg_trgm.
+ *
+ * @see src/hooks/customers/use-duplicate-scan.ts
+ * @see src/server/functions/customers/customer-duplicate-scan.ts
  */
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Search, Users, Loader2, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,6 +26,7 @@ import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { useDuplicateScan } from '@/hooks/customers'
 
 // ============================================================================
 // TYPES
@@ -47,6 +53,13 @@ type ScanStatus = 'idle' | 'configuring' | 'scanning' | 'complete' | 'error'
 // MAIN COMPONENT
 // ============================================================================
 
+/**
+ * Duplicate Scan Button
+ * Triggers real duplicate detection using the useDuplicateScan hook.
+ * 
+ * @source scanResult from useDuplicateScan hook
+ * @source scanProgress simulated during loading state
+ */
 export function DuplicateScanButton({
   onScanComplete,
   onReviewDuplicates,
@@ -62,6 +75,56 @@ export function DuplicateScanButton({
   const [foundCount, setFoundCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [scanEnabled, setScanEnabled] = useState(false)
+
+  // Use the real duplicate scan hook
+  const { data: scanResult, isLoading: isScanning, error: scanError } = useDuplicateScan({
+    threshold,
+    includeArchived,
+    limit: 100,
+    enabled: scanEnabled,
+  })
+
+  // Simulate progress during scanning
+  useEffect(() => {
+    if (!isScanning) {
+      setProgress(0)
+      return
+    }
+
+    setStatus('scanning')
+    let currentProgress = 0
+    const interval = setInterval(() => {
+      currentProgress += Math.random() * 15
+      if (currentProgress >= 95) {
+        currentProgress = 95 // Hold at 95% until real data arrives
+      }
+      setProgress(Math.min(currentProgress, 95))
+    }, 300)
+
+    return () => clearInterval(interval)
+  }, [isScanning])
+
+  // Handle scan completion
+  useEffect(() => {
+    if (scanResult && !isScanning && status === 'scanning') {
+      setProgress(100)
+      const count = scanResult.pairs?.length ?? 0
+      setFoundCount(count)
+      setStatus('complete')
+      setScanEnabled(false)
+      onScanComplete?.(count)
+    }
+  }, [scanResult, isScanning, status, onScanComplete])
+
+  // Handle scan error
+  useEffect(() => {
+    if (scanError) {
+      setError(scanError instanceof Error ? scanError.message : 'Scan failed')
+      setStatus('error')
+      setScanEnabled(false)
+    }
+  }, [scanError])
 
   // Start the scan
   const handleStartScan = async () => {
@@ -69,36 +132,7 @@ export function DuplicateScanButton({
     setProgress(0)
     setError(null)
     setFoundCount(0)
-
-    try {
-      // Simulate scanning progress
-      // In production, this would call the server function
-      const simulateProgress = () => {
-        return new Promise<void>((resolve) => {
-          let currentProgress = 0
-          const interval = setInterval(() => {
-            currentProgress += Math.random() * 20
-            if (currentProgress >= 100) {
-              currentProgress = 100
-              clearInterval(interval)
-              resolve()
-            }
-            setProgress(Math.min(currentProgress, 100))
-          }, 300)
-        })
-      }
-
-      await simulateProgress()
-
-      // Simulate finding duplicates (in production, this comes from server)
-      const mockCount = Math.floor(Math.random() * 20) + 5
-      setFoundCount(mockCount)
-      setStatus('complete')
-      onScanComplete?.(mockCount)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Scan failed')
-      setStatus('error')
-    }
+    setScanEnabled(true)
   }
 
   // Reset and close
@@ -106,6 +140,7 @@ export function DuplicateScanButton({
     if (status !== 'scanning') {
       setStatus('idle')
       setProgress(0)
+      setScanEnabled(false)
       setDialogOpen(false)
     }
   }

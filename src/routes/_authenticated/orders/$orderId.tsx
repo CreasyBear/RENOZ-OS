@@ -7,14 +7,14 @@
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { OrderDetailSkeleton } from "@/components/skeletons/orders";
 import { Button } from "@/components/ui/button";
 import { toastSuccess, toastError } from "@/hooks";
 import { OrderDetail } from "@/components/domain/orders";
-import { duplicateOrder } from "@/server/functions/orders/orders";
+import { useDuplicateOrder } from "@/hooks/orders";
 import { queryKeys } from "@/lib/query-keys";
 
 // ============================================================================
@@ -27,7 +27,7 @@ export const Route = createFileRoute("/_authenticated/orders/$orderId")({
     <RouteErrorFallback error={error} parentRoute="/orders" />
   ),
   pendingComponent: () => (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header title="Order Details" />
       <PageLayout.Content>
         <OrderDetailSkeleton />
@@ -46,22 +46,7 @@ function OrderDetailPage() {
   const queryClient = useQueryClient();
 
   // Duplicate order mutation
-  const duplicateMutation = useMutation({
-    mutationFn: async (id: string) => {
-      return duplicateOrder({ data: { id } });
-    },
-    onSuccess: (result) => {
-      toastSuccess(`Order duplicated as ${result.orderNumber}`);
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
-      navigate({
-        to: "/orders/$orderId",
-        params: { orderId: result.id },
-      });
-    },
-    onError: () => {
-      toastError("Failed to duplicate order");
-    },
-  });
+  const duplicateMutation = useDuplicateOrder();
 
   // Handlers
   const handleBack = useCallback(() => {
@@ -78,8 +63,20 @@ function OrderDetailPage() {
   }, [navigate, orderId]);
 
   const handleDuplicate = useCallback(() => {
-    duplicateMutation.mutate(orderId);
-  }, [duplicateMutation, orderId]);
+    duplicateMutation.mutate(orderId, {
+      onSuccess: (result) => {
+        toastSuccess(`Order duplicated as ${result.orderNumber}`);
+        queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+        navigate({
+          to: "/orders/$orderId",
+          params: { orderId: result.id },
+        });
+      },
+      onError: () => {
+        toastError("Failed to duplicate order");
+      },
+    });
+  }, [duplicateMutation, orderId, navigate, queryClient]);
 
   // Note: handlePrint is currently unused but kept for future print functionality
   // const handlePrint = useCallback(() => {
@@ -87,7 +84,7 @@ function OrderDetailPage() {
   // }, []);
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Order Details"
         description="View and manage order information"

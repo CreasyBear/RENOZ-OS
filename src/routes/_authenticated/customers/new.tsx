@@ -24,7 +24,7 @@ export const Route = createFileRoute('/_authenticated/customers/new')({
     <RouteErrorFallback error={error} parentRoute="/customers" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header title="New Customer" />
       <PageLayout.Content>
         <FormSkeleton sections={3} />
@@ -177,7 +177,7 @@ function NewCustomerPage() {
     createAddressMutation.isPending
 
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="New Customer"
         description="Create a new customer with contacts and addresses"

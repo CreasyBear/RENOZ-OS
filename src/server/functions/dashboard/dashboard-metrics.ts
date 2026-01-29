@@ -188,6 +188,7 @@ function getTodayStr(): string {
 /**
  * Query metrics from materialized views (for historical data).
  * Fast because data is pre-aggregated.
+ * Falls back to live queries if MVs don't exist.
  */
 async function queryMetricsFromMV(
   organizationId: string,
@@ -201,75 +202,173 @@ async function queryMetricsFromMV(
   activeJobs: number;
   openClaims: number;
 }> {
-  // Run all MV queries in parallel for better performance
-  const [orderMetricsResult, pipelineMetricsResult, jobMetricsResult, claimMetricsResult] =
-    await Promise.all([
-      // Query mv_daily_metrics for orders/revenue
-      db.execute<{
-        orders_count: string;
-        revenue: string;
-        customer_count: string;
-      }>(sql`
-        SELECT
-          COALESCE(SUM(orders_count), 0) as orders_count,
-          COALESCE(SUM(revenue), 0) as revenue,
-          COALESCE(SUM(customer_count), 0) as customer_count
-        FROM mv_daily_metrics
-        WHERE organization_id = ${organizationId}
-          AND metric_date >= ${dateFrom}::date
-          AND metric_date <= ${dateTo}::date
-      `),
+  try {
+    // Run all MV queries in parallel for better performance
+    const [orderMetricsResult, pipelineMetricsResult, jobMetricsResult, claimMetricsResult] =
+      await Promise.all([
+        // Query mv_daily_metrics for orders/revenue
+        db.execute<{
+          orders_count: string;
+          revenue: string;
+          customer_count: string;
+        }>(sql`
+          SELECT
+            COALESCE(SUM(orders_count), 0) as orders_count,
+            COALESCE(SUM(revenue), 0) as revenue,
+            COALESCE(SUM(customer_count), 0) as customer_count
+          FROM mv_daily_metrics
+          WHERE organization_id = ${organizationId}
+            AND metric_date >= ${dateFrom}::date
+            AND metric_date <= ${dateTo}::date
+        `),
 
-      // Query mv_daily_pipeline for pipeline value
-      db.execute<{
-        total_value: string;
-      }>(sql`
-        SELECT COALESCE(SUM(total_value), 0) as total_value
-        FROM mv_daily_pipeline
-        WHERE organization_id = ${organizationId}
-          AND metric_date >= ${dateFrom}::date
-          AND metric_date <= ${dateTo}::date
-          AND stage NOT IN ('won', 'lost')
-      `),
+        // Query mv_daily_pipeline for pipeline value
+        db.execute<{
+          total_value: string;
+        }>(sql`
+          SELECT COALESCE(SUM(total_value), 0) as total_value
+          FROM mv_daily_pipeline
+          WHERE organization_id = ${organizationId}
+            AND metric_date >= ${dateFrom}::date
+            AND metric_date <= ${dateTo}::date
+            AND stage NOT IN ('won', 'lost')
+        `),
 
-      // Query mv_daily_jobs for active jobs
-      db.execute<{
-        active_count: string;
-      }>(sql`
-        SELECT COALESCE(SUM(job_count), 0) as active_count
-        FROM mv_daily_jobs
-        WHERE organization_id = ${organizationId}
-          AND metric_date >= ${dateFrom}::date
-          AND metric_date <= ${dateTo}::date
-          AND status IN ('scheduled', 'in_progress')
-      `),
+        // Query mv_daily_jobs for active jobs
+        db.execute<{
+          active_count: string;
+        }>(sql`
+          SELECT COALESCE(SUM(job_count), 0) as active_count
+          FROM mv_daily_jobs
+          WHERE organization_id = ${organizationId}
+            AND metric_date >= ${dateFrom}::date
+            AND metric_date <= ${dateTo}::date
+            AND status IN ('scheduled', 'in_progress')
+        `),
 
-      // Query mv_daily_warranty for open claims
-      db.execute<{
-        open_count: string;
-      }>(sql`
-        SELECT COALESCE(SUM(claim_count), 0) as open_count
-        FROM mv_daily_warranty
-        WHERE organization_id = ${organizationId}
-          AND metric_date >= ${dateFrom}::date
-          AND metric_date <= ${dateTo}::date
-          AND status IN ('submitted', 'under_review', 'approved')
-      `),
-    ]);
+        // Query mv_daily_warranty for open claims
+        db.execute<{
+          open_count: string;
+        }>(sql`
+          SELECT COALESCE(SUM(claim_count), 0) as open_count
+          FROM mv_daily_warranty
+          WHERE organization_id = ${organizationId}
+            AND metric_date >= ${dateFrom}::date
+            AND metric_date <= ${dateTo}::date
+            AND status IN ('submitted', 'under_review', 'approved')
+        `),
+      ]);
 
-  // Extract first row from each result
-  const orderMetrics = orderMetricsResult[0];
-  const pipelineMetrics = pipelineMetricsResult[0];
-  const jobMetrics = jobMetricsResult[0];
-  const claimMetrics = claimMetricsResult[0];
+    // Extract first row from each result
+    const orderMetrics = orderMetricsResult[0];
+    const pipelineMetrics = pipelineMetricsResult[0];
+    const jobMetrics = jobMetricsResult[0];
+    const claimMetrics = claimMetricsResult[0];
+
+    return {
+      revenue: Number(orderMetrics?.revenue ?? 0),
+      ordersCount: Number(orderMetrics?.orders_count ?? 0),
+      customerCount: Number(orderMetrics?.customer_count ?? 0),
+      pipelineValue: Number(pipelineMetrics?.total_value ?? 0),
+      activeJobs: Number(jobMetrics?.active_count ?? 0),
+      openClaims: Number(claimMetrics?.open_count ?? 0),
+    };
+  } catch (error) {
+    // MVs don't exist yet - fall back to live queries
+    console.warn('Materialized views not available, falling back to live queries:', error);
+    return queryMetricsLive(organizationId, dateFrom, dateTo);
+  }
+}
+
+/**
+ * Query metrics from live tables (fallback when MVs don't exist).
+ */
+async function queryMetricsLive(
+  organizationId: string,
+  dateFrom: string,
+  dateTo: string
+): Promise<{
+  revenue: number;
+  ordersCount: number;
+  customerCount: number;
+  pipelineValue: number;
+  activeJobs: number;
+  openClaims: number;
+}> {
+  const [ordersResult, customersResult, pipelineResult, jobsResult, claimsResult] = await Promise.all([
+    // Orders and revenue
+    db
+      .select({
+        total: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
+        count: count(),
+      })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.organizationId, organizationId),
+          sql`DATE(${orders.orderDate}) >= ${dateFrom}::date`,
+          sql`DATE(${orders.orderDate}) <= ${dateTo}::date`,
+          sql`${orders.deletedAt} IS NULL`
+        )
+      ),
+
+    // New customers
+    db
+      .select({ count: count() })
+      .from(customers)
+      .where(
+        and(
+          eq(customers.organizationId, organizationId),
+          sql`DATE(${customers.createdAt}) >= ${dateFrom}::date`,
+          sql`DATE(${customers.createdAt}) <= ${dateTo}::date`,
+          sql`${customers.deletedAt} IS NULL`
+        )
+      ),
+
+    // Pipeline value (current state, not date-filtered)
+    db
+      .select({
+        total: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
+      })
+      .from(opportunities)
+      .where(
+        and(
+          eq(opportunities.organizationId, organizationId),
+          sql`${opportunities.stage} NOT IN ('won', 'lost')`,
+          sql`${opportunities.deletedAt} IS NULL`
+        )
+      ),
+
+    // Active jobs (current state)
+    db
+      .select({ count: count() })
+      .from(jobAssignments)
+      .where(
+        and(
+          eq(jobAssignments.organizationId, organizationId),
+          sql`${jobAssignments.status} IN ('scheduled', 'in_progress')`
+        )
+      ),
+
+    // Open warranty claims (current state)
+    db
+      .select({ count: count() })
+      .from(warrantyClaims)
+      .where(
+        and(
+          eq(warrantyClaims.organizationId, organizationId),
+          sql`${warrantyClaims.status} IN ('submitted', 'under_review', 'approved')`
+        )
+      ),
+  ]);
 
   return {
-    revenue: Number(orderMetrics?.revenue ?? 0),
-    ordersCount: Number(orderMetrics?.orders_count ?? 0),
-    customerCount: Number(orderMetrics?.customer_count ?? 0),
-    pipelineValue: Number(pipelineMetrics?.total_value ?? 0),
-    activeJobs: Number(jobMetrics?.active_count ?? 0),
-    openClaims: Number(claimMetrics?.open_count ?? 0),
+    revenue: Number(ordersResult[0]?.total ?? 0),
+    ordersCount: Number(ordersResult[0]?.count ?? 0),
+    customerCount: Number(customersResult[0]?.count ?? 0),
+    pipelineValue: Number(pipelineResult[0]?.total ?? 0),
+    activeJobs: Number(jobsResult[0]?.count ?? 0),
+    openClaims: Number(claimsResult[0]?.count ?? 0),
   };
 }
 

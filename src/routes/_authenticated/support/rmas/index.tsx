@@ -55,7 +55,7 @@ export const Route = createFileRoute('/_authenticated/support/rmas/')({
     <RouteErrorFallback error={error} parentRoute="/support" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Return Authorizations"
         description="Manage product returns and RMA workflow"
@@ -110,7 +110,7 @@ function RmasListPage() {
   };
 
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title={
           <div className="flex items-center gap-2">

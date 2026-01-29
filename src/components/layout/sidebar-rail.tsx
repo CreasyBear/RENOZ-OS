@@ -13,14 +13,21 @@
  * ```
  */
 import { cn } from '@/lib/utils'
-import { useSidebar } from './sidebar-provider'
+import { useSidebarSafe } from './sidebar-provider'
 
 interface SidebarRailProps {
   className?: string
 }
 
 export function SidebarRail({ className }: SidebarRailProps) {
-  const { toggle, collapsible, isCollapsed } = useSidebar()
+  const context = useSidebarSafe()
+  
+  // Don't render if no context (shouldn't happen, but protects against HMR issues)
+  if (!context) {
+    return null
+  }
+  
+  const { toggle, collapsible, isCollapsed } = context
 
   // Don't render if collapsible is 'none'
   if (collapsible === 'none') {

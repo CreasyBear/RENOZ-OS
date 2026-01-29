@@ -68,6 +68,13 @@ interface HealthDistribution {
   atRisk: number
 }
 
+interface QuickStatsData {
+  newCustomers: number
+  churnedCustomers: number
+  avgOrderValue: number
+  repeatRate: number
+}
+
 interface AnalyticsDashboardProps {
   dateRange?: string
   onDateRangeChange?: (range: string) => void
@@ -81,6 +88,8 @@ interface AnalyticsDashboardProps {
   revenueTrend?: TrendDataPoint[]
   /** Segment performance data */
   segments?: SegmentPerformance[]
+  /** Quick stats summary */
+  quickStats?: QuickStatsData
   /** Loading state */
   isLoading?: boolean
   className?: string
@@ -458,12 +467,30 @@ function HealthDistributionChart({ distribution, isLoading }: HealthDistribution
 // QUICK STATS (Static for now - could be made dynamic)
 // ============================================================================
 
-function QuickStats() {
+function getQuickStatsLabel(range: string) {
+  switch (range) {
+    case '7d':
+      return 'New (7d)'
+    case '30d':
+      return 'New (30d)'
+    case '90d':
+      return 'New (90d)'
+    case '365d':
+      return 'New (1y)'
+    default:
+      return 'New (All)'
+  }
+}
+
+function QuickStats({ data, dateRange, isLoading }: { data?: QuickStatsData; dateRange: string; isLoading?: boolean }) {
   const stats = [
-    { label: 'New This Month', value: '-', change: '' },
-    { label: 'Churned', value: '-', change: '' },
-    { label: 'Avg Order Value', value: '-', change: '' },
-    { label: 'Repeat Rate', value: '-', change: '' },
+    { label: getQuickStatsLabel(dateRange), value: data ? data.newCustomers.toLocaleString() : '-' },
+    { label: 'Churned', value: data ? data.churnedCustomers.toLocaleString() : '-' },
+    {
+      label: 'Avg Order Value',
+      value: data ? <FormatAmount amount={data.avgOrderValue} cents={false} compact showCents={false} /> : '-',
+    },
+    { label: 'Repeat Rate', value: data ? `${data.repeatRate.toFixed(1)}%` : '-' },
   ]
 
   return (
@@ -478,7 +505,9 @@ function QuickStats() {
         <div className="grid grid-cols-2 gap-4">
           {stats.map(stat => (
             <div key={stat.label} className="text-center p-3 rounded-lg bg-muted/50">
-              <p className="text-2xl font-bold text-muted-foreground">{stat.value}</p>
+              <p className="text-2xl font-bold text-muted-foreground">
+                {isLoading ? '-' : stat.value}
+              </p>
               <p className="text-xs text-muted-foreground">{stat.label}</p>
             </div>
           ))}
@@ -500,6 +529,7 @@ export function AnalyticsDashboard({
   customerTrend,
   revenueTrend,
   segments,
+  quickStats,
   isLoading = false,
   className,
 }: AnalyticsDashboardProps) {
@@ -569,7 +599,7 @@ export function AnalyticsDashboard({
       <div className="grid gap-6 lg:grid-cols-3">
         <SegmentPerformanceTable segments={segments} isLoading={isLoading} />
         <HealthDistributionChart distribution={healthDistribution} isLoading={isLoading} />
-        <QuickStats />
+        <QuickStats data={quickStats} dateRange={dateRange} isLoading={isLoading} />
       </div>
     </div>
   )

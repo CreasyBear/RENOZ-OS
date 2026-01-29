@@ -1,77 +1,92 @@
+'use server'
+
 /**
  * Supabase Server Client
  *
  * Server-side Supabase instances for use in TanStack Start server functions.
- * Provides both anon client (respects RLS) and admin client (bypasses RLS).
+ * Uses @supabase/ssr for proper cookie-based session handling.
  *
  * @example
  * ```ts
- * import { createServerSupabase, createAdminSupabase } from '~/lib/supabase/server'
+ * import { createClient, createServerSupabase, createAdminSupabase } from '~/lib/supabase/server'
  *
  * // In a server function - use for user-context operations
- * const supabase = createServerSupabase(request)
+ * const supabase = createClient()
  * const { data: user } = await supabase.auth.getUser()
+ *
+ * // Or pass the request explicitly
+ * const supabase = createServerSupabase(request)
  *
  * // Admin operations - bypasses RLS
  * const admin = createAdminSupabase()
  * const { data: allUsers } = await admin.from('users').select('*')
  * ```
  */
-import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { createServerClient, parseCookieHeader, serializeCookieHeader } from '@supabase/ssr'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
-const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+function getSupabaseConfig() {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-if (!supabaseUrl) {
-  throw new Error('Missing SUPABASE_URL or VITE_SUPABASE_URL environment variable')
-}
+  if (!supabaseUrl) {
+    throw new Error('Missing SUPABASE_URL or VITE_SUPABASE_URL environment variable')
+  }
 
-if (!supabaseAnonKey) {
-  throw new Error('Missing SUPABASE_ANON_KEY or VITE_SUPABASE_ANON_KEY environment variable')
+  if (!supabaseAnonKey) {
+    throw new Error('Missing SUPABASE_ANON_KEY or VITE_SUPABASE_ANON_KEY environment variable')
+  }
+
+  return { supabaseUrl, supabaseAnonKey, supabaseServiceRoleKey }
 }
 
 /**
- * Create a Supabase client for server-side operations with user context.
- * Uses the anon key and respects RLS policies.
+ * Create a Supabase server client with proper cookie handling.
+ * Uses @supabase/ssr for SSR-compatible session management.
  *
- * @param request - Optional request object to extract auth token from cookies/headers
+ * @param request - Optional request object. If not provided, uses getRequest() from context.
  * @returns Supabase client configured for server use
  */
-export function createServerSupabase(request?: Request): SupabaseClient {
-  let accessToken: string | null = null
+export function createServerSupabase(request?: Request) {
+  const { supabaseUrl, supabaseAnonKey } = getSupabaseConfig()
 
-  if (request) {
-    // Try to get token from Authorization header
-    const authHeader = request.headers.get('Authorization')
-    if (authHeader?.startsWith('Bearer ')) {
-      accessToken = authHeader.slice(7)
-    }
+  // Parse cookies from request using Supabase's utility
+  const cookieHeader = request?.headers.get('Cookie') ?? ''
+  const parsedCookies = parseCookieHeader(cookieHeader)
 
-    // Try to get token from cookies if no header
-    if (!accessToken) {
-      const cookieHeader = request.headers.get('Cookie')
-      if (cookieHeader) {
-        const cookies = parseCookies(cookieHeader)
-        accessToken = cookies['sb-access-token'] || cookies['supabase-auth-token'] || null
-      }
-    }
-  }
+  // Filter out cookies with undefined values and ensure type safety
+  const cookies = parsedCookies
+    .filter((c): c is { name: string; value: string } => c.value !== undefined)
 
-  return createClient(supabaseUrl!, supabaseAnonKey!, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-      detectSessionInUrl: false,
-    },
-    global: {
-      headers: accessToken
-        ? {
-            Authorization: `Bearer ${accessToken}`,
-          }
-        : {},
+  return createServerClient(supabaseUrl, supabaseAnonKey, {
+    cookies: {
+      getAll() {
+        return cookies
+      },
+      setAll(cookiesToSet) {
+        // In server functions, we typically can't set cookies directly
+        // The session refresh happens automatically via the browser client
+        // This is pattern 3 (read-only) from the Supabase SSR docs
+        // For full cookie setting support, you'd need middleware
+        if (process.env.NODE_ENV === 'development' && cookiesToSet.length > 0) {
+          console.debug(`[Supabase SSR] Cookie set attempted: ${cookiesToSet.map(c => c.name).join(', ')}`)
+        }
+      },
     },
   })
+}
+
+/**
+ * Create a Supabase server client using getRequest() from TanStack Start context.
+ * Convenience wrapper when you don't have the request object handy.
+ *
+ * @returns Supabase client configured for server use
+ */
+export async function createClient() {
+  const { getRequest } = await import('@tanstack/react-start/server')
+  const request = getRequest()
+  return createServerSupabase(request)
 }
 
 /**
@@ -84,7 +99,9 @@ export function createServerSupabase(request?: Request): SupabaseClient {
  * @returns Supabase admin client
  * @throws Error if SUPABASE_SERVICE_ROLE_KEY is not set
  */
-export function createAdminSupabase(): SupabaseClient {
+export function createAdminSupabase() {
+  const { supabaseUrl, supabaseServiceRoleKey } = getSupabaseConfig()
+
   if (!supabaseServiceRoleKey) {
     throw new Error(
       'Missing SUPABASE_SERVICE_ROLE_KEY environment variable. ' +
@@ -92,7 +109,7 @@ export function createAdminSupabase(): SupabaseClient {
     )
   }
 
-  return createClient(supabaseUrl!, supabaseServiceRoleKey, {
+  return createSupabaseClient(supabaseUrl, supabaseServiceRoleKey, {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
@@ -108,8 +125,8 @@ export function createAdminSupabase(): SupabaseClient {
  * @param request - The incoming request
  * @returns The authenticated user or null
  */
-export async function getServerUser(request: Request) {
-  const supabase = createServerSupabase(request)
+export async function getServerUser(request?: Request) {
+  const supabase = request ? createServerSupabase(request) : await createClient()
   const {
     data: { user },
     error,
@@ -131,7 +148,7 @@ export async function getServerUser(request: Request) {
  * @returns The authenticated user
  * @throws Error if not authenticated
  */
-export async function requireServerUser(request: Request) {
+export async function requireServerUser(request?: Request) {
   const user = await getServerUser(request)
   if (!user) {
     throw new Error('Unauthorized: No valid session')
@@ -139,19 +156,5 @@ export async function requireServerUser(request: Request) {
   return user
 }
 
-/**
- * Parse cookies from a cookie header string.
- */
-function parseCookies(cookieHeader: string): Record<string, string> {
-  const cookies: Record<string, string> = {}
-  const pairs = cookieHeader.split(';')
-
-  for (const pair of pairs) {
-    const [name, ...rest] = pair.trim().split('=')
-    if (name && rest.length > 0) {
-      cookies[name] = decodeURIComponent(rest.join('='))
-    }
-  }
-
-  return cookies
-}
+// Re-export the utilities for use in middleware if needed
+export { parseCookieHeader, serializeCookieHeader }

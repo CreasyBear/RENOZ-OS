@@ -1,7 +1,11 @@
 /**
  * Knowledge Base Articles Page
  *
+ * LAYOUT: full-width
+ *
  * Main page for browsing and managing KB articles.
+ *
+ * LAYOUT: full-width
  *
  * @see src/components/domain/support/kb-article-list.tsx
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-007b
@@ -49,7 +53,7 @@ export const Route = createFileRoute('/_authenticated/support/knowledge-base')({
     <RouteErrorFallback error={error} parentRoute="/support" />
   ),
   pendingComponent: () => (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Knowledge Base"
         description="Articles, guides, and documentation"
@@ -285,21 +289,22 @@ function KnowledgeBasePage() {
   };
 
   return (
-    <div className="container space-y-6 py-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Knowledge Base</h1>
-          <p className="text-muted-foreground">Articles, guides, and documentation</p>
-        </div>
-        <Link to="/settings/knowledge-base">
-          <Button variant="outline" size="sm">
-            <Settings className="mr-2 h-4 w-4" />
-            Manage Categories
-          </Button>
-        </Link>
-      </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="Knowledge Base"
+        description="Articles, guides, and documentation"
+        actions={
+          <Link to="/settings/knowledge-base">
+            <Button variant="outline" size="sm">
+              <Settings className="mr-2 h-4 w-4" />
+              Manage Categories
+            </Button>
+          </Link>
+        }
+      />
 
-      <div className="grid gap-6 xl:grid-cols-[280px_1fr_320px]">
+      <PageLayout.Content>
+        <div className="grid gap-6 xl:grid-cols-[280px_1fr_320px]">
         {/* Sidebar - Categories */}
         <Card className="h-fit">
           <CardHeader className="pb-3">
@@ -408,16 +413,17 @@ function KnowledgeBasePage() {
         </div>
       </div>
 
-      {/* Article Dialog */}
-      <KbArticleFormDialog
-        key={editingArticle?.id ?? 'new'}
-        open={articleDialogOpen}
-        onOpenChange={handleCloseDialog}
-        article={editingArticle}
-        categories={categories ?? []}
-        isSubmitting={createArticleMutation.isPending || updateArticleMutation.isPending}
-        onSubmit={handleSubmitArticle}
-      />
-    </div>
+        {/* Article Dialog */}
+        <KbArticleFormDialog
+          key={editingArticle?.id ?? 'new'}
+          open={articleDialogOpen}
+          onOpenChange={handleCloseDialog}
+          article={editingArticle}
+          categories={categories ?? []}
+          isSubmitting={createArticleMutation.isPending || updateArticleMutation.isPending}
+          onSubmit={handleSubmitArticle}
+        />
+      </PageLayout.Content>
+    </PageLayout>
   );
 }

@@ -19,7 +19,7 @@ import { SignaturesList } from "@/components/domain/communications";
 import { type SignatureFormValues } from "@/components/domain/communications";
 import { toastSuccess, toastError } from "@/hooks";
 import { ErrorState } from "@/components/shared";
-import { RouteErrorFallback } from "@/components/layout";
+import { RouteErrorFallback, PageLayout } from "@/components/layout";
 import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
 
 // ============================================================================
@@ -32,9 +32,11 @@ export const Route = createFileRoute("/_authenticated/communications/signatures/
     <RouteErrorFallback error={error} parentRoute="/communications" />
   ),
   pendingComponent: () => (
-    <div className="container py-6 max-w-4xl">
-      <CommunicationsListSkeleton />
-    </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Content>
+        <CommunicationsListSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
   ),
 });
 
@@ -70,11 +72,10 @@ function SignaturesContainer() {
     async (values: SignatureFormValues) => {
       try {
         await createMutation.mutateAsync({
-          data: {
-            name: values.name,
-            content: values.content,
-            isDefault: values.isDefault,
-          },
+          name: values.name,
+          content: values.content,
+          isDefault: values.isDefault,
+          isCompanyWide: false,
         });
         toastSuccess("Signature created");
       } catch {
@@ -89,12 +90,10 @@ function SignaturesContainer() {
     async (id: string, values: SignatureFormValues) => {
       try {
         await updateMutation.mutateAsync({
-          data: {
-            id,
-            name: values.name,
-            content: values.content,
-            isDefault: values.isDefault,
-          },
+          id,
+          name: values.name,
+          content: values.content,
+          isDefault: values.isDefault,
         });
         toastSuccess("Signature updated");
       } catch {
@@ -108,7 +107,7 @@ function SignaturesContainer() {
   const handleDelete = useCallback(
     async (id: string) => {
       try {
-        await deleteMutation.mutateAsync({ data: { id } });
+        await deleteMutation.mutateAsync({ id });
         toastSuccess("Signature deleted");
       } catch {
         toastError("Failed to delete signature");
@@ -120,7 +119,7 @@ function SignaturesContainer() {
   const handleSetDefault = useCallback(
     async (id: string) => {
       try {
-        await setDefaultMutation.mutateAsync({ data: { id } });
+        await setDefaultMutation.mutateAsync({ id });
         toastSuccess("Default signature updated");
       } catch {
         toastError("Failed to set default signature");
@@ -134,11 +133,15 @@ function SignaturesContainer() {
   // ============================================================================
   if (error) {
     return (
-      <ErrorState
-        title="Failed to load signatures"
-        message="There was an error loading your email signatures."
-        onRetry={() => refetch()}
-      />
+      <PageLayout variant="full-width">
+        <PageLayout.Content>
+          <ErrorState
+            title="Failed to load signatures"
+            message="There was an error loading your email signatures."
+            onRetry={() => refetch()}
+          />
+        </PageLayout.Content>
+      </PageLayout>
     );
   }
 
@@ -148,19 +151,23 @@ function SignaturesContainer() {
   const signatures = signaturesData ?? [];
 
   return (
-    <div className="container py-6 max-w-4xl">
-      <SignaturesList
-        signatures={signatures}
-        isLoading={isLoading}
-        onCreate={handleCreate}
-        onUpdate={handleUpdate}
-        onDelete={handleDelete}
-        onSetDefault={handleSetDefault}
-        isDeleting={deleteMutation.isPending}
-        isSettingDefault={setDefaultMutation.isPending}
-        isSaving={createMutation.isPending || updateMutation.isPending}
-      />
-    </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Content>
+        <div className="max-w-4xl">
+          <SignaturesList
+            signatures={signatures}
+            isLoading={isLoading}
+            onCreate={handleCreate}
+            onUpdate={handleUpdate}
+            onDelete={handleDelete}
+            onSetDefault={handleSetDefault}
+            isDeleting={deleteMutation.isPending}
+            isSettingDefault={setDefaultMutation.isPending}
+            isSaving={createMutation.isPending || updateMutation.isPending}
+          />
+        </div>
+      </PageLayout.Content>
+    </PageLayout>
   );
 }
 

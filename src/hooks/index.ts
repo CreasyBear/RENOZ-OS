@@ -46,6 +46,9 @@ export * from './products';
 // --- Orders ---
 export * from './orders';
 
+// --- Organizations ---
+export * from './organizations';
+
 // --- Pipeline ---
 export * from './pipeline';
 
@@ -60,6 +63,9 @@ export * from './support';
 
 // --- Users ---
 export * from './users';
+
+// --- Profile ---
+export * from './profile';
 
 // --- Settings ---
 export * from './settings';

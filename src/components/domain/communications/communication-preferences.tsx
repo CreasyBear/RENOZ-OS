@@ -13,8 +13,11 @@ import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import {
+  useContactPreferences,
+  usePreferenceHistory,
+  useUpdateContactPreferences,
+} from "@/hooks/communications/use-contact-preferences";
 import { Mail, MessageSquare, Loader2, History, Check } from "lucide-react";
 import { format } from "date-fns";
 
@@ -55,11 +58,6 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 
-import {
-  getContactPreferences,
-  updateContactPreferences,
-  getPreferenceHistory,
-} from "@/lib/server/communication-preferences";
 import { toast } from "sonner";
 
 // ============================================================================
@@ -124,12 +122,9 @@ export function CommunicationPreferences({
   const [confirmOptOut, setConfirmOptOut] = React.useState<
     "email" | "sms" | null
   >(null);
-  const queryClient = useQueryClient();
-
   // Fetch current preferences
-  const { data: preferencesData, isLoading } = useQuery({
-    queryKey: queryKeys.communications.contactPreference(contactId),
-    queryFn: () => getContactPreferences({ data: { contactId } }),
+  const { data: preferencesData, isLoading } = useContactPreferences({
+    contactId,
     enabled: !!contactId,
   });
 
@@ -149,26 +144,7 @@ export function CommunicationPreferences({
       : undefined,
   });
 
-  const updateMutation = useMutation({
-    mutationFn: async (values: Partial<PreferencesFormValues>) => {
-      return updateContactPreferences({
-        data: {
-          contactId,
-          ...values,
-        },
-      });
-    },
-    onSuccess: () => {
-      toast.success("Preferences updated");
-      queryClient.invalidateQueries({ queryKey: queryKeys.communications.contactPreference(contactId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.communications.preferenceHistory(contactId) });
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to update preferences"
-      );
-    },
-  });
+  const updateMutation = useUpdateContactPreferences();
 
   const handleToggle = (field: "emailOptIn" | "smsOptIn", value: boolean) => {
     // If opting out, show confirmation dialog
@@ -179,7 +155,19 @@ export function CommunicationPreferences({
 
     // If opting in, update immediately
     form.setValue(field, value);
-    updateMutation.mutate({ [field]: value });
+    updateMutation.mutate(
+      { contactId, [field]: value },
+      {
+        onSuccess: () => {
+          toast.success("Preferences updated");
+        },
+        onError: (error) => {
+          toast.error(
+            error instanceof Error ? error.message : "Failed to update preferences"
+          );
+        },
+      }
+    );
   };
 
   const confirmOptOutAction = () => {
@@ -187,7 +175,19 @@ export function CommunicationPreferences({
 
     const field = confirmOptOut === "email" ? "emailOptIn" : "smsOptIn";
     form.setValue(field, false);
-    updateMutation.mutate({ [field]: false });
+    updateMutation.mutate(
+      { contactId, [field]: false },
+      {
+        onSuccess: () => {
+          toast.success("Preferences updated");
+        },
+        onError: (error) => {
+          toast.error(
+            error instanceof Error ? error.message : "Failed to update preferences"
+          );
+        },
+      }
+    );
     setConfirmOptOut(null);
   };
 
@@ -380,10 +380,10 @@ export function PreferenceHistory({
   customerId,
   className,
 }: PreferenceHistoryProps) {
-  const { data: historyData, isLoading } = useQuery({
-    queryKey: queryKeys.communications.preferenceHistory(contactId ?? "", { customerId }),
-    queryFn: () =>
-      getPreferenceHistory({ data: { contactId, customerId, limit: 50 } }),
+  const { data: historyData, isLoading } = usePreferenceHistory({
+    contactId,
+    customerId,
+    limit: 50,
     enabled: !!contactId || !!customerId,
   });
 

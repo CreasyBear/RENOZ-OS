@@ -17,7 +17,7 @@ import {
   useTransferOwnership,
 } from '@/hooks/users/use-users';
 import { useConfirmation } from '@/hooks';
-import { RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { AdminDetailSkeleton } from '@/components/skeletons/admin';
 
 // ============================================================================
@@ -77,9 +77,11 @@ export const Route = createFileRoute('/_authenticated/admin/users/$userId')({
     <RouteErrorFallback error={error} parentRoute="/admin/users" />
   ),
   pendingComponent: () => (
-    <div className="p-6">
-      <AdminDetailSkeleton />
-    </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Content>
+        <AdminDetailSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
   ),
 });
 
@@ -122,9 +124,11 @@ function UserDetailPage() {
   // Show loading state while fetching user data
   if (isLoadingUser) {
     return (
-      <div className="p-6">
-        <AdminDetailSkeleton />
-      </div>
+      <PageLayout variant="full-width">
+        <PageLayout.Content>
+          <AdminDetailSkeleton />
+        </PageLayout.Content>
+      </PageLayout>
     );
   }
 
@@ -287,7 +291,8 @@ function UserDetailPresenter({
     currentUserIsOwner && !isOwner && user.status === 'active' && appUser?.id !== userId;
 
   return (
-    <div className="space-y-6 p-6">
+    <PageLayout variant="full-width">
+      <PageLayout.Content className="space-y-6">
       {/* Breadcrumb */}
       <nav className="flex" aria-label="Breadcrumb">
         <ol className="flex items-center space-x-2">
@@ -599,6 +604,7 @@ function UserDetailPresenter({
           </div>
         )}
       </div>
-    </div>
+      </PageLayout.Content>
+    </PageLayout>
   );
 }

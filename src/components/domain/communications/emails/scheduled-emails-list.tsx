@@ -8,8 +8,6 @@
  */
 
 import { memo, useState, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import { format } from "date-fns";
 import {
   MoreHorizontal,
@@ -57,9 +55,9 @@ import {
   type ScheduledEmailStatus,
 } from "./scheduled-email-badge";
 import {
-  getScheduledEmails,
-  cancelScheduledEmail,
-} from "@/lib/server/scheduled-emails";
+  useScheduledEmails,
+  useCancelScheduledEmail,
+} from "@/hooks/communications/use-scheduled-emails";
 
 // ============================================================================
 // TYPES
@@ -83,11 +81,6 @@ interface ScheduledEmail {
   timezone: string;
   status: ScheduledEmailStatus;
   createdAt: Date;
-}
-
-interface ScheduledEmailsResponse {
-  items: ScheduledEmail[];
-  total: number;
 }
 
 // ============================================================================
@@ -123,7 +116,6 @@ export const ScheduledEmailsList = memo(function ScheduledEmailsList({
   onCompose,
   className,
 }: ScheduledEmailsListProps) {
-  const queryClient = useQueryClient();
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [emailToCancel, setEmailToCancel] = useState<ScheduledEmail | null>(null);
 
@@ -133,38 +125,10 @@ export const ScheduledEmailsList = memo(function ScheduledEmailsList({
     isLoading,
     error,
     refetch,
-  } = useQuery<ScheduledEmailsResponse>({
-    queryKey: queryKeys.communications.scheduledEmailsList({ status, customerId }),
-    queryFn: async () => {
-      const result = await getScheduledEmails({
-        data: {
-          status,
-          customerId,
-          limit: 50,
-          offset: 0,
-        },
-      });
-      return result as ScheduledEmailsResponse;
-    },
-  });
+  } = useScheduledEmails({ status, customerId, limit: 50, offset: 0 });
 
   // Cancel mutation
-  const cancelMutation = useMutation({
-    mutationFn: (id: string) => cancelScheduledEmail({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.communications.scheduledEmails() });
-      toast.success("Email cancelled", {
-        description: "The scheduled email has been cancelled.",
-      });
-      setCancelDialogOpen(false);
-      setEmailToCancel(null);
-    },
-    onError: (error) => {
-      toast.error("Failed to cancel email", {
-        description: error instanceof Error ? error.message : "Please try again.",
-      });
-    },
-  });
+  const cancelMutation = useCancelScheduledEmail();
 
   const handleCancelClick = useCallback((email: ScheduledEmail) => {
     setEmailToCancel(email);
@@ -173,7 +137,23 @@ export const ScheduledEmailsList = memo(function ScheduledEmailsList({
 
   const handleConfirmCancel = useCallback(() => {
     if (emailToCancel) {
-      cancelMutation.mutate(emailToCancel.id);
+      cancelMutation.mutate(
+        { id: emailToCancel.id },
+        {
+          onSuccess: () => {
+            toast.success("Email cancelled", {
+              description: "The scheduled email has been cancelled.",
+            });
+            setCancelDialogOpen(false);
+            setEmailToCancel(null);
+          },
+          onError: (error) => {
+            toast.error("Failed to cancel email", {
+              description: error instanceof Error ? error.message : "Please try again.",
+            });
+          },
+        }
+      );
     }
   }, [emailToCancel, cancelMutation]);
 

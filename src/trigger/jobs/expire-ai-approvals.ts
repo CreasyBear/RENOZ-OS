@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Expire AI Approvals Cron Job
  *

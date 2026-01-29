@@ -101,6 +101,7 @@ export {
   useUpdateJobMaterial,
   useRemoveJobMaterial,
   useReserveJobStock,
+  useRecordMaterialInstallation,
   // Time tracking
   useJobTimeEntries,
   useTimeEntry,
@@ -165,9 +166,164 @@ export type {
 export { useJobDataMutationSync, useRealtimeJobUpdates } from './use-jobs-view-sync';
 
 // ============================================================================
+// SPRINT-03: PROJECTS & SITE VISITS (New Domain Model)
+// ============================================================================
+
+// Projects
+export {
+  useProjects,
+  useAllProjects,
+  useProjectsCursor,
+  useProject,
+  useProjectsByCustomer,
+  useCreateProject,
+  useUpdateProject,
+  useDeleteProject,
+  useAddProjectMember,
+  useRemoveProjectMember,
+  useCompleteProject,
+  usePrefetchProject,
+} from './use-projects';
+
+// Site Visits
+export {
+  useSiteVisits,
+  useSiteVisitsByProject,
+  useSiteVisitsByInstaller,
+  useSchedule,
+  useSiteVisit,
+  useCreateSiteVisit,
+  useUpdateSiteVisit,
+  useDeleteSiteVisit,
+  useCheckIn,
+  useCheckOut,
+  useCustomerSignOff,
+  usePrefetchSiteVisit,
+} from './use-site-visits';
+
+export type {
+  ProjectListQuery,
+  CreateProjectInput,
+  UpdateProjectInput,
+  AddProjectMemberInput,
+  RemoveProjectMemberInput,
+  CompleteProjectInput,
+} from './use-projects';
+
+// ============================================================================
+// SPRINT-03: INSTALLER MANAGEMENT
+// ============================================================================
+
+export {
+  // Queries
+  useInstallers,
+  useAllInstallers,
+  useInstaller,
+  useInstallerAvailability,
+  useInstallerWorkload,
+  useSuggestInstallers,
+  // Profile mutations
+  useCreateInstallerProfile,
+  useUpdateInstallerProfile,
+  useDeleteInstallerProfile,
+  // Certification mutations
+  useCreateCertification,
+  useUpdateCertification,
+  useVerifyCertification,
+  useDeleteCertification,
+  // Skill mutations
+  useCreateSkill,
+  useUpdateSkill,
+  useDeleteSkill,
+  // Territory mutations
+  useCreateTerritory,
+  useUpdateTerritory,
+  useDeleteTerritory,
+  // Blockout mutations
+  useCreateBlockout,
+  useUpdateBlockout,
+  useDeleteBlockout,
+} from './use-installers';
+
+export type {
+  UseInstallersOptions,
+} from './use-installers';
+
+// ============================================================================
+// SPRINT-03: WORKSTREAMS, NOTES, FILES
+// ============================================================================
+
+// Workstreams
+export {
+  useWorkstreams,
+  useWorkstream,
+  useCreateWorkstream,
+  useUpdateWorkstream,
+  useDeleteWorkstream,
+  useReorderWorkstreams,
+} from './use-workstreams';
+
+// Notes
+export {
+  useNotes,
+  useNotesStats,
+  useNote,
+  useCreateNote,
+  useUpdateNote,
+  useDeleteNote,
+  useCreateAudioNote,
+} from './use-notes';
+
+// Files
+export {
+  useFiles,
+  useFilesStats,
+  useFile,
+  useCreateFile,
+  useUpdateFile,
+  useDeleteFile,
+} from './use-files';
+
+export type {
+  CreateWorkstreamInput,
+  UpdateWorkstreamInput,
+  CreateNoteInput,
+  UpdateNoteInput,
+  CreateFileInput,
+  UpdateFileInput,
+  NoteType,
+  NoteStatus,
+  ProjectFileType,
+} from '@/lib/schemas/jobs/workstreams-notes';
+
+// ============================================================================
+// SPRINT-03: PROJECT BOM
+// ============================================================================
+
+export {
+  useProjectBom,
+  useCreateProjectBom,
+  useAddBomItem,
+  useUpdateBomItem,
+  useRemoveBomItem,
+} from './use-project-bom';
+
+// ============================================================================
+// SPRINT-03: PROJECT TASKS
+// ============================================================================
+
+export {
+  useProjectTasks,
+  useCreateTask as useCreateProjectTask,
+  useUpdateProjectTask,
+  useDeleteProjectTask,
+} from './use-project-tasks';
+
+// ============================================================================
 // RE-EXPORTED TYPES
 // ============================================================================
 
 export type { JobFilters } from '@/lib/query-keys';
 export type { JobAssignmentFilters } from '@/lib/schemas/jobs/job-assignments';
 export type { TaskResponse as JobTask, CreateTaskInput, UpdateTaskInput } from '@/lib/schemas';
+export type { RecordMaterialInstallationInput } from '@/lib/schemas/jobs/job-materials';

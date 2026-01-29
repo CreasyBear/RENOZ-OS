@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Preview Document Server Function (INT-DOC-006-A)
  *

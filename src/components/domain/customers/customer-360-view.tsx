@@ -19,7 +19,8 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { ActivityTimeline } from './activity-timeline'
+import { UnifiedActivityTimeline } from '@/components/shared/unified-activity-timeline'
+import { useUnifiedActivities } from '@/hooks/use-unified-activities'
 import { MetricsDashboard } from './analytics/metrics-dashboard'
 
 // ============================================================================
@@ -137,6 +138,25 @@ function getStatusColor(status: string): 'default' | 'secondary' | 'destructive'
 // SUB-COMPONENTS
 // ============================================================================
 
+function CustomerActivityTimeline({ customerId }: { customerId: string }) {
+  const { activities, isLoading, error } = useUnifiedActivities({
+    entityType: 'customer',
+    entityId: customerId,
+  })
+
+  return (
+    <UnifiedActivityTimeline
+      activities={activities}
+      isLoading={isLoading}
+      hasError={!!error}
+      error={error || undefined}
+      title="Activity Timeline"
+      description="Complete history of customer interactions and system events"
+      showFilters={true}
+    />
+  )
+}
+
 function ContactCard({ contact }: { contact: Contact }) {
   return (
     <div className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
@@ -228,7 +248,9 @@ function AddressCard({ address }: { address: Address }) {
 // ============================================================================
 
 export function Customer360View({ customer }: Customer360ViewProps) {
-  const tags = customer.tagAssignments.map((ta) => ta.tag)
+  const tags = (customer.tagAssignments ?? []).map((ta) => ta.tag)
+  const contacts = customer.contacts ?? []
+  const addresses = customer.addresses ?? []
 
   return (
     <div className="space-y-6">
@@ -346,16 +368,16 @@ export function Customer360View({ customer }: Customer360ViewProps) {
                 Contacts
               </CardTitle>
               <CardDescription>
-                {customer.contacts.length} contact{customer.contacts.length !== 1 ? 's' : ''}
+                {contacts.length} contact{contacts.length !== 1 ? 's' : ''}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {customer.contacts.length === 0 ? (
+              {contacts.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">
                   No contacts added yet
                 </p>
               ) : (
-                customer.contacts.map((contact) => (
+                contacts.map((contact) => (
                   <ContactCard key={contact.id} contact={contact} />
                 ))
               )}
@@ -370,16 +392,16 @@ export function Customer360View({ customer }: Customer360ViewProps) {
                 Addresses
               </CardTitle>
               <CardDescription>
-                {customer.addresses.length} address{customer.addresses.length !== 1 ? 'es' : ''}
+                {addresses.length} address{addresses.length !== 1 ? 'es' : ''}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {customer.addresses.length === 0 ? (
+              {addresses.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-4 text-center">
                   No addresses added yet
                 </p>
               ) : (
-                customer.addresses.map((address) => (
+                addresses.map((address) => (
                   <AddressCard key={address.id} address={address} />
                 ))
               )}
@@ -389,15 +411,7 @@ export function Customer360View({ customer }: Customer360ViewProps) {
 
         {/* Right Column - Activity Timeline */}
         <div className="lg:col-span-2">
-          <Card className="h-full">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Activity Timeline</CardTitle>
-              <CardDescription>Recent interactions and events</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ActivityTimeline activities={customer.activities} />
-            </CardContent>
-          </Card>
+          <CustomerActivityTimeline customerId={customer.id} />
         </div>
       </div>
     </div>

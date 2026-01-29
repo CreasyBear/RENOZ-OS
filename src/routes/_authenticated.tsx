@@ -19,7 +19,7 @@
  */
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router'
 import { useState, useCallback } from 'react'
-import { supabase } from '../lib/supabase/client'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { AppShell } from '../components/layout'
 import {
   QuickLogDialog,
@@ -28,10 +28,21 @@ import {
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: async ({ location }) => {
-    // Check if user is authenticated with Supabase
-    const { data: { session } } = await supabase.auth.getSession()
+    let supabase: SupabaseClient
+    if (typeof window === 'undefined') {
+      const { getRequest } = await import('@tanstack/react-start/server')
+      const { createServerSupabase } = await import('~/lib/supabase/server')
+      supabase = createServerSupabase(getRequest())
+    } else {
+      const { supabase: browserSupabase } = await import('~/lib/supabase/client')
+      supabase = browserSupabase
+    }
 
-    if (!session) {
+    // Check if user is authenticated with Supabase
+    // Use getUser() for reliable auth check (validates JWT with server)
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+    if (!user || authError) {
       // Redirect to login with return URL
       throw redirect({
         to: '/login',
@@ -46,7 +57,7 @@ export const Route = createFileRoute('/_authenticated')({
     const { data: appUser, error } = await supabase
       .from('users')
       .select('id, status, organization_id, role, deleted_at')
-      .eq('auth_id', session.user.id)
+      .eq('auth_id', user.id)
       .is('deleted_at', null)
       .single()
 
@@ -75,7 +86,7 @@ export const Route = createFileRoute('/_authenticated')({
 
     // Return user context for child routes
     return {
-      user: session.user,
+      user,
       appUser: {
         id: appUser.id,
         organizationId: appUser.organization_id,

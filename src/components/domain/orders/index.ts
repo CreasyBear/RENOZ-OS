@@ -7,6 +7,14 @@
 // --- Core Components ---
 export { OrderList, type OrderListProps, type OrderFilters } from './order-list';
 export {
+  OrderListContent,
+  type OrderListContentProps,
+} from './order-list-content';
+export {
+  OrdersListContainer,
+  type OrdersListContainerProps,
+} from './orders-list-container';
+export {
   OrderFilters as OrderFiltersComponent,
   type OrderFiltersProps,
   type OrderFiltersState,

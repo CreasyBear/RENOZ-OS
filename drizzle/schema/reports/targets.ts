@@ -2,12 +2,19 @@
  * Targets Schema
  *
  * KPI targets for reporting and dashboard goals.
+ * Canonical owner: reports domain.
  */
 
-import { pgTable, pgPolicy, uuid, text, date, index } from "drizzle-orm/pg-core";
+import { pgTable, pgPolicy, uuid, text, date, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { relations, sql } from "drizzle-orm";
-import { timestampColumns, numericCasted } from "../_shared/patterns";
+import {
+  timestampColumns,
+  auditColumns,
+  numericCasted,
+} from "../_shared/patterns";
+import { targetMetricEnum, targetPeriodEnum } from "../_shared/enums";
 import { organizations } from "../settings/organizations";
+import { users } from "../users/users";
 
 export const targets = pgTable(
   "targets",
@@ -18,7 +25,8 @@ export const targets = pgTable(
       .references(() => organizations.id, { onDelete: "cascade" }),
 
     name: text("name").notNull(),
-    metricKey: text("metric_key").notNull(),
+    metric: targetMetricEnum("metric").notNull(),
+    period: targetPeriodEnum("period").notNull(),
 
     startDate: date("start_date").notNull(),
     endDate: date("end_date").notNull(),
@@ -27,17 +35,32 @@ export const targets = pgTable(
       .notNull()
       .default(0),
 
+    description: text("description"),
+
     ...timestampColumns,
+    ...auditColumns,
   },
   (table) => ({
+    // Performance indexes
     orgMetricIdx: index("idx_targets_org_metric").on(
       table.organizationId,
-      table.metricKey
+      table.metric
     ),
     orgDateIdx: index("idx_targets_org_date").on(
       table.organizationId,
       table.startDate,
       table.endDate
+    ),
+    orgPeriodIdx: index("idx_targets_org_period").on(
+      table.organizationId,
+      table.period
+    ),
+    // Unique constraint: one target per metric/period/date range per org
+    uniqueMetricPeriod: uniqueIndex("idx_targets_unique_metric_period").on(
+      table.organizationId,
+      table.metric,
+      table.period,
+      table.startDate
     ),
     // RLS Policies
     selectPolicy: pgPolicy("targets_select_policy", {
@@ -64,7 +87,22 @@ export const targets = pgTable(
   })
 );
 
-export const targetsRelations = relations(targets, () => ({}));
+export const targetsRelations = relations(targets, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [targets.organizationId],
+    references: [organizations.id],
+  }),
+  createdByUser: one(users, {
+    fields: [targets.createdBy],
+    references: [users.id],
+    relationName: "targetCreatedBy",
+  }),
+  updatedByUser: one(users, {
+    fields: [targets.updatedBy],
+    references: [users.id],
+    relationName: "targetUpdatedBy",
+  }),
+}));
 
 export type Target = typeof targets.$inferSelect;
 export type NewTarget = typeof targets.$inferInsert;

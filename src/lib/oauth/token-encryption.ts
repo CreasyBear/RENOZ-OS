@@ -1,8 +1,12 @@
+'use server'
+
 /**
  * OAuth Token Encryption Utilities
  *
  * AES-256-GCM encryption for OAuth tokens with organization-specific keys.
  * Based on midday encryption patterns for secure token storage.
+ *
+ * ⚠️ SERVER-ONLY: Uses Node.js crypto and Buffer APIs.
  */
 
 import crypto from 'node:crypto';

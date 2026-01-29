@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Email Client Abstraction
  *

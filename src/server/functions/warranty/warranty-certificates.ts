@@ -16,12 +16,12 @@
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-004b
  */
 
-import { eq, and } from 'drizzle-orm';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { eq, and, asc } from 'drizzle-orm';
 import * as React from 'react';
 import { db } from '@/lib/db';
 import {
   warranties,
+  warrantyItems,
   warrantyPolicies,
   slaConfigurations,
   customers,
@@ -31,8 +31,7 @@ import {
   addresses,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
-import { ServerError } from '@/lib/server/errors';
-import { generatePresignedUploadUrl, generatePresignedDownloadUrl } from '@/lib/storage';
+import { uploadFile, createSignedUrl } from '@/lib/storage';
 import {
   generateWarrantyCertificateSchema,
   getWarrantyCertificateSchema,
@@ -41,11 +40,14 @@ import {
   type GetCertificateResult,
 } from '@/lib/schemas/warranty/certificates';
 import { typedGetFn, typedPostFn } from '@/lib/server/typed-server-fn';
+
+// PDF Generation imports
 import {
-  WarrantyCertificateTemplate,
-  type WarrantyCertificateProps,
-  type WarrantyCoverageDetails,
-} from '@/components/domain/warranty/warranty-certificate-template';
+  renderPdfToBuffer,
+  WarrantyCertificatePdfDocument,
+  type WarrantyCertificateData,
+  type DocumentOrganization,
+} from '@/lib/documents';
 
 // ============================================================================
 // CONSTANTS
@@ -53,9 +55,6 @@ import {
 
 /** Storage path prefix for warranty certificates */
 const CERTIFICATE_STORAGE_PREFIX = 'warranty-certificates';
-
-/** Base URL for warranty verification (used in QR code) */
-const APP_BASE_URL = process.env.VITE_APP_URL ?? 'https://app.renoz.energy';
 
 // ============================================================================
 // HELPERS
@@ -79,7 +78,7 @@ function generateCertificateFilename(warrantyNumber: string): string {
 }
 
 /**
- * Build customer address for certificate template.
+ * Build customer address string.
  */
 function buildCustomerAddress(
   street1: string,
@@ -88,95 +87,59 @@ function buildCustomerAddress(
   state: string | null,
   postcode: string,
   country: string
-): WarrantyCertificateProps['customerAddress'] | undefined {
+): string | undefined {
   if (!street1 && !city) {
     return undefined;
   }
 
-  return {
-    street: [street1, street2].filter(Boolean).join(', '),
-    suburb: city ?? undefined,
-    state: state ?? undefined,
-    postcode: postcode ?? undefined,
-    country: country ?? undefined,
-  };
+  const parts = [
+    [street1, street2].filter(Boolean).join(', '),
+    city,
+    [state, postcode].filter(Boolean).join(' '),
+    country,
+  ].filter(Boolean);
+
+  return parts.join(', ');
 }
 
-/**
- * Parse warranty policy terms to coverage details.
- */
-function parseTermsToCoverage(
-  terms: Record<string, unknown> | null
-): WarrantyCoverageDetails | undefined {
-  if (!terms) return undefined;
 
-  return {
-    coverage: Array.isArray(terms.coverage) ? (terms.coverage as string[]) : undefined,
-    exclusions: Array.isArray(terms.exclusions) ? (terms.exclusions as string[]) : undefined,
-    claimRequirements: Array.isArray(terms.claimRequirements)
-      ? (terms.claimRequirements as string[])
-      : undefined,
-    transferable: typeof terms.transferable === 'boolean' ? terms.transferable : undefined,
-    proratedAfterMonths:
-      typeof terms.proratedAfterMonths === 'number' ? terms.proratedAfterMonths : undefined,
-  };
-}
+
+
 
 /**
- * Render the warranty certificate to HTML.
- */
-function renderCertificateHtml(props: WarrantyCertificateProps): string {
-  const element = React.createElement(WarrantyCertificateTemplate, props);
-  return '<!DOCTYPE html>\n' + renderToStaticMarkup(element);
-}
-
-/**
- * Upload HTML content to R2 storage.
+ * Upload PDF certificate to Supabase Storage.
  * Returns the public URL of the uploaded file.
- *
- * Note: This uploads HTML directly. For actual PDF generation, you would:
- * 1. Use puppeteer/playwright to convert HTML to PDF buffer
- * 2. Upload the PDF buffer instead
- *
- * This placeholder implementation uploads the HTML so the feature is functional
- * while PDF rendering can be added later.
  */
 async function uploadCertificateToStorage(
   organizationId: string,
   warrantyNumber: string,
-  htmlContent: string
+  pdfBuffer: Buffer
 ): Promise<{ storageKey: string; publicUrl: string }> {
   const storageKey = generateCertificateStorageKey(organizationId, warrantyNumber);
 
-  // Generate presigned upload URL
-  // Note: Using text/html as mime type since we're uploading HTML
-  // When PDF generation is added, this should be application/pdf
-  const { uploadUrl } = await generatePresignedUploadUrl({
-    key: storageKey,
-    mimeType: 'text/html', // TODO: Change to 'application/pdf' when PDF generation is implemented
+  // Upload PDF to Supabase Storage
+  // Convert Buffer to ArrayBuffer for upload
+  const arrayBuffer = pdfBuffer.buffer.slice(
+    pdfBuffer.byteOffset,
+    pdfBuffer.byteOffset + pdfBuffer.byteLength
+  ) as ArrayBuffer;
+  await uploadFile({
+    path: storageKey,
+    fileBody: arrayBuffer,
+    contentType: 'application/pdf',
+    bucket: 'warranty-certificates',
   });
 
-  // Upload the HTML content
-  const response = await fetch(uploadUrl, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'text/html',
-    },
-    body: htmlContent,
-  });
-
-  if (!response.ok) {
-    throw new ServerError(`Failed to upload certificate: ${response.statusText}`);
-  }
-
-  // Generate presigned download URL for the uploaded file
-  const { downloadUrl } = await generatePresignedDownloadUrl({
-    key: storageKey,
+  // Generate signed download URL for the uploaded file
+  const { signedUrl } = await createSignedUrl({
+    path: storageKey,
+    bucket: 'warranty-certificates',
+    expiresIn: 86400, // 24 hours
   });
 
   return {
     storageKey,
-    publicUrl: downloadUrl,
+    publicUrl: signedUrl,
   };
 }
 
@@ -243,8 +206,30 @@ export const generateWarrantyCertificate = typedPostFn(
         };
       }
 
-      const { warranty, customer, product, category, policy, slaConfig, organization, address } =
+      const { warranty, customer, product, policy, organization, address } =
         warrantyData[0];
+
+      const items = await db
+        .select({
+          id: warrantyItems.id,
+          productId: warrantyItems.productId,
+          productName: products.name,
+          productSku: products.sku,
+          productSerial: warrantyItems.productSerial,
+          warrantyStartDate: warrantyItems.warrantyStartDate,
+          warrantyEndDate: warrantyItems.warrantyEndDate,
+          warrantyPeriodMonths: warrantyItems.warrantyPeriodMonths,
+          installationNotes: warrantyItems.installationNotes,
+        })
+        .from(warrantyItems)
+        .innerJoin(products, eq(warrantyItems.productId, products.id))
+        .where(
+          and(
+            eq(warrantyItems.warrantyId, warrantyId),
+            eq(warrantyItems.organizationId, ctx.organizationId)
+          )
+        )
+        .orderBy(asc(warrantyItems.warrantyStartDate));
 
       // Check if certificate already exists and regeneration not forced
       if (warranty.certificateUrl && !forceRegenerate) {
@@ -257,15 +242,9 @@ export const generateWarrantyCertificate = typedPostFn(
         };
       }
 
-      // 2. Build certificate props
-      const verificationUrl = `${APP_BASE_URL}/verify/${warranty.warrantyNumber}`;
-
-      const certificateProps: WarrantyCertificateProps = {
-        // Certificate identification
+      // 2. Build PDF certificate data
+      const certificateData: WarrantyCertificateData = {
         warrantyNumber: warranty.warrantyNumber,
-        registrationDate: warranty.registrationDate,
-
-        // Customer information
         customerName: customer.name,
         customerAddress: address
           ? buildCustomerAddress(
@@ -277,45 +256,51 @@ export const generateWarrantyCertificate = typedPostFn(
               address.country
             )
           : undefined,
-        customerEmail: customer.email ?? undefined,
-        customerPhone: customer.phone ?? undefined,
-
-        // Product information
         productName: product.name,
-        productSerial: warranty.productSerial ?? undefined,
-        productCategory: category?.name ?? undefined,
-        productSku: product.sku ?? undefined,
-
-        // Policy details
-        policyType: policy.type as WarrantyCertificateProps['policyType'],
-        policyName: policy.name,
-        durationMonths: policy.durationMonths,
-        cycleLimit: policy.cycleLimit ?? undefined,
-        expiryDate: warranty.expiryDate,
-        coverageDetails: parseTermsToCoverage(policy.terms as Record<string, unknown> | null),
-
-        // SLA information
-        slaResponseHours: slaConfig?.responseTargetValue ?? 24,
-        slaResolutionDays: slaConfig?.resolutionTargetValue ?? 5,
-
-        // Verification
-        verificationUrl,
-
-        // Branding (from organization settings if available)
-        companyName: organization.name,
-        // TODO: Add organization logo, support email, etc. when available
+        productSerial: warranty.productSerial,
+        items: items.map((item) => ({
+          id: item.id,
+          productId: item.productId,
+          productName: item.productName,
+          productSku: item.productSku,
+          productSerial: item.productSerial,
+          warrantyStartDate: item.warrantyStartDate.toISOString(),
+          warrantyEndDate: item.warrantyEndDate.toISOString(),
+          warrantyPeriodMonths: item.warrantyPeriodMonths,
+          installationNotes: item.installationNotes,
+        })),
+        registrationDate: new Date(warranty.registrationDate),
+        expiryDate: new Date(warranty.expiryDate),
+        warrantyDuration: `${policy.durationMonths} Months`,
+        coverageType: policy.type,
+        terms: policy.terms ? JSON.stringify(policy.terms) : undefined,
+        status: (warranty.status as WarrantyCertificateData['status']) || 'active',
       };
 
-      // 3. Render certificate to HTML
-      const htmlContent = renderCertificateHtml(certificateProps);
+      // Build organization data for branding
+      const orgData: DocumentOrganization = {
+        id: organization.id,
+        name: organization.name,
+        email: organization.email,
+        phone: organization.phone,
+        taxId: organization.abn,
+        currency: 'AUD',
+        locale: 'en-AU',
+      };
+
+      // 3. Render certificate to PDF
+      const { buffer: pdfBuffer } = await renderPdfToBuffer(
+        React.createElement(WarrantyCertificatePdfDocument, {
+          organization: orgData,
+          data: certificateData,
+        }) as React.ReactElement<import('@react-pdf/renderer').DocumentProps>
+      );
 
       // 4. Upload to storage
-      // Note: This uploads HTML. PDF generation can be added here when library is available.
-      // TODO: Implement actual PDF generation using puppeteer or @react-pdf/renderer
       const { publicUrl } = await uploadCertificateToStorage(
         ctx.organizationId,
         warranty.warrantyNumber,
-        htmlContent
+        pdfBuffer
       );
 
       // 5. Update warranty with certificate URL

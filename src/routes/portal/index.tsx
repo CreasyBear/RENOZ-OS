@@ -6,6 +6,7 @@ import {
   listPortalOrders,
   listPortalQuotes,
 } from '@/server/functions/portal/portal-read';
+import { PageLayout } from '@/components/layout/page-layout';
 
 export const Route = createFileRoute('/portal/')({
   component: PortalHome,
@@ -55,17 +56,24 @@ function PortalHome() {
   }, [fetchOrders, fetchJobs, fetchQuotes]);
 
   if (state === 'loading') {
-    return <div className="text-muted-foreground p-6 text-sm">Loading portal data...</div>;
+    return (
+      <PageLayout variant="container">
+        <div className="text-muted-foreground py-12 text-sm">Loading portal data...</div>
+      </PageLayout>
+    );
   }
 
   if (state === 'error') {
     return (
-      <div className="p-6 text-sm text-red-600">{errorMessage ?? 'Something went wrong.'}</div>
+      <PageLayout variant="container">
+        <div className="py-12 text-sm text-destructive">{errorMessage ?? 'Something went wrong.'}</div>
+      </PageLayout>
     );
   }
 
   return (
-    <div className="space-y-8 p-6">
+    <PageLayout variant="container">
+      <div className="space-y-8 py-6">
       <section className="space-y-2">
         <h1 className="text-xl font-semibold">Portal Overview</h1>
         <p className="text-muted-foreground text-sm">
@@ -124,6 +132,7 @@ function PortalHome() {
           </ul>
         )}
       </section>
-    </div>
+      </div>
+    </PageLayout>
   );
 }

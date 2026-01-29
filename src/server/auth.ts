@@ -33,6 +33,11 @@ const passwordResetInputSchema = z.object({
   email: z.string().email("Invalid email address"),
 });
 
+const changePasswordInputSchema = z.object({
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(8, "Password must be at least 8 characters"),
+});
+
 // ============================================================================
 // SERVER-SIDE SUPABASE CLIENT
 // ============================================================================
@@ -175,6 +180,73 @@ export const serverRequestPasswordReset = createServerFn({ method: "POST" })
       }
 
       console.error("[serverRequestPasswordReset] Unexpected error:", err);
+      return {
+        success: false,
+        error: "An unexpected error occurred. Please try again.",
+      };
+    }
+  });
+
+// ============================================================================
+// CHANGE PASSWORD
+// ============================================================================
+
+const changePasswordResultSchema = z.object({
+  success: z.boolean(),
+  error: z.string().optional(),
+});
+
+type ChangePasswordResult = z.infer<typeof changePasswordResultSchema>;
+
+/**
+ * Change password for authenticated user.
+ * Requires user to be logged in and provide current password.
+ */
+export const serverChangePassword = createServerFn({ method: "POST" })
+  .inputValidator(changePasswordInputSchema)
+  .handler(async ({ data }): Promise<ChangePasswordResult> => {
+    try {
+      const supabase = getServerSupabase();
+      
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user?.email) {
+        return {
+          success: false,
+          error: "Not authenticated",
+        };
+      }
+
+      // Verify current password by attempting to sign in
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: data.currentPassword,
+      });
+
+      if (signInError) {
+        return {
+          success: false,
+          error: "Current password is incorrect",
+        };
+      }
+
+      // Update password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: data.newPassword,
+      });
+
+      if (updateError) {
+        console.error("[serverChangePassword] Update error:", updateError);
+        return {
+          success: false,
+          error: updateError.message || "Failed to change password",
+        };
+      }
+
+      return { success: true };
+    } catch (err) {
+      console.error("[serverChangePassword] Unexpected error:", err);
       return {
         success: false,
         error: "An unexpected error occurred. Please try again.",

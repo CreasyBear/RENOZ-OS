@@ -1,12 +1,10 @@
 /**
- * Invoice PDF Template
+ * Invoice PDF Template - Apple/Linear Style
  *
- * Generates professional invoice documents with organization branding,
- * payment details, balance due, and PAID watermark support.
- * Uses comprehensive document types for full data support.
+ * Clean, minimal invoice with pill-style badges and card-based layout.
  */
 
-import { Document, Page, StyleSheet, View } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
   DocumentHeader,
   AddressColumns,
@@ -19,12 +17,16 @@ import {
   pageMargins,
   colors,
   spacing,
+  borderRadius,
+  fontSize,
+  FONT_FAMILY,
+  FONT_WEIGHTS,
 } from "../../components";
 import { OrgDocumentProvider, useOrgDocument } from "../../context";
 import type { InvoiceDocumentData, DocumentOrganization } from "../../types";
 
 // ============================================================================
-// STYLES
+// STYLES - Clean, Minimal
 // ============================================================================
 
 const styles = StyleSheet.create({
@@ -34,15 +36,72 @@ const styles = StyleSheet.create({
     paddingLeft: pageMargins.left,
     paddingRight: pageMargins.right,
     backgroundColor: colors.background.white,
-    position: "relative",
   },
   content: {
     flex: 1,
   },
+
+  // Addresses - Clean layout
+  addressesSection: {
+    marginTop: spacing.xl,
+    marginBottom: spacing.xl,
+  },
+
+  // Payment info card
+  paymentInfoCard: {
+    backgroundColor: colors.background.subtle,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    marginTop: spacing.xl,
+  },
+  paymentInfoTitle: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.md,
+  },
+  paymentInfoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.md,
+  },
+  paymentInfoItem: {
+    minWidth: 120,
+  },
+  paymentInfoLabel: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.muted,
+    marginBottom: spacing.xs,
+  },
+  paymentInfoValue: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.primary,
+  },
+
+  // QR Code
   qrSection: {
     marginTop: spacing.xl,
     flexDirection: "row",
     justifyContent: "flex-end",
+  },
+  qrBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.background.subtle,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    gap: spacing.md,
+  },
+  qrText: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.secondary,
   },
 });
 
@@ -51,27 +110,23 @@ const styles = StyleSheet.create({
 // ============================================================================
 
 export interface InvoicePdfTemplateProps {
-  /** Invoice document data */
   data: InvoiceDocumentData;
-  /** Optional QR code data URL (pre-generated) */
   qrCodeDataUrl?: string;
 }
 
 export interface InvoicePdfDocumentProps extends InvoicePdfTemplateProps {
-  /** Organization data for branding */
   organization: DocumentOrganization;
 }
 
 // ============================================================================
-// INTERNAL COMPONENT (uses context)
+// INTERNAL COMPONENT
 // ============================================================================
 
 function InvoiceContent({ data, qrCodeDataUrl }: InvoicePdfTemplateProps) {
-  const { organization } = useOrgDocument();
-
+  const { organization, locale } = useOrgDocument();
   const { order } = data;
 
-  // Build "from" address from organization
+  // Build addresses
   const fromAddress = {
     name: organization.name,
     addressLine1: organization.address?.addressLine1,
@@ -83,11 +138,9 @@ function InvoiceContent({ data, qrCodeDataUrl }: InvoicePdfTemplateProps) {
     phone: organization.phone,
     email: organization.email,
     website: organization.website,
-    // Include ABN/Tax ID for invoices (required for GST)
     taxId: organization.taxId,
   };
 
-  // Build "to" address from billing address (preferred) or customer address (fallback)
   const customerAddress = order.billingAddress ?? order.customer.address;
   const toAddress = {
     name: order.customer.name,
@@ -100,104 +153,137 @@ function InvoiceContent({ data, qrCodeDataUrl }: InvoicePdfTemplateProps) {
     email: order.customer.email,
     phone: order.customer.phone,
     taxId: order.customer.taxId,
-    // Include contact name from address if different from customer name
     contactName: customerAddress?.contactName,
     contactPhone: customerAddress?.contactPhone,
   };
 
-  // Resolve notes: document notes take precedence, fall back to order customer notes
   const resolvedNotes = data.notes ?? order.customerNotes;
 
-  // Determine if we should show balance section
-  const showBalance = !data.isPaid && (order.paidAmount != null || order.balanceDue != null);
+  // Determine status
+  const isPaid = data.isPaid;
+  const isOverdue = !isPaid && data.dueDate && new Date(data.dueDate).getTime() < Date.now();
+  
+  const status = isPaid ? "paid" : isOverdue ? "overdue" : "pending";
+  const statusDate = isPaid ? data.paidAt : data.dueDate;
+
+  const paymentDetails = data.paymentDetails
+    ? {
+        bankName: data.paymentDetails.bankName,
+        accountName: data.paymentDetails.accountName,
+        accountNumber: data.paymentDetails.accountNumber,
+        bsb: data.paymentDetails.bsb,
+        swift: data.paymentDetails.swift,
+        paymentInstructions: data.paymentDetails.paymentInstructions,
+      }
+    : null;
 
   return (
     <Page size="A4" style={styles.page}>
-      {/* PAID watermark overlay */}
-      <PaidWatermark show={data.isPaid} paidAt={data.paidAt} />
-
       <View style={styles.content}>
-        {/* Header with logo and document info */}
+        {/* Header with pill status */}
         <DocumentHeader
-          title="INVOICE"
+          title="Invoice"
           documentNumber={data.documentNumber}
           date={data.issueDate}
           dueDate={data.dueDate}
+          reference={data.reference}
+          status={status}
+          statusDate={statusDate}
         />
 
-        {/* From/To addresses */}
-        <AddressColumns from={fromAddress} to={toAddress} />
+        {/* Addresses */}
+        <View style={styles.addressesSection}>
+          <AddressColumns
+            from={fromAddress}
+            to={toAddress}
+            labels={{ from: "From", to: "Bill To" }}
+          />
+        </View>
 
-        {/* Line items table - pass full DocumentLineItem objects */}
+        {/* Line Items */}
         <LineItems
           lineItems={order.lineItems}
           showSku={order.lineItems.some((item) => item.sku)}
           showNotes={order.lineItems.some((item) => item.notes)}
-          alternateRows
         />
 
-        {/* Totals summary with all financial details including balance */}
+        {/* Summary */}
         <Summary
           subtotal={order.subtotal}
           discountAmount={order.discount}
           discountPercent={order.discountPercent}
           taxRate={order.taxRate}
           taxAmount={order.taxAmount}
+          taxRegistrationNumber={organization.taxId}
           shippingAmount={order.shippingAmount}
           total={order.total}
           paidAmount={order.paidAmount}
           balanceDue={order.balanceDue}
-          showBalance={showBalance}
+          showBalance={!isPaid}
         />
 
-        {/* Footer with payment details, terms, and notes */}
-        <DocumentFooter
-          paymentDetails={
-            data.paymentDetails
-              ? {
-                  bankName: data.paymentDetails.bankName,
-                  accountName: data.paymentDetails.accountName,
-                  accountNumber: data.paymentDetails.accountNumber,
-                  bsb: data.paymentDetails.bsb,
-                  swift: data.paymentDetails.swift,
-                  paymentInstructions: data.paymentDetails.paymentInstructions,
-                }
-              : null
-          }
-          terms={data.terms}
-          notes={resolvedNotes}
-        />
+        {/* Payment Info Card (for unpaid) */}
+        {!isPaid && (
+          <View style={styles.paymentInfoCard}>
+            <Text style={styles.paymentInfoTitle}>Payment Details</Text>
+            <View style={styles.paymentInfoGrid}>
+              <View style={styles.paymentInfoItem}>
+                <Text style={styles.paymentInfoLabel}>Invoice Number</Text>
+                <Text style={styles.paymentInfoValue}>{data.documentNumber}</Text>
+              </View>
+              <View style={styles.paymentInfoItem}>
+                <Text style={styles.paymentInfoLabel}>Amount Due</Text>
+                <Text style={styles.paymentInfoValue}>
+                  {new Intl.NumberFormat(locale, {
+                    style: "currency",
+                    currency: organization.currency,
+                  }).format(order.balanceDue || order.total)}
+                </Text>
+              </View>
+              {data.dueDate && (
+                <View style={styles.paymentInfoItem}>
+                  <Text style={styles.paymentInfoLabel}>Due Date</Text>
+                  <Text style={styles.paymentInfoValue}>
+                    {formatDateForPdf(data.dueDate, locale, "medium")}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
 
-        {/* QR Code for quick payment/access */}
-        {qrCodeDataUrl && (
+        {/* QR Code */}
+        {qrCodeDataUrl && !isPaid && (
           <View style={styles.qrSection}>
-            <QRCode dataUrl={qrCodeDataUrl} size={60} />
+            <View style={styles.qrBox}>
+              <QRCode dataUrl={qrCodeDataUrl} size={80} />
+              <Text style={styles.qrText}>Scan to pay</Text>
+            </View>
           </View>
         )}
       </View>
 
-      {/* Page numbers */}
-      <PageNumber />
+      {/* Watermark (rendered after content) */}
+      <PaidWatermark show={isPaid} paidAt={data.paidAt} />
+
+      {/* Footer */}
+      <DocumentFooter
+        paymentDetails={paymentDetails}
+        notes={resolvedNotes}
+        terms={data.terms}
+        showThankYou={isPaid}
+        thankYouMessage="Thank you for your business"
+      />
+
+      <PageNumber documentNumber={data.documentNumber} />
     </Page>
   );
 }
 
 // ============================================================================
-// EXPORTED COMPONENT
+// EXPORTED COMPONENTS
 // ============================================================================
 
-/**
- * Invoice PDF Template
- *
- * Renders a complete invoice document with organization branding,
- * payment details, balance due tracking, and optional PAID watermark.
- *
- * @example
- * const qrCode = await generateQRCode(`https://app.example.com/invoices/${invoiceId}/pay`);
- * const { buffer } = await renderPdfToBuffer(
- *   <InvoicePdfDocument organization={org} data={invoiceData} qrCodeDataUrl={qrCode} />
- * );
- */
 export function InvoicePdfDocument({
   organization,
   data,
@@ -209,7 +295,7 @@ export function InvoicePdfDocument({
         title={`Invoice ${data.documentNumber}`}
         author={organization.name}
         subject={`Invoice for ${data.order.customer.name}`}
-        creator="Renoz CRM"
+        creator="Renoz"
       >
         <InvoiceContent data={data} qrCodeDataUrl={qrCodeDataUrl} />
       </Document>
@@ -217,15 +303,19 @@ export function InvoicePdfDocument({
   );
 }
 
-/**
- * Invoice PDF Template (for use within existing Document/Provider)
- *
- * Use this when you need to control the Document wrapper yourself,
- * or when rendering multiple invoices in a single PDF.
- */
 export function InvoicePdfTemplate({
   data,
   qrCodeDataUrl,
 }: InvoicePdfTemplateProps) {
   return <InvoiceContent data={data} qrCodeDataUrl={qrCodeDataUrl} />;
+}
+
+// Helper
+function formatDateForPdf(date: Date, locale: string, format: "short" | "medium" | "long"): string {
+  const options: Record<string, Intl.DateTimeFormatOptions> = {
+    short: { year: "numeric", month: "short", day: "numeric" },
+    medium: { year: "numeric", month: "long", day: "numeric" },
+    long: { year: "numeric", month: "long", day: "numeric" },
+  };
+  return new Intl.DateTimeFormat(locale, options[format]).format(date);
 }

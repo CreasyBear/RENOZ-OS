@@ -41,7 +41,7 @@ export const Route = createFileRoute('/_authenticated/support/issues/$issueId')(
     <RouteErrorFallback error={error} parentRoute="/support/issues" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Issue Details"
         description="Loading issue information..."
@@ -200,7 +200,7 @@ function IssueDetailPage() {
     : null;
 
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title={
           <div className="flex items-center gap-2">

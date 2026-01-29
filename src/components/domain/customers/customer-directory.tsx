@@ -11,8 +11,12 @@ import {
   Trash2,
   Tag,
   RefreshCw,
+  LayoutGrid,
+  Table as TableIcon,
+  Users,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -24,7 +28,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { CustomerTable, type CustomerTableData } from './customer-table'
-import { CustomerFilters, type CustomerFiltersState } from './customer-filters'
+import { CustomerCard, CustomerCardSkeleton } from './customer-card'
+import { CustomerFilters, ActiveFilterChips, type CustomerFiltersState } from './customer-filters'
+import { EmptyState } from '@/components/shared/empty-state'
+import { cn } from '@/lib/utils'
 
 // ============================================================================
 // TYPES
@@ -248,6 +255,9 @@ export function CustomerDirectory({
   // Selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
+  // View mode state (auto-detect mobile, but allow override)
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table')
+
   // Filter state
   const [filters, setFilters] = useState<CustomerFiltersState>({
     search: '',
@@ -355,6 +365,20 @@ export function CustomerDirectory({
               Refresh
             </Button>
           )}
+          {/* View Mode Toggle - Desktop only */}
+          <ToggleGroup
+            type="single"
+            value={viewMode}
+            onValueChange={(v) => v && setViewMode(v as 'table' | 'grid')}
+            className="hidden sm:flex"
+          >
+            <ToggleGroupItem value="table" aria-label="Table view">
+              <TableIcon className="h-4 w-4" />
+            </ToggleGroupItem>
+            <ToggleGroupItem value="grid" aria-label="Grid view">
+              <LayoutGrid className="h-4 w-4" />
+            </ToggleGroupItem>
+          </ToggleGroup>
         </div>
         <div className="flex items-center gap-2">
           {onCreateCustomer && (
@@ -371,6 +395,14 @@ export function CustomerDirectory({
         filters={filters}
         onChange={handleFiltersChange}
         availableTags={tags}
+        resultCount={totalCount}
+      />
+
+      {/* Active Filter Chips */}
+      <ActiveFilterChips
+        filters={filters}
+        availableTags={tags}
+        onChange={handleFiltersChange}
       />
 
       {/* Bulk Actions Bar */}
@@ -393,19 +425,60 @@ export function CustomerDirectory({
       )}
       */}
 
-      {/* Customer Table */}
-      <CustomerTable
-        customers={customers}
-        isLoading={isLoading}
-        selectedIds={selectedIds}
-        onSelectAll={handleSelectAll}
-        onSelectOne={handleSelectOne}
-        onSort={handleSort}
-        sortColumn={sortColumn}
-        sortDirection={sortDirection}
-        onEdit={onEditCustomer}
-        onDelete={onDeleteCustomer}
-      />
+      {/* Customer List - Table or Grid based on view mode */}
+      {viewMode === 'table' ? (
+        <div className="hidden md:block">
+          <CustomerTable
+            customers={customers}
+            isLoading={isLoading}
+            selectedIds={selectedIds}
+            onSelectAll={handleSelectAll}
+            onSelectOne={handleSelectOne}
+            onSort={handleSort}
+            sortColumn={sortColumn}
+            sortDirection={sortDirection}
+            onEdit={onEditCustomer}
+            onDelete={onDeleteCustomer}
+          />
+        </div>
+      ) : null}
+      
+      {/* Mobile Card View - Always show on mobile, or when grid mode selected */}
+      <div className={cn(
+        'space-y-3',
+        viewMode === 'table' ? 'md:hidden' : 'block'
+      )}>
+        {isLoading ? (
+          Array.from({ length: 5 }).map((_, i) => (
+            <CustomerCardSkeleton key={i} />
+          ))
+        ) : customers.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title="No customers yet"
+            message="Get started by adding your first customer to the directory."
+            primaryAction={onCreateCustomer ? {
+              label: 'Add Customer',
+              onClick: onCreateCustomer,
+            } : undefined}
+          />
+        ) : (
+          customers.map((customer) => (
+            <CustomerCard
+              key={customer.id}
+              customer={customer}
+              isSelected={selectedIds.has(customer.id)}
+              onSelect={(checked) => handleSelectOne(customer.id, checked)}
+              onEdit={onEditCustomer}
+              onDelete={onDeleteCustomer}
+              onClick={(c) => {
+                // Navigate to detail view
+                window.location.href = `/customers/${c.id}`
+              }}
+            />
+          ))
+        )}
+      </div>
 
       {/* Pagination */}
       {onPageChange && (

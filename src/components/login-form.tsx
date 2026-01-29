@@ -6,15 +6,17 @@ import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '~/components/ui/card';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
-import { Link, useNavigate, useRouter } from '@tanstack/react-router';
+import { Link, useNavigate, useRouter, useSearch } from '@tanstack/react-router';
 
 export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
+  const { redirect } = useSearch({ from: '/login' });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const router = useRouter();
+  const safeRedirect = redirect && redirect.startsWith('/') ? redirect : '/dashboard';
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,9 +29,26 @@ export function LoginForm({ className, ...props }: React.ComponentPropsWithoutRe
         password,
       });
       if (error) throw error;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        await supabase.auth.signOut();
+        throw new Error('Login succeeded but no session was found.');
+      }
+
+      const { data: appUser, error: appUserError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('auth_id', user.id)
+        .single();
+
+      if (appUserError || !appUser) {
+        await supabase.auth.signOut();
+        throw new Error('Account setup is incomplete. Please sign up again or contact support.');
+      }
+
       // Invalidate router cache to refresh auth state, then redirect
       await router.invalidate();
-      await navigate({ to: '/dashboard' });
+      await navigate({ to: safeRedirect, replace: true });
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'An error occurred');
     } finally {

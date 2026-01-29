@@ -31,7 +31,10 @@ import {
   useUpdateOpportunity,
   useDeleteOpportunity,
   useUpdateOpportunityStage,
+  useConvertToOrder,
+  useSendQuote,
 } from "@/hooks/pipeline";
+import { useConfirmation } from "@/hooks";
 import { FormatAmount } from "@/components/shared/format";
 import type { OpportunityStage, UpdateOpportunity, Opportunity } from "@/lib/schemas/pipeline";
 
@@ -58,7 +61,7 @@ export const Route = createFileRoute("/_authenticated/pipeline/$opportunityId")(
     <RouteErrorFallback error={error} parentRoute="/pipeline" />
   ),
   pendingComponent: () => (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header title="Opportunity" />
       <PageLayout.Content>
         <PipelineDetailSkeleton />
@@ -121,6 +124,9 @@ function OpportunityDetailPage() {
   const updateMutation = useUpdateOpportunity();
   const stageChangeMutation = useUpdateOpportunityStage();
   const deleteMutation = useDeleteOpportunity();
+  const convertToOrderMutation = useConvertToOrder();
+  const sendQuoteMutation = useSendQuote();
+  const confirm = useConfirmation();
 
   // Handle stage change from Won/Lost dialog
   const handleWonLostConfirm = async (
@@ -172,7 +178,13 @@ function OpportunityDetailPage() {
 
   // Handle delete
   const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this opportunity?")) return;
+    const result = await confirm.confirm({
+      title: "Delete Opportunity",
+      description: "Are you sure you want to delete this opportunity? This action cannot be undone.",
+      confirmLabel: "Delete",
+      variant: "destructive",
+    });
+    if (!result.confirmed) return;
     try {
       await deleteMutation.mutateAsync(opportunityId);
       toastSuccess("Opportunity deleted.");
@@ -182,10 +194,52 @@ function OpportunityDetailPage() {
     }
   };
 
+  // Handle convert to order
+  const handleConvertToOrder = async () => {
+    const result = await confirm.confirm({
+      title: "Convert to Order",
+      description: "This will convert the opportunity to an order. The opportunity must be marked as Won first. Continue?",
+      confirmLabel: "Convert",
+    });
+    if (!result.confirmed) return;
+    try {
+      await convertToOrderMutation.mutateAsync({ opportunityId });
+      toastSuccess("Opportunity conversion initiated.");
+      // TODO: Navigate to newly created order when Orders domain integration is complete
+    } catch (error) {
+      toastError(error instanceof Error ? error.message : "Failed to convert opportunity. Please try again.");
+    }
+  };
+
+  // Handle send quote
+  const handleSendQuote = async () => {
+    // Get the latest quote version
+    const latestVersion = versions[versions.length - 1];
+    if (!latestVersion) {
+      toastError("No quote version available to send.");
+      return;
+    }
+    if (!customer?.email) {
+      toastError("Customer email is required to send quote.");
+      return;
+    }
+    try {
+      await sendQuoteMutation.mutateAsync({
+        opportunityId,
+        quoteVersionId: latestVersion.id,
+        recipientEmail: customer.email,
+        subject: `Quote for ${opportunity.title}`,
+      });
+      toastSuccess("Quote sent successfully.");
+    } catch {
+      toastError("Failed to send quote. Please try again.");
+    }
+  };
+
   // Loading state
   if (isLoading) {
     return (
-      <PageLayout>
+      <PageLayout variant="full-width">
         <PageLayout.Header title="Loading..." />
         <PageLayout.Content>
           <div className="space-y-6">
@@ -202,7 +256,7 @@ function OpportunityDetailPage() {
   // Error state
   if (error || !data) {
     return (
-      <PageLayout>
+      <PageLayout variant="full-width">
         <PageLayout.Header title="Opportunity Not Found" />
         <PageLayout.Content>
           <div className="text-center py-12">
@@ -224,7 +278,7 @@ function OpportunityDetailPage() {
 
   return (
     <>
-      <PageLayout>
+      <PageLayout variant="full-width">
         <PageLayout.Header
           title={opportunity.title}
           description={
@@ -269,10 +323,8 @@ function OpportunityDetailPage() {
 
                   <Button
                     variant="outline"
-                    onClick={() => {
-                      // TODO: Implement quote sending
-                      toastError("Quote sending not yet implemented");
-                    }}
+                    onClick={handleSendQuote}
+                    disabled={sendQuoteMutation.isPending || versions.length === 0}
                   >
                     <Send className="mr-2 h-4 w-4" />
                     Send Quote
@@ -299,10 +351,8 @@ function OpportunityDetailPage() {
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
-                        onClick={() => {
-                          // TODO: Implement convert to order
-                          toastError("Convert to order not yet implemented");
-                        }}
+                        onClick={handleConvertToOrder}
+                        disabled={convertToOrderMutation.isPending}
                       >
                         <ArrowRight className="mr-2 h-4 w-4" />
                         Convert to Order

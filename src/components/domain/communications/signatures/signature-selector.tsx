@@ -10,8 +10,6 @@
 "use client";
 
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import { Check, ChevronDown, FileSignature, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -30,7 +28,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-import { getEmailSignatures } from "@/lib/server/email-signatures";
+import { useSignatures } from "@/hooks/communications/use-signatures";
 
 // ============================================================================
 // TYPES
@@ -61,9 +59,8 @@ export function SignatureSelector({
   onCreateNew,
   className,
 }: SignatureSelectorProps) {
-  const { data: signaturesData, isLoading } = useQuery({
-    queryKey: queryKeys.communications.signatures(),
-    queryFn: () => getEmailSignatures({ data: { includeCompanyWide: true } }),
+  const { data: signaturesData, isLoading } = useSignatures({
+    includeCompanyWide: true,
   });
 
   const signatures = (signaturesData as Signature[] | undefined) ?? [];

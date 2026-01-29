@@ -5,7 +5,7 @@
  * Provides hooks for generating PDFs and viewing document history.
  */
 
-// --- Generation ---
+// --- Generation (Async - Trigger.dev) ---
 export {
   useGenerateQuote,
   useGenerateInvoice,
@@ -17,6 +17,21 @@ export {
   type DocumentStatusInput,
   type DocumentStatusResult,
 } from './use-generate-document';
+
+// --- Generation (Sync - Immediate PDF) ---
+export {
+  useGenerateOrderDocument,
+  useGenerateOrderQuote,
+  useGenerateOrderInvoice,
+  useGenerateOrderPackingSlip,
+  useGenerateOrderDeliveryNote,
+  type OrderDocumentType,
+  type GenerateOrderDocumentResult,
+  type GenerateOrderQuoteInput,
+  type GenerateOrderInvoiceInput,
+  type GenerateOrderPackingSlipInput,
+  type GenerateOrderDeliveryNoteInput,
+} from './use-generate-order-documents';
 
 // --- History ---
 export {

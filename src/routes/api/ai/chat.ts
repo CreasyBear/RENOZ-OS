@@ -19,9 +19,9 @@ import {
 } from 'ai';
 import { withAuth } from '@/lib/server/protected';
 import { checkRateLimit, createRateLimitResponse } from '@/lib/ai/ratelimit';
-import { checkBudget, createBudgetExceededResponse } from '@/lib/ai/utils/budget';
-import { trackCostFromSDK, estimateCost } from '@/lib/ai/utils/cost';
-import { getDrizzleMemoryProvider } from '@/lib/ai/memory';
+import { checkBudget, createBudgetExceededResponse } from '@/server/functions/ai/utils/budget';
+import { trackCostFromSDK, estimateCost } from '@/server/functions/ai/utils/cost';
+import { getDrizzleMemoryProvider } from '@/server/functions/ai/memory/drizzle-provider';
 import { runTriageAgent } from '@/lib/ai/agents/triage';
 import {
   runCustomerAgent,
@@ -34,7 +34,7 @@ import {
   orderTools,
   analyticsTools,
   quoteTools,
-} from '@/lib/ai/tools';
+} from '@/server/functions/ai/tools';
 import { setContext } from '@/lib/ai/artifacts';
 import type { UserContext } from '@/lib/ai/prompts/shared';
 import type { ToolSet } from 'ai';

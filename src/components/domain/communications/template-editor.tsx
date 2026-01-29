@@ -13,8 +13,6 @@ import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import {
   Bold,
   Italic,
@@ -68,11 +66,13 @@ import { cn } from "@/lib/utils";
 
 import { TemplateVariableMenu } from "./template-variable-menu";
 import {
-  createEmailTemplate,
-  updateEmailTemplate,
+  useCreateTemplate,
+  useUpdateTemplate,
+} from "@/hooks/communications/use-templates";
+import {
   substituteTemplateVariables,
   getSampleTemplateData,
-} from "@/lib/server/email-templates";
+} from "@/lib/communications/template-utils";
 import type { TemplateCategory } from "../../../../drizzle/schema";
 import { toast } from "sonner";
 
@@ -150,7 +150,8 @@ export function TemplateEditor({
 }: TemplateEditorProps) {
   const [activeTab, setActiveTab] = React.useState<"edit" | "preview">("edit");
   const editorRef = React.useRef<HTMLDivElement>(null);
-  const queryClient = useQueryClient();
+  const createTemplate = useCreateTemplate();
+  const updateTemplate = useUpdateTemplate();
 
   const form = useForm<TemplateFormValues>({
     resolver: zodResolver(templateFormSchema),
@@ -165,36 +166,12 @@ export function TemplateEditor({
     },
   });
 
-  const createMutation = useMutation({
-    mutationFn: async (values: TemplateFormValues) => {
-      return createEmailTemplate({
-        data: {
-          name: values.name,
-          description: values.description,
-          category: values.category,
-          subject: values.subject,
-          bodyHtml: values.bodyHtml,
-          variables: [], // Will be parsed from content later
-        },
-      });
-    },
-    onSuccess: () => {
-      toast.success("Template created");
-      queryClient.invalidateQueries({ queryKey: queryKeys.communications.templates() });
-      onSave?.();
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to create template"
-      );
-    },
-  });
+  const isPending = createTemplate.isPending || updateTemplate.isPending;
 
-  const updateMutation = useMutation({
-    mutationFn: async (values: TemplateFormValues) => {
-      if (!template?.id) throw new Error("No template ID");
-      return updateEmailTemplate({
-        data: {
+  const onSubmit = (values: TemplateFormValues) => {
+    if (template?.id) {
+      updateTemplate.mutate(
+        {
           id: template.id,
           name: values.name,
           description: values.description,
@@ -204,27 +181,40 @@ export function TemplateEditor({
           isActive: values.isActive,
           createVersion: values.createVersion,
         },
-      });
-    },
-    onSuccess: () => {
-      toast.success("Template updated");
-      queryClient.invalidateQueries({ queryKey: queryKeys.communications.templates() });
-      onSave?.();
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to update template"
+        {
+          onSuccess: () => {
+            toast.success("Template updated");
+            onSave?.();
+          },
+          onError: (error) => {
+            toast.error(
+              error instanceof Error ? error.message : "Failed to update template"
+            );
+          },
+        }
       );
-    },
-  });
-
-  const isPending = createMutation.isPending || updateMutation.isPending;
-
-  const onSubmit = (values: TemplateFormValues) => {
-    if (template?.id) {
-      updateMutation.mutate(values);
     } else {
-      createMutation.mutate(values);
+      createTemplate.mutate(
+        {
+          name: values.name,
+          description: values.description,
+          category: values.category,
+          subject: values.subject,
+          bodyHtml: values.bodyHtml,
+          variables: [],
+        },
+        {
+          onSuccess: () => {
+            toast.success("Template created");
+            onSave?.();
+          },
+          onError: (error) => {
+            toast.error(
+              error instanceof Error ? error.message : "Failed to create template"
+            );
+          },
+        }
+      );
     }
   };
 

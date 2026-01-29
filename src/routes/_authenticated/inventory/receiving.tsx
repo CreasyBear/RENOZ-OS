@@ -3,10 +3,9 @@
  *
  * Goods receiving interface with form and history.
  *
- * Features:
- * - Receive new inventory
- * - View receiving history
- * - Quick receive mode
+ * LAYOUT: full-width
+ *
+ * @see UI_UX_STANDARDIZATION_PRD.md
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useCallback } from "react";
@@ -36,8 +35,8 @@ export const Route = createFileRoute("/_authenticated/inventory/receiving" as an
     <RouteErrorFallback error={error} parentRoute="/inventory" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="container">
-      <PageLayout.Header title="Receive Inventory" />
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="Receive Inventory" description="Record incoming goods and update stock levels" />
       <PageLayout.Content>
         <FormSkeleton sections={2} />
       </PageLayout.Content>
@@ -137,7 +136,7 @@ function ReceivingPage() {
   const defaultLocation = locations.find((l) => l.code === "MAIN") ?? locations[0];
 
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Receive Inventory"
         description="Record incoming goods and update stock levels"

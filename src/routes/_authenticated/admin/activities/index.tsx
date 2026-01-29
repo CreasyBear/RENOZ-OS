@@ -23,7 +23,7 @@ export const Route = createFileRoute("/_authenticated/admin/activities/")({
     <RouteErrorFallback error={error} parentRoute="/admin" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Activity Analytics"
         description="Track and analyze organization activity"
@@ -41,7 +41,7 @@ export const Route = createFileRoute("/_authenticated/admin/activities/")({
 
 function ActivityAnalyticsPage() {
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Activity Analytics"
         description="Track and analyze organization activity"

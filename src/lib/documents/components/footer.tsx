@@ -1,52 +1,152 @@
 /**
- * PDF Document Footer Component
+ * PDF Document Footer Component - Premium Design
  *
- * Displays terms, notes, and page numbers.
+ * Displays terms, notes, payment details, and page numbers
+ * with professional styling and clear visual hierarchy.
+ *
+ * @see docs/DOCUMENT_DESIGN_SYSTEM.md
  */
 
 import { Text, View, StyleSheet } from "@react-pdf/renderer";
-import { colors, fontSize, spacing, FONT_FAMILY, FONT_WEIGHTS } from "./theme";
+import {
+  colors,
+  fontSize,
+  spacing,
+  lineHeight,
+  letterSpacing,
+  FONT_FAMILY,
+  FONT_WEIGHTS,
+} from "./theme";
 
 // ============================================================================
-// STYLES
+// STYLES - Premium Footer Design
 // ============================================================================
 
 const styles = StyleSheet.create({
+  // Main container
   container: {
     marginTop: spacing.xl,
   },
-  section: {
+
+  // Divider
+  divider: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
     marginBottom: spacing.lg,
   },
-  label: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.secondary,
-    marginBottom: spacing.xs,
+
+  // Two-column layout
+  twoColumn: {
+    flexDirection: "row",
+    marginBottom: spacing.lg,
   },
-  content: {
+  column: {
+    flex: 1,
+  },
+  columnLeft: {
+    marginRight: spacing.lg,
+  },
+  columnRight: {
+    marginLeft: spacing.lg,
+  },
+
+  // Section styles
+  section: {
+    marginBottom: spacing.md,
+  },
+  sectionLabel: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.semibold,
+    color: colors.text.secondary,
+    textTransform: "uppercase",
+    letterSpacing: letterSpacing.wide,
+    marginBottom: spacing.sm,
+  },
+  sectionContent: {
     fontSize: fontSize.sm,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.primary,
-    lineHeight: 1.5,
+    lineHeight: lineHeight.relaxed,
   },
-  divider: {
+
+  // Payment details grid
+  paymentRow: {
+    flexDirection: "row",
+    marginBottom: spacing.xs,
+  },
+  paymentLabel: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.secondary,
+    width: 100,
+  },
+  paymentValue: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.primary,
+    flex: 1,
+  },
+
+  // Terms section
+  termsSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
     borderTopWidth: 0.5,
     borderTopColor: colors.border.light,
-    marginVertical: spacing.lg,
   },
+  termsText: {
+    fontSize: fontSize.md,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.secondary,
+    lineHeight: lineHeight.normal,
+  },
+
+  // Page number
   pageNumber: {
     position: "absolute",
-    bottom: 20,
+    bottom: 32,
     left: 0,
     right: 0,
     textAlign: "center",
+  },
+  pageNumberText: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.muted,
+  },
+
+  // QR Code section
+  qrSection: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: spacing.md,
+  },
+  qrLabel: {
     fontSize: fontSize.xs,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.regular,
     color: colors.text.muted,
+    marginLeft: spacing.sm,
+  },
+
+  // Thank you message
+  thankYou: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.md,
+    alignItems: "center",
+  },
+  thankYouText: {
+    fontSize: fontSize.md,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.secondary,
+    fontStyle: "italic",
   },
 });
 
@@ -67,8 +167,8 @@ export interface TermsProps {
 export function Terms({ terms, label = "Terms & Conditions" }: TermsProps) {
   return (
     <View style={styles.section}>
-      <Text style={styles.label}>{label}</Text>
-      <Text style={styles.content}>{terms}</Text>
+      <Text style={styles.sectionLabel}>{label}</Text>
+      <Text style={styles.sectionContent}>{terms}</Text>
     </View>
   );
 }
@@ -90,8 +190,8 @@ export interface NotesProps {
 export function Notes({ notes, label = "Notes" }: NotesProps) {
   return (
     <View style={styles.section}>
-      <Text style={styles.label}>{label}</Text>
-      <Text style={styles.content}>{notes}</Text>
+      <Text style={styles.sectionLabel}>{label}</Text>
+      <Text style={styles.sectionContent}>{notes}</Text>
     </View>
   );
 }
@@ -99,37 +199,6 @@ export function Notes({ notes, label = "Notes" }: NotesProps) {
 // ============================================================================
 // PAYMENT DETAILS COMPONENT
 // ============================================================================
-
-const paymentStyles = StyleSheet.create({
-  container: {
-    marginBottom: spacing.lg,
-  },
-  row: {
-    flexDirection: "row",
-    marginBottom: spacing.xs,
-  },
-  label: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.secondary,
-    width: 100,
-  },
-  value: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.regular,
-    color: colors.text.primary,
-    flex: 1,
-  },
-  sectionLabel: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.secondary,
-    marginBottom: spacing.sm,
-  },
-});
 
 export interface PaymentDetailsProps {
   /** Bank name */
@@ -167,46 +236,46 @@ export function PaymentDetails({
   }
 
   return (
-    <View style={paymentStyles.container}>
-      <Text style={paymentStyles.sectionLabel}>{label}</Text>
+    <View style={styles.section}>
+      <Text style={styles.sectionLabel}>{label}</Text>
 
       {bankName && (
-        <View style={paymentStyles.row}>
-          <Text style={paymentStyles.label}>Bank:</Text>
-          <Text style={paymentStyles.value}>{bankName}</Text>
+        <View style={styles.paymentRow}>
+          <Text style={styles.paymentLabel}>Bank</Text>
+          <Text style={styles.paymentValue}>{bankName}</Text>
         </View>
       )}
 
       {accountName && (
-        <View style={paymentStyles.row}>
-          <Text style={paymentStyles.label}>Account Name:</Text>
-          <Text style={paymentStyles.value}>{accountName}</Text>
+        <View style={styles.paymentRow}>
+          <Text style={styles.paymentLabel}>Account Name</Text>
+          <Text style={styles.paymentValue}>{accountName}</Text>
         </View>
       )}
 
       {bsb && (
-        <View style={paymentStyles.row}>
-          <Text style={paymentStyles.label}>BSB:</Text>
-          <Text style={paymentStyles.value}>{bsb}</Text>
+        <View style={styles.paymentRow}>
+          <Text style={styles.paymentLabel}>BSB</Text>
+          <Text style={styles.paymentValue}>{bsb}</Text>
         </View>
       )}
 
       {accountNumber && (
-        <View style={paymentStyles.row}>
-          <Text style={paymentStyles.label}>Account No:</Text>
-          <Text style={paymentStyles.value}>{accountNumber}</Text>
+        <View style={styles.paymentRow}>
+          <Text style={styles.paymentLabel}>Account Number</Text>
+          <Text style={styles.paymentValue}>{accountNumber}</Text>
         </View>
       )}
 
       {swift && (
-        <View style={paymentStyles.row}>
-          <Text style={paymentStyles.label}>SWIFT:</Text>
-          <Text style={paymentStyles.value}>{swift}</Text>
+        <View style={styles.paymentRow}>
+          <Text style={styles.paymentLabel}>SWIFT</Text>
+          <Text style={styles.paymentValue}>{swift}</Text>
         </View>
       )}
 
       {paymentInstructions && (
-        <Text style={[styles.content, { marginTop: spacing.sm }]}>
+        <Text style={[styles.sectionContent, { marginTop: spacing.sm }]}>
           {paymentInstructions}
         </Text>
       )}
@@ -226,15 +295,44 @@ export function PaymentDetails({
  *   <PageNumber />
  * </Page>
  */
-export function PageNumber() {
+export interface PageNumberProps {
+  /** Optional document number to show on every page */
+  documentNumber?: string;
+}
+
+export function PageNumber({ documentNumber }: PageNumberProps = {}) {
   return (
-    <Text
-      style={styles.pageNumber}
-      render={({ pageNumber, totalPages }) =>
-        `Page ${pageNumber} of ${totalPages}`
-      }
-      fixed
-    />
+    <View style={styles.pageNumber}>
+      <Text
+        style={styles.pageNumberText}
+        render={({ pageNumber, totalPages }) =>
+          documentNumber
+            ? `${documentNumber} · Page ${pageNumber} of ${totalPages}`
+            : `Page ${pageNumber} of ${totalPages}`
+        }
+        fixed
+      />
+    </View>
+  );
+}
+
+// ============================================================================
+// THANK YOU COMPONENT
+// ============================================================================
+
+export interface ThankYouProps {
+  /** Custom message */
+  message?: string;
+}
+
+/**
+ * Thank you message for document footer
+ */
+export function ThankYou({ message = "Thank you for your business" }: ThankYouProps) {
+  return (
+    <View style={styles.thankYou}>
+      <Text style={styles.thankYouText}>{message}</Text>
+    </View>
   );
 }
 
@@ -251,20 +349,33 @@ export interface DocumentFooterProps {
   paymentDetails?: PaymentDetailsProps | null;
   /** Whether to show divider above footer */
   showDivider?: boolean;
+  /** Show thank you message */
+  showThankYou?: boolean;
+  /** Custom thank you message */
+  thankYouMessage?: string;
+  /** QR code element */
+  qrCode?: React.ReactNode;
+  /** QR code label */
+  qrCodeLabel?: string;
 }
 
 /**
- * Complete document footer with terms, notes, and payment details
+ * Complete document footer with terms, notes, payment details
  */
 export function DocumentFooter({
   terms,
   notes,
   paymentDetails,
   showDivider = true,
+  showThankYou = false,
+  thankYouMessage,
+  qrCode,
+  qrCodeLabel = "Scan to view online",
 }: DocumentFooterProps) {
   const hasContent = terms || notes || paymentDetails;
+  const hasTwoColumn = paymentDetails && notes;
 
-  if (!hasContent) {
+  if (!hasContent && !showThankYou && !qrCode) {
     return null;
   }
 
@@ -272,16 +383,40 @@ export function DocumentFooter({
     <View style={styles.container} wrap={false}>
       {showDivider && <View style={styles.divider} />}
 
-      <View style={{ flexDirection: "row" }}>
-        <View style={{ flex: 1, marginRight: spacing.lg }}>
+      {/* Two-column layout for payment details and notes */}
+      {hasTwoColumn ? (
+        <View style={styles.twoColumn}>
+          <View style={[styles.column, styles.columnLeft]}>
+            {paymentDetails && <PaymentDetails {...paymentDetails} />}
+          </View>
+          <View style={[styles.column, styles.columnRight]}>
+            {notes && <Notes notes={notes} />}
+          </View>
+        </View>
+      ) : (
+        <>
           {paymentDetails && <PaymentDetails {...paymentDetails} />}
-        </View>
-        <View style={{ flex: 1 }}>
           {notes && <Notes notes={notes} />}
-        </View>
-      </View>
+        </>
+      )}
 
-      {terms && <Terms terms={terms} />}
+      {/* Terms (full width) */}
+      {terms && (
+        <View style={styles.termsSection}>
+          <Text style={styles.termsText}>{terms}</Text>
+        </View>
+      )}
+
+      {/* QR Code */}
+      {qrCode && (
+        <View style={styles.qrSection}>
+          {qrCode}
+          <Text style={styles.qrLabel}>{qrCodeLabel}</Text>
+        </View>
+      )}
+
+      {/* Thank You */}
+      {showThankYou && <ThankYou message={thankYouMessage} />}
     </View>
   );
 }

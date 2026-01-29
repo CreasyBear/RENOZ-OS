@@ -1,3 +1,5 @@
+'use server'
+
 import { createServerSupabase } from '@/lib/supabase/server';
 import { type EmailOtpType } from '@supabase/supabase-js';
 import { redirect } from '@tanstack/react-router';

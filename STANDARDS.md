@@ -2,7 +2,7 @@
 
 This document establishes authoritative patterns for the Renoz v3 codebase. It is the single source of truth for barrel exports, component architecture, hook patterns, and file/folder structure.
 
-**Last updated:** 2026-01-24
+**Last updated:** 2026-01-27
 
 **Related:**
 - [CLAUDE.md](./CLAUDE.md) - Project overview and commands
@@ -16,8 +16,9 @@ This document establishes authoritative patterns for the Renoz v3 codebase. It i
 2. [Component Architecture](#2-component-architecture)
 3. [Hook Patterns](#3-hook-patterns)
 4. [File/Folder Structure](#4-filefolder-structure)
-5. [Compliance Checklist](#compliance-checklist)
-6. [Audit Commands](#audit-commands)
+5. [Server-Only Code Patterns](#5-server-only-code-patterns)
+6. [Compliance Checklist](#compliance-checklist)
+7. [Audit Commands](#audit-commands)
 
 ---
 
@@ -487,6 +488,7 @@ For each domain, verify:
 - [ ] **Components follow container/presenter split** with `@source` JSDoc
 - [ ] **Routes don't call `useQuery()` directly** - use container components
 - [ ] **Query keys added** to `src/lib/query-keys.ts` for new entities
+- [ ] **Server-only code marked** with `'use server'` when using Node.js APIs (Buffer, crypto, postgres)
 
 ---
 
@@ -512,6 +514,9 @@ find src/lib/schemas -type d -mindepth 1 -maxdepth 1 -exec sh -c 'test ! -f "$1/
 
 # List component domain directories missing barrel exports
 find src/components/domain -type d -mindepth 1 -maxdepth 1 -exec sh -c 'test ! -f "$1/index.ts" && echo "$1"' _ {} \;
+
+# Find server-only code violations (Buffer without 'use server')
+bun run scripts/diagnose-buffer-issues.ts
 ```
 
 ### Interpreting Results
@@ -531,6 +536,254 @@ When cleaning up violations:
 
 ---
 
+## 5. Server-Only Code Patterns
+
+### The Problem
+
+Node.js-specific APIs (`Buffer`, `crypto`, `fs`, etc.) and server-only packages (`postgres`, `drizzle-orm`) cannot run in the browser. If they leak into the client bundle, you'll see errors like:
+
+```
+ReferenceError: Buffer is not defined
+```
+
+### The Solution
+
+Use `'use server'` directives combined with proper build configuration to ensure server-only code never reaches the client.
+
+### Pattern: Server-Only Directives
+
+**CRITICAL:** Any file that uses Node.js APIs or imports server-only packages MUST have `'use server'` at the top.
+
+**Do this:**
+```typescript
+'use server'
+
+/**
+ * OAuth Token Encryption
+ *
+ * ⚠️ SERVER-ONLY: Uses Node.js crypto and Buffer APIs.
+ */
+import crypto from 'node:crypto';
+
+function encryptToken(token: string): string {
+  // Uses Buffer - OK because of 'use server'
+  const buffer = Buffer.from(token, 'utf-8');
+  // ... encryption logic
+}
+```
+
+**Not this:**
+```typescript
+// ❌ Missing 'use server' - will crash browser
+import crypto from 'node:crypto';
+
+function encryptToken(token: string): string {
+  const buffer = Buffer.from(token, 'utf-8'); // Browser error!
+  // ... encryption logic
+}
+```
+
+### When to Use `'use server'`
+
+Required for files that:
+- Import `postgres` or `drizzle-orm`
+- Import Node.js built-ins (`node:crypto`, `node:fs`, etc.)
+- Use `Buffer`, `process`, or other Node.js globals
+- Access `process.env` server secrets
+- Use `createServerFn` from TanStack Start
+
+**Examples:**
+- `src/lib/db/index.ts` (postgres client)
+- `src/lib/storage/supabase-storage.ts` (server-side storage)
+- `src/server/functions/**/*.ts` (all server functions)
+- `src/lib/oauth/*.ts` (OAuth with crypto)
+- `src/trigger/jobs/*.ts` (background jobs)
+
+### Pattern: Safe Shared Types
+
+Keep Zod schemas and types in separate files that DON'T use `'use server'` so they can be imported by both client and server.
+
+**Do this:**
+```typescript
+// src/lib/schemas/customers.ts (NO 'use server')
+import { z } from 'zod';
+
+export const customerSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+});
+
+export type Customer = z.infer<typeof customerSchema>;
+```
+
+```typescript
+// src/server/functions/customers.ts (WITH 'use server')
+'use server'
+
+import { db } from '@/lib/db';
+import { customerSchema } from '@/lib/schemas/customers'; // Safe to import
+```
+
+```typescript
+// src/components/customers/customer-form.tsx (Client component)
+import { customerSchema } from '@/lib/schemas/customers'; // Also safe
+```
+
+### Build Configuration
+
+The `'use server'` directive prevents **execution** but **NOT bundling**. Server-only modules may still be included in the client bundle, causing runtime errors when they use Node.js APIs.
+
+The Vite config includes a plugin that **replaces** server-only modules with stubs in the client bundle:
+
+```typescript
+// vite.config.ts
+function serverOnlyModulesStub() {
+  const stubs: Record<string, string> = {
+    postgres: `
+      function throwServerOnly() { 
+        throw new Error('[postgres] Server-only module'); 
+      }
+      export default function postgres() { throwServerOnly(); }
+      export const PostgresError = class extends Error {};
+    `,
+    '@trigger.dev/sdk': `/* stub */`,
+    'node:stream': `/* stub */`,
+    'node:async_hooks': `/* stub */`,
+  }
+
+  return {
+    name: 'server-only-modules-stub',
+    enforce: 'pre',
+    resolveId(id: string, _importer: string | undefined, options: { ssr?: boolean }) {
+      if (options?.ssr) return null  // Don't stub on server
+      if (stubs[id]) return `\0stub:${id}`
+      for (const key of Object.keys(stubs)) {
+        if (id.startsWith(key)) return `\0stub:${key}`
+      }
+      return null
+    },
+    load(id: string) {
+      if (id.startsWith('\0stub:')) {
+        const moduleId = id.slice('\0stub:'.length)
+        return stubs[moduleId]
+      }
+      return null
+    }
+  }
+}
+
+export default defineConfig({
+  plugins: [serverOnlyModulesStub(), /* ... */],
+  ssr: {
+    external: ['postgres', '@trigger.dev/sdk'],
+  },
+})
+```
+
+This two-layer defense:
+1. **`'use server'`** - Prevents accidental execution on client (dev-time safety)
+2. **Stub plugin** - Prevents Node.js code from being bundled (build-time safety)
+
+### Diagnostic Tool
+
+Run the diagnostic script to find potential issues:
+
+```bash
+bun run scripts/diagnose-buffer-issues.ts
+```
+
+This will report:
+- Files using `Buffer` without `'use server'`
+- Files importing `postgres` without `'use server'`
+- Client components importing server modules
+
+### Debugging Buffer Errors
+
+If you see `Buffer is not defined` in the browser:
+
+1. **Check the stack trace** - which file is causing the issue?
+2. **Add `'use server'`** to the top of that file
+3. **If it's a shared file**, split it:
+   - Move types/schemas to a shared file (no directive)
+   - Move server logic to a server file (with `'use server'`)
+4. **Clear caches** and restart dev server:
+   ```bash
+   rm -rf node_modules/.vite .tanstack
+   bun run dev
+   ```
+
+### Pattern: Proper File Location
+
+`'use server'` is a band-aid, not a solution. Files that use the database belong in `src/server/functions/`, not `src/lib/`.
+
+**❌ Wrong location (lib files shouldn't use db):**
+```typescript
+// src/lib/jobs/oauth-bridge.ts
+'use server'  // ❌ Band-aid - file is in wrong location
+
+import { db } from '@/lib/db';  // ❌ Lib files shouldn't import db
+
+export async function syncJobToCalendar(...) {
+  // Uses db directly
+}
+```
+
+**✅ Correct location:**
+```typescript
+// src/server/functions/jobs/oauth-bridge.ts
+import { createServerFn } from '@tanstack/react-start';
+import { db } from '@/lib/db';  // ✅ OK - this is a server function
+
+export const syncJobToCalendar = createServerFn({ method: 'POST' })
+  .handler(async ({ data }) => {
+    // Uses db via server function
+  });
+```
+
+**Architecture Rule:**
+- `src/lib/` - Shared utilities, types, schemas (NO database)
+- `src/server/functions/` - Server functions with database access
+- `src/hooks/` - Client hooks that call server functions via `useServerFn`
+- `src/routes/` - Container components that use hooks
+
+### Common Mistakes
+
+**❌ Importing db in a hook:**
+```typescript
+// src/hooks/customers/use-customers.ts
+import { db } from '@/lib/db'; // ❌ NEVER DO THIS
+
+export function useCustomers() {
+  return useQuery({
+    queryFn: () => db.query(...), // ❌ This runs in browser!
+  });
+}
+```
+
+**✅ Importing server functions only:**
+```typescript
+// src/hooks/customers/use-customers.ts
+import { getCustomers } from '@/server/functions/customers'; // ✅ OK
+
+export function useCustomers() {
+  return useQuery({
+    queryFn: () => getCustomers({ data: filters }), // ✅ Server function
+  });
+}
+```
+
+---
+
 ## Changelog
 
+- **2026-01-27:** 
+  - Added Server-Only Code Patterns section
+  - Documented proper file location pattern (lib vs server/functions)
+  - Moved db-using files from `src/lib/` to `src/server/functions/`
+    - `src/lib/jobs/oauth-bridge.ts` → `src/server/functions/jobs/oauth-bridge.ts`
+    - `src/lib/ai/tools/*.ts` → `src/server/functions/ai/tools/*.ts`
+    - `src/lib/ai/approvals/*.ts` → `src/server/functions/ai/approvals/*.ts`
+    - `src/lib/ai/context/builder.ts` → `src/server/functions/ai/context/builder.ts`
+    - `src/lib/ai/memory/drizzle-provider.ts` → `src/server/functions/ai/memory/drizzle-provider.ts`
+    - `src/lib/ai/utils/*.ts` → `src/server/functions/ai/utils/*.ts`
 - **2026-01-24:** Initial version created

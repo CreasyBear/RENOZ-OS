@@ -9,7 +9,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 import { CampaignDetailPanel } from "@/components/domain/communications";
-import { RouteErrorFallback } from "@/components/layout";
+import { RouteErrorFallback, PageLayout } from "@/components/layout";
 import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
 
 // ============================================================================
@@ -22,9 +22,11 @@ export const Route = createFileRoute("/_authenticated/communications/campaigns/$
     <RouteErrorFallback error={error} parentRoute="/communications/campaigns" />
   ),
   pendingComponent: () => (
-    <div className="container py-6 max-w-4xl">
-      <CommunicationsListSkeleton />
-    </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Content>
+        <CommunicationsListSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
   ),
 });
 
@@ -47,12 +49,14 @@ function CampaignDetailContainer() {
   // RENDER
   // ============================================================================
   return (
-    <div className="container py-6 max-w-4xl">
-      <CampaignDetailPanel
-        campaignId={campaignId}
-        onBack={handleBack}
-      />
-    </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Content>
+        <CampaignDetailPanel
+          campaignId={campaignId}
+          onBack={handleBack}
+        />
+      </PageLayout.Content>
+    </PageLayout>
   );
 }
 

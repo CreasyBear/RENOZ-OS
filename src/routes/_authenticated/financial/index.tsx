@@ -42,7 +42,7 @@ export const Route = createFileRoute('/_authenticated/financial/')({
     <RouteErrorFallback error={error} parentRoute="/" />
   ),
   pendingComponent: () => (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Financial"
         description="Accounts receivable, revenue recognition, and payment management"
@@ -146,7 +146,7 @@ function FinancialDashboardPage() {
   const error = metricsError || revenueError || customersError || outstandingError;
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Financial"
         description="Accounts receivable, revenue recognition, and payment management"

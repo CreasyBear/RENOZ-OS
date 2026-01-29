@@ -107,7 +107,7 @@ const invitationSearchSchema = z.object({
   status: z.enum(['pending', 'accepted', 'expired', 'cancelled', 'all']).default('all'),
 });
 
-import { RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { AdminTableSkeleton } from '@/components/skeletons/admin';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -131,9 +131,11 @@ export const Route = createFileRoute('/_authenticated/admin/invitations/' as any
     <RouteErrorFallback error={error} parentRoute="/admin" />
   ),
   pendingComponent: () => (
-    <div className="p-6">
-      <AdminTableSkeleton />
-    </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Content>
+        <AdminTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
   ),
 });
 
@@ -267,7 +269,8 @@ function InvitationsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <PageLayout variant="full-width">
+      <PageLayout.Content className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -527,6 +530,7 @@ function InvitationsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </PageLayout.Content>
+    </PageLayout>
   );
 }

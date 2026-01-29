@@ -4,9 +4,28 @@
  * Exports all pipeline-related UI components.
  */
 
+// --- Container Components ---
+export {
+  PipelineKanbanContainer,
+  type PipelineKanbanContainerProps,
+} from './pipeline-kanban-container';
+
 // --- Core Components ---
 export { PipelineBoard, type PipelineBoardProps } from './pipeline-board';
 export { PipelineColumn, type PipelineColumnProps } from './pipeline-column';
+export {
+  PipelineColumnVirtualized,
+  type PipelineColumnVirtualizedProps,
+} from './pipeline-column-virtualized';
+export {
+  PipelineColumnSummary,
+  type PipelineColumnSummaryProps,
+} from './pipeline-column-summary';
+export {
+  PipelineListView,
+  type PipelineListViewProps,
+} from './pipeline-list-view';
+export type { PipelineViewMode } from './pipeline-kanban-container';
 export { PipelineMetrics, type PipelineMetricsProps } from './pipeline-metrics';
 export {
   PipelineFilters,

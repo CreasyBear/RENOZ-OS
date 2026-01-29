@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Generate Invoice PDF Task (Trigger.dev v3)
  *

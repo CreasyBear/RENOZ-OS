@@ -1,80 +1,59 @@
 /**
  * Jobs Domain Components
  *
- * Components for job/project management including task management,
- * time tracking, and commissioning checklists.
+ * This domain contains project-related components after SPRINT-03/04 restructuring.
+ * Legacy job components have been removed in SPRINT-04.
  *
- * @see _Initiation/_prd/2-domains/jobs/jobs.prd.json
+ * Current Structure:
+ * - ✅ Projects: src/components/domain/jobs/projects/
+ * - ✅ Schedule: src/components/domain/jobs/schedule/
+ * - ✅ Technician: src/components/domain/jobs/technician/
+ * - ✅ Site Visits: src/components/domain/jobs/site-visits/
+ * - ✅ Installers: src/components/domain/jobs/installers/
+ * - 🔄 Templates: Will be migrated to projects in SPRINT-05
+ * - 🔄 Time: Will be consolidated in SPRINT-05
+ *
+ * SPRINT-04: Legacy cleanup complete (kanban, materials, tasks, calendar, timeline, bulk removed)
  */
 
-// --- Core Components ---
-export { JobsFilters, type JobsFiltersProps, type JobsFiltersState } from './jobs-filters';
-export { JobsErrorBoundary } from './jobs-error-boundary';
-export { JobsFilterBar } from './jobs-filter-bar';
+// --- Active New Model (KEEP) ---
+// These are properly migrated and active
+
+// Projects - Everything now exported from projects domain
+export * from './projects';
+
+// Schedule - Cross-project scheduling (active)
 export {
-  UnifiedJobsProvider,
-  useUnifiedJobs,
-  useUnifiedJobData,
-  useCrossViewJobSync,
-  useJobViewPerformance,
-} from './jobs-unified-context';
-export type {
-  JobViewType,
-  UnifiedJobFilters,
-  UnifiedJobViewState,
-  UnifiedJobAction,
-} from './jobs-unified-context';
-export { JobsViewProvider, useJobsView, useJobsViewSync } from './jobs-view-context';
-export type { JobsViewType, JobsViewFilters, JobsViewState } from './jobs-view-context';
-export { JobDocumentsTab } from './job-documents-tab';
+  ScheduleCalendarContainer,
+  ScheduleTimelineContainer,
+  ScheduleDashboard,
+  type ScheduleVisit,
+  type ScheduleDay,
+} from './schedule';
 
-// --- Kanban ---
-export * from './kanban';
-export { useJobsCardInlineEdit } from './kanban/jobs-card-inline-edit';
+// Technician - Field technician view (active)
+export { TechnicianDashboard } from './technician';
 
-// --- Tasks ---
-export * from './tasks';
-export { TaskCardSkeleton } from './tasks/task-list-skeleton';
+// Site Visits - Project site visits (active)
+export { SiteVisitList, CompactSiteVisitList, SiteVisitDetail } from './site-visits';
 
-// --- Materials ---
-export * from './materials';
-export { MaterialRowSkeleton, MaterialCardSkeleton } from './materials/materials-table-skeleton';
-export type { Product as MaterialProduct } from './materials/add-material-dialog';
+// Installer Management (active)
+export {
+  InstallerSuggestionPanel,
+  InstallerAvailabilityCalendar,
+  type InstallerSuggestionPanelProps,
+} from './installers';
 
-// --- Time Tracking ---
-export * from './time';
+// --- LEGACY SUPPORT (To be removed in SPRINT-05) ---
+// Templates and time tracking are temporarily kept for settings/job-templates route
+// These will be migrated to projects in SPRINT-05
 
-// --- Templates & Checklists ---
-export * from './templates';
+export { JobTemplateList } from './templates/job-template-list';
+export { JobTemplateFormDialog } from './templates/job-template-form-dialog';
 
-// --- Bulk Operations ---
-export * from './bulk';
-
-// --- Calendar (existing subdirectory) ---
-export * from './calendar';
-
-// --- Timeline (existing subdirectory) ---
-export * from './timeline';
-
-// Type re-exports
-export type { TaskCardProps } from './tasks/task-card';
-export type { TaskFormDialogProps } from './tasks/task-form-dialog';
-export type { SortableTaskListProps } from './tasks/sortable-task-list';
-export type { JobTasksTabProps } from './tasks/job-tasks-tab';
-export type { JobsBoardProps } from './kanban/jobs-board';
-export type { JobsColumnProps } from './kanban/jobs-column';
-export type { JobsCardProps } from './kanban/jobs-card';
-export type { JobsCardInlineEditProps } from './kanban/jobs-card-inline-edit';
-export type { JobsCardContextMenuProps } from './kanban/jobs-card-context-menu';
-export type { JobsBulkActionsProps } from './bulk/jobs-bulk-actions';
-export type { JobsTaskCreateDialogProps } from './tasks/jobs-task-create-dialog';
-export type { JobsBulkCreateDialogProps } from './bulk/jobs-bulk-create-dialog';
-export type { MaterialCardProps } from './materials/material-card';
-export type { AddMaterialDialogProps } from './materials/add-material-dialog';
-export type { JobMaterialsTabProps } from './materials/job-materials-tab';
-export type { ActiveTimerProps } from './time/active-timer';
-export type { TimeEntryDialogProps } from './time/time-entry-dialog';
-export type { JobTimeTabProps } from './time/job-time-tab';
-export type { ChecklistItemCardProps } from './templates/checklist-item-card';
-export type { ApplyChecklistDialogProps } from './templates/apply-checklist-dialog';
-export type { JobChecklistTabProps } from './templates/job-checklist-tab';
+// ============================================================================
+// SPRINT-04 STATUS: Legacy directories removed ✅
+// SPRINT-05 TODO:
+// - Migrate templates/ to projects (project templates)
+// - Migrate time/ to projects (time tracking consolidation)
+// ============================================================================

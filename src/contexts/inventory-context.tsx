@@ -54,6 +54,8 @@ export interface StockReservation {
 export interface InventoryMetrics {
   totalValue: number;
   totalItems: number;
+  totalSkus: number;
+  totalUnits: number;
   lowStockCount: number;
   outOfStockCount: number;
   alertsCount: number;
@@ -159,6 +161,8 @@ export function InventoryProvider({
         setMetrics({
           totalValue: data.metrics.totalValue ?? 0,
           totalItems: data.metrics.totalItems ?? 0,
+          totalSkus: data.metrics.totalSkus ?? 0,
+          totalUnits: data.metrics.totalUnits ?? 0,
           lowStockCount: data.metrics.lowStockCount ?? 0,
           outOfStockCount: data.metrics.outOfStockCount ?? 0,
           alertsCount: data.alerts?.length ?? 0,

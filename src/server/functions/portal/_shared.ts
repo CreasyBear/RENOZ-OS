@@ -1,5 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
+'use server'
+
 import { portalIdentities } from 'drizzle/schema';
 import { getServerUser } from '@/lib/supabase/server';
 import { getRequest } from '@tanstack/react-start/server';

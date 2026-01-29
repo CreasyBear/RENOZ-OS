@@ -87,6 +87,7 @@ export const updateTaskSchema = z.object({
     .nullable(), // YYYY-MM-DD format
   priority: jobTaskPrioritySchema.optional(),
   status: jobTaskStatusSchema.optional(),
+  estimatedHours: z.number().min(0).optional().nullable(),
 });
 
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;

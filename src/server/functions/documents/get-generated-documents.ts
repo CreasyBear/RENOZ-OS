@@ -119,6 +119,7 @@ export const getGeneratedDocuments = createServerFn({ method: 'GET' })
     const results = await db
       .select({
         id: generatedDocuments.id,
+        organizationId: generatedDocuments.organizationId,
         documentType: generatedDocuments.documentType,
         entityType: generatedDocuments.entityType,
         entityId: generatedDocuments.entityId,

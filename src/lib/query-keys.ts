@@ -337,6 +337,51 @@ export interface ScheduledReportsFilters {
 }
 
 // ============================================================================
+// REPORTS FILTER TYPES
+// ============================================================================
+
+export interface ReportsScheduledReportsFilters {
+  search?: string
+  isActive?: boolean
+  frequency?: 'daily' | 'weekly' | 'biweekly' | 'monthly' | 'quarterly'
+  format?: 'pdf' | 'csv' | 'xlsx' | 'html'
+  page?: number
+  pageSize?: number
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+}
+
+export interface ReportsTargetsFilters {
+  metric?: string
+  period?: string
+  startDate?: string
+  endDate?: string
+  search?: string
+  page?: number
+  pageSize?: number
+  sortBy?: string
+  sortOrder?: 'asc' | 'desc'
+}
+
+export interface ReportsTargetProgressFilters {
+  metric?: string
+  period?: string
+}
+
+export interface ReportsCustomReportsFilters {
+  isShared?: boolean
+  search?: string
+  page?: number
+  pageSize?: number
+}
+
+export interface ReportsReportFavoritesFilters {
+  reportType?: 'scheduled' | 'custom' | 'dashboard'
+  page?: number
+  pageSize?: number
+}
+
+// ============================================================================
 // QUERY KEYS FACTORY
 // ============================================================================
 
@@ -361,6 +406,22 @@ export const queryKeys = {
   currentUser: {
     all: ['currentUser'] as const,
     detail: () => [...queryKeys.currentUser.all, 'detail'] as const,
+  },
+
+  // -------------------------------------------------------------------------
+  // USER PROFILE (avatar, password, MFA, preferences)
+  // -------------------------------------------------------------------------
+  user: {
+    all: ['user'] as const,
+    profile: () => [...queryKeys.user.all, 'profile'] as const,
+    mfa: {
+      all: () => [...queryKeys.user.all, 'mfa'] as const,
+      status: () => [...queryKeys.user.mfa.all(), 'status'] as const,
+      factors: () => [...queryKeys.user.mfa.all(), 'factors'] as const,
+    },
+    preferences: (category?: string) =>
+      [...queryKeys.user.all, 'preferences', category ?? 'all'] as const,
+    notifications: () => [...queryKeys.user.all, 'notifications'] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -600,6 +661,11 @@ export const queryKeys = {
       [...queryKeys.inventory.stockCountsAll(), 'items', countId] as const,
     stockCountVariances: (countId: string) =>
       [...queryKeys.inventory.stockCountsAll(), 'variances', countId] as const,
+
+    // Quality
+    qualityAll: () => [...queryKeys.inventory.all, 'quality'] as const,
+    qualityInspections: (inventoryId: string) =>
+      [...queryKeys.inventory.qualityAll(), 'inspections', inventoryId] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -615,6 +681,8 @@ export const queryKeys = {
     download: (id: string) => [...queryKeys.files.all, 'download', id] as const,
     downloads: (ids: string[]) =>
       [...queryKeys.files.all, 'downloads', ids] as const,
+    transform: (id: string, options: { width?: number; height?: number; resize?: string; format?: string; quality?: number }) =>
+      [...queryKeys.files.all, 'transform', id, options] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -671,6 +739,7 @@ export const queryKeys = {
       lists: () => [...queryKeys.users.invitations.all(), 'list'] as const,
       list: (filters?: { page?: number; pageSize?: number; status?: string }) =>
         [...queryKeys.users.invitations.lists(), filters ?? {}] as const,
+      byToken: (token: string) => [...queryKeys.users.invitations.all(), 'byToken', token] as const,
     },
   },
 
@@ -681,6 +750,7 @@ export const queryKeys = {
     all: ['organizations'] as const,
     current: () => [...queryKeys.organizations.all, 'current'] as const,
     settings: () => [...queryKeys.organizations.all, 'settings'] as const,
+    branding: () => [...queryKeys.organizations.all, 'branding'] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -1176,6 +1246,17 @@ export const queryKeys = {
   },
 
   // -------------------------------------------------------------------------
+  // DOCUMENTS (Generated PDFs, certificates, etc.)
+  // -------------------------------------------------------------------------
+  documents: {
+    all: ['documents'] as const,
+    history: (entityType: string, entityId: string, documentType?: string) =>
+      [...queryKeys.documents.all, 'history', entityType, entityId, documentType ?? ''] as const,
+    counts: (entityType: string, entityId: string) =>
+      [...queryKeys.documents.all, 'counts', entityType, entityId] as const,
+  },
+
+  // -------------------------------------------------------------------------
   // ACTIVITIES
   // -------------------------------------------------------------------------
   activities: {
@@ -1293,6 +1374,105 @@ export const queryKeys = {
       [...queryKeys.jobAssignments.all, 'byUser', userId] as const,
     kanbanSelector: (filters?: Record<string, unknown>) =>
       [...queryKeys.jobAssignments.all, 'kanbanSelector', filters ?? {}] as const,
+  },
+
+  // SPRINT-03: New Projects Domain
+  projects: {
+    all: ['projects'] as const,
+    lists: () => [...queryKeys.projects.all, 'list'] as const,
+    list: (filters?: Record<string, unknown>) =>
+      [...queryKeys.projects.lists(), filters ?? {}] as const,
+    details: () => [...queryKeys.projects.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.projects.details(), id] as const,
+    byCustomer: (customerId: string) =>
+      [...queryKeys.projects.all, 'byCustomer', customerId] as const,
+    byOrder: (orderId: string) =>
+      [...queryKeys.projects.all, 'byOrder', orderId] as const,
+    members: (projectId: string) =>
+      [...queryKeys.projects.all, 'members', projectId] as const,
+    bom: (projectId: string) =>
+      [...queryKeys.projects.all, 'bom', projectId] as const,
+  },
+
+  // SPRINT-03: Site Visits
+  siteVisits: {
+    all: ['siteVisits'] as const,
+    lists: () => [...queryKeys.siteVisits.all, 'list'] as const,
+    list: (filters?: Record<string, unknown>) =>
+      [...queryKeys.siteVisits.lists(), filters ?? {}] as const,
+    details: () => [...queryKeys.siteVisits.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.siteVisits.details(), id] as const,
+    byProject: (projectId: string) =>
+      [...queryKeys.siteVisits.all, 'byProject', projectId] as const,
+    byInstaller: (installerId: string) =>
+      [...queryKeys.siteVisits.all, 'byInstaller', installerId] as const,
+    schedule: (dateFrom: string, dateTo: string) =>
+      [...queryKeys.siteVisits.all, 'schedule', dateFrom, dateTo] as const,
+    myVisits: () => [...queryKeys.siteVisits.all, 'myVisits'] as const,
+  },
+
+  // SPRINT-03: Installer Management
+  installers: {
+    all: ['installers'] as const,
+    lists: () => [...queryKeys.installers.all, 'list'] as const,
+    list: (filters?: Record<string, unknown>) =>
+      [...queryKeys.installers.lists(), filters ?? {}] as const,
+    details: () => [...queryKeys.installers.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.installers.details(), id] as const,
+    availability: (installerId: string, dateFrom?: string, dateTo?: string) =>
+      [...queryKeys.installers.all, 'availability', installerId, dateFrom, dateTo] as const,
+    workload: (installerId: string) =>
+      [...queryKeys.installers.all, 'workload', installerId] as const,
+    suggestions: (postcode: string, filters?: Record<string, unknown>) =>
+      [...queryKeys.installers.all, 'suggestions', postcode, filters ?? {}] as const,
+    certifications: (installerId: string) =>
+      [...queryKeys.installers.all, 'certifications', installerId] as const,
+    skills: (installerId: string) =>
+      [...queryKeys.installers.all, 'skills', installerId] as const,
+    territories: (installerId: string) =>
+      [...queryKeys.installers.all, 'territories', installerId] as const,
+    blockouts: (installerId: string) =>
+      [...queryKeys.installers.all, 'blockouts', installerId] as const,
+  },
+
+  // SPRINT-03: Project Workstreams
+  projectWorkstreams: {
+    all: ['projectWorkstreams'] as const,
+    byProject: (projectId: string) =>
+      [...queryKeys.projectWorkstreams.all, 'byProject', projectId] as const,
+    detail: (id: string) =>
+      [...queryKeys.projectWorkstreams.all, 'detail', id] as const,
+  },
+
+  // SPRINT-03: Project Notes
+  projectNotes: {
+    all: ['projectNotes'] as const,
+    byProject: (projectId: string) =>
+      [...queryKeys.projectNotes.all, 'byProject', projectId] as const,
+    detail: (id: string) =>
+      [...queryKeys.projectNotes.all, 'detail', id] as const,
+    stats: (projectId: string) =>
+      [...queryKeys.projectNotes.all, 'stats', projectId] as const,
+  },
+
+  // SPRINT-03: Project Files
+  projectFiles: {
+    all: ['projectFiles'] as const,
+    byProject: (projectId: string) =>
+      [...queryKeys.projectFiles.all, 'byProject', projectId] as const,
+    detail: (id: string) =>
+      [...queryKeys.projectFiles.all, 'detail', id] as const,
+    stats: (projectId: string) =>
+      [...queryKeys.projectFiles.all, 'stats', projectId] as const,
+  },
+
+  // SPRINT-03: Project Tasks
+  projectTasks: {
+    all: ['projectTasks'] as const,
+    byProject: (projectId: string) =>
+      [...queryKeys.projectTasks.all, 'byProject', projectId] as const,
+    detail: (id: string) =>
+      [...queryKeys.projectTasks.all, 'detail', id] as const,
   },
 
   jobDocuments: {
@@ -1421,9 +1601,23 @@ export const queryKeys = {
       [...queryKeys.customerAnalytics.all, 'healthDistribution'] as const,
     lifecycleStages: () =>
       [...queryKeys.customerAnalytics.all, 'lifecycleStages'] as const,
+    lifecycleCohorts: (filters?: Record<string, unknown>) =>
+      [...queryKeys.customerAnalytics.all, 'lifecycleCohorts', filters ?? {}] as const,
+    churnMetrics: (filters?: Record<string, unknown>) =>
+      [...queryKeys.customerAnalytics.all, 'churnMetrics', filters ?? {}] as const,
+    conversionFunnel: (filters?: Record<string, unknown>) =>
+      [...queryKeys.customerAnalytics.all, 'conversionFunnel', filters ?? {}] as const,
+    acquisitionMetrics: (filters?: Record<string, unknown>) =>
+      [...queryKeys.customerAnalytics.all, 'acquisitionMetrics', filters ?? {}] as const,
+    quickStats: (filters?: Record<string, unknown>) =>
+      [...queryKeys.customerAnalytics.all, 'quickStats', filters ?? {}] as const,
     topCustomers: (filters?: Record<string, unknown>) =>
       [...queryKeys.customerAnalytics.all, 'topCustomers', filters ?? {}] as const,
     valueTiers: () => [...queryKeys.customerAnalytics.all, 'valueTiers'] as const,
+    valueKpis: (filters?: Record<string, unknown>) =>
+      [...queryKeys.customerAnalytics.all, 'valueKpis', filters ?? {}] as const,
+    profitabilitySegments: (filters?: Record<string, unknown>) =>
+      [...queryKeys.customerAnalytics.all, 'profitabilitySegments', filters ?? {}] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -1449,6 +1643,51 @@ export const queryKeys = {
     // Procurement Reports
     procurementAnalytics: (dateRange?: Record<string, unknown>) =>
       [...queryKeys.reports.all, 'procurementAnalytics', dateRange ?? {}] as const,
+
+    // Scheduled Reports
+    scheduledReports: {
+      all: () => [...queryKeys.reports.all, 'scheduledReports'] as const,
+      lists: () => [...queryKeys.reports.scheduledReports.all(), 'list'] as const,
+      list: (filters?: ReportsScheduledReportsFilters) =>
+        [...queryKeys.reports.scheduledReports.lists(), filters ?? {}] as const,
+      details: () => [...queryKeys.reports.scheduledReports.all(), 'detail'] as const,
+      detail: (id: string) => [...queryKeys.reports.scheduledReports.details(), id] as const,
+      status: (id: string) => [...queryKeys.reports.scheduledReports.all(), 'status', id] as const,
+    },
+
+    // Targets
+    targets: {
+      all: () => [...queryKeys.reports.all, 'targets'] as const,
+      lists: () => [...queryKeys.reports.targets.all(), 'list'] as const,
+      list: (filters?: ReportsTargetsFilters) =>
+        [...queryKeys.reports.targets.lists(), filters ?? {}] as const,
+      details: () => [...queryKeys.reports.targets.all(), 'detail'] as const,
+      detail: (id: string) => [...queryKeys.reports.targets.details(), id] as const,
+      progress: (filters?: ReportsTargetProgressFilters) =>
+        [...queryKeys.reports.targets.all(), 'progress', filters ?? {}] as const,
+    },
+
+    // Custom Reports
+    customReports: {
+      all: () => [...queryKeys.reports.all, 'customReports'] as const,
+      lists: () => [...queryKeys.reports.customReports.all(), 'list'] as const,
+      list: (filters?: ReportsCustomReportsFilters) =>
+        [...queryKeys.reports.customReports.lists(), filters ?? {}] as const,
+      details: () => [...queryKeys.reports.customReports.all(), 'detail'] as const,
+      detail: (id: string) => [...queryKeys.reports.customReports.details(), id] as const,
+      results: (id: string, params?: Record<string, unknown>) =>
+        [...queryKeys.reports.customReports.all(), 'result', id, params ?? {}] as const,
+    },
+
+    // Report Favorites
+    reportFavorites: {
+      all: () => [...queryKeys.reports.all, 'reportFavorites'] as const,
+      lists: () => [...queryKeys.reports.reportFavorites.all(), 'list'] as const,
+      list: (filters?: ReportsReportFavoritesFilters) =>
+        [...queryKeys.reports.reportFavorites.lists(), filters ?? {}] as const,
+      details: () => [...queryKeys.reports.reportFavorites.all(), 'detail'] as const,
+      detail: (id: string) => [...queryKeys.reports.reportFavorites.details(), id] as const,
+    },
   },
 
   // -------------------------------------------------------------------------

@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Generate Work Order PDF Task (Trigger.dev v3)
  *

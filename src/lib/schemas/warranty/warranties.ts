@@ -52,6 +52,7 @@ export const createWarrantySchema = z.object({
   customerId: z.string().uuid(),
   productId: z.string().uuid(),
   orderId: z.string().uuid().optional(),
+  projectId: z.string().uuid().optional(),
   policyId: z.string().uuid(),
   serialNumber: z.string().min(1).max(255),
   installationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), // YYYY-MM-DD format
@@ -123,6 +124,7 @@ export const warrantyResponseSchema = z.object({
     sku: z.string(),
   }),
   orderId: z.string().uuid().nullable(),
+  projectId: z.string().uuid().nullable().optional(),
   policyId: z.string().uuid(),
   policy: z.object({
     id: z.string().uuid(),

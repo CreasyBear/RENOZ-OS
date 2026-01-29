@@ -8,7 +8,6 @@
  *
  * ARCHITECTURE: Presentational component - receives data via props from route.
  */
-import { useState } from 'react'
 import {
   DollarSign,
   TrendingUp,
@@ -58,11 +57,29 @@ interface TopCustomer {
   status?: string
 }
 
+interface ProfitabilitySegment {
+  name: string
+  customers: number
+  revenue: number
+  avgOrderValue: number
+}
+
 interface ValueAnalysisProps {
   /** Value tier distribution */
   tiers?: ValueTier[]
   /** Top customers by LTV */
   topCustomers?: TopCustomer[]
+  /** Revenue-based profitability segments */
+  profitabilitySegments?: ProfitabilitySegment[]
+  /** Value KPI summary */
+  valueKpis?: {
+    avgLifetimeValue: number
+    totalRevenue: number
+    avgOrderValue: number
+    ordersPerCustomer: number
+  }
+  timeRange?: '3m' | '6m' | '1y'
+  onTimeRangeChange?: (range: '3m' | '6m' | '1y') => void
   /** Loading state */
   isLoading?: boolean
   className?: string
@@ -301,7 +318,47 @@ function TopCustomers({ customers, isLoading }: TopCustomersProps) {
 // PROFITABILITY ANALYSIS (Static placeholder - needs cost data)
 // ============================================================================
 
-function ProfitabilityAnalysis() {
+function ProfitabilityAnalysis({ segments, isLoading }: { segments?: ProfitabilitySegment[]; isLoading?: boolean }) {
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Target className="h-5 w-5" />
+            Profitability Segments
+          </CardTitle>
+          <CardDescription>
+            Customer segments by revenue contribution
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {[1, 2, 3].map(i => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!segments?.length) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Target className="h-5 w-5" />
+            Profitability Segments
+          </CardTitle>
+          <CardDescription>
+            Customer segments by revenue contribution
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground text-center py-8">No profitability data available</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -310,14 +367,29 @@ function ProfitabilityAnalysis() {
           Profitability Segments
         </CardTitle>
         <CardDescription>
-          Customer segments by profit margin
+          Customer segments by revenue contribution
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="text-center py-8 text-muted-foreground">
-          <p>Profitability analysis requires cost tracking.</p>
-          <p className="text-sm mt-2">Coming soon after financial domain implementation.</p>
+        <div className="space-y-3">
+          {segments.map(segment => (
+            <div key={segment.name} className="flex items-center justify-between py-2 border-b last:border-0">
+              <div>
+                <p className="font-medium">{segment.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {segment.customers} customers • Avg order{' '}
+                  <FormatAmount amount={segment.avgOrderValue} cents={false} compact showCents={false} />
+                </p>
+              </div>
+              <p className="font-semibold">
+                <FormatAmount amount={segment.revenue} cents={false} compact showCents={false} />
+              </p>
+            </div>
+          ))}
         </div>
+        <p className="text-xs text-muted-foreground text-center mt-4">
+          Profitability is revenue-based until cost tracking is available.
+        </p>
       </CardContent>
     </Card>
   )
@@ -327,12 +399,28 @@ function ProfitabilityAnalysis() {
 // VALUE KPIs (Static placeholder)
 // ============================================================================
 
-function ValueKpis() {
+function ValueKpis({ data, isLoading }: { data?: ValueAnalysisProps['valueKpis']; isLoading?: boolean }) {
   const kpis = [
-    { label: 'Avg Lifetime Value', value: '-', icon: Wallet },
-    { label: 'Total Revenue', value: '-', icon: DollarSign },
-    { label: 'Avg Order Value', value: '-', icon: ShoppingCart },
-    { label: 'Orders per Customer', value: '-', icon: TrendingUp },
+    {
+      label: 'Avg Lifetime Value',
+      value: data ? <FormatAmount amount={data.avgLifetimeValue} cents={false} compact showCents={false} /> : '-',
+      icon: Wallet,
+    },
+    {
+      label: 'Total Revenue',
+      value: data ? <FormatAmount amount={data.totalRevenue} cents={false} compact showCents={false} /> : '-',
+      icon: DollarSign,
+    },
+    {
+      label: 'Avg Order Value',
+      value: data ? <FormatAmount amount={data.avgOrderValue} cents={false} compact showCents={false} /> : '-',
+      icon: ShoppingCart,
+    },
+    {
+      label: 'Orders per Customer',
+      value: data ? data.ordersPerCustomer.toFixed(1) : '-',
+      icon: TrendingUp,
+    },
   ]
 
   return (
@@ -345,7 +433,9 @@ function ValueKpis() {
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">{kpi.label}</p>
-                  <p className="text-2xl font-bold text-muted-foreground">{kpi.value}</p>
+                  <p className="text-2xl font-bold text-muted-foreground">
+                    {isLoading ? '-' : kpi.value}
+                  </p>
                 </div>
                 <div className="rounded-full bg-muted p-3">
                   <Icon className="h-5 w-5 text-muted-foreground" />
@@ -366,10 +456,14 @@ function ValueKpis() {
 export function ValueAnalysis({
   tiers,
   topCustomers,
+  profitabilitySegments,
+  valueKpis,
+  timeRange = '6m',
+  onTimeRangeChange,
   isLoading = false,
   className,
 }: ValueAnalysisProps) {
-  const [timeRange, setTimeRange] = useState('6m')
+  const handleTimeRangeChange = onTimeRangeChange ?? (() => {})
 
   return (
     <div className={cn('space-y-6', className)}>
@@ -381,7 +475,7 @@ export function ValueAnalysis({
             Customer profitability and lifetime value
           </p>
         </div>
-        <Select value={timeRange} onValueChange={setTimeRange}>
+        <Select value={timeRange} onValueChange={handleTimeRangeChange}>
           <SelectTrigger className="w-[160px]">
             <Calendar className="h-4 w-4 mr-2" />
             <SelectValue />
@@ -395,7 +489,7 @@ export function ValueAnalysis({
       </div>
 
       {/* KPIs - placeholder until order aggregation */}
-      <ValueKpis />
+      <ValueKpis data={valueKpis} isLoading={isLoading} />
 
       {/* Distribution and Top Customers */}
       <div className="grid gap-6 lg:grid-cols-2">
@@ -404,7 +498,7 @@ export function ValueAnalysis({
       </div>
 
       {/* Profitability - placeholder until cost tracking */}
-      <ProfitabilityAnalysis />
+      <ProfitabilityAnalysis segments={profitabilitySegments} isLoading={isLoading} />
     </div>
   )
 }

@@ -9,7 +9,6 @@
  *
  * ARCHITECTURE: Presentational component - receives data via props from route.
  */
-import { useState } from 'react'
 import {
   Users,
   TrendingUp,
@@ -42,9 +41,42 @@ interface LifecycleStage {
   color: string
 }
 
+interface CohortRow {
+  period: string
+  customers: number
+  retention30: number
+  retention60: number
+  retention90: number
+}
+
+interface ChurnMetrics {
+  totalChurned: number
+  avgMonthlyRate: number
+  monthly: { period: string; churned: number; churnRate: number }[]
+}
+
+interface ConversionStep {
+  label: string
+  count: number
+  rate?: number
+}
+
+interface AcquisitionMetricsData {
+  newCustomers: number
+  activationRate: number
+  avgTimeToFirstOrderDays: number
+  avgAcquisitionCost: number | null
+}
+
 interface LifecycleAnalyticsProps {
   /** Lifecycle stage distribution from server */
   stages?: LifecycleStage[]
+  cohorts?: CohortRow[]
+  churn?: ChurnMetrics
+  conversion?: { steps: ConversionStep[] }
+  acquisition?: AcquisitionMetricsData
+  timeRange?: '3m' | '6m' | '1y'
+  onTimeRangeChange?: (range: '3m' | '6m' | '1y') => void
   /** Loading state */
   isLoading?: boolean
   className?: string
@@ -149,7 +181,48 @@ function LifecycleFunnel({ stages, isLoading }: LifecycleFunnelProps) {
 // COHORT TABLE (Static placeholder - needs server function)
 // ============================================================================
 
-function CohortTable() {
+function CohortTable({ cohorts, isLoading }: { cohorts?: CohortRow[]; isLoading?: boolean }) {
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <RefreshCw className="h-5 w-5" />
+            Cohort Retention
+          </CardTitle>
+          <CardDescription>
+            Monthly retention rates by customer cohort
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Skeleton className="h-6 w-full" />
+          {[1, 2, 3].map(i => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </CardContent>
+      </Card>
+    )
+  }
+
+  if (!cohorts?.length) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <RefreshCw className="h-5 w-5" />
+            Cohort Retention
+          </CardTitle>
+          <CardDescription>
+            Monthly retention rates by customer cohort
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-muted-foreground text-center py-8">No cohort data available</p>
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -162,9 +235,26 @@ function CohortTable() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="text-center py-8 text-muted-foreground">
-          <p>Cohort analysis requires order history.</p>
-          <p className="text-sm mt-2">Coming soon after orders domain implementation.</p>
+        <div className="space-y-2">
+          <div className="grid grid-cols-5 gap-3 text-xs font-medium text-muted-foreground">
+            <span>Cohort</span>
+            <span className="text-right">Customers</span>
+            <span className="text-right">30d</span>
+            <span className="text-right">60d</span>
+            <span className="text-right">90d</span>
+          </div>
+          {cohorts.map((row) => (
+            <div
+              key={row.period}
+              className="grid grid-cols-5 gap-3 items-center py-2 border-b last:border-0 text-sm"
+            >
+              <span>{row.period}</span>
+              <span className="text-right">{row.customers.toLocaleString()}</span>
+              <span className="text-right">{row.retention30}%</span>
+              <span className="text-right">{row.retention60}%</span>
+              <span className="text-right">{row.retention90}%</span>
+            </div>
+          ))}
         </div>
       </CardContent>
     </Card>
@@ -175,7 +265,27 @@ function CohortTable() {
 // CHURN ANALYSIS (Static placeholder)
 // ============================================================================
 
-function ChurnAnalysis() {
+function ChurnAnalysis({ churn, isLoading }: { churn?: ChurnMetrics; isLoading?: boolean }) {
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <UserMinus className="h-5 w-5" />
+            Churn Analysis
+          </CardTitle>
+          <CardDescription>
+            Customer churn trends
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-4 w-2/3 mx-auto" />
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -190,17 +300,32 @@ function ChurnAnalysis() {
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div className="text-center p-3 rounded-lg bg-muted/50">
-            <p className="text-2xl font-bold text-muted-foreground">-</p>
+            <p className="text-2xl font-bold text-muted-foreground">
+              {churn ? `${churn.avgMonthlyRate.toFixed(1)}%` : '-'}
+            </p>
             <p className="text-xs text-muted-foreground">Avg Monthly Rate</p>
           </div>
           <div className="text-center p-3 rounded-lg bg-muted/50">
-            <p className="text-2xl font-bold text-muted-foreground">-</p>
+            <p className="text-2xl font-bold text-muted-foreground">
+              {churn ? churn.totalChurned.toLocaleString() : '-'}
+            </p>
             <p className="text-xs text-muted-foreground">Total Churned</p>
           </div>
         </div>
-        <p className="text-sm text-muted-foreground text-center">
-          Churn tracking requires historical status changes.
-        </p>
+        {churn?.monthly?.length ? (
+          <div className="space-y-2">
+            {churn.monthly.slice(0, 4).map((row) => (
+              <div key={row.period} className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>{row.period}</span>
+                <span>{row.churned} churned ({row.churnRate.toFixed(1)}%)</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center">
+            Churn insights are still building as status history accumulates.
+          </p>
+        )}
       </CardContent>
     </Card>
   )
@@ -210,7 +335,26 @@ function ChurnAnalysis() {
 // CONVERSION FUNNEL (Static placeholder)
 // ============================================================================
 
-function ConversionFunnel() {
+function ConversionFunnel({ conversion, isLoading }: { conversion?: { steps: ConversionStep[] }; isLoading?: boolean }) {
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            Conversion Funnel
+          </CardTitle>
+          <CardDescription>
+            Lead to customer conversion
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-24 w-full" />
+        </CardContent>
+      </Card>
+    )
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -223,10 +367,28 @@ function ConversionFunnel() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="text-center py-8 text-muted-foreground">
-          <p>Conversion tracking requires pipeline integration.</p>
-          <p className="text-sm mt-2">Coming soon after pipeline domain implementation.</p>
-        </div>
+        {conversion?.steps?.length ? (
+          <div className="space-y-3">
+            {conversion.steps.map((step, index) => (
+              <div key={step.label} className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">{step.label}</p>
+                  {index > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {step.rate ?? 0}% of previous stage
+                    </p>
+                  )}
+                </div>
+                <span className="text-sm font-semibold">{step.count.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-muted-foreground">
+            <p>Conversion tracking requires pipeline or order history.</p>
+            <p className="text-sm mt-2">Add pipeline stages to see conversion performance.</p>
+          </div>
+        )}
       </CardContent>
     </Card>
   )
@@ -236,12 +398,28 @@ function ConversionFunnel() {
 // ACQUISITION METRICS (Static placeholder)
 // ============================================================================
 
-function AcquisitionMetrics() {
-  const metrics = [
-    { label: 'New Customers (MTD)', value: '-', icon: UserPlus },
-    { label: 'Avg Acquisition Cost', value: '-', icon: TrendingDown },
-    { label: 'Time to First Order', value: '-', icon: Activity },
-    { label: 'Activation Rate', value: '-', icon: TrendingUp },
+function AcquisitionMetrics({ metrics, isLoading }: { metrics?: AcquisitionMetricsData; isLoading?: boolean }) {
+  const items = [
+    {
+      label: 'New Customers',
+      value: metrics ? metrics.newCustomers.toLocaleString() : '-',
+      icon: UserPlus,
+    },
+    {
+      label: 'Avg Acquisition Cost',
+      value: metrics?.avgAcquisitionCost != null ? `$${metrics.avgAcquisitionCost.toFixed(0)}` : '-',
+      icon: TrendingDown,
+    },
+    {
+      label: 'Time to First Order',
+      value: metrics ? `${metrics.avgTimeToFirstOrderDays.toFixed(1)} days` : '-',
+      icon: Activity,
+    },
+    {
+      label: 'Activation Rate',
+      value: metrics ? `${metrics.activationRate.toFixed(1)}%` : '-',
+      icon: TrendingUp,
+    },
   ]
 
   return (
@@ -254,7 +432,7 @@ function AcquisitionMetrics() {
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-4">
-          {metrics.map(metric => {
+          {items.map(metric => {
             const Icon = metric.icon
             return (
               <div key={metric.label} className="space-y-1">
@@ -262,13 +440,15 @@ function AcquisitionMetrics() {
                   <Icon className="h-4 w-4 text-muted-foreground" />
                   <span className="text-xs text-muted-foreground">{metric.label}</span>
                 </div>
-                <p className="text-lg font-bold text-muted-foreground">{metric.value}</p>
+                <p className="text-lg font-bold text-muted-foreground">
+                  {isLoading ? '-' : metric.value}
+                </p>
               </div>
             )
           })}
         </div>
         <p className="text-sm text-muted-foreground text-center mt-4">
-          Requires orders and cost tracking.
+          Acquisition cost will populate once marketing spend is tracked.
         </p>
       </CardContent>
     </Card>
@@ -281,10 +461,16 @@ function AcquisitionMetrics() {
 
 export function LifecycleAnalytics({
   stages,
+  cohorts,
+  churn,
+  conversion,
+  acquisition,
+  timeRange = '6m',
+  onTimeRangeChange,
   isLoading = false,
   className,
 }: LifecycleAnalyticsProps) {
-  const [timeRange, setTimeRange] = useState('6m')
+  const handleTimeRangeChange = onTimeRangeChange ?? (() => {})
 
   return (
     <div className={cn('space-y-6', className)}>
@@ -296,7 +482,7 @@ export function LifecycleAnalytics({
             Customer journey and retention analysis
           </p>
         </div>
-        <Select value={timeRange} onValueChange={setTimeRange}>
+        <Select value={timeRange} onValueChange={handleTimeRangeChange}>
           <SelectTrigger className="w-[160px]">
             <Calendar className="h-4 w-4 mr-2" />
             <SelectValue />
@@ -310,18 +496,18 @@ export function LifecycleAnalytics({
       </div>
 
       {/* Cohort Analysis - placeholder until orders domain */}
-      <CohortTable />
+      <CohortTable cohorts={cohorts} isLoading={isLoading} />
 
       {/* Second Row */}
       <div className="grid gap-6 lg:grid-cols-2">
         <LifecycleFunnel stages={stages} isLoading={isLoading} />
-        <ConversionFunnel />
+        <ConversionFunnel conversion={conversion} isLoading={isLoading} />
       </div>
 
       {/* Third Row */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <ChurnAnalysis />
-        <AcquisitionMetrics />
+        <ChurnAnalysis churn={churn} isLoading={isLoading} />
+        <AcquisitionMetrics metrics={acquisition} isLoading={isLoading} />
       </div>
     </div>
   )

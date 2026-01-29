@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Generate Completion Certificate PDF Task (Trigger.dev v3)
  *

@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Process Scheduled Emails Job (Trigger.dev v3)
  *

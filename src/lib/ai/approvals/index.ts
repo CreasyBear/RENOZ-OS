@@ -1,28 +1,28 @@
 /**
- * AI Approvals Module
+ * AI Approvals Types
  *
- * Human-in-the-loop approval system for AI-drafted actions.
- * Implements AI-INFRA-015 acceptance criteria.
+ * Type definitions for human-in-the-loop approval system.
+ * 
+ * ⚠️ NOTE: Implementations are in src/server/functions/ai/approvals/
+ *    Import from there in server code.
  *
  * @see _Initiation/_prd/3-integrations/ai-infrastructure/ai-infrastructure.prd.json
  */
 
-export {
-  executeAction,
-  rejectAction,
-  getPendingApprovals,
-  getStuckApprovals,
-  getApprovalsForEntity,
-  getEntitiesForApproval,
-  type ExecuteActionResult,
-  type RejectActionResult,
-} from './executor';
+export type {
+  ExecuteActionResult,
+  RejectActionResult,
+  ActionHandler,
+  HandlerContext,
+  HandlerResult,
+} from './types';
 
-export {
-  actionHandlers,
-  getActionHandler,
-  hasActionHandler,
-  type ActionHandler,
-  type HandlerContext,
-  type HandlerResult,
-} from './handlers';
+// ============================================================================
+// NOTE: Implementations are in src/server/functions/ai/approvals/
+//
+// - executor.ts
+// - handlers.ts
+//
+// Import from there in server code:
+// import { executeAction, rejectAction } from '@/server/functions/ai/approvals';
+// ============================================================================

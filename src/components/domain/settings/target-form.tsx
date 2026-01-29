@@ -12,7 +12,7 @@
  * - Description (optional)
  *
  * @see DASH-TARGETS-UI acceptance criteria
- * @see src/lib/schemas/dashboard/targets.ts for validation
+ * @see src/lib/schemas/reports/targets.ts for validation
  */
 
 import { memo, useCallback, useEffect } from 'react';
@@ -52,7 +52,7 @@ import {
   type TargetPeriod,
   type Target,
   type CreateTargetInput,
-} from '@/lib/schemas/dashboard/targets';
+} from '@/lib/schemas/reports/targets';
 
 // ============================================================================
 // TYPES

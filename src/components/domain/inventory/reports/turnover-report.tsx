@@ -112,7 +112,7 @@ export const TurnoverReport = memo(function TurnoverReport({
       maximumFractionDigits: 0,
     }).format(value);
 
-  const formatRatio = (value: number) => value.toFixed(2);
+  const formatRatio = (value: number) => (Number.isFinite(value) ? value : 0).toFixed(2);
 
   // Loading state
   if (isLoading) {
@@ -246,8 +246,8 @@ export const TurnoverReport = memo(function TurnoverReport({
           <CardContent>
             <div className="flex items-end gap-2 h-32">
               {trends.map((point, i) => {
-                const maxRatio = Math.max(...trends.map((t) => t.turnoverRatio));
-                const height = (point.turnoverRatio / maxRatio) * 100;
+                const maxRatio = Math.max(...trends.map((t) => t.turnoverRatio), 0);
+                const height = maxRatio > 0 ? (point.turnoverRatio / maxRatio) * 100 : 0;
 
                 return (
                   <div key={i} className="flex-1 flex flex-col items-center">

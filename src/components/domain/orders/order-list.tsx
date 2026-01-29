@@ -1,16 +1,23 @@
 /**
- * OrderList Component
+ * OrderList Component (Presenter)
  *
- * Responsive order list with filtering, sorting, and bulk actions.
- * Adapts layout for mobile (cards), tablet (compact table), desktop (full table).
+ * Pure UI component for displaying orders in table/card format.
+ * Responsive layout: mobile (cards), tablet (compact), desktop (full table).
  *
+ * @source orders from useOrders hook via OrderListContainer
+ * @source customer names from orders.customer join in listOrders server function
+ * @source itemCount from order_items aggregate in listOrders server function
+ *
+ * @see STANDARDS.md Section 2: Component Architecture
+ * @see src/hooks/orders/use-orders.ts (Hook)
+ * @see src/server/functions/orders/orders.ts listOrders (Server)
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json (ORD-LIST-UI)
  */
 
 import { memo, useState, useCallback, useMemo } from "react";
 import { Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { useOrders } from "@/hooks/orders";
+// OrderListItem type is used via ReturnType<typeof useOrders>
 import {
   MoreHorizontal,
   Eye,
@@ -23,6 +30,10 @@ import {
   Clock,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
+  AlertCircle,
+  ShoppingCart,
 } from "lucide-react";
 import { TruncateTooltip } from "@/components/shared/truncate-tooltip";
 import {
@@ -51,7 +62,6 @@ import {
 import { cn } from "@/lib/utils";
 import { FormatAmount } from "@/components/shared/format";
 import { format } from "date-fns";
-import { listOrders } from "@/server/functions/orders/orders";
 import type { OrderStatus, PaymentStatus } from "@/lib/schemas/orders";
 
 // ============================================================================
@@ -77,6 +87,14 @@ export interface OrderFilters {
   maxTotal?: number;
 }
 
+type SortField = "orderNumber" | "orderDate" | "status" | "total" | "createdAt";
+type SortDirection = "asc" | "desc";
+
+interface SortState {
+  field: SortField;
+  direction: SortDirection;
+}
+
 // ============================================================================
 // HELPERS
 // ============================================================================
@@ -94,6 +112,50 @@ const STATUS_CONFIG: Record<
   cancelled: { label: "Cancelled", variant: "destructive", icon: XCircle },
 };
 
+// Check if order is overdue
+function isOverdue(dueDate: string | null | undefined): boolean {
+  if (!dueDate) return false;
+  return new Date(dueDate) < new Date();
+}
+
+// Format due date with relative indicator
+function formatDueDate(dueDate: string | null | undefined): { text: string; isOverdue: boolean; variant: 'default' | 'destructive' } {
+  if (!dueDate) return { text: '-', isOverdue: false, variant: 'default' };
+  
+  const due = new Date(dueDate);
+  const now = new Date();
+  const isOver = due < now;
+  
+  // Calculate days difference
+  const diffMs = due.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (isOver) {
+    return { 
+      text: `${Math.abs(diffDays)}d overdue`, 
+      isOverdue: true, 
+      variant: 'destructive' 
+    };
+  }
+  
+  if (diffDays === 0) return { text: 'Today', isOverdue: false, variant: 'default' };
+  if (diffDays === 1) return { text: 'Tomorrow', isOverdue: false, variant: 'default' };
+  if (diffDays <= 7) return { text: `${diffDays}d`, isOverdue: false, variant: 'default' };
+  
+  return { text: format(due, 'dd/MM/yyyy'), isOverdue: false, variant: 'default' };
+}
+
+const PAYMENT_STATUS_CONFIG: Record<
+  PaymentStatus,
+  { label: string; variant: "default" | "secondary" | "destructive" | "outline" }
+> = {
+  pending: { label: "Pending", variant: "secondary" },
+  partial: { label: "Partial", variant: "outline" },
+  paid: { label: "Paid", variant: "default" },
+  refunded: { label: "Refunded", variant: "outline" },
+  overdue: { label: "Overdue", variant: "destructive" },
+};
+
 function getStatusBadge(status: OrderStatus) {
   const config = STATUS_CONFIG[status] ?? STATUS_CONFIG.draft;
   const Icon = config.icon;
@@ -103,6 +165,50 @@ function getStatusBadge(status: OrderStatus) {
       <Icon className="h-3 w-3" />
       {config.label}
     </Badge>
+  );
+}
+
+function getPaymentStatusBadge(paymentStatus: PaymentStatus) {
+  const config = PAYMENT_STATUS_CONFIG[paymentStatus] ?? PAYMENT_STATUS_CONFIG.pending;
+  
+  return (
+    <Badge variant={config.variant} className="text-xs">
+      {config.label}
+    </Badge>
+  );
+}
+
+// ============================================================================
+// SORT HEADER COMPONENT
+// ============================================================================
+
+function SortHeader({
+  label,
+  field,
+  currentSort,
+  onSort,
+}: {
+  label: string;
+  field: SortField;
+  currentSort: SortState;
+  onSort: (field: SortField) => void;
+}) {
+  const isActive = currentSort.field === field;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-8 px-2 -ml-2 font-medium"
+      onClick={() => onSort(field)}
+    >
+      {label}
+      {isActive &&
+        (currentSort.direction === "asc" ? (
+          <ChevronUp className="ml-1 h-4 w-4" />
+        ) : (
+          <ChevronDown className="ml-1 h-4 w-4" />
+        ))}
+    </Button>
   );
 }
 
@@ -119,30 +225,38 @@ export const OrderList = memo(function OrderList({
 }: OrderListProps) {
   const [page, setPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sort, setSort] = useState<SortState>({
+    field: "createdAt",
+    direction: "desc",
+  });
   const pageSize = 20;
 
-  // Fetch orders
-  const { data, isLoading, error } = useQuery({
-    queryKey: queryKeys.orders.list({ ...filters, page, pageSize }),
-    queryFn: async () => {
-      const result = await listOrders({
-        data: {
-          page,
-          pageSize,
-          search: filters.search,
-          status: filters.status,
-          paymentStatus: filters.paymentStatus,
-          customerId: filters.customerId,
-          dateFrom: filters.dateFrom,
-          dateTo: filters.dateTo,
-          minTotal: filters.minTotal,
-          maxTotal: filters.maxTotal,
-          sortBy: "createdAt",
-          sortOrder: "desc",
-        },
-      });
-      return result;
-    },
+  // Handle sort toggle
+  const handleSort = useCallback((field: SortField) => {
+    setSort((current) => ({
+      field,
+      direction:
+        current.field === field && current.direction === "asc"
+          ? "desc"
+          : "asc",
+    }));
+    setPage(1); // Reset to first page on sort change
+  }, []);
+
+  // Fetch orders using centralized hook (follows STANDARDS.md)
+  const { data, isLoading, error } = useOrders({
+    page,
+    pageSize,
+    search: filters.search,
+    status: filters.status,
+    paymentStatus: filters.paymentStatus,
+    customerId: filters.customerId,
+    dateFrom: filters.dateFrom,
+    dateTo: filters.dateTo,
+    minTotal: filters.minTotal,
+    maxTotal: filters.maxTotal,
+    sortBy: sort.field,
+    sortOrder: sort.direction,
   });
 
   const orders = data?.orders ?? [];
@@ -208,9 +322,12 @@ export const OrderList = memo(function OrderList({
                   <Skeleton className="h-4 w-4" />
                   <Skeleton className="h-4 w-24" />
                   <Skeleton className="h-4 w-32 flex-1" />
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-16" />
                   <Skeleton className="h-6 w-20" />
-                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-5 w-16" />
                   <Skeleton className="h-4 w-8" />
+                  <Skeleton className="h-4 w-20" />
                 </div>
               ))}
             </div>
@@ -269,11 +386,42 @@ export const OrderList = memo(function OrderList({
                   aria-label="Select all orders"
                 />
               </TableHead>
-              <TableHead>Order #</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Total</TableHead>
+              <TableHead className="min-w-[120px]">
+                <SortHeader
+                  label="Order #"
+                  field="orderNumber"
+                  currentSort={sort}
+                  onSort={handleSort}
+                />
+              </TableHead>
+              <TableHead className="min-w-[160px]">Customer</TableHead>
+              <TableHead className="w-[100px]">
+                <SortHeader
+                  label="Date"
+                  field="orderDate"
+                  currentSort={sort}
+                  onSort={handleSort}
+                />
+              </TableHead>
+              <TableHead className="w-[90px]">Due</TableHead>
+              <TableHead className="w-[110px]">
+                <SortHeader
+                  label="Status"
+                  field="status"
+                  currentSort={sort}
+                  onSort={handleSort}
+                />
+              </TableHead>
+              <TableHead className="w-[100px]">Payment</TableHead>
+              <TableHead className="w-[70px] text-center">Items</TableHead>
+              <TableHead className="w-[100px] text-right">
+                <SortHeader
+                  label="Total"
+                  field="total"
+                  currentSort={sort}
+                  onSort={handleSort}
+                />
+              </TableHead>
               <TableHead className="w-12"></TableHead>
             </TableRow>
           </TableHeader>
@@ -301,18 +449,44 @@ export const OrderList = memo(function OrderList({
                     {order.orderNumber}
                   </Link>
                 </TableCell>
-                <TableCell className="max-w-[200px]">
-                  {/* Customer name would come from joined data */}
-                  <span className="text-muted-foreground text-sm">
-                    <TruncateTooltip text={order.customerId} maxLength={20} />
+                <TableCell className="max-w-[160px]">
+                  <span className="text-sm truncate block">
+                    {order.customer?.name ?? (
+                      <span className="text-muted-foreground">
+                        <TruncateTooltip text={order.customerId} maxLength={18} />
+                      </span>
+                    )}
                   </span>
                 </TableCell>
-                <TableCell>
+                <TableCell className="text-sm">
                   {order.orderDate ? format(new Date(order.orderDate), "dd/MM/yyyy") : '-'}
                 </TableCell>
+                <TableCell>
+                  {(() => {
+                    const due = formatDueDate(order.dueDate);
+                    return (
+                      <div className={cn(
+                        "flex items-center gap-1 text-xs",
+                        due.isOverdue && "text-destructive font-medium"
+                      )}>
+                        {due.isOverdue && <AlertCircle className="h-3 w-3" />}
+                        <span title={order.dueDate ? format(new Date(order.dueDate), 'dd/MM/yyyy') : undefined}>
+                          {due.text}
+                        </span>
+                      </div>
+                    );
+                  })()}
+                </TableCell>
                 <TableCell>{getStatusBadge(order.status as OrderStatus)}</TableCell>
+                <TableCell>{getPaymentStatusBadge(order.paymentStatus as PaymentStatus)}</TableCell>
+                <TableCell className="text-center">
+                  <div className="flex items-center justify-center gap-1 text-sm text-muted-foreground">
+                    <ShoppingCart className="h-3 w-3" />
+                    <span>{order.itemCount ?? 0}</span>
+                  </div>
+                </TableCell>
                 <TableCell className="text-right font-medium">
-                  <FormatAmount amount={Number(order.total)} />
+                  <FormatAmount amount={Number(order.total)} cents={false} />
                 </TableCell>
                 <TableCell>
                   <DropdownMenu>
@@ -379,17 +553,31 @@ export const OrderList = memo(function OrderList({
                   <p className="font-medium">{order.orderNumber}</p>
                   <p className="text-sm text-muted-foreground">
                     {order.orderDate ? format(new Date(order.orderDate), "dd/MM/yyyy") : '-'}
+                    {order.dueDate && (
+                      <span className={cn(
+                        "ml-2",
+                        isOverdue(order.dueDate) && "text-destructive"
+                      )}>
+                        · Due {formatDueDate(order.dueDate).text}
+                      </span>
+                    )}
                   </p>
                 </div>
                 {getStatusBadge(order.status as OrderStatus)}
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">
-                  {order.customerId.slice(0, 8)}...
+                <span className="text-sm text-muted-foreground truncate max-w-[140px]">
+                  {order.customer?.name ?? order.customerId.slice(0, 8)}
                 </span>
-                <span className="font-semibold">
-                  <FormatAmount amount={Number(order.total)} />
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <ShoppingCart className="h-3 w-3" />
+                    {order.itemCount ?? 0}
+                  </span>
+                  <span className="font-semibold">
+                    <FormatAmount amount={Number(order.total)} cents={false} />
+                  </span>
+                </div>
               </div>
             </CardContent>
           </Card>

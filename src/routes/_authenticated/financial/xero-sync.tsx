@@ -31,7 +31,7 @@ export const Route = createFileRoute('/_authenticated/financial/xero-sync')({
     <RouteErrorFallback error={error} parentRoute="/financial" />
   ),
   pendingComponent: () => (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Xero Sync"
         description="Invoice synchronization status and history"
@@ -80,7 +80,7 @@ function XeroSyncStatusPage() {
   const invoices: InvoiceWithSyncStatus[] = data?.invoices ?? [];
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header title="Xero Sync" description="Invoice synchronization status and history" />
       <PageLayout.Content>
         <XeroSyncStatus

@@ -34,7 +34,7 @@ export const Route = createFileRoute('/_authenticated/financial/revenue')({
     <RouteErrorFallback error={error} parentRoute="/financial" />
   ),
   pendingComponent: () => (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Revenue Recognition"
         description="Track recognized and deferred revenue with sync status"
@@ -101,7 +101,7 @@ function RevenueRecognitionPage() {
   }
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Revenue Recognition"
         description="Track recognized and deferred revenue with sync status"

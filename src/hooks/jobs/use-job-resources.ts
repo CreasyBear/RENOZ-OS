@@ -22,6 +22,7 @@ import {
   reserveJobStock,
   calculateJobMaterialCost,
   getJobMaterial,
+  recordMaterialInstallation,
 } from '@/server/functions/jobs/job-materials';
 import type {
   ListJobMaterialsInput,
@@ -31,6 +32,7 @@ import type {
   ReserveJobStockInput,
   CalculateJobMaterialCostInput,
   GetJobMaterialInput,
+  RecordMaterialInstallationInput,
 } from '@/lib/schemas';
 
 // Time tracking imports
@@ -380,5 +382,29 @@ export function useJobCostingReport(options: GetJobCostingReportInput) {
   return useQuery({
     queryKey: queryKeys.jobCosting.list(options as unknown as Record<string, unknown>),
     queryFn: () => reportFn({ data: options }),
+  });
+}
+
+// ============================================================================
+// ENHANCED MATERIAL TRACKING HOOKS (Story 029)
+// ============================================================================
+
+/**
+ * Record material installation with serial numbers, location, and photos.
+ */
+export function useRecordMaterialInstallation(jobId: string) {
+  const queryClient = useQueryClient();
+  const installFn = useServerFn(recordMaterialInstallation);
+
+  return useMutation({
+    mutationFn: async (input: RecordMaterialInstallationInput) => {
+      return await installFn({ data: input });
+    },
+    onSuccess: () => {
+      // Invalidate job materials list
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.jobs.materials(jobId),
+      });
+    },
   });
 }

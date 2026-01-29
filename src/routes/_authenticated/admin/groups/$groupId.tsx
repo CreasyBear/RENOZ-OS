@@ -136,7 +136,7 @@ const groupDetailSchema = z.object({
   tab: z.enum(['members', 'settings', 'activity']).default('members'),
 });
 
-import { RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { AdminDetailSkeleton } from '@/components/skeletons/admin';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -158,9 +158,11 @@ export const Route = createFileRoute('/_authenticated/admin/groups/$groupId' as 
     <RouteErrorFallback error={error} parentRoute="/admin/groups" />
   ),
   pendingComponent: () => (
-    <div className="p-6">
-      <AdminDetailSkeleton />
-    </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Content>
+        <AdminDetailSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
   ),
 });
 
@@ -303,7 +305,8 @@ function GroupDetailPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <PageLayout variant="full-width">
+      <PageLayout.Content className="space-y-6">
       {/* Breadcrumb */}
       <div className="text-muted-foreground flex items-center gap-2 text-sm">
         <a
@@ -686,6 +689,7 @@ function GroupDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </PageLayout.Content>
+    </PageLayout>
   );
 }

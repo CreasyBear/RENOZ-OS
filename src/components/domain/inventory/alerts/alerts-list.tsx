@@ -7,12 +7,13 @@
  * - List of configured alert rules
  * - Toggle active/inactive
  * - Edit/delete actions
+ * - Sortable columns
  *
  * Accessibility:
  * - Status indicated by icon + text
  * - Action buttons with labels
  */
-import { memo } from "react";
+import { memo, useState, useMemo, useCallback } from "react";
 import {
   AlertTriangle,
   AlertCircle,
@@ -27,6 +28,8 @@ import {
   Trash2,
   ToggleLeft,
   ToggleRight,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -80,6 +83,9 @@ export interface AlertRule {
   createdAt: Date;
 }
 
+type SortField = 'name' | 'alertType' | 'thresholdValue' | 'isActive' | 'triggeredCount' | 'lastTriggeredAt' | 'createdAt';
+type SortDirection = 'asc' | 'desc';
+
 interface AlertsListProps {
   alerts: AlertRule[];
   isLoading?: boolean;
@@ -130,6 +136,40 @@ const ALERT_TYPE_CONFIG: Record<
 };
 
 // ============================================================================
+// SORT HEADER COMPONENT
+// ============================================================================
+
+function SortHeader({
+  label,
+  field,
+  currentSort,
+  onSort,
+}: {
+  label: string;
+  field: SortField;
+  currentSort: { field: SortField; direction: SortDirection };
+  onSort: (field: SortField) => void;
+}) {
+  const isActive = currentSort.field === field;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-8 px-2 -ml-2 font-medium"
+      onClick={() => onSort(field)}
+    >
+      {label}
+      {isActive &&
+        (currentSort.direction === "asc" ? (
+          <ChevronUp className="ml-1 h-4 w-4" />
+        ) : (
+          <ChevronDown className="ml-1 h-4 w-4" />
+        ))}
+    </Button>
+  );
+}
+
+// ============================================================================
 // COMPONENT
 // ============================================================================
 
@@ -141,6 +181,55 @@ export const AlertsList = memo(function AlertsList({
   onToggleActive,
   className,
 }: AlertsListProps) {
+  const [sort, setSort] = useState<{ field: SortField; direction: SortDirection }>({
+    field: 'createdAt',
+    direction: 'desc',
+  });
+
+  const handleSort = useCallback((field: SortField) => {
+    setSort((current) => ({
+      field,
+      direction: current.field === field && current.direction === "asc" ? "desc" : "asc",
+    }));
+  }, []);
+
+  // Sort alerts
+  const sortedAlerts = useMemo(() => {
+    const sorted = [...alerts];
+    sorted.sort((a, b) => {
+      let comparison = 0;
+      switch (sort.field) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'alertType':
+          comparison = a.alertType.localeCompare(b.alertType);
+          break;
+        case 'thresholdValue':
+          comparison = a.thresholdValue - b.thresholdValue;
+          break;
+        case 'isActive':
+          comparison = (a.isActive ? 1 : 0) - (b.isActive ? 1 : 0);
+          break;
+        case 'triggeredCount':
+          comparison = (a.triggeredCount ?? 0) - (b.triggeredCount ?? 0);
+          break;
+        case 'lastTriggeredAt':
+          const dateA = a.lastTriggeredAt ? new Date(a.lastTriggeredAt).getTime() : 0;
+          const dateB = b.lastTriggeredAt ? new Date(b.lastTriggeredAt).getTime() : 0;
+          comparison = dateA - dateB;
+          break;
+        case 'createdAt':
+          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
+        default:
+          comparison = 0;
+      }
+      return sort.direction === "asc" ? comparison : -comparison;
+    });
+    return sorted;
+  }, [alerts, sort]);
+
   // Loading state
   if (isLoading) {
     return (
@@ -228,16 +317,24 @@ export const AlertsList = memo(function AlertsList({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Alert</TableHead>
+                <TableHead>
+                  <SortHeader label="Alert" field="name" currentSort={sort} onSort={handleSort} />
+                </TableHead>
                 <TableHead>Scope</TableHead>
-                <TableHead>Threshold</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Triggered</TableHead>
+                <TableHead>
+                  <SortHeader label="Threshold" field="thresholdValue" currentSort={sort} onSort={handleSort} />
+                </TableHead>
+                <TableHead>
+                  <SortHeader label="Status" field="isActive" currentSort={sort} onSort={handleSort} />
+                </TableHead>
+                <TableHead>
+                  <SortHeader label="Triggered" field="triggeredCount" currentSort={sort} onSort={handleSort} />
+                </TableHead>
                 <TableHead className="w-[50px]" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {alerts.map((alert) => {
+              {sortedAlerts.map((alert) => {
                 const typeConfig = ALERT_TYPE_CONFIG[alert.alertType];
                 const TypeIcon = typeConfig.icon;
 

@@ -87,7 +87,7 @@ export function useOpportunitiesKanban(options: UseOpportunitiesKanbanOptions = 
       const result = await listOpportunities({
         data: {
           page: 1,
-          pageSize: 200, // Load all for kanban view
+          pageSize: 100, // Max allowed by schema, loads most kanban boards
           sortBy: 'createdAt',
           sortOrder: 'desc',
           search: filters.search || undefined,

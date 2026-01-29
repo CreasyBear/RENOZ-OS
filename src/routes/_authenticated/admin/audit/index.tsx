@@ -67,7 +67,7 @@ import {
   Loader2,
 } from 'lucide-react';
 
-import { RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { AdminTableSkeleton } from '@/components/skeletons/admin';
 
 // Route definition
@@ -89,9 +89,11 @@ export const Route = createFileRoute('/_authenticated/admin/audit' as any)({
     <RouteErrorFallback error={error} parentRoute="/admin" />
   ),
   pendingComponent: () => (
-    <div className="p-6">
-      <AdminTableSkeleton />
-    </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Content>
+        <AdminTableSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
   ),
 });
 
@@ -271,283 +273,281 @@ function AuditLogViewer() {
   const totalPages = Math.ceil(total / pageSize);
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Audit Log</h1>
-          <p className="text-muted-foreground text-sm">
-            Track all user activity and system changes
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleExport('csv')}
-            disabled={exporting}
-          >
-            {exporting ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="mr-2 h-4 w-4" />
-            )}
-            Export CSV
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleExport('json')}
-            disabled={exporting}
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Export JSON
-          </Button>
-        </div>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="rounded-lg bg-blue-100 p-2">
-                <Activity className="h-5 w-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.totalLogs || 0}</p>
-                <p className="text-muted-foreground text-sm">Total Events</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="rounded-lg bg-green-100 p-2">
-                <User className="h-5 w-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.userStats?.length || 0}</p>
-                <p className="text-muted-foreground text-sm">Active Users</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="rounded-lg bg-purple-100 p-2">
-                <FileEdit className="h-5 w-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.entityStats?.length || 0}</p>
-                <p className="text-muted-foreground text-sm">Entity Types</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <div className="rounded-lg bg-amber-100 p-2">
-                <Clock className="h-5 w-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold">{stats.actionStats?.length || 0}</p>
-                <p className="text-muted-foreground text-sm">Action Types</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters */}
-      <Card className="mb-6">
-        <CardContent className="pt-6">
-          <div className="flex flex-wrap items-center gap-4">
-            {/* Search */}
-            <div className="min-w-64 flex-1">
-              <div className="relative">
-                <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-                <Input
-                  placeholder="Search by user, entity, or IP..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                />
-              </div>
-            </div>
-
-            {/* Entity Type */}
-            <Select value={entityType} onValueChange={setEntityType}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Entity type" />
-              </SelectTrigger>
-              <SelectContent>
-                {ENTITY_TYPES.map((type) => (
-                  <SelectItem key={type.value} value={type.value}>
-                    {type.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Action Type */}
-            <Select value={actionType} onValueChange={setActionType}>
-              <SelectTrigger className="w-36">
-                <SelectValue placeholder="Action" />
-              </SelectTrigger>
-              <SelectContent>
-                {ACTION_TYPES.map((type) => (
-                  <SelectItem key={type.value} value={type.value}>
-                    {type.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Time Range */}
-            <Select value={timeRange} onValueChange={setTimeRange}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder="Time range" />
-              </SelectTrigger>
-              <SelectContent>
-                {TIME_RANGES.map((range) => (
-                  <SelectItem key={range.value} value={range.value}>
-                    {range.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Button onClick={handleSearch} disabled={loading}>
-              {loading ? (
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="Audit Log"
+        description="Track all user activity and system changes"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleExport('csv')}
+              disabled={exporting}
+            >
+              {exporting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <Filter className="mr-2 h-4 w-4" />
+                <Download className="mr-2 h-4 w-4" />
               )}
-              Apply
+              Export CSV
             </Button>
-
-            <Button variant="ghost" size="icon" onClick={() => fetchLogs(page)} disabled={loading}>
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleExport('json')}
+              disabled={exporting}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export JSON
             </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Log Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Activity Log</CardTitle>
-          <CardDescription>
-            Showing {logs.length} of {total} entries
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto rounded-lg border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-44">Timestamp</TableHead>
-                  <TableHead className="w-48">User</TableHead>
-                  <TableHead className="w-32">Action</TableHead>
-                  <TableHead className="w-32">Entity</TableHead>
-                  <TableHead>Details</TableHead>
-                  <TableHead className="w-32">IP Address</TableHead>
-                  <TableHead className="w-16"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {logs.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
-                      No audit entries found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  logs.map((entry) => {
-                    const style = getActionStyle(entry.action);
-                    const Icon = style.icon;
-                    return (
-                      <TableRow key={entry.id}>
-                        <TableCell className="font-mono text-sm">
-                          {format(new Date(entry.timestamp), 'MMM d, yyyy h:mm a')}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className="bg-muted flex h-8 w-8 items-center justify-center rounded-full">
-                              <User className="h-4 w-4" />
-                            </div>
-                            <span className="max-w-32 truncate" title={entry.user?.email || '-'}>
-                              {entry.user?.email || '-'}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className={`rounded p-1.5 ${style.bgColor}`}>
-                              <Icon className={`h-3.5 w-3.5 ${style.color}`} />
-                            </div>
-                            <span className="text-sm">{formatAction(entry.action)}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{entry.entityType}</Badge>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground max-w-48 truncate text-sm">
-                          {entry.entityId ? `ID: ${entry.entityId.slice(0, 8)}...` : '-'}
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {entry.ipAddress || '-'}
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setSelectedEntry(entry)}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="mt-4 flex items-center justify-between">
-              <p className="text-muted-foreground text-sm">
-                Page {page} of {totalPages}
-              </p>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fetchLogs(page - 1)}
-                  disabled={page === 1 || loading}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fetchLogs(page + 1)}
-                  disabled={page === totalPages || loading}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
+          </>
+        }
+      />
+      <PageLayout.Content>
+        {/* Stats Cards */}
+        <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-4">
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <div className="rounded-lg bg-blue-100 p-2">
+                  <Activity className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{stats.totalLogs || 0}</p>
+                  <p className="text-muted-foreground text-sm">Total Events</p>
+                </div>
               </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <div className="rounded-lg bg-green-100 p-2">
+                  <User className="h-5 w-5 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{stats.userStats?.length || 0}</p>
+                  <p className="text-muted-foreground text-sm">Active Users</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <div className="rounded-lg bg-purple-100 p-2">
+                  <FileEdit className="h-5 w-5 text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{stats.entityStats?.length || 0}</p>
+                  <p className="text-muted-foreground text-sm">Entity Types</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-4">
+                <div className="rounded-lg bg-amber-100 p-2">
+                  <Clock className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{stats.actionStats?.length || 0}</p>
+                  <p className="text-muted-foreground text-sm">Action Types</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filters */}
+        <Card className="mb-6">
+          <CardContent className="pt-6">
+            <div className="flex flex-wrap items-center gap-4">
+              {/* Search */}
+              <div className="min-w-64 flex-1">
+                <div className="relative">
+                  <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                  <Input
+                    placeholder="Search by user, entity, or IP..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  />
+                </div>
+              </div>
+
+              {/* Entity Type */}
+              <Select value={entityType} onValueChange={setEntityType}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Entity type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ENTITY_TYPES.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Action Type */}
+              <Select value={actionType} onValueChange={setActionType}>
+                <SelectTrigger className="w-36">
+                  <SelectValue placeholder="Action" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ACTION_TYPES.map((type) => (
+                    <SelectItem key={type.value} value={type.value}>
+                      {type.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {/* Time Range */}
+              <Select value={timeRange} onValueChange={setTimeRange}>
+                <SelectTrigger className="w-40">
+                  <SelectValue placeholder="Time range" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIME_RANGES.map((range) => (
+                    <SelectItem key={range.value} value={range.value}>
+                      {range.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Button onClick={handleSearch} disabled={loading}>
+                {loading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Filter className="mr-2 h-4 w-4" />
+                )}
+                Apply
+              </Button>
+
+              <Button variant="ghost" size="icon" onClick={() => fetchLogs(page)} disabled={loading}>
+                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+
+        {/* Log Table */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Activity Log</CardTitle>
+            <CardDescription>
+              Showing {logs.length} of {total} entries
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-44">Timestamp</TableHead>
+                    <TableHead className="w-48">User</TableHead>
+                    <TableHead className="w-32">Action</TableHead>
+                    <TableHead className="w-32">Entity</TableHead>
+                    <TableHead>Details</TableHead>
+                    <TableHead className="w-32">IP Address</TableHead>
+                    <TableHead className="w-16"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {logs.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-muted-foreground py-8 text-center">
+                        No audit entries found
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    logs.map((entry) => {
+                      const style = getActionStyle(entry.action);
+                      const Icon = style.icon;
+                      return (
+                        <TableRow key={entry.id}>
+                          <TableCell className="font-mono text-sm">
+                            {format(new Date(entry.timestamp), 'MMM d, yyyy h:mm a')}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className="bg-muted flex h-8 w-8 items-center justify-center rounded-full">
+                                <User className="h-4 w-4" />
+                              </div>
+                              <span className="max-w-32 truncate" title={entry.user?.email || '-'}>
+                                {entry.user?.email || '-'}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <div className={`rounded p-1.5 ${style.bgColor}`}>
+                                <Icon className={`h-3.5 w-3.5 ${style.color}`} />
+                              </div>
+                              <span className="text-sm">{formatAction(entry.action)}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="secondary">{entry.entityType}</Badge>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground max-w-48 truncate text-sm">
+                            {entry.entityId ? `ID: ${entry.entityId.slice(0, 8)}...` : '-'}
+                          </TableCell>
+                          <TableCell className="font-mono text-sm">
+                            {entry.ipAddress || '-'}
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setSelectedEntry(entry)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-4 flex items-center justify-between">
+                <p className="text-muted-foreground text-sm">
+                  Page {page} of {totalPages}
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fetchLogs(page - 1)}
+                    disabled={page === 1 || loading}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => fetchLogs(page + 1)}
+                    disabled={page === totalPages || loading}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </PageLayout.Content>
 
       {/* Entry Detail Dialog */}
       <Dialog open={!!selectedEntry} onOpenChange={(open) => !open && setSelectedEntry(null)}>
@@ -626,6 +626,6 @@ function AuditLogViewer() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </PageLayout>
   );
 }

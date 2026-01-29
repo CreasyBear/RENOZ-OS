@@ -175,7 +175,7 @@ export function DataTable<TData>({
     <div className={cn("space-y-4", className)}>
       <div className="rounded-md border" role="table">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} role="row">
                 {headerGroup.headers.map((header) => {

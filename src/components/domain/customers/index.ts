@@ -6,8 +6,9 @@
 
 // --- Core Components ---
 export { CustomerDirectory } from './customer-directory';
-export { CustomerTable, type CustomerTableData } from './customer-table';
-export { CustomerFilters, type CustomerFiltersState } from './customer-filters';
+export { CustomerTable, type CustomerTableData } from './customer-table'
+export { CustomerCard, CustomerCardSkeleton } from './customer-card';
+export { CustomerFilters, ActiveFilterChips, type CustomerFiltersState } from './customer-filters';
 export { Customer360View } from './customer-360-view';
 export { ActivityTimeline } from './activity-timeline';
 export { CustomerForm } from './customer-form';

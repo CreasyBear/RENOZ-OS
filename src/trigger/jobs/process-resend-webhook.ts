@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Process Resend Webhook Task (Trigger.dev v3)
  *

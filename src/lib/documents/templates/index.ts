@@ -78,3 +78,14 @@ export {
   type PackingSlipPdfDocumentProps,
   type PackingSlipPdfTemplateProps,
 } from "./operational";
+
+// ============================================================================
+// REPORT DOCUMENTS
+// ============================================================================
+
+export {
+  ReportSummaryPdfDocument,
+  type ReportSummaryDocumentData,
+  type ReportSummaryMetric,
+  type ReportSummaryPdfDocumentProps,
+} from "./reports/report-summary";

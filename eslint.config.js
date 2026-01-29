@@ -4,6 +4,10 @@ import tsPlugin from '@typescript-eslint/eslint-plugin';
 import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
 import reactRefreshPlugin from 'eslint-plugin-react-refresh';
+import {
+  layoutRules,
+  pageLayoutVariantRules,
+} from './eslint-architecture-rules.js';
 
 export default [
   {
@@ -15,6 +19,8 @@ export default [
       'public/**',
       'drizzle/**',
       'supabase/**',
+      '_Initiation/**',
+      '_reference/**',
       '**/*.config.js',
       '**/*.config.ts'
     ]
@@ -109,5 +115,8 @@ export default [
         version: 'detect'
       }
     }
-  }
+  },
+  // UI/UX Layout Rules
+  layoutRules,
+  pageLayoutVariantRules,
 ];

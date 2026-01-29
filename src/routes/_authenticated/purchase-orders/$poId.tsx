@@ -82,7 +82,7 @@ function PurchaseOrderDetailPage() {
   // Loading state
   if (isLoading) {
     return (
-      <PageLayout>
+      <PageLayout variant="full-width">
         <div className="flex items-center justify-center py-12">
           <Loader2 className="text-muted-foreground h-8 w-8 animate-spin" />
         </div>
@@ -93,7 +93,7 @@ function PurchaseOrderDetailPage() {
   // Error state
   if (error || !po) {
     return (
-      <PageLayout>
+      <PageLayout variant="full-width">
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <h3 className="mb-2 text-lg font-semibold">Purchase Order Not Found</h3>
           <p className="text-muted-foreground mb-4 text-sm">
@@ -146,7 +146,7 @@ function PurchaseOrderDetailPage() {
   }
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title={po.poNumber}
         description={`Order for ${po.supplierName || 'Unknown Supplier'}`}

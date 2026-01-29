@@ -190,9 +190,13 @@ export interface ProcurementReportsProps {
   /** @source Container: route/_authenticated/reports/procurement/index.tsx - useState setter */
   onDateRangeChange: (range: DateRange) => void;
   /** @source Container: route/_authenticated/reports/procurement/index.tsx - useCallback */
-  onExport: (format: 'pdf' | 'excel') => void;
+  onExport: (format: 'pdf' | 'excel' | 'csv') => void;
   /** @source Container: route/_authenticated/reports/procurement/index.tsx - useCallback */
-  onCreateCustomReport: () => void;
+  onCreateCustomReport: (input: {
+    name: string;
+    description?: string;
+    reportType: ReportConfig['type'];
+  }) => void;
   /** @source Container: route/_authenticated/reports/procurement/index.tsx - useCallback */
   onScheduleReport: () => void;
 }
@@ -215,18 +219,27 @@ export const ProcurementReports = memo(function ProcurementReports({
   const [selectedReportType, setSelectedReportType] = useState<string>('supplier-performance');
   const [customReportDialog, setCustomReportDialog] = useState(false);
   const [exportDialog, setExportDialog] = useState(false);
+  const [customReportName, setCustomReportName] = useState('');
+  const [customReportDescription, setCustomReportDescription] = useState('');
 
   // Handle export
-  const handleExport = useCallback((format: 'pdf' | 'excel') => {
+  const handleExport = useCallback((format: 'pdf' | 'excel' | 'csv') => {
     onExport(format);
     setExportDialog(false);
   }, [onExport]);
 
   // Handle custom report creation
   const handleCreateCustomReport = useCallback(() => {
-    onCreateCustomReport();
+    if (!customReportName.trim()) return;
+    onCreateCustomReport({
+      name: customReportName.trim(),
+      description: customReportDescription.trim() || undefined,
+      reportType: selectedReportType as ReportConfig['type'],
+    });
     setCustomReportDialog(false);
-  }, [onCreateCustomReport]);
+    setCustomReportName('');
+    setCustomReportDescription('');
+  }, [customReportName, customReportDescription, onCreateCustomReport, selectedReportType]);
 
   // Format currency
   const formatCurrency = (amount: number) => {
@@ -772,10 +785,14 @@ export const ProcurementReports = memo(function ProcurementReports({
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <Button onClick={() => handleExport('pdf')} className="h-20">
                 <FileText className="mr-2 h-6 w-6" />
                 PDF Report
+              </Button>
+              <Button onClick={() => handleExport('csv')} variant="outline" className="h-20">
+                <FileText className="mr-2 h-6 w-6" />
+                CSV Export
               </Button>
               <Button onClick={() => handleExport('excel')} variant="outline" className="h-20">
                 <Download className="mr-2 h-6 w-6" />
@@ -814,16 +831,26 @@ export const ProcurementReports = memo(function ProcurementReports({
               </div>
               <div className="space-y-2">
                 <Label>Report Name</Label>
-                <Input placeholder="Enter report name" />
+                <Input
+                  placeholder="Enter report name"
+                  value={customReportName}
+                  onChange={(event) => setCustomReportName(event.target.value)}
+                />
               </div>
             </div>
             <div className="space-y-2">
               <Label>Description</Label>
-              <Textarea placeholder="Describe the purpose of this report" />
+              <Textarea
+                placeholder="Describe the purpose of this report"
+                value={customReportDescription}
+                onChange={(event) => setCustomReportDescription(event.target.value)}
+              />
             </div>
           </div>
           <DialogFooter>
-            <Button onClick={handleCreateCustomReport}>Create Report</Button>
+            <Button onClick={handleCreateCustomReport} disabled={!customReportName.trim()}>
+              Create Report
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

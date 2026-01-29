@@ -15,6 +15,18 @@ export {
 } from "./generate-documents";
 
 // ============================================================================
+// SYNCHRONOUS DOCUMENT GENERATION (New - immediate PDF generation)
+// ============================================================================
+
+export {
+  generateOrderDocument,
+  generateOrderQuotePdf,
+  generateOrderInvoicePdf,
+  generateOrderPackingSlipPdf,
+  generateOrderDeliveryNotePdf,
+} from "./generate-documents-sync";
+
+// ============================================================================
 // DOCUMENT TEMPLATES (INT-DOC-005)
 // ============================================================================
 

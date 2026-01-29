@@ -160,7 +160,7 @@ function PurchaseOrdersPage() {
   };
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Purchase Orders"
         description="Track and manage your supplier orders"

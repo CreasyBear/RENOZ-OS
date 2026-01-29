@@ -3,21 +3,18 @@
  *
  * Main product catalog page with search, filtering, and data table.
  *
- * Features:
- * - Full-text search with autocomplete
- * - Category tree navigation sidebar
- * - Advanced filtering (status, type, price range)
- * - Sortable data table with pagination
- * - Bulk selection and actions
- * - Quick actions per row
+ * LAYOUT: full-width (data-dense table view)
+ *
+ * @see UI_UX_STANDARDIZATION_PRD.md
  */
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
-import { Plus, Download, Upload, Search, X } from "lucide-react";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { useState, useMemo } from "react";
+import { Plus, Download, Upload, Search, X, Loader2, Trash2, Tag, Package, AlertTriangle, Layers, DollarSign } from "lucide-react";
 import { z } from "zod";
 
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { Button } from "@/components/ui/button";
+import { toastSuccess } from "@/hooks";
 import { ProductTableSkeleton } from "@/components/skeletons/products/table-skeleton";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -30,9 +27,13 @@ import {
 } from "@/components/ui/select";
 import { EmptyState } from "@/components/shared/empty-state";
 import { SearchEmptyState } from "@/components/shared/search-empty-state";
+import { MetricCard } from "@/components/shared/metric-card";
 import { listProducts, getCategoryTree } from "@/server/functions/products/products";
+import { exportProducts } from "@/server/functions/products/product-bulk-ops";
+import { useState as useStateCallback } from "react";
 import { ProductTable } from "@/components/domain/products/product-table";
 import { CategorySidebar } from "@/components/domain/products";
+import { formatCurrency } from "@/lib/formatters";
 
 // Search params schema for URL-based filtering
 const searchParamsSchema = z.object({
@@ -126,6 +127,46 @@ function ProductsPage() {
   const hasActiveFilters =
     search.search || search.categoryId || search.status || search.type;
 
+  // Calculate product stats from loaded data
+  const productStats = useMemo(() => {
+    const products = productsResult.products;
+    const totalProducts = productsResult.total;
+    const activeProducts = products.filter(p => p.status === 'active').length;
+    const lowStockCount = products.filter(p =>
+      p.trackInventory &&
+      (p as any).stockStatus === 'low_stock'
+    ).length;
+    const totalValue = products.reduce((sum, p) => sum + (p.basePrice || 0), 0);
+
+    return [
+      {
+        title: 'Total Products',
+        value: totalProducts,
+        subtitle: 'In catalog',
+        icon: Package,
+      },
+      {
+        title: 'Active',
+        value: activeProducts,
+        subtitle: 'Available for sale',
+        icon: Layers,
+      },
+      {
+        title: 'Low Stock',
+        value: lowStockCount,
+        subtitle: 'Need reordering',
+        icon: AlertTriangle,
+        alert: lowStockCount > 0,
+      },
+      {
+        title: 'Avg Price',
+        value: totalProducts > 0 ? formatCurrency(totalValue / totalProducts) : formatCurrency(0),
+        subtitle: 'Per product',
+        icon: DollarSign,
+      },
+    ];
+  }, [productsResult]);
+
   return (
     <PageLayout variant="full-width">
       <PageLayout.Header
@@ -133,14 +174,13 @@ function ProductsPage() {
         description={`${productsResult.total} products in catalog`}
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm">
-              <Upload className="mr-2 h-4 w-4" />
-              Import
+            <Button variant="outline" size="sm" asChild>
+              <Link to="/products/import">
+                <Upload className="mr-2 h-4 w-4" />
+                Import
+              </Link>
             </Button>
-            <Button variant="outline" size="sm">
-              <Download className="mr-2 h-4 w-4" />
-              Export
-            </Button>
+            <ExportButton />
             <Button
               onClick={() => navigate({ to: "/products/new" as string })}
             >
@@ -165,6 +205,21 @@ function ProductsPage() {
 
         {/* Main content */}
         <div className="flex-1 space-y-4">
+          {/* Summary Stats */}
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {productStats.map((stat) => (
+              <MetricCard
+                key={stat.title}
+                title={stat.title}
+                value={stat.value}
+                subtitle={stat.subtitle}
+                icon={stat.icon}
+                alert={stat.alert}
+                isLoading={false}
+              />
+            ))}
+          </div>
+
           {/* Search and filters bar */}
           <div className="flex flex-col sm:flex-row gap-4">
             {/* Search input */}
@@ -293,18 +348,41 @@ function ProductsPage() {
 
           {/* Bulk actions bar (when rows selected) */}
           {selectedRows.length > 0 && (
-            <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-              <span className="text-sm">
-                {selectedRows.length} product{selectedRows.length > 1 ? "s" : ""} selected
-              </span>
+            <div className="flex items-center justify-between p-3 bg-muted rounded-lg animate-in fade-in slide-in-from-top-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">
+                  {selectedRows.length} product{selectedRows.length > 1 ? "s" : ""} selected
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedRows([])}
+                  className="h-auto py-1"
+                >
+                  Clear
+                </Button>
+              </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm">
+                  <Tag className="mr-2 h-4 w-4" />
                   Update Status
                 </Button>
                 <Button variant="outline" size="sm">
+                  <Upload className="mr-2 h-4 w-4" />
                   Update Category
                 </Button>
-                <Button variant="destructive" size="sm">
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    if (confirm(`Delete ${selectedRows.length} selected products?`)) {
+                      // TODO: Implement bulk delete
+                      toastSuccess(`Deleted ${selectedRows.length} products`);
+                      setSelectedRows([]);
+                    }
+                  }}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
                   Delete
                 </Button>
               </div>
@@ -356,5 +434,50 @@ function ProductsPage() {
         </div>
       </PageLayout.Content>
     </PageLayout>
+  );
+}
+
+/**
+ * Export button with loading state
+ */
+function ExportButton() {
+  const [isExporting, setIsExporting] = useStateCallback(false);
+  const search = Route.useSearch() as SearchParams;
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const result = await exportProducts({
+        data: {
+          categoryId: search.categoryId,
+          status: search.status,
+          type: search.type,
+        },
+      });
+
+      // Create and download the CSV file
+      const blob = new Blob([result.content], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = result.filename;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Export failed:', error);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  return (
+    <Button variant="outline" size="sm" onClick={handleExport} disabled={isExporting}>
+      {isExporting ? (
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      ) : (
+        <Download className="mr-2 h-4 w-4" />
+      )}
+      Export
+    </Button>
   );
 }

@@ -34,7 +34,7 @@ export const Route = createFileRoute('/_authenticated/customers/segments/')({
     <RouteErrorFallback error={error} parentRoute="/customers" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header title="Customer Segments" />
       <PageLayout.Content>
         <InventoryTabsSkeleton tabCount={2} />
@@ -96,23 +96,21 @@ function SegmentsPage() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
-          <Link to="/customers">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold">Customer Segments</h1>
-          <p className="text-muted-foreground">
-            Create and manage customer segments for targeted actions
-          </p>
-        </div>
-      </div>
-
-      {/* Error State */}
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="Customer Segments"
+        description="Create and manage customer segments for targeted actions"
+        actions={
+          <Button variant="outline" asChild>
+            <Link to="/customers">
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Link>
+          </Button>
+        }
+      />
+      <PageLayout.Content>
+        {/* Error State */}
       {segments.isError && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
@@ -171,23 +169,24 @@ function SegmentsPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Segment Builder Dialog */}
-      <Dialog open={isBuilderOpen} onOpenChange={setIsBuilderOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {editingSegmentId ? 'Edit Segment' : 'Create Segment'}
-            </DialogTitle>
-            <DialogDescription>
-              Define criteria to group customers into a segment
-            </DialogDescription>
-          </DialogHeader>
-          <SegmentBuilder
-            onSave={handleSaveSegment}
-            onCancel={() => setIsBuilderOpen(false)}
-          />
-        </DialogContent>
-      </Dialog>
-    </div>
+        {/* Segment Builder Dialog */}
+        <Dialog open={isBuilderOpen} onOpenChange={setIsBuilderOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>
+                {editingSegmentId ? 'Edit Segment' : 'Create Segment'}
+              </DialogTitle>
+              <DialogDescription>
+                Define criteria to group customers into a segment
+              </DialogDescription>
+            </DialogHeader>
+            <SegmentBuilder
+              onSave={handleSaveSegment}
+              onCancel={() => setIsBuilderOpen(false)}
+            />
+          </DialogContent>
+        </Dialog>
+      </PageLayout.Content>
+    </PageLayout>
   )
 }

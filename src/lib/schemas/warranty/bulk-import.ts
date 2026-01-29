@@ -8,6 +8,7 @@
  */
 
 import { z } from 'zod';
+import { optionalEmailSchema } from '../_shared/patterns';
 import { warrantyPolicyTypeSchema } from './policies';
 
 // ============================================================================
@@ -20,7 +21,7 @@ import { warrantyPolicyTypeSchema } from './policies';
  */
 export const csvWarrantyRowSchema = z.object({
   // Customer identification (one of these required)
-  customer_email: z.string().email().optional(),
+  customer_email: optionalEmailSchema,
   customer_id: z.string().uuid().optional(),
 
   // Product identification (one of these required)

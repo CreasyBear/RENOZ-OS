@@ -42,16 +42,33 @@ export function sanitizeForHtml(value: string | null | undefined): string {
  */
 export function substituteTemplateVariables(
   html: string,
-  variables: Record<string, string | number | boolean | null | undefined>
+  variables: Record<string, unknown>
 ): string {
-  return html.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key) => {
-    const value = variables[key];
-    // Numbers and booleans are safe, strings need sanitization
+  return html.replace(/\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g, (_match, path) => {
+    const value = resolveTemplateValue(variables, path);
     if (typeof value === "number" || typeof value === "boolean") {
       return String(value);
     }
-    return sanitizeForHtml(value as string | null | undefined);
+    if (typeof value === "string") {
+      return sanitizeForHtml(value);
+    }
+    return "";
   });
+}
+
+function resolveTemplateValue(variables: Record<string, unknown>, path: string): unknown {
+  const keys = path.split(".");
+  let current: unknown = variables;
+
+  for (const key of keys) {
+    if (current && typeof current === "object" && key in current) {
+      current = (current as Record<string, unknown>)[key];
+    } else {
+      return undefined;
+    }
+  }
+
+  return current;
 }
 
 /**

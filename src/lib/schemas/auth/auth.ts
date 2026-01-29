@@ -7,6 +7,7 @@
 import { z } from 'zod';
 import {
   emailSchema,
+  optionalEmailSchema,
   phoneSchema,
   urlSchema,
   addressSchema,
@@ -243,7 +244,7 @@ export const createOrganizationSchema = z.object({
     .string()
     .regex(/^\d{11}$/, 'ABN must be 11 digits')
     .optional(),
-  email: emailSchema.optional(),
+  email: optionalEmailSchema,
   phone: phoneSchema,
   website: urlSchema,
   address: addressSchema.partial().optional(),

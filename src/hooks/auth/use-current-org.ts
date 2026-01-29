@@ -25,12 +25,13 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useCurrentUser } from './use-current-user';
+import { useOrganizationQuery } from '@/hooks/organizations';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export interface Organization {
+export interface CurrentOrg {
   id: string;
   name: string;
   slug?: string;
@@ -39,9 +40,9 @@ export interface Organization {
 
 export interface UseCurrentOrgResult {
   /** Current active organization */
-  currentOrg: Organization | null;
+  currentOrg: CurrentOrg | null;
   /** List of organizations user has access to */
-  organizations: Organization[];
+  organizations: CurrentOrg[];
   /** Whether organizations are loading */
   isLoading: boolean;
   /** Set the current organization by ID */
@@ -62,24 +63,32 @@ const ORG_STORAGE_KEY = 'renoz_current_org_id';
 
 export function useCurrentOrg(): UseCurrentOrgResult {
   const { user: currentUser, isLoading: userLoading } = useCurrentUser();
+  const { data: organization, isLoading: organizationLoading } = useOrganizationQuery();
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(() => {
     // Initialize from localStorage if available
     if (typeof window === 'undefined') return null;
     return localStorage.getItem(ORG_STORAGE_KEY);
   });
 
-  // For MVP, we derive organization from the user's metadata or app_metadata
-  // In a full multi-org setup, this would fetch from a user_organizations table
-  const organizations: Organization[] = currentUser
+  const organizations: CurrentOrg[] = organization
     ? [
         {
-          id: currentUser.user_metadata?.organizationId || currentUser.id,
-          name: currentUser.user_metadata?.organizationName || 'My Organization',
-          slug: 'my-org',
-          logoUrl: null,
+          id: organization.id,
+          name: organization.name,
+          slug: organization.slug,
+          logoUrl: organization.branding?.logoUrl ?? null,
         },
       ]
-    : [];
+    : currentUser?.organizationId
+      ? [
+          {
+            id: currentUser.organizationId,
+            name: currentUser.user_metadata?.organizationName || 'My Organization',
+            slug: 'my-org',
+            logoUrl: null,
+          },
+        ]
+      : [];
 
   // Determine current org
   const currentOrg =
@@ -121,7 +130,7 @@ export function useCurrentOrg(): UseCurrentOrgResult {
   return {
     currentOrg,
     organizations,
-    isLoading: userLoading,
+    isLoading: userLoading || organizationLoading,
     setCurrentOrg,
     refresh,
   };

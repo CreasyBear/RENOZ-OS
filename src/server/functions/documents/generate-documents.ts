@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Document Generation Server Functions
  *

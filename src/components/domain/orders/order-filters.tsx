@@ -27,7 +27,7 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import type { OrderStatus } from "@/lib/schemas/orders";
+import type { OrderStatus, PaymentStatus } from "@/lib/schemas/orders";
 
 // ============================================================================
 // TYPES
@@ -36,13 +36,14 @@ import type { OrderStatus } from "@/lib/schemas/orders";
 export interface OrderFiltersProps {
   filters: OrderFiltersState;
   onFiltersChange: (filters: OrderFiltersState) => void;
+  resultCount?: number;
   className?: string;
 }
 
 export interface OrderFiltersState {
   search: string;
   status: OrderStatus | null;
-  paymentStatus: string | null;
+  paymentStatus: PaymentStatus | null;
   dateFrom: Date | null;
   dateTo: Date | null;
   minTotal: number | null;
@@ -74,6 +75,7 @@ const PAYMENT_STATUSES = [
 export const OrderFilters = memo(function OrderFilters({
   filters,
   onFiltersChange,
+  resultCount,
   className,
 }: OrderFiltersProps) {
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -106,6 +108,8 @@ export const OrderFilters = memo(function OrderFilters({
     filters.maxTotal,
   ].filter((v) => v !== null).length;
 
+  const hasActiveFilters = activeFilterCount > 0 || filters.search;
+
   return (
     <div className={cn("space-y-4", className)}>
       {/* Primary Filters Row */}
@@ -119,7 +123,25 @@ export const OrderFilters = memo(function OrderFilters({
             onChange={(e) => updateFilter("search", e.target.value)}
             className="pl-10"
           />
+          {filters.search && (
+            <button
+              type="button"
+              onClick={() => updateFilter("search", "")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
+
+        {/* Result Count */}
+        {resultCount !== undefined && (
+          <div className="flex items-center">
+            <span className="text-sm text-muted-foreground whitespace-nowrap">
+              {resultCount.toLocaleString()} result{resultCount !== 1 ? 's' : ''}
+            </span>
+          </div>
+        )}
 
         {/* Status Filter */}
         <Select
@@ -160,6 +182,112 @@ export const OrderFilters = memo(function OrderFilters({
         </Button>
       </div>
 
+      {/* Active Filter Chips - Always Visible */}
+      {hasActiveFilters && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-muted-foreground">Active filters:</span>
+          {filters.search && (
+            <Badge variant="secondary" className="gap-1">
+              Search: {filters.search}
+              <button
+                type="button"
+                onClick={() => updateFilter("search", "")}
+                className="ml-1 hover:text-destructive focus:outline-none"
+                aria-label="Clear search"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {filters.status && (
+            <Badge variant="secondary" className="gap-1">
+              Status: {ORDER_STATUSES.find(s => s.value === filters.status)?.label || filters.status}
+              <button
+                type="button"
+                onClick={() => updateFilter("status", null)}
+                className="ml-1 hover:text-destructive focus:outline-none"
+                aria-label="Clear status filter"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {filters.paymentStatus && (
+            <Badge variant="secondary" className="gap-1">
+              Payment: {PAYMENT_STATUSES.find(s => s.value === filters.paymentStatus)?.label || filters.paymentStatus}
+              <button
+                type="button"
+                onClick={() => updateFilter("paymentStatus", null)}
+                className="ml-1 hover:text-destructive focus:outline-none"
+                aria-label="Clear payment status filter"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {filters.dateFrom && (
+            <Badge variant="secondary" className="gap-1">
+              From: {format(filters.dateFrom, "dd/MM/yyyy")}
+              <button
+                type="button"
+                onClick={() => updateFilter("dateFrom", null)}
+                className="ml-1 hover:text-destructive focus:outline-none"
+                aria-label="Clear from date filter"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {filters.dateTo && (
+            <Badge variant="secondary" className="gap-1">
+              To: {format(filters.dateTo, "dd/MM/yyyy")}
+              <button
+                type="button"
+                onClick={() => updateFilter("dateTo", null)}
+                className="ml-1 hover:text-destructive focus:outline-none"
+                aria-label="Clear to date filter"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {filters.minTotal !== null && (
+            <Badge variant="secondary" className="gap-1">
+              Min: ${filters.minTotal}
+              <button
+                type="button"
+                onClick={() => updateFilter("minTotal", null)}
+                className="ml-1 hover:text-destructive focus:outline-none"
+                aria-label="Clear min amount filter"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          {filters.maxTotal !== null && (
+            <Badge variant="secondary" className="gap-1">
+              Max: ${filters.maxTotal}
+              <button
+                type="button"
+                onClick={() => updateFilter("maxTotal", null)}
+                className="ml-1 hover:text-destructive focus:outline-none"
+                aria-label="Clear max amount filter"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </Badge>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearFilters}
+            className="text-muted-foreground hover:text-foreground h-auto py-1"
+          >
+            Clear all
+          </Button>
+        </div>
+      )}
+
       {/* Advanced Filters Panel */}
       {showAdvanced && (
         <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
@@ -182,7 +310,7 @@ export const OrderFilters = memo(function OrderFilters({
               <Select
                 value={filters.paymentStatus ?? "all"}
                 onValueChange={(v) =>
-                  updateFilter("paymentStatus", v === "all" ? null : v)
+                  updateFilter("paymentStatus", v === "all" ? null : (v as PaymentStatus))
                 }
               >
                 <SelectTrigger id="payment-status">
@@ -290,77 +418,6 @@ export const OrderFilters = memo(function OrderFilters({
             </div>
           </div>
 
-          {/* Active Filter Tags */}
-          {activeFilterCount > 0 && (
-            <div className="flex flex-wrap gap-2 pt-2 border-t">
-              {filters.status && (
-                <Badge variant="secondary" className="gap-1">
-                  Status: {filters.status}
-                  <button
-                    onClick={() => updateFilter("status", null)}
-                    className="ml-1 hover:text-destructive"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              )}
-              {filters.paymentStatus && (
-                <Badge variant="secondary" className="gap-1">
-                  Payment: {filters.paymentStatus}
-                  <button
-                    onClick={() => updateFilter("paymentStatus", null)}
-                    className="ml-1 hover:text-destructive"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              )}
-              {filters.dateFrom && (
-                <Badge variant="secondary" className="gap-1">
-                  From: {format(filters.dateFrom, "dd/MM/yyyy")}
-                  <button
-                    onClick={() => updateFilter("dateFrom", null)}
-                    className="ml-1 hover:text-destructive"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              )}
-              {filters.dateTo && (
-                <Badge variant="secondary" className="gap-1">
-                  To: {format(filters.dateTo, "dd/MM/yyyy")}
-                  <button
-                    onClick={() => updateFilter("dateTo", null)}
-                    className="ml-1 hover:text-destructive"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              )}
-              {filters.minTotal !== null && (
-                <Badge variant="secondary" className="gap-1">
-                  Min: ${filters.minTotal}
-                  <button
-                    onClick={() => updateFilter("minTotal", null)}
-                    className="ml-1 hover:text-destructive"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              )}
-              {filters.maxTotal !== null && (
-                <Badge variant="secondary" className="gap-1">
-                  Max: ${filters.maxTotal}
-                  <button
-                    onClick={() => updateFilter("maxTotal", null)}
-                    className="ml-1 hover:text-destructive"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              )}
-            </div>
-          )}
         </div>
       )}
     </div>

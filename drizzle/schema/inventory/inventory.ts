@@ -11,6 +11,7 @@
 
 import {
   pgTable,
+  pgEnum,
   uuid,
   text,
   varchar,
@@ -742,6 +743,69 @@ export const inventoryAlertsRelations = relations(inventoryAlerts, ({ one }) => 
 }));
 
 // ============================================================================
+// QUALITY INSPECTIONS TABLE
+// ============================================================================
+
+export const qualityInspectionResultEnum = pgEnum("quality_inspection_result", [
+  "pass",
+  "fail",
+  "conditional",
+]);
+
+export const qualityInspections = pgTable(
+  "quality_inspections",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+
+    // References
+    inventoryId: uuid("inventory_id")
+      .notNull()
+      .references(() => inventory.id, { onDelete: "cascade" }),
+    productId: uuid("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+
+    // Inspection details
+    inspectionDate: timestamp("inspection_date", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    inspectorName: varchar("inspector_name", { length: 255 }).notNull(),
+    result: qualityInspectionResultEnum("result").notNull(),
+    notes: text("notes"),
+
+    // Defects (stored as JSON array)
+    defects: jsonb("defects").$type<string[]>(),
+
+    // Audit
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    createdBy: uuid("created_by"),
+    updatedBy: uuid("updated_by"),
+  },
+  (table) => ({
+    orgIdx: index("idx_quality_inspections_org").on(table.organizationId),
+    inventoryIdx: index("idx_quality_inspections_inventory").on(table.inventoryId),
+    productIdx: index("idx_quality_inspections_product").on(table.productId),
+    dateIdx: index("idx_quality_inspections_date").on(table.inspectionDate),
+  })
+);
+
+// Quality Inspections Relations
+export const qualityInspectionsRelations = relations(qualityInspections, ({ one }) => ({
+  inventory: one(inventory, {
+    fields: [qualityInspections.inventoryId],
+    references: [inventory.id],
+  }),
+  product: one(products, {
+    fields: [qualityInspections.productId],
+    references: [products.id],
+  }),
+}));
+
+// ============================================================================
 // TYPE EXPORTS
 // ============================================================================
 
@@ -769,3 +833,7 @@ export type NewInventoryForecast = typeof inventoryForecasts.$inferInsert;
 // Alerts
 export type InventoryAlert = typeof inventoryAlerts.$inferSelect;
 export type NewInventoryAlert = typeof inventoryAlerts.$inferInsert;
+
+// Quality Inspections
+export type QualityInspection = typeof qualityInspections.$inferSelect;
+export type NewQualityInspection = typeof qualityInspections.$inferInsert;

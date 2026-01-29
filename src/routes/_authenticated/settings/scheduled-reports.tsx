@@ -12,7 +12,7 @@
  * - Status display (last run, next run)
  *
  * @see DASH-REPORTS-UI acceptance criteria
- * @see src/hooks/dashboard/use-scheduled-reports.ts
+ * @see src/hooks/reports/use-scheduled-reports.ts
  */
 
 import { useState, useCallback } from 'react';
@@ -88,13 +88,13 @@ import {
   useExecuteScheduledReport,
   useBulkDeleteScheduledReports,
   useBulkUpdateScheduledReports,
-} from '@/hooks/dashboard';
+} from '@/hooks/reports';
 import type {
   ReportFrequency,
   ReportFormat,
   CreateScheduledReportInput,
-} from '@/lib/schemas/dashboard/scheduled-reports';
-import type { ScheduledReport } from 'drizzle/schema/dashboard/scheduled-reports';
+} from '@/lib/schemas/reports/scheduled-reports';
+import type { ScheduledReport } from 'drizzle/schema/reports/scheduled-reports';
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -454,7 +454,7 @@ function ScheduledReportsPage() {
   // ============================================================================
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">

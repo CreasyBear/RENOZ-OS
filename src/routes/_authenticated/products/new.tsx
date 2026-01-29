@@ -2,6 +2,10 @@
  * New Product Route
  *
  * Product creation page with comprehensive form.
+ *
+ * LAYOUT: full-width
+ *
+ * @see UI_UX_STANDARDIZATION_PRD.md
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
@@ -22,8 +26,11 @@ export const Route = createFileRoute("/_authenticated/products/new")({
     <RouteErrorFallback error={error} parentRoute="/products" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="container">
-      <FormSkeleton sections={4} />
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="Create Product" />
+      <PageLayout.Content>
+        <FormSkeleton sections={4} />
+      </PageLayout.Content>
     </PageLayout>
   ),
 });
@@ -74,7 +81,7 @@ function NewProductPage() {
   };
 
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title={
           <div className="flex items-center gap-3">

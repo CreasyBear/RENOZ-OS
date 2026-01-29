@@ -10,8 +10,7 @@
 "use client";
 
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { useScheduledCalls } from "@/hooks/communications/use-scheduled-calls";
 import {
   Phone,
   Clock,
@@ -38,7 +37,6 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
-import { getScheduledCalls } from "@/lib/server/scheduled-calls";
 import { ScheduledCallActionMenu } from "./scheduled-call-action-menu";
 import { CallOutcomeDialog } from "./call-outcome-dialog";
 
@@ -83,17 +81,11 @@ export function UpcomingCallsWidget({
   >(null);
 
   // Fetch upcoming calls
-  const { data: callsData, isLoading } = useQuery({
-    queryKey: queryKeys.communications.upcomingCalls({ userId, limit }),
-    queryFn: () =>
-      getScheduledCalls({
-        data: {
-          assigneeId: userId,
-          status: "pending",
-          fromDate: new Date(),
-          limit,
-        },
-      }),
+  const { data: callsData, isLoading } = useScheduledCalls({
+    assigneeId: userId,
+    status: "pending",
+    fromDate: new Date(),
+    limit,
   });
 
   const calls = (callsData as CallsResponse | undefined)?.items ?? [];

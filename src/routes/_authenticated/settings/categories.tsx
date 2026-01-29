@@ -166,7 +166,7 @@ function CategoriesSettingsPage() {
     deleteCategoryMutation.isPending;
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Product Categories"
         description="Organize your products into a hierarchical category structure"

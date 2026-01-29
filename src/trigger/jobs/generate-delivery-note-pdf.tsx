@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Generate Delivery Note PDF Task (Trigger.dev v3)
  *

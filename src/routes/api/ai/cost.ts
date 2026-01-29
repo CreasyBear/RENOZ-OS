@@ -13,7 +13,7 @@ import { withAuth } from '@/lib/server/protected';
 import { db } from '@/lib/db';
 import { aiCostTracking } from 'drizzle/schema/_ai';
 import { eq, and, gte, lte, sql, desc } from 'drizzle-orm';
-import { getOrgDailyLimitCents } from '@/lib/ai/utils/budget';
+import { getOrgDailyLimitCents } from '@/server/functions/ai/utils/budget';
 
 export async function GET({ request }: { request: Request }) {
   try {

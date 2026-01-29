@@ -25,16 +25,8 @@ import {
   completeJobAssignmentSchema,
   createJobPhotoSchema,
   listJobPhotosSchema,
-  type CreateJobAssignmentInput,
-  type UpdateJobAssignmentInput,
-  type ListJobAssignmentsInput,
   type JobAssignmentFilters,
-  type GetJobAssignmentInput,
-  type DeleteJobAssignmentInput,
-  type StartJobAssignmentInput,
-  type CompleteJobAssignmentInput,
-  type CreateJobPhotoInput,
-  type ListJobPhotosInput,
+  type UpdateJobAssignmentInput,
   type JobAssignmentResponse,
   type JobPhotoResponse,
   type ListJobAssignmentsResponse,
@@ -119,7 +111,7 @@ function toJobPhotoResponse(photo: typeof jobPhotos.$inferSelect): JobPhotoRespo
 
 export const createJobAssignment = createServerFn({ method: 'POST' })
   .inputValidator(createJobAssignmentSchema)
-  .handler(async ({ data }: { data: CreateJobAssignmentInput }) => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     try {
@@ -193,7 +185,9 @@ export const createJobAssignment = createServerFn({ method: 'POST' })
 
 export const getJobAssignment = createServerFn({ method: 'GET' })
   .inputValidator(getJobAssignmentSchema)
-  .handler(async ({ data }: { data: GetJobAssignmentInput }) => {
+  .handler(async ({ data }) => {
+    const ctx = await withAuth();
+    
     try {
       const [jobWithRelations] = await db
         .select({
@@ -212,7 +206,7 @@ export const getJobAssignment = createServerFn({ method: 'GET' })
         .where(
           and(
             eq(jobAssignments.id, data.id),
-            eq(jobAssignments.organizationId, data.organizationId)
+            eq(jobAssignments.organizationId, ctx.organizationId)
           )
         )
         .innerJoin(users, eq(jobAssignments.installerId, users.id))
@@ -240,7 +234,7 @@ export const getJobAssignment = createServerFn({ method: 'GET' })
 
 export const listJobAssignments = createServerFn({ method: 'GET' })
   .inputValidator(listJobAssignmentsSchema)
-  .handler(async ({ data }: { data: ListJobAssignmentsInput }) => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     try {
@@ -439,7 +433,7 @@ export const updateJobAssignment = createServerFn({ method: 'POST' })
 
 export const deleteJobAssignment = createServerFn({ method: 'POST' })
   .inputValidator(deleteJobAssignmentSchema)
-  .handler(async ({ data }: { data: DeleteJobAssignmentInput }) => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     try {
@@ -483,7 +477,7 @@ export const deleteJobAssignment = createServerFn({ method: 'POST' })
 
 export const startJobAssignment = createServerFn({ method: 'POST' })
   .inputValidator(startJobAssignmentSchema)
-  .handler(async ({ data }: { data: StartJobAssignmentInput }) => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     try {
@@ -526,7 +520,7 @@ export const startJobAssignment = createServerFn({ method: 'POST' })
 
 export const completeJobAssignment = createServerFn({ method: 'POST' })
   .inputValidator(completeJobAssignmentSchema)
-  .handler(async ({ data }: { data: CompleteJobAssignmentInput }) => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     try {
@@ -569,7 +563,7 @@ export const completeJobAssignment = createServerFn({ method: 'POST' })
 
 export const createJobPhoto = createServerFn({ method: 'POST' })
   .inputValidator(createJobPhotoSchema)
-  .handler(async ({ data }: { data: CreateJobPhotoInput }) => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     try {
@@ -604,7 +598,7 @@ export const createJobPhoto = createServerFn({ method: 'POST' })
 
 export const getJobPhotos = createServerFn({ method: 'GET' })
   .inputValidator(listJobPhotosSchema)
-  .handler(async ({ data }: { data: ListJobPhotosInput }) => {
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     try {

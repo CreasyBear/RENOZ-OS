@@ -12,7 +12,6 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
   listPendingApprovals,
@@ -49,11 +48,10 @@ export interface UsePendingApprovalsOptions extends Partial<ListPendingApprovals
  */
 export function usePendingApprovals(options: UsePendingApprovalsOptions = {}) {
   const { enabled = true, ...filters } = options;
-  const listFn = useServerFn(listPendingApprovals);
 
   return useQuery({
     queryKey: queryKeys.approvals.pending(filters),
-    queryFn: () => listFn({ data: filters as ListPendingApprovalsInput }),
+    queryFn: () => listPendingApprovals({ data: filters as ListPendingApprovalsInput }),
     enabled,
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000, // Refresh every minute for real-time feel
@@ -72,11 +70,10 @@ export function useApprovalDetails(
   options: UseApprovalDetailsOptions = {}
 ) {
   const { enabled = true } = options;
-  const getFn = useServerFn(getApprovalDetails);
 
   return useQuery({
     queryKey: queryKeys.approvals.detail(approvalId),
-    queryFn: () => getFn({ data: { approvalId } }),
+    queryFn: () => getApprovalDetails({ data: { approvalId } }),
     enabled: enabled && !!approvalId,
     staleTime: 60 * 1000,
   });
@@ -88,11 +85,10 @@ export function useApprovalDetails(
  */
 export function useApprovalHistory(purchaseOrderId: string, options: { enabled?: boolean } = {}) {
   const { enabled = true } = options;
-  const getFn = useServerFn(getApprovalHistory);
 
   return useQuery({
     queryKey: queryKeys.approvals.history(purchaseOrderId),
-    queryFn: () => getFn({ data: { purchaseOrderId } }),
+    queryFn: () => getApprovalHistory({ data: { purchaseOrderId } }),
     enabled: enabled && !!purchaseOrderId,
     staleTime: 60 * 1000,
   });
@@ -104,11 +100,10 @@ export function useApprovalHistory(purchaseOrderId: string, options: { enabled?:
  */
 export function useMyApprovalStats(options: { enabled?: boolean } = {}) {
   const { enabled = true } = options;
-  const statsFn = useServerFn(getApprovalStats);
 
   return useQuery({
     queryKey: queryKeys.approvals.stats(),
-    queryFn: () => statsFn({}),
+    queryFn: () => getApprovalStats({}),
     enabled,
     staleTime: 30 * 1000,
   });
@@ -124,10 +119,9 @@ export function useMyApprovalStats(options: { enabled?: boolean } = {}) {
  */
 export function useApproveItem() {
   const queryClient = useQueryClient();
-  const approveFn = useServerFn(approvePurchaseOrderAtLevel);
 
   return useMutation({
-    mutationFn: (data: ApproveRejectInput) => approveFn({ data }),
+    mutationFn: (data: ApproveRejectInput) => approvePurchaseOrderAtLevel({ data }),
     onSuccess: (_result, variables) => {
       // Invalidate approval queries
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.lists() });
@@ -147,10 +141,9 @@ export function useApproveItem() {
  */
 export function useRejectItem() {
   const queryClient = useQueryClient();
-  const rejectFn = useServerFn(rejectPurchaseOrderAtLevel);
 
   return useMutation({
-    mutationFn: (data: RejectInput) => rejectFn({ data }),
+    mutationFn: (data: RejectInput) => rejectPurchaseOrderAtLevel({ data }),
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.stats() });
@@ -168,10 +161,9 @@ export function useRejectItem() {
  */
 export function useBulkApprove() {
   const queryClient = useQueryClient();
-  const bulkApproveFn = useServerFn(bulkApproveApprovals);
 
   return useMutation({
-    mutationFn: (data: BulkApproveInput) => bulkApproveFn({ data }),
+    mutationFn: (data: BulkApproveInput) => bulkApproveApprovals({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrders() });
@@ -185,7 +177,6 @@ export function useBulkApprove() {
  */
 export function useBulkReject() {
   const queryClient = useQueryClient();
-  const rejectFn = useServerFn(rejectPurchaseOrderAtLevel);
 
   return useMutation({
     mutationFn: async (items: RejectInput[]) => {
@@ -196,7 +187,7 @@ export function useBulkReject() {
 
       for (const item of items) {
         try {
-          await rejectFn({ data: item });
+          await rejectPurchaseOrderAtLevel({ data: item });
           results.rejected.push(item.approvalId);
         } catch (error) {
           results.failed.push({
@@ -225,10 +216,9 @@ export function useBulkReject() {
  */
 export function useEscalateApproval() {
   const queryClient = useQueryClient();
-  const escalateFn = useServerFn(escalateApproval);
 
   return useMutation({
-    mutationFn: (data: EscalateInput) => escalateFn({ data }),
+    mutationFn: (data: EscalateInput) => escalateApproval({ data }),
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.stats() });
@@ -249,10 +239,9 @@ export function useEscalateApproval() {
  */
 export function useDelegateApproval() {
   const queryClient = useQueryClient();
-  const delegateFn = useServerFn(delegateApproval);
 
   return useMutation({
-    mutationFn: (data: DelegateInput) => delegateFn({ data }),
+    mutationFn: (data: DelegateInput) => delegateApproval({ data }),
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.lists() });
       queryClient.invalidateQueries({
@@ -290,10 +279,9 @@ export function useRevokeDelegation() {
  */
 export function useEvaluateApprovalRules() {
   const queryClient = useQueryClient();
-  const evaluateFn = useServerFn(evaluateApprovalRules);
 
   return useMutation({
-    mutationFn: (purchaseOrderId: string) => evaluateFn({ data: { purchaseOrderId } }),
+    mutationFn: (purchaseOrderId: string) => evaluateApprovalRules({ data: { purchaseOrderId } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.all });
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrders() });

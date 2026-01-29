@@ -6,9 +6,7 @@
  * @see _Initiation/_prd/2-domains/pipeline/pipeline.prd.json (PIPE-WINLOSS-UI)
  */
 
-import { memo, useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { memo, useState, useMemo, useCallback } from "react";
 import {
   Trophy,
   XCircle,
@@ -16,6 +14,8 @@ import {
   TrendingDown,
   Building2,
   BarChart3,
+  Download,
+  Mail,
 } from "lucide-react";
 import {
   Card,
@@ -36,6 +36,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Table,
   TableBody,
   TableCell,
@@ -45,7 +51,10 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/formatters";
-import { getWinLossAnalysis, getCompetitors } from "@/server/functions/pipeline/win-loss-reasons";
+import { useWinLossAnalysis, useCompetitors } from "@/hooks/reports";
+import { useCreateScheduledReport, useGenerateReport } from "@/hooks/reports";
+import { ScheduledReportForm } from "@/components/domain/settings/scheduled-report-form";
+import type { Button } from "react-day-picker";
 
 // ============================================================================
 // TYPES
@@ -93,33 +102,53 @@ export const WinLossAnalysis = memo(function WinLossAnalysis({
   className,
 }: WinLossAnalysisProps) {
   const [period, setPeriod] = useState("90d");
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const { dateFrom, dateTo } = useMemo(() => getDateRange(period), [period]);
 
   // Fetch analysis data
-  const analysisQuery = useQuery({
-    queryKey: queryKeys.reports.winLossAnalysis(dateFrom.toISOString(), dateTo.toISOString()),
-    queryFn: async () => {
-      const result = await getWinLossAnalysis({
-        data: { dateFrom, dateTo },
-      });
-      return result;
-    },
-  });
+  const analysisQuery = useWinLossAnalysis({ dateFrom, dateTo });
 
   // Fetch competitors
-  const competitorsQuery = useQuery({
-    queryKey: queryKeys.reports.competitors(dateFrom.toISOString(), dateTo.toISOString()),
-    queryFn: async () => {
-      const result = await getCompetitors({
-        data: { dateFrom, dateTo },
-      });
-      return result;
-    },
-  });
+  const competitorsQuery = useCompetitors({ dateFrom, dateTo });
 
   const analysis = analysisQuery.data;
   const competitors = competitorsQuery.data?.competitors ?? [];
   const isLoading = analysisQuery.isLoading;
+  const createScheduledReport = useCreateScheduledReport();
+  const generateReport = useGenerateReport();
+
+  const handleExport = useCallback(
+    (format: "pdf" | "excel") => {
+      const reportFormat = format === "excel" ? "xlsx" : "pdf";
+      generateReport
+        .mutateAsync({
+          metrics: ["win_rate", "won_revenue", "lost_revenue"],
+          dateFrom: dateFrom.toISOString().split("T")[0],
+          dateTo: dateTo.toISOString().split("T")[0],
+          format: reportFormat,
+          includeCharts: true,
+          includeTrends: true,
+        })
+        .then((result) => {
+          window.open(result.reportUrl, "_blank", "noopener,noreferrer");
+        })
+        .catch(() => {
+          // keep UI quiet; caller can toast
+        });
+    },
+    [generateReport, dateFrom, dateTo]
+  );
+
+  const handleScheduleReport = useCallback(() => {
+    setScheduleOpen(true);
+  }, []);
+
+  const handleScheduleSubmit = useCallback(
+    async (input: Parameters<typeof createScheduledReport.mutateAsync>[0]) => {
+      await createScheduledReport.mutateAsync(input);
+    },
+    [createScheduledReport]
+  );
 
   // Render metric card
   const renderMetricCard = (
@@ -171,18 +200,40 @@ export const WinLossAnalysis = memo(function WinLossAnalysis({
             Analyze patterns and trends in won and lost opportunities
           </p>
         </div>
-        <Select value={period} onValueChange={setPeriod}>
-          <SelectTrigger className="w-[140px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="30d">Last 30 days</SelectItem>
-            <SelectItem value="90d">Last 90 days</SelectItem>
-            <SelectItem value="6m">Last 6 months</SelectItem>
-            <SelectItem value="1y">Last year</SelectItem>
-            <SelectItem value="all">All time</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={period} onValueChange={setPeriod}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="30d">Last 30 days</SelectItem>
+              <SelectItem value="90d">Last 90 days</SelectItem>
+              <SelectItem value="6m">Last 6 months</SelectItem>
+              <SelectItem value="1y">Last year</SelectItem>
+              <SelectItem value="all">All time</SelectItem>
+            </SelectContent>
+          </Select>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <Download className="mr-2 h-4 w-4" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => handleExport("pdf")}>
+                Export PDF
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExport("excel")}>
+                Export Excel
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button variant="outline" onClick={handleScheduleReport}>
+            <Mail className="mr-2 h-4 w-4" />
+            Schedule
+          </Button>
+        </div>
       </div>
 
       {/* Summary metrics */}
@@ -467,6 +518,22 @@ export const WinLossAnalysis = memo(function WinLossAnalysis({
           </Card>
         </TabsContent>
       </Tabs>
+      <ScheduledReportForm
+        open={scheduleOpen}
+        onOpenChange={setScheduleOpen}
+        onSubmit={handleScheduleSubmit}
+        isSubmitting={createScheduledReport.isPending}
+        defaultValues={{
+          name: "Win/Loss Report",
+          description: "Recurring win/loss summary and competitor insights",
+          metrics: {
+            metrics: ["win_rate", "won_revenue", "lost_revenue"],
+            includeCharts: true,
+            includeTrends: true,
+            comparisonPeriod: "previous_period",
+          },
+        }}
+      />
     </div>
   );
 });

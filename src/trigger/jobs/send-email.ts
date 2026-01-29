@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Send Email Tasks (Trigger.dev v3)
  *
@@ -18,6 +20,7 @@ import {
   products,
   type NewEmailHistory,
 } from "drizzle/schema";
+import { createEmailSentActivity } from "@/lib/server/activity-bridge";
 
 // Initialize Resend client
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -325,6 +328,17 @@ export const sendOrderConfirmation = task({
       }
     );
 
+    // Log email activity to audit trail
+    await createEmailSentActivity({
+      emailId: emailRecord.id,
+      organizationId,
+      userId: null, // System-triggered email
+      customerId,
+      subject,
+      recipientEmail: customer.email,
+      recipientName: customer.name,
+    });
+
     return {
       success: true,
       orderId,
@@ -474,6 +488,17 @@ export const sendShippingNotification = task({
         emailHistoryId: emailRecord.id,
       }
     );
+
+    // Log email activity to audit trail
+    await createEmailSentActivity({
+      emailId: emailRecord.id,
+      organizationId,
+      userId: null, // System-triggered email
+      customerId,
+      subject,
+      recipientEmail: customer.email,
+      recipientName: customer.name,
+    });
 
     return {
       success: true,

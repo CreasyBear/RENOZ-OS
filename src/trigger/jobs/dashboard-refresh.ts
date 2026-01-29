@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Dashboard Refresh Background Tasks (Trigger.dev v3)
  *

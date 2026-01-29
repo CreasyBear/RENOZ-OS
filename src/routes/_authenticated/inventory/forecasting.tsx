@@ -21,6 +21,7 @@ import { toast } from "@/hooks";
 import {
   ReorderRecommendations,
   type ReorderRecommendation,
+  CreatePOFromRecommendationDialog,
 } from "@/components/domain/inventory";
 import {
   ForecastChart,
@@ -108,22 +109,34 @@ function ForecastingPage() {
   // Get selected product name
   const selectedProduct = recommendations.find((r) => r.productId === selectedProductId);
 
+  // Dialog state for PO creation
+  const [selectedRecommendation, setSelectedRecommendation] = useState<ReorderRecommendation | null>(null);
+  const [showPODialog, setShowPODialog] = useState(false);
+
   // Handlers
   const handleRefresh = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: queryKeys.inventory.reorderRecommendations({}) });
   }, [queryClient]);
 
-  const handleReorder = useCallback((_productId: string, quantity: number) => {
-    toast.info("Create Order", {
-      description: `Order ${quantity} units of product - Purchase order creation coming soon`,
-    });
-  }, []);
+  const handleReorder = useCallback((productId: string, _quantity: number) => {
+    const recommendation = recommendations.find((r) => r.productId === productId);
+    if (recommendation) {
+      setSelectedRecommendation(recommendation);
+      setShowPODialog(true);
+    }
+  }, [recommendations]);
 
   const handleReorderAll = useCallback(() => {
     toast.info("Create Bulk Order", {
       description: "Bulk order creation for all urgent items coming soon",
     });
   }, []);
+
+  const handlePOCreated = useCallback(() => {
+    toast.success("Purchase order created successfully");
+    // Refresh recommendations
+    queryClient.invalidateQueries({ queryKey: queryKeys.inventory.reorderRecommendations({}) });
+  }, [queryClient]);
 
   return (
     <PageLayout variant="full-width">
@@ -302,6 +315,14 @@ function ForecastingPage() {
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Create PO Dialog */}
+        <CreatePOFromRecommendationDialog
+          recommendation={selectedRecommendation}
+          open={showPODialog}
+          onOpenChange={setShowPODialog}
+          onSuccess={handlePOCreated}
+        />
       </PageLayout.Content>
     </PageLayout>
   );

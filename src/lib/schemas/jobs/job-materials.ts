@@ -115,6 +115,23 @@ export const getJobMaterialSchema = z.object({
 export type GetJobMaterialInput = z.infer<typeof getJobMaterialSchema>;
 
 // ============================================================================
+// RECORD MATERIAL INSTALLATION (Enhanced Tracking - Story 029)
+// ============================================================================
+
+/**
+ * Schema for recording material installation with serial numbers and photos.
+ */
+export const recordMaterialInstallationSchema = z.object({
+  materialId: z.string().uuid('Invalid material ID format'),
+  serialNumbers: z.array(z.string().min(1)).default([]),
+  installedLocation: z.string().max(500).optional().nullable(),
+  photos: z.array(z.string().url()).default([]),
+  quantityUsed: quantitySchema.min(0),
+});
+
+export type RecordMaterialInstallationInput = z.infer<typeof recordMaterialInstallationSchema>;
+
+// ============================================================================
 // RESPONSE TYPES
 // ============================================================================
 

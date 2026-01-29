@@ -2,7 +2,8 @@
  * AI Context Module
  *
  * Provides application context for AI operations.
- * Implements ARCH-001 (context structure) and ARCH-006 (caching).
+ *
+ * ⚠️ NOTE: Builder implementations are in src/server/functions/ai/context/
  */
 
 // Types
@@ -20,7 +21,7 @@ export type {
 // Type guards
 export { isPeriodOption, isMetricsFilter } from './types';
 
-// Builder functions
+// Builder functions (server-only)
 export {
   buildAppContext,
   buildToolContext,
@@ -28,27 +29,21 @@ export {
   getDefaultAppContext,
   DEFAULT_METRICS_FILTER,
   type BuildAppContextInput,
-  // Cached builder (ARCH-006)
   buildCachedAppContext,
   type BuildCachedAppContextInput,
-} from './builder';
+} from '@/server/functions/ai/context/builder';
 
-// Cache functions (ARCH-006)
+// Cache functions (safe - no db)
 export {
-  // Types
   type CachedUserContext,
   type CachedOrgContext,
-  // Getters
   getCachedUserContext,
   getCachedOrgContext,
-  // Setters (fire-and-forget)
   setCachedUserContext,
   setCachedOrgContext,
-  // Invalidation
   invalidateUserContext,
   invalidateOrgContext,
   invalidateOrgContexts,
-  // Cache-aside helpers
   getUserContextWithCache,
   getOrgContextWithCache,
 } from './cache';

@@ -1,7 +1,11 @@
 /**
  * Issues Board Route
  *
+ * LAYOUT: full-width
+ *
  * Kanban board view for issue management.
+ *
+ * LAYOUT: full-width
  *
  * @see src/components/domain/support/issue-kanban-board.tsx
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-008
@@ -44,7 +48,7 @@ export const Route = createFileRoute('/_authenticated/support/issues-board')({
     <RouteErrorFallback error={error} parentRoute="/support" />
   ),
   pendingComponent: () => (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Issues Board"
         description="Manage issues with drag-and-drop"
@@ -243,54 +247,61 @@ function IssuesBoardPage() {
 
   if (error) {
     return (
-      <div className="container py-6">
-        <div className="py-12 text-center">
-          <p className="text-destructive mb-4">Failed to load issues</p>
-          <Button onClick={() => refetch()}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Retry
-          </Button>
-        </div>
-      </div>
+      <PageLayout variant="full-width">
+        <PageLayout.Header
+          title="Issues Board"
+          description="Manage issues with drag-and-drop"
+        />
+        <PageLayout.Content>
+          <div className="py-12 text-center">
+            <p className="text-destructive mb-4">Failed to load issues</p>
+            <Button onClick={() => refetch()}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Retry
+            </Button>
+          </div>
+        </PageLayout.Content>
+      </PageLayout>
     );
   }
 
   return (
     <TooltipProvider>
-      <div className="container space-y-4 py-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Issues Board</h1>
-            <p className="text-muted-foreground">Manage issues with drag-and-drop</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {/* View Toggle */}
-            <Tabs defaultValue="board" className="w-auto">
-              <TabsList className="h-9">
-                <TabsTrigger value="board" className="px-3">
-                  <LayoutGrid className="h-4 w-4" />
-                </TabsTrigger>
-                <Link to="/support/issues">
-                  <TabsTrigger value="list" className="px-3">
-                    <List className="h-4 w-4" />
+      <PageLayout variant="full-width">
+        <PageLayout.Header
+          title="Issues Board"
+          description="Manage issues with drag-and-drop"
+          actions={
+            <div className="flex items-center gap-2">
+              {/* View Toggle */}
+              <Tabs defaultValue="board" className="w-auto">
+                <TabsList className="h-9">
+                  <TabsTrigger value="board" className="px-3">
+                    <LayoutGrid className="h-4 w-4" />
                   </TabsTrigger>
-                </Link>
-              </TabsList>
-            </Tabs>
+                  <Link to="/support/issues">
+                    <TabsTrigger value="list" className="px-3">
+                      <List className="h-4 w-4" />
+                    </TabsTrigger>
+                  </Link>
+                </TabsList>
+              </Tabs>
 
-            <Button onClick={() => refetch()} variant="outline" size="sm">
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-
-            <Link to="/support/issues/new">
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Issue
+              <Button onClick={() => refetch()} variant="outline" size="sm">
+                <RefreshCw className="h-4 w-4" />
               </Button>
-            </Link>
-          </div>
-        </div>
+
+              <Link to="/support/issues/new">
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Issue
+                </Button>
+              </Link>
+            </div>
+          }
+        />
+
+        <PageLayout.Content>
 
         {/* Quick Filters */}
         <IssueQuickFilters
@@ -329,7 +340,8 @@ function IssuesBoardPage() {
             onConfirm={handleStatusChangeConfirm}
           />
         )}
-      </div>
+        </PageLayout.Content>
+      </PageLayout>
     </TooltipProvider>
   );
 }

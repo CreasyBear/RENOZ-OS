@@ -42,7 +42,7 @@ export const Route = createFileRoute('/_authenticated/financial/credit-notes')({
     <RouteErrorFallback error={error} parentRoute="/financial" />
   ),
   pendingComponent: () => (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Credit Notes"
         description="Customer credit notes and refund management"
@@ -102,7 +102,7 @@ function CreditNotesPage() {
     voidMutation.isPending;
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Credit Notes"
         description="Customer credit notes and refund management"

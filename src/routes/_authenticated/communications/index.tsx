@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_authenticated/communications/")({
     <RouteErrorFallback error={error} parentRoute="/" />
   ),
   pendingComponent: () => (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Communications"
         description="Manage email campaigns, templates, and scheduled communications"
@@ -84,7 +84,7 @@ function CommunicationsLayout() {
   const location = useLocation();
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Communications"
         description="Manage email campaigns, templates, and scheduled communications"

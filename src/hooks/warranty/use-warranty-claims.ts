@@ -3,23 +3,12 @@
  *
  * Provides data fetching and mutations for warranty claims workflow.
  *
- * @see src/server/functions/warranty-claims.ts
+ * @see src/server/functions/warranty/warranty-claims.ts
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json - DOM-WAR-006c
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
-import {
-  listWarrantyClaims,
-  getWarrantyClaim,
-  createWarrantyClaim,
-  updateClaimStatus,
-  approveClaim,
-  denyClaim,
-  resolveClaim,
-  assignClaim,
-} from '@/server/functions/warranty/warranty-claims';
 import type {
   ListWarrantyClaimsInput,
   CreateWarrantyClaimInput,
@@ -41,6 +30,16 @@ import {
   formatClaimCost,
 } from '@/lib/warranty/claims-utils';
 import { toast } from '../_shared/use-toast';
+import {
+  listWarrantyClaims,
+  getWarrantyClaim,
+  createWarrantyClaim,
+  updateClaimStatus,
+  approveClaim,
+  denyClaim,
+  resolveClaim,
+  assignClaim,
+} from '@/server/functions/warranty';
 
 // ============================================================================
 // CACHE CONFIGURATION
@@ -82,12 +81,10 @@ export {
  * Hook for fetching warranty claims with filters and pagination.
  */
 export function useWarrantyClaims(options?: ListWarrantyClaimsInput) {
-  const listFn = useServerFn(listWarrantyClaims);
-
   return useQuery({
     queryKey: queryKeys.warrantyClaims.list(options),
     queryFn: () =>
-      listFn({
+      listWarrantyClaims({
         data: {
           ...options,
           page: options?.page ?? 1,
@@ -104,12 +101,10 @@ export function useWarrantyClaims(options?: ListWarrantyClaimsInput) {
  * Hook for fetching claims for a specific warranty.
  */
 export function useWarrantyClaimsByWarranty(warrantyId: string | undefined) {
-  const listFn = useServerFn(listWarrantyClaims);
-
   return useQuery({
     queryKey: queryKeys.warrantyClaims.byWarranty(warrantyId ?? ''),
     queryFn: () =>
-      listFn({
+      listWarrantyClaims({
         data: {
           warrantyId: warrantyId!,
           page: 1,
@@ -127,12 +122,10 @@ export function useWarrantyClaimsByWarranty(warrantyId: string | undefined) {
  * Hook for fetching claims for a specific customer.
  */
 export function useWarrantyClaimsByCustomer(customerId: string | undefined) {
-  const listFn = useServerFn(listWarrantyClaims);
-
   return useQuery({
     queryKey: queryKeys.warrantyClaims.byCustomer(customerId ?? ''),
     queryFn: () =>
-      listFn({
+      listWarrantyClaims({
         data: {
           customerId: customerId!,
           page: 1,
@@ -154,11 +147,9 @@ export function useWarrantyClaimsByCustomer(customerId: string | undefined) {
  * Hook for fetching a single warranty claim with full details.
  */
 export function useWarrantyClaim(claimId: string | undefined) {
-  const getFn = useServerFn(getWarrantyClaim);
-
   return useQuery({
     queryKey: queryKeys.warrantyClaims.detail(claimId ?? ''),
-    queryFn: () => getFn({ data: { claimId: claimId! } }),
+    queryFn: () => getWarrantyClaim({ data: { claimId: claimId! } }),
     enabled: !!claimId,
     staleTime: DETAIL_STALE_TIME,
   });
@@ -173,10 +164,9 @@ export function useWarrantyClaim(claimId: string | undefined) {
  */
 export function useCreateWarrantyClaim() {
   const queryClient = useQueryClient();
-  const createFn = useServerFn(createWarrantyClaim);
 
   return useMutation({
-    mutationFn: (data: CreateWarrantyClaimInput) => createFn({ data }),
+    mutationFn: (data: CreateWarrantyClaimInput) => createWarrantyClaim({ data }),
     onSuccess: (result) => {
       // Invalidate all claim lists
       queryClient.invalidateQueries({ queryKey: queryKeys.warrantyClaims.lists() });
@@ -201,10 +191,9 @@ export function useCreateWarrantyClaim() {
  */
 export function useUpdateClaimStatus() {
   const queryClient = useQueryClient();
-  const updateFn = useServerFn(updateClaimStatus);
 
   return useMutation({
-    mutationFn: (data: UpdateClaimStatusInput) => updateFn({ data }),
+    mutationFn: (data: UpdateClaimStatusInput) => updateClaimStatus({ data }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.warrantyClaims.lists() });
       queryClient.invalidateQueries({
@@ -232,10 +221,9 @@ export function useUpdateClaimStatus() {
  */
 export function useApproveClaim() {
   const queryClient = useQueryClient();
-  const approveFn = useServerFn(approveClaim);
 
   return useMutation({
-    mutationFn: (data: ApproveClaimInput) => approveFn({ data }),
+    mutationFn: (data: ApproveClaimInput) => approveClaim({ data }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.warrantyClaims.lists() });
       queryClient.invalidateQueries({
@@ -261,10 +249,9 @@ export function useApproveClaim() {
  */
 export function useDenyClaim() {
   const queryClient = useQueryClient();
-  const denyFn = useServerFn(denyClaim);
 
   return useMutation({
-    mutationFn: (data: DenyClaimInput) => denyFn({ data }),
+    mutationFn: (data: DenyClaimInput) => denyClaim({ data }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.warrantyClaims.lists() });
       queryClient.invalidateQueries({
@@ -290,10 +277,9 @@ export function useDenyClaim() {
  */
 export function useResolveClaim() {
   const queryClient = useQueryClient();
-  const resolveFn = useServerFn(resolveClaim);
 
   return useMutation({
-    mutationFn: (data: ResolveClaimInput) => resolveFn({ data }),
+    mutationFn: (data: ResolveClaimInput) => resolveClaim({ data }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.warrantyClaims.lists() });
       queryClient.invalidateQueries({
@@ -322,10 +308,9 @@ export function useResolveClaim() {
  */
 export function useAssignClaim() {
   const queryClient = useQueryClient();
-  const assignFn = useServerFn(assignClaim);
 
   return useMutation({
-    mutationFn: (data: AssignClaimInput) => assignFn({ data }),
+    mutationFn: (data: AssignClaimInput) => assignClaim({ data }),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.warrantyClaims.lists() });
       queryClient.invalidateQueries({

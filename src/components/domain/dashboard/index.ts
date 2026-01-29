@@ -17,6 +17,8 @@ export type { DashboardGridProps, WidgetConfig } from "./dashboard-grid"
 export { WidgetCatalog } from "./widget-catalog"
 export type { WidgetCatalogProps, WidgetDefinition } from "./widget-catalog"
 
+export { WidgetRenderer, type WidgetRendererProps } from "./widget-renderer"
+
 export { MainDashboard } from "./main-dashboard"
 export type {
   MainDashboardProps,

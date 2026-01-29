@@ -56,6 +56,7 @@ interface ProductValuation {
 
 interface InventoryValuationResult {
   totalValue: number;
+  totalSkus: number;
   byLocation: LocationValuation[];
   byProduct: ProductValuation[];
   valuationMethod: string;
@@ -236,6 +237,7 @@ export const getInventoryValuation = createServerFn({ method: 'GET' })
     const [totals] = await db
       .select({
         totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
+        totalSkus: sql<number>`COUNT(DISTINCT ${inventory.productId})::int`,
       })
       .from(inventory)
       .where(and(...invConditions));
@@ -271,20 +273,25 @@ export const getInventoryValuation = createServerFn({ method: 'GET' })
           END::numeric`,
         totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
         costLayers: sql<number>`(
-          SELECT COUNT(*) FROM inventory_cost_layers cl
-          WHERE cl.inventory_id = ${inventory.id}
-          AND cl.quantity_remaining > 0
+          SELECT COUNT(*)
+          FROM inventory_cost_layers cl
+          INNER JOIN inventory inv2 ON cl.inventory_id = inv2.id
+          WHERE inv2.product_id = ${products.id}
+            AND inv2.organization_id = ${ctx.organizationId}
+            AND cl.quantity_remaining > 0
+            ${data.locationId ? sql`AND inv2.location_id = ${data.locationId}` : sql``}
         )::int`,
       })
       .from(inventory)
       .innerJoin(products, eq(inventory.productId, products.id))
       .where(and(...invConditions))
-      .groupBy(products.id, products.sku, products.name, inventory.id)
+      .groupBy(products.id, products.sku, products.name)
       .orderBy(desc(sql`SUM(${inventory.totalValue})`))
       .limit(50);
 
     return {
       totalValue: Number(totals?.totalValue ?? 0),
+      totalSkus: totals?.totalSkus ?? 0,
       byLocation: byLocation.map((l) => ({
         ...l,
         totalValue: Number(l.totalValue),

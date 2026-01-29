@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Unsubscribe Token Generation and Verification
  *

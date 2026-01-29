@@ -1,8 +1,12 @@
+'use server'
+
 /**
  * Activity Logger Utility
  *
  * Provides functions for logging activities to the audit trail.
  * Activities are logged asynchronously to avoid blocking main transactions.
+ *
+ * ⚠️ SERVER-ONLY: Imports database client.
  *
  * @see drizzle/schema/activities.ts for database schema
  * @see src/lib/schemas/activities.ts for validation schemas

@@ -26,7 +26,7 @@ export const Route = createFileRoute('/_authenticated/financial/ar-aging')({
     <RouteErrorFallback error={error} parentRoute="/financial" />
   ),
   pendingComponent: () => (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="AR Aging Report"
         description="Accounts receivable aging analysis by customer"
@@ -62,7 +62,7 @@ function ARAgingReportPage() {
   );
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="AR Aging Report"
         description="Accounts receivable aging analysis by customer"

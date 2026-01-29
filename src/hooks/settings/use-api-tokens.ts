@@ -9,16 +9,14 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
-import {
-  listApiTokens,
-  createApiToken,
-  revokeApiToken,
-} from '@/lib/server/api-tokens';
 import type {
   ApiTokenListItem,
   CreateApiTokenResponse,
   ApiTokenScope,
 } from '@/lib/schemas/auth';
+
+// Dynamic imports to prevent server-only code from being bundled to client
+const loadApiTokensModule = () => import('@/server/functions/settings/api-tokens');
 
 // ============================================================================
 // TYPES
@@ -48,7 +46,10 @@ export interface UseApiTokensOptions {
  * Returns masked tokens (no plaintext).
  */
 export function useApiTokens({ enabled = true }: UseApiTokensOptions = {}) {
-  const listTokensFn = useServerFn(listApiTokens);
+  const listTokensFn = useServerFn(async () => {
+    const { listApiTokens } = await loadApiTokensModule();
+    return listApiTokens();
+  });
 
   return useQuery({
     queryKey: queryKeys.apiTokens.list(),
@@ -77,7 +78,10 @@ export function useApiTokens({ enabled = true }: UseApiTokensOptions = {}) {
  */
 export function useCreateApiToken() {
   const queryClient = useQueryClient();
-  const createFn = useServerFn(createApiToken);
+  const createFn = useServerFn(async ({ data }: { data: CreateApiTokenParams }) => {
+    const { createApiToken } = await loadApiTokensModule();
+    return createApiToken({ data });
+  });
 
   return useMutation({
     mutationFn: ({ name, scopes, expiresAt }: CreateApiTokenParams) =>
@@ -94,7 +98,10 @@ export function useCreateApiToken() {
  */
 export function useRevokeApiToken() {
   const queryClient = useQueryClient();
-  const revokeFn = useServerFn(revokeApiToken);
+  const revokeFn = useServerFn(async ({ data }: { data: RevokeApiTokenParams }) => {
+    const { revokeApiToken } = await loadApiTokensModule();
+    return revokeApiToken({ data });
+  });
 
   return useMutation({
     mutationFn: ({ tokenId, reason }: RevokeApiTokenParams) =>

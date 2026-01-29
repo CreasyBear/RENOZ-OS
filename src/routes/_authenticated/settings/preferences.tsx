@@ -18,7 +18,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useServerFn } from '@tanstack/react-start';
-import { RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { SettingsCardsSkeleton } from '@/components/skeletons/settings';
 import { getPreferences, setPreference } from '@/server/functions/users/user-preferences';
 import { PREFERENCE_CATEGORIES, type PreferenceCategory } from 'drizzle/schema';
@@ -524,13 +524,12 @@ function PreferencesSettings() {
   const activeCategoryMeta = CATEGORIES.find((c) => c.id === activeCategory);
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Preferences</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Personalize your experience. Changes are saved automatically.
-        </p>
-      </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="Preferences"
+        description="Personalize your experience. Changes are saved automatically."
+      />
+      <PageLayout.Content>
 
       <div className="flex gap-6">
         {/* Sidebar */}
@@ -571,6 +570,7 @@ function PreferencesSettings() {
           </Card>
         </div>
       </div>
-    </div>
+      </PageLayout.Content>
+    </PageLayout>
   );
 }

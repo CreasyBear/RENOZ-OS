@@ -81,6 +81,12 @@ export {
   useCancelStockCount,
 } from './use-stock-counts';
 
+// Quality
+export {
+  useQualityInspections,
+  useCreateQualityInspection,
+} from './use-quality';
+
 // Re-export types
 export type { InventoryItem, InventoryFilters, MovementRecord } from '@/lib/schemas/inventory';
 export type { WarehouseLocation, LocationType, LocationFilters } from './use-locations';

@@ -4,6 +4,8 @@ import { db } from '@/lib/db';
 import { portalIdentities } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+'use server'
+
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getServerUser } from '@/lib/supabase/server';
 import { getRequest } from '@tanstack/react-start/server';

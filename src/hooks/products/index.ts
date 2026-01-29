@@ -13,10 +13,16 @@ export {
   useCreateProduct,
   useUpdateProduct,
   useDeleteProduct,
+  useDuplicateProduct,
   useCreateCategory,
   useUpdateCategory,
   useDeleteCategory,
   useProductsForJobMaterials,
+  useParseImportFile,
+  useImportProducts,
+  type ImportPreview,
+  type ImportPreviewRow,
+  type ImportProductsResult,
 } from './use-products';
 
 // Re-export types

@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Generate Warranty Certificate PDF Task (Trigger.dev v3)
  *

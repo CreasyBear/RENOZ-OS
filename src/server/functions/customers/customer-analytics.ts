@@ -9,10 +9,10 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { sql, eq, and, gte, lte, count, sum, avg } from 'drizzle-orm';
+import { sql, eq, and, gte, lte, count, sum, avg, ne } from 'drizzle-orm';
 import { cache } from 'react';
 import { db } from '@/lib/db';
-import { customers, customerTags, customerTagAssignments } from 'drizzle/schema';
+import { customers, customerTags, customerTagAssignments, orders, customerActivities } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError } from '@/lib/server/errors';
@@ -28,6 +28,14 @@ export const dateRangeSchema = z.object({
 export const segmentAnalyticsSchema = z.object({
   segmentId: z.string().uuid().optional(),
   tagId: z.string().uuid().optional(),
+});
+
+export const valueRangeSchema = z.object({
+  range: z.enum(['3m', '6m', '1y']).default('6m'),
+});
+
+export const lifecycleRangeSchema = z.object({
+  range: z.enum(['3m', '6m', '1y']).default('6m'),
 });
 
 // ============================================================================
@@ -419,6 +427,444 @@ export const getLifecycleStages = createServerFn({ method: 'GET' })
     };
   });
 
+// ============================================================================
+// LIFECYCLE COHORT RETENTION
+// ============================================================================
+
+export const getLifecycleCohorts = createServerFn({ method: 'GET' })
+  .inputValidator(lifecycleRangeSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
+    const startDate = getValueStartDate(data.range, new Date());
+    const startDateString = startDate ? startDate.toISOString() : null;
+
+    const cohorts = await db.execute<{
+      period: string;
+      customers: number;
+      retained_30: number;
+      retained_60: number;
+      retained_90: number;
+    }>(sql`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', c.created_at), 'Mon YYYY') AS period,
+        COUNT(*) AS customers,
+        COUNT(DISTINCT CASE
+          WHEN (
+            (o.order_date IS NOT NULL AND o.order_date <= (c.created_at::date + interval '30 days') AND o.order_date >= c.created_at::date)
+            OR (
+              COALESCE(ca.completed_at, ca.created_at) IS NOT NULL
+              AND COALESCE(ca.completed_at, ca.created_at)::timestamp BETWEEN c.created_at::timestamp AND c.created_at::timestamp + interval '30 days'
+            )
+          )
+          THEN c.id
+        END) AS retained_30,
+        COUNT(DISTINCT CASE
+          WHEN (
+            (o.order_date IS NOT NULL AND o.order_date <= (c.created_at::date + interval '60 days') AND o.order_date >= c.created_at::date)
+            OR (
+              COALESCE(ca.completed_at, ca.created_at) IS NOT NULL
+              AND COALESCE(ca.completed_at, ca.created_at)::timestamp BETWEEN c.created_at::timestamp AND c.created_at::timestamp + interval '60 days'
+            )
+          )
+          THEN c.id
+        END) AS retained_60,
+        COUNT(DISTINCT CASE
+          WHEN (
+            (o.order_date IS NOT NULL AND o.order_date <= (c.created_at::date + interval '90 days') AND o.order_date >= c.created_at::date)
+            OR (
+              COALESCE(ca.completed_at, ca.created_at) IS NOT NULL
+              AND COALESCE(ca.completed_at, ca.created_at)::timestamp BETWEEN c.created_at::timestamp AND c.created_at::timestamp + interval '90 days'
+            )
+          )
+          THEN c.id
+        END) AS retained_90
+      FROM ${customers} c
+      LEFT JOIN ${orders} o
+        ON o.customer_id = c.id
+        AND o.organization_id = ${ctx.organizationId}
+        AND o.deleted_at IS NULL
+        AND o.status NOT IN ('draft', 'cancelled')
+      LEFT JOIN ${customerActivities} ca
+        ON ca.customer_id = c.id
+        AND ca.organization_id = ${ctx.organizationId}
+      WHERE c.organization_id = ${ctx.organizationId}
+        AND c.deleted_at IS NULL
+        ${startDateString ? sql`AND c.created_at >= ${startDateString}` : sql``}
+      GROUP BY DATE_TRUNC('month', c.created_at)
+      ORDER BY DATE_TRUNC('month', c.created_at) DESC
+      LIMIT 12
+    `);
+
+    const cohortRows = cohorts as unknown as {
+      period: string;
+      customers: number;
+      retained_30: number;
+      retained_60: number;
+      retained_90: number;
+    }[];
+
+    return {
+      cohorts: cohortRows.map((row) => {
+        const total = Number(row.customers ?? 0) || 1;
+        return {
+          period: row.period,
+          customers: Number(row.customers ?? 0),
+          retention30: Math.round((Number(row.retained_30 ?? 0) / total) * 100),
+          retention60: Math.round((Number(row.retained_60 ?? 0) / total) * 100),
+          retention90: Math.round((Number(row.retained_90 ?? 0) / total) * 100),
+        };
+      }),
+    };
+  });
+
+// ============================================================================
+// CHURN METRICS
+// ============================================================================
+
+export const getChurnMetrics = createServerFn({ method: 'GET' })
+  .inputValidator(lifecycleRangeSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
+    const startDate = getValueStartDate(data.range, new Date());
+    const startDateString = startDate ? startDate.toISOString() : null;
+
+    const churnedByMonth = await db.execute<{
+      period: string;
+      churned: number;
+    }>(sql`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', c.updated_at), 'Mon YYYY') AS period,
+        COUNT(*) AS churned
+      FROM ${customers} c
+      WHERE c.organization_id = ${ctx.organizationId}
+        AND c.deleted_at IS NULL
+        AND c.status IN ('inactive', 'suspended', 'blacklisted')
+        ${startDateString ? sql`AND c.updated_at >= ${startDateString}` : sql``}
+      GROUP BY DATE_TRUNC('month', c.updated_at)
+      ORDER BY DATE_TRUNC('month', c.updated_at) DESC
+    `);
+
+    const churnRows = churnedByMonth as unknown as {
+      period: string;
+      churned: number;
+    }[];
+
+    const [totalCustomers] = await db
+      .select({ total: count() })
+      .from(customers)
+      .where(
+        and(eq(customers.organizationId, ctx.organizationId), sql`${customers.deletedAt} IS NULL`)
+      );
+
+    const total = Number(totalCustomers?.total ?? 0) || 1;
+    const monthly = churnRows.map((row) => ({
+      period: row.period,
+      churned: Number(row.churned ?? 0),
+      churnRate: Math.round((Number(row.churned ?? 0) / total) * 1000) / 10,
+    }));
+
+    const avgMonthlyRate =
+      monthly.length > 0
+        ? Math.round(
+            (monthly.reduce((sum, row) => sum + row.churnRate, 0) / monthly.length) * 10
+          ) / 10
+        : 0;
+
+    return {
+      totalChurned: monthly.reduce((sum, row) => sum + row.churned, 0),
+      avgMonthlyRate,
+      monthly,
+    };
+  });
+
+// ============================================================================
+// CONVERSION FUNNEL
+// ============================================================================
+
+export const getConversionFunnel = createServerFn({ method: 'GET' })
+  .inputValidator(lifecycleRangeSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
+    const startDate = getValueStartDate(data.range, new Date());
+    const startDateString = startDate ? startDate.toISOString() : null;
+
+    const [statusCounts] = await db
+      .select({
+        prospects: count(sql`CASE WHEN ${customers.status} = 'prospect' THEN 1 END`),
+        active: count(sql`CASE WHEN ${customers.status} = 'active' THEN 1 END`),
+      })
+      .from(customers)
+      .where(
+        and(
+          eq(customers.organizationId, ctx.organizationId),
+          sql`${customers.deletedAt} IS NULL`,
+          startDate ? gte(customers.createdAt, startDate) : sql`1=1`
+        )
+      );
+
+    const orderCounts = await db.execute<{
+      with_orders: number;
+      repeat_customers: number;
+    }>(sql`
+      SELECT
+        COUNT(*) FILTER (WHERE order_count >= 1) AS with_orders,
+        COUNT(*) FILTER (WHERE order_count >= 2) AS repeat_customers
+      FROM (
+        SELECT o.customer_id, COUNT(*) AS order_count
+        FROM ${orders} o
+        WHERE o.organization_id = ${ctx.organizationId}
+          AND o.deleted_at IS NULL
+          AND o.status NOT IN ('draft', 'cancelled')
+          ${startDateString ? sql`AND o.order_date >= ${startDateString}` : sql``}
+        GROUP BY o.customer_id
+      ) t
+    `);
+
+    const orderRow = orderCounts as unknown as {
+      with_orders: number;
+      repeat_customers: number;
+    }[];
+
+    const prospects = Number(statusCounts?.prospects ?? 0);
+    const active = Number(statusCounts?.active ?? 0);
+    const withOrders = Number(orderRow[0]?.with_orders ?? 0);
+    const repeatCustomers = Number(orderRow[0]?.repeat_customers ?? 0);
+
+    const steps = [
+      { label: 'Prospects', count: prospects },
+      { label: 'Active Customers', count: active },
+      { label: 'Customers with Orders', count: withOrders },
+      { label: 'Repeat Customers', count: repeatCustomers },
+    ];
+
+    return {
+      steps: steps.map((step, index) => {
+        if (index === 0) {
+          return { ...step, rate: 100 };
+        }
+        const prev = steps[index - 1].count || 1;
+        return { ...step, rate: Math.round((step.count / prev) * 100) };
+      }),
+    };
+  });
+
+// ============================================================================
+// ACQUISITION METRICS
+// ============================================================================
+
+export const getAcquisitionMetrics = createServerFn({ method: 'GET' })
+  .inputValidator(lifecycleRangeSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
+    const startDate = getValueStartDate(data.range, new Date());
+    const startDateString = startDate ? startDate.toISOString() : null;
+
+    const acquisition = await db.execute<{
+      new_customers: number;
+      activated_customers: number;
+      avg_days: number;
+    }>(sql`
+      WITH first_orders AS (
+        SELECT
+          c.id,
+          c.created_at,
+          MIN(o.order_date) AS first_order_date
+        FROM ${customers} c
+        LEFT JOIN ${orders} o
+          ON o.customer_id = c.id
+          AND o.organization_id = ${ctx.organizationId}
+          AND o.deleted_at IS NULL
+          AND o.status NOT IN ('draft', 'cancelled')
+        WHERE c.organization_id = ${ctx.organizationId}
+          AND c.deleted_at IS NULL
+          ${startDateString ? sql`AND c.created_at >= ${startDateString}` : sql``}
+        GROUP BY c.id, c.created_at
+      )
+      SELECT
+        COUNT(*) AS new_customers,
+        COUNT(*) FILTER (WHERE first_order_date IS NOT NULL) AS activated_customers,
+        COALESCE(AVG(EXTRACT(EPOCH FROM (first_order_date::timestamp - created_at)) / 86400), 0) AS avg_days
+      FROM first_orders
+    `);
+
+    const row = acquisition as unknown as {
+      new_customers: number;
+      activated_customers: number;
+      avg_days: number;
+    }[];
+
+    const newCustomers = Number(row[0]?.new_customers ?? 0);
+    const activatedCustomers = Number(row[0]?.activated_customers ?? 0);
+
+    return {
+      newCustomers,
+      activationRate: newCustomers > 0 ? (activatedCustomers / newCustomers) * 100 : 0,
+      avgTimeToFirstOrderDays: Math.round(Number(row[0]?.avg_days ?? 0) * 10) / 10,
+      avgAcquisitionCost: null,
+    };
+  });
+
+// ============================================================================
+// QUICK STATS
+// ============================================================================
+
+/**
+ * Get quick stats for the customer analytics dashboard.
+ */
+export const getQuickStats = createServerFn({ method: 'GET' })
+  .inputValidator(dateRangeSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
+    const now = new Date();
+    const startDate = getStartDate(data.range, now);
+    const startDateString = startDate ? startDate.toISOString().split('T')[0] : null;
+
+    const [newCustomers] = await db
+      .select({
+        count: count(),
+      })
+      .from(customers)
+      .where(
+        and(
+          eq(customers.organizationId, ctx.organizationId),
+          sql`${customers.deletedAt} IS NULL`,
+          startDate ? gte(customers.createdAt, startDate) : sql`1=1`
+        )
+      );
+
+    const [churnedCustomers] = await db
+      .select({
+        count: count(),
+      })
+      .from(customers)
+      .where(
+        and(
+          eq(customers.organizationId, ctx.organizationId),
+          sql`${customers.deletedAt} IS NULL`,
+          sql`${customers.status} IN ('inactive', 'suspended', 'blacklisted')`,
+          startDate ? gte(customers.updatedAt, startDate) : sql`1=1`
+        )
+      );
+
+    const [orderStats] = await db
+      .select({
+        avgOrderValue: sql<number>`COALESCE(AVG(${orders.total}), 0)`,
+      })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.organizationId, ctx.organizationId),
+          sql`${orders.deletedAt} IS NULL`,
+          ne(orders.status, 'draft'),
+          ne(orders.status, 'cancelled'),
+          startDateString ? gte(orders.orderDate, startDateString) : sql`1=1`
+        )
+      );
+
+    const repeatRateResult = await db.execute<{
+      repeat_customers: number;
+      total_customers: number;
+    }>(sql`
+      SELECT
+        COUNT(*) FILTER (WHERE order_count > 1) AS repeat_customers,
+        COUNT(*) AS total_customers
+      FROM (
+        SELECT o.customer_id, COUNT(*) AS order_count
+        FROM ${orders} o
+        WHERE o.organization_id = ${ctx.organizationId}
+          AND o.deleted_at IS NULL
+          AND o.status NOT IN ('draft', 'cancelled')
+          ${startDateString ? sql`AND o.order_date >= ${startDateString}` : sql``}
+        GROUP BY o.customer_id
+      ) t
+    `);
+
+    const repeatRow = repeatRateResult as unknown as {
+      repeat_customers: number;
+      total_customers: number;
+    }[];
+    const repeatCustomers = Number(repeatRow[0]?.repeat_customers ?? 0);
+    const totalCustomers = Number(repeatRow[0]?.total_customers ?? 0);
+
+    return {
+      newCustomers: Number(newCustomers?.count ?? 0),
+      churnedCustomers: Number(churnedCustomers?.count ?? 0),
+      avgOrderValue: Number(orderStats?.avgOrderValue ?? 0),
+      repeatRate: totalCustomers > 0 ? (repeatCustomers / totalCustomers) * 100 : 0,
+    };
+  });
+
+// ============================================================================
+// VALUE KPIS
+// ============================================================================
+
+/**
+ * Get value KPIs for customer value analysis.
+ */
+export const getValueKpis = createServerFn({ method: 'GET' })
+  .inputValidator(valueRangeSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
+    const now = new Date();
+    const startDate = getValueStartDate(data.range, now);
+    const startDateString = startDate ? startDate.toISOString().split('T')[0] : null;
+
+    const [customerValue] = await db
+      .select({
+        avgLifetimeValue: sql<number>`COALESCE(AVG(${customers.lifetimeValue}), 0)`,
+      })
+      .from(customers)
+      .where(
+        and(
+          eq(customers.organizationId, ctx.organizationId),
+          sql`${customers.deletedAt} IS NULL`,
+          startDate ? gte(customers.createdAt, startDate) : sql`1=1`
+        )
+      );
+
+    const orderMetrics = await db.execute<{
+      total_revenue: number;
+      avg_order_value: number;
+      order_count: number;
+      customer_count: number;
+    }>(sql`
+      SELECT
+        COALESCE(SUM(o.total), 0) AS total_revenue,
+        COALESCE(AVG(o.total), 0) AS avg_order_value,
+        COUNT(*) AS order_count,
+        COUNT(DISTINCT o.customer_id) AS customer_count
+      FROM ${orders} o
+      WHERE o.organization_id = ${ctx.organizationId}
+        AND o.deleted_at IS NULL
+        AND o.status NOT IN ('draft', 'cancelled')
+        ${startDateString ? sql`AND o.order_date >= ${startDateString}` : sql``}
+    `);
+
+    const orderRow = orderMetrics as unknown as {
+      total_revenue: number;
+      avg_order_value: number;
+      order_count: number;
+      customer_count: number;
+    }[];
+
+    const totals = orderRow[0] ?? {
+      total_revenue: 0,
+      avg_order_value: 0,
+      order_count: 0,
+      customer_count: 0,
+    };
+
+    const orderCount = Number(totals.order_count ?? 0);
+    const customerCount = Number(totals.customer_count ?? 0);
+
+    return {
+      avgLifetimeValue: Number(customerValue?.avgLifetimeValue ?? 0),
+      totalRevenue: Number(totals.total_revenue ?? 0),
+      avgOrderValue: Number(totals.avg_order_value ?? 0),
+      ordersPerCustomer: customerCount > 0 ? orderCount / customerCount : 0,
+    };
+  });
+
 /**
  * Get value tier distribution (Platinum, Gold, Silver, Bronze)
  */
@@ -523,6 +969,67 @@ export const getTopCustomers = createServerFn({ method: 'GET' })
   });
 
 // ============================================================================
+// PROFITABILITY SEGMENTS (REVENUE-BASED)
+// ============================================================================
+
+export const getProfitabilitySegments = createServerFn({ method: 'GET' })
+  .inputValidator(valueRangeSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
+    const startDate = getValueStartDate(data.range, new Date());
+    const startDateString = startDate ? startDate.toISOString().split('T')[0] : null;
+
+    const segments = await db.execute<{
+      segment: string;
+      customers: number;
+      total_revenue: number;
+      avg_order_value: number;
+    }>(sql`
+      WITH customer_orders AS (
+        SELECT
+          o.customer_id,
+          COUNT(*) AS orders,
+          COALESCE(SUM(o.total), 0) AS revenue,
+          COALESCE(AVG(o.total), 0) AS avg_order_value
+        FROM ${orders} o
+        WHERE o.organization_id = ${ctx.organizationId}
+          AND o.deleted_at IS NULL
+          AND o.status NOT IN ('draft', 'cancelled')
+          ${startDateString ? sql`AND o.order_date >= ${startDateString}` : sql``}
+        GROUP BY o.customer_id
+      )
+      SELECT
+        CASE
+          WHEN revenue >= 100000 THEN 'High Margin'
+          WHEN revenue >= 50000 THEN 'Mid Margin'
+          ELSE 'Baseline'
+        END AS segment,
+        COUNT(*) AS customers,
+        COALESCE(SUM(revenue), 0) AS total_revenue,
+        COALESCE(AVG(avg_order_value), 0) AS avg_order_value
+      FROM customer_orders
+      GROUP BY 1
+      ORDER BY total_revenue DESC
+    `);
+
+    const segmentRows = segments as unknown as {
+      segment: string;
+      customers: number;
+      total_revenue: number;
+      avg_order_value: number;
+    }[];
+
+    return {
+      segments: segmentRows.map((row) => ({
+        name: row.segment,
+        customers: Number(row.customers ?? 0),
+        revenue: Number(row.total_revenue ?? 0),
+        avgOrderValue: Number(row.avg_order_value ?? 0),
+      })),
+    };
+  });
+
+// ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
 
@@ -560,6 +1067,23 @@ function getPreviousStartDate(range: string, currentStart: Date | null): Date | 
       d.setDate(d.getDate() - 90);
       return d;
     case '365d':
+      d.setFullYear(d.getFullYear() - 1);
+      return d;
+    default:
+      return null;
+  }
+}
+
+function getValueStartDate(range: string, now: Date): Date | null {
+  const d = new Date(now);
+  switch (range) {
+    case '3m':
+      d.setMonth(d.getMonth() - 3);
+      return d;
+    case '6m':
+      d.setMonth(d.getMonth() - 6);
+      return d;
+    case '1y':
       d.setFullYear(d.getFullYear() - 1);
       return d;
     default:

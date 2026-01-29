@@ -10,7 +10,7 @@
  */
 
 import { withAuth } from '@/lib/server/protected';
-import { getPendingApprovals } from '@/lib/ai/approvals';
+import { getPendingApprovals } from '@/server/functions/ai/approvals';
 
 export async function GET({ request }: { request: Request }) {
   try {

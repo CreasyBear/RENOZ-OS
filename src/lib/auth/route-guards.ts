@@ -16,7 +16,7 @@
  */
 
 import { redirect } from "@tanstack/react-router";
-import { supabase } from "@/lib/supabase/client";
+import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Role } from "./permissions";
 
 // ============================================================================
@@ -47,38 +47,49 @@ export async function requireRoles(
   allowedRoles: Role[],
   redirectTo = "/dashboard"
 ): Promise<RouteGuardResult> {
+  let supabase: SupabaseClient;
+  if (typeof window === 'undefined') {
+    const { getRequest } = await import('@tanstack/react-start/server');
+    const { createServerSupabase } = await import('~/lib/supabase/server');
+    supabase = createServerSupabase(getRequest());
+  } else {
+    const { supabase: browserSupabase } = await import('~/lib/supabase/client');
+    supabase = browserSupabase;
+  }
+
   // Get current session
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user: authUser },
+    error: authError,
+  } = await supabase.auth.getUser();
 
-  if (!session) {
-    throw redirect({ to: "/login" });
+  if (!authUser || authError) {
+    throw redirect({ to: "/login", search: { redirect: undefined } });
   }
 
   // Fetch user role from users table
-  const { data: user, error } = await supabase
+  const { data: appUser, error } = await supabase
     .from("users")
     .select("id, auth_id, email, role")
-    .eq("auth_id", session.user.id)
+    .eq("auth_id", authUser.id)
     .single();
 
-  if (error || !user) {
+  if (error || !appUser) {
     console.error("Failed to fetch user for route guard:", error);
-    throw redirect({ to: "/login" });
+    throw redirect({ to: "/login", search: { redirect: undefined } });
   }
 
   // Check if user role is in allowed list
-  if (!allowedRoles.includes(user.role as Role)) {
+  if (!allowedRoles.includes(appUser.role as Role)) {
     throw redirect({ to: redirectTo });
   }
 
   return {
     user: {
-      id: user.id,
-      authId: user.auth_id,
-      email: user.email,
-      role: user.role as Role,
+      id: appUser.id,
+      authId: appUser.auth_id,
+      email: appUser.email,
+      role: appUser.role as Role,
     },
   };
 }

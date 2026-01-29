@@ -186,6 +186,12 @@ export const presignedDownloadResponseSchema = z.object({
 
   /** URL expiration timestamp */
   expiresAt: z.string().datetime(),
+
+  /** MIME type for client-side handling */
+  mimeType: z.string(),
+
+  /** File size in bytes */
+  sizeBytes: z.number(),
 });
 
 export type PresignedDownloadResponse = z.infer<typeof presignedDownloadResponseSchema>;

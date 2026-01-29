@@ -23,7 +23,7 @@ export const Route = createFileRoute("/_authenticated/orders/create")({
     <RouteErrorFallback error={error} parentRoute="/orders" />
   ),
   pendingComponent: () => (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Create Order"
         description="Create a new customer order"
@@ -91,21 +91,19 @@ function OrderCreatePage() {
   );
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Create Order"
         description="Create a new customer order"
       />
 
       <PageLayout.Content>
-        <div className="max-w-4xl mx-auto">
-          <OrderCreationWizard
-            onComplete={handleComplete}
-            onCancel={handleCancel}
-            onSubmit={handleSubmit}
-            isSubmitting={createMutation.isPending}
-          />
-        </div>
+        <OrderCreationWizard
+          onComplete={handleComplete}
+          onCancel={handleCancel}
+          onSubmit={handleSubmit}
+          isSubmitting={createMutation.isPending}
+        />
       </PageLayout.Content>
     </PageLayout>
   );

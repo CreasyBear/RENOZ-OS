@@ -1,131 +1,16 @@
 /**
- * AI Tools Registry
+ * AI Tools Types and Utilities
  *
- * Central export point for all AI tools.
- * Tools are organized by domain (handoff, customer, order, analytics, quote).
+ * Shared types, formatters, and utilities for AI tools.
+ * ⚠️ This file is client-safe. Tool implementations that use database
+ * are in src/server/functions/ai/tools/
  *
+ * @see src/server/functions/ai/tools/ for implementations
  * @see _Initiation/_prd/3-integrations/ai-infrastructure/ai-infrastructure.prd.json
  */
 
-import { triageTools } from './handoff';
-import { customerTools } from './customer-tools';
-import { orderTools } from './order-tools';
-import { analyticsTools } from './analytics-tools';
-import { quoteTools } from './quote-tools';
-
 // ============================================================================
-// TOOL REGISTRY
-// ============================================================================
-
-/**
- * Tool registry mapping agent names to their available tools.
- */
-const toolRegistry = {
-  triage: triageTools,
-  customer: customerTools,
-  order: orderTools,
-  analytics: analyticsTools,
-  quote: quoteTools,
-} as const;
-
-export type AgentWithTools = keyof typeof toolRegistry;
-
-/**
- * Get tools for a specific agent by name.
- * Returns empty object if agent not found.
- */
-export function getToolsForAgent(agentName: string): Record<string, unknown> {
-  return toolRegistry[agentName as AgentWithTools] ?? {};
-}
-
-/**
- * Check if an agent has a specific tool.
- */
-export function agentHasTool(agentName: string, toolName: string): boolean {
-  const tools = getToolsForAgent(agentName);
-  return toolName in tools;
-}
-
-/**
- * Get all tool names for an agent.
- */
-export function getToolNamesForAgent(agentName: string): string[] {
-  const tools = getToolsForAgent(agentName);
-  return Object.keys(tools);
-}
-
-/**
- * Get all agents that have a specific tool.
- */
-export function getAgentsWithTool(toolName: string): string[] {
-  return Object.entries(toolRegistry)
-    .filter(([_, tools]) => toolName in tools)
-    .map(([agent]) => agent);
-}
-
-// ============================================================================
-// HANDOFF TOOLS (Triage Agent)
-// ============================================================================
-
-export {
-  handoffToAgentTool,
-  triageTools,
-  type HandoffParams,
-  type HandoffResult,
-  type TriageTools,
-} from './handoff';
-
-// ============================================================================
-// CUSTOMER TOOLS
-// ============================================================================
-
-export {
-  getCustomerTool,
-  searchCustomersTool,
-  updateCustomerNotesTool,
-  customerTools,
-  type CustomerTools,
-} from './customer-tools';
-
-// ============================================================================
-// ORDER TOOLS
-// ============================================================================
-
-export {
-  getOrdersTool,
-  getInvoicesTool,
-  createOrderDraftTool,
-  createQuoteDraftTool,
-  orderTools,
-  type OrderTools,
-} from './order-tools';
-
-// ============================================================================
-// ANALYTICS TOOLS
-// ============================================================================
-
-export {
-  runReportTool,
-  getMetricsTool,
-  getTrendsTool,
-  analyticsTools,
-  type AnalyticsTools,
-} from './analytics-tools';
-
-// ============================================================================
-// QUOTE TOOLS
-// ============================================================================
-
-export {
-  configureSystemTool,
-  calculatePriceTool,
-  checkCompatibilityTool,
-  quoteTools,
-  type QuoteTools,
-} from './quote-tools';
-
-// ============================================================================
-// TYPES
+// TYPES (Shared - safe for client)
 // ============================================================================
 
 export {
@@ -150,7 +35,19 @@ export {
 } from './types';
 
 // ============================================================================
-// STREAMING UTILITIES
+// HANDOFF/TRIAGE TOOLS (Safe for client - no db)
+// ============================================================================
+
+export {
+  handoffToAgentTool,
+  triageTools,
+  type HandoffParams,
+  type HandoffResult,
+  type TriageTools,
+} from './handoff';
+
+// ============================================================================
+// STREAMING UTILITIES (Safe for client)
 // ============================================================================
 
 export {
@@ -166,7 +63,7 @@ export {
 } from './streaming';
 
 // ============================================================================
-// FORMATTERS
+// FORMATTERS (Safe for client)
 // ============================================================================
 
 export {
@@ -181,3 +78,15 @@ export {
   formatResultSummary,
   type TableColumn,
 } from './formatters';
+
+// ============================================================================
+// NOTE: Tool implementations that use database are in:
+// src/server/functions/ai/tools/
+//
+// - customer-tools.ts
+// - order-tools.ts
+// - analytics-tools.ts
+// - quote-tools.ts
+//
+// Import from there in server code, not from here.
+// ============================================================================

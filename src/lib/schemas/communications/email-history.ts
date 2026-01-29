@@ -5,7 +5,7 @@
  */
 
 import { z } from 'zod';
-import { idParamSchema, cursorPaginationSchema, emailSchema } from '../_shared/patterns';
+import { idParamSchema, cursorPaginationSchema, emailSchema, optionalEmailSchema } from '../_shared/patterns';
 
 // ============================================================================
 // ENUMS
@@ -37,7 +37,7 @@ export const EmailAttachmentSchema = z.object({
 export const EmailMetadataSchema = z
   .object({
     fromName: z.string().max(255).optional(),
-    replyTo: z.string().email().optional(),
+    replyTo: optionalEmailSchema,
     cc: z.array(z.string().email()).optional(),
     bcc: z.array(z.string().email()).optional(),
     headers: z.record(z.string(), z.string()).optional(),

@@ -105,81 +105,6 @@ interface CommunicationTimelineProps {
 }
 
 // ============================================================================
-// MOCK DATA
-// ============================================================================
-
-const MOCK_COMMUNICATIONS: Communication[] = [
-  {
-    id: '1',
-    type: 'email',
-    direction: 'outbound',
-    status: 'read',
-    subject: 'Quote Follow-up - Project Alpha',
-    preview: 'Hi John, I wanted to follow up on the quote we sent last week for Project Alpha. Have you had a chance to review...',
-    from: { name: 'Sarah Mitchell', email: 'sarah@company.com' },
-    to: { name: 'John Smith', email: 'john@acme.com' },
-    timestamp: '2024-01-20T14:30:00Z',
-    attachments: 2,
-    customerId: '1',
-  },
-  {
-    id: '2',
-    type: 'phone',
-    direction: 'inbound',
-    subject: 'Incoming Call',
-    preview: 'Discussed project timeline and pricing options. Customer requested revised quote by Friday.',
-    from: { name: 'John Smith' },
-    timestamp: '2024-01-20T10:15:00Z',
-    duration: 847,
-    customerId: '1',
-  },
-  {
-    id: '3',
-    type: 'meeting',
-    direction: 'outbound',
-    subject: 'Site Visit - Project Inspection',
-    preview: 'Met with client on site to discuss installation requirements. Notes attached.',
-    from: { name: 'Mike Johnson' },
-    to: { name: 'John Smith' },
-    timestamp: '2024-01-19T09:00:00Z',
-    duration: 3600,
-    customerId: '1',
-  },
-  {
-    id: '4',
-    type: 'email',
-    direction: 'inbound',
-    status: 'replied',
-    subject: 'RE: Quote Follow-up - Project Alpha',
-    preview: 'Thanks Sarah, we&apos;ve reviewed the quote and have a few questions about the warranty terms...',
-    from: { name: 'John Smith', email: 'john@acme.com' },
-    to: { name: 'Sarah Mitchell', email: 'sarah@company.com' },
-    timestamp: '2024-01-18T16:45:00Z',
-    customerId: '1',
-  },
-  {
-    id: '5',
-    type: 'portal',
-    direction: 'inbound',
-    subject: 'Support Ticket #1234',
-    preview: 'Customer submitted a support request through the portal regarding installation documentation.',
-    from: { name: 'John Smith' },
-    timestamp: '2024-01-17T11:20:00Z',
-    customerId: '1',
-  },
-  {
-    id: '6',
-    type: 'note',
-    direction: 'internal',
-    subject: 'Internal Note',
-    preview: 'Customer mentioned they are considering expanding to a second location next year. Follow up in Q2.',
-    from: { name: 'Sarah Mitchell' },
-    timestamp: '2024-01-16T14:00:00Z',
-    customerId: '1',
-  },
-]
-
-// ============================================================================
 // HELPERS
 // ============================================================================
 
@@ -419,8 +344,8 @@ export function CommunicationTimeline({
   const [directionFilter, setDirectionFilter] = useState<CommunicationDirection | 'all'>('all')
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
 
-  // Use mock data if not provided
-  const communications = propCommunications ?? MOCK_COMMUNICATIONS
+  // Use provided communications or empty array
+  const communications = propCommunications ?? []
 
   // Filter communications
   const filteredCommunications = useMemo(() => {

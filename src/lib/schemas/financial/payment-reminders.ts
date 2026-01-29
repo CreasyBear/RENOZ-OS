@@ -8,7 +8,7 @@
  */
 
 import { z } from 'zod';
-import { idSchema, paginationSchema } from '../_shared/patterns';
+import { idSchema, paginationSchema, optionalEmailSchema } from '../_shared/patterns';
 
 // ============================================================================
 // DELIVERY STATUS ENUM
@@ -80,7 +80,7 @@ export type ReminderTemplateListQuery = z.infer<typeof reminderTemplateListQuery
 export const sendReminderSchema = z.object({
   orderId: idSchema,
   templateId: idSchema.optional(), // If not provided, uses default template for days overdue
-  recipientEmail: z.string().email('Invalid email address').optional(), // Override customer email
+  recipientEmail: optionalEmailSchema, // Override customer email
   notes: z.string().max(500).optional(),
 });
 

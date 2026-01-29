@@ -35,7 +35,8 @@ import type { OpportunityStage } from "@/lib/schemas/pipeline";
 export interface PipelineFiltersState {
   search: string;
   stages: OpportunityStage[];
-  assignedTo: string | null;
+  /** 'me' for current user, user ID for specific user, null for all */
+  assignedTo: "me" | string | null;
   minValue: number | null;
   maxValue: number | null;
   includeWonLost: boolean;
@@ -141,26 +142,25 @@ export const PipelineFilters = memo(function PipelineFilters({
         </div>
 
         {/* Assignee Filter */}
-        {assignees.length > 0 && (
-          <Select
-            value={filters.assignedTo ?? "all"}
-            onValueChange={(value) =>
-              updateAssignee(value === "all" ? null : value)
-            }
-          >
-            <SelectTrigger className="w-full sm:w-[180px]">
-              <SelectValue placeholder="All Assignees" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Assignees</SelectItem>
-              {assignees.map((assignee) => (
-                <SelectItem key={assignee.id} value={assignee.id}>
-                  {assignee.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
+        <Select
+          value={filters.assignedTo ?? "all"}
+          onValueChange={(value) =>
+            updateAssignee(value === "all" ? null : value)
+          }
+        >
+          <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectValue placeholder="All Assignees" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Assignees</SelectItem>
+            <SelectItem value="me">My Opportunities</SelectItem>
+            {assignees.map((assignee) => (
+              <SelectItem key={assignee.id} value={assignee.id}>
+                {assignee.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
         {/* More Filters Popover */}
         <Popover>
@@ -289,8 +289,10 @@ export const PipelineFilters = memo(function PipelineFilters({
               className="gap-1 cursor-pointer"
               onClick={() => updateAssignee(null)}
             >
-              {assignees.find((a) => a.id === filters.assignedTo)?.name ??
-                "Assigned"}
+              {filters.assignedTo === "me"
+                ? "My Opportunities"
+                : assignees.find((a) => a.id === filters.assignedTo)?.name ??
+                  "Assigned"}
               <X className="h-3 w-3" />
             </Badge>
           )}

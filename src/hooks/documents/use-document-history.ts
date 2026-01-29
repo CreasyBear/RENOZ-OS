@@ -20,6 +20,8 @@
  */
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getGeneratedDocuments } from '@/server/functions/documents/get-generated-documents';
+import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================================
 // TYPES
@@ -43,9 +45,10 @@ export interface GeneratedDocument {
   entityId: string;
   filename: string;
   storageUrl: string;
-  fileSize: number;
+  fileSize: number | null;
   generatedAt: Date | string;
-  generatedById?: string | null;
+  generatedById: string | null;
+  createdAt?: Date | string;
 }
 
 export interface DocumentHistoryFilters {
@@ -62,20 +65,40 @@ export interface DocumentHistoryResult {
 }
 
 // ============================================================================
-// MOCK DATA (temporary until generated_documents table exists)
+// SERVER FUNCTION WRAPPER
 // ============================================================================
 
 /**
- * Temporary mock function - replace with server function once schema exists.
+ * Wrapper to call the server function with proper typing.
  */
 async function fetchDocumentHistory(
-  _filters: DocumentHistoryFilters
+  filters: DocumentHistoryFilters
 ): Promise<DocumentHistoryResult> {
-  // TODO: Replace with actual server function once generated_documents table exists
-  // For now, return empty list as the table doesn't exist yet
+  const result = await getGeneratedDocuments({
+    data: {
+      entityType: filters.entityType,
+      entityId: filters.entityId,
+      documentType: filters.documentType,
+      limit: filters.limit ?? 20,
+      cursor: filters.offset?.toString(), // Using offset as cursor for simple pagination
+      sortOrder: 'desc',
+    },
+  });
+
+  // Transform server response to hook's expected format
   return {
-    documents: [],
-    total: 0,
+    documents: result.items.map((item) => ({
+      ...item,
+      documentType: item.documentType as DocumentType,
+      entityType: item.entityType as DocumentEntityType,
+      generatedAt: item.generatedAt instanceof Date 
+        ? item.generatedAt.toISOString() 
+        : item.generatedAt,
+      createdAt: item.createdAt instanceof Date
+        ? item.createdAt.toISOString()
+        : item.createdAt,
+    })),
+    total: result.items.length, // Note: This is the page total, not full total
   };
 }
 
@@ -113,13 +136,7 @@ async function fetchDocumentHistory(
  */
 export function useDocumentHistory(filters: DocumentHistoryFilters) {
   return useQuery({
-    queryKey: [
-      'documents',
-      'history',
-      filters.entityType,
-      filters.entityId,
-      filters.documentType,
-    ],
+    queryKey: queryKeys.documents.history(filters.entityType, filters.entityId, filters.documentType),
     queryFn: () => fetchDocumentHistory(filters),
     enabled: !!filters.entityId,
     staleTime: 60 * 1000, // 1 minute
@@ -178,7 +195,7 @@ export function useInvalidateDocumentHistory() {
 
   return (filters: { entityType: DocumentEntityType; entityId: string }) => {
     queryClient.invalidateQueries({
-      queryKey: ['documents', 'history', filters.entityType, filters.entityId],
+      queryKey: queryKeys.documents.history(filters.entityType, filters.entityId),
     });
   };
 }

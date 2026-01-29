@@ -9,7 +9,7 @@
 import { createFileRoute, useNavigate, useRouter } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useServerFn } from '@tanstack/react-start';
-import { RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { SettingsTabsSkeleton } from '@/components/skeletons/settings';
 import {
   createDelegation,
@@ -116,9 +116,12 @@ export const Route = createFileRoute('/_authenticated/settings/delegations' as a
     <RouteErrorFallback error={error} parentRoute="/settings" />
   ),
   pendingComponent: () => (
-    <div className="p-6">
-      <SettingsTabsSkeleton />
-    </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="Delegation Management" description="Manage your out-of-office delegations" />
+      <PageLayout.Content>
+        <SettingsTabsSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
   ),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   loaderDeps: ({ search }: any) => search,
@@ -235,20 +238,18 @@ function DelegationsPage() {
   });
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Delegation Management</h1>
-          <p className="text-muted-foreground">
-            Set up out-of-office delegations and manage tasks assigned to you.
-          </p>
-        </div>
-        <Button onClick={() => setIsCreateOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Delegation
-        </Button>
-      </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="Delegation Management"
+        description="Set up out-of-office delegations and manage tasks assigned to you."
+        actions={
+          <Button onClick={() => setIsCreateOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Delegation
+          </Button>
+        }
+      />
+      <PageLayout.Content className="space-y-6">
 
       {/* Active Delegation Banner */}
       {activeDelegations.length > 0 && (
@@ -508,7 +509,8 @@ function DelegationsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+      </PageLayout.Content>
+    </PageLayout>
   );
 }
 

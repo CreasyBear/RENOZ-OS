@@ -15,7 +15,7 @@
 import { createFileRoute, useLoaderData } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
 import { useServerFn } from '@tanstack/react-start';
-import { RouteErrorFallback } from '@/components/layout';
+import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SettingsCardsSkeleton } from '@/components/skeletons/settings';
 import { format, formatDistanceToNow } from 'date-fns';
 import {
@@ -296,13 +296,13 @@ function SecuritySettings() {
   const securityEvents = loaderData?.securityEvents ?? [];
 
   return (
-    <div className="max-w-4xl p-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Security</h1>
-        <p className="text-muted-foreground mt-1 text-sm">
-          Manage your password, sessions, and security settings
-        </p>
-      </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="Security"
+        description="Manage your password, sessions, and security settings"
+      />
+      <PageLayout.Content>
+        <div className="max-w-4xl space-y-6">
 
       <div className="space-y-6">
         {/* Password Section */}
@@ -636,6 +636,8 @@ function SecuritySettings() {
           onDisabled={() => mfa.refreshStatus()}
         />
       )}
-    </div>
+        </div>
+      </PageLayout.Content>
+    </PageLayout>
   );
 }

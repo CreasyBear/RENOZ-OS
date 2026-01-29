@@ -23,7 +23,7 @@ export const Route = createFileRoute("/_authenticated/orders/fulfillment")({
     <RouteErrorFallback error={error} parentRoute="/orders" />
   ),
   pendingComponent: () => (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Order Fulfillment"
         description="Track and manage order fulfillment"

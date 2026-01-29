@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Warranty Claims Server Functions
  *

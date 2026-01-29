@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * OAuth Flow Implementation
  *

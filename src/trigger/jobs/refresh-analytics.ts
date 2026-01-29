@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Refresh Analytics Materialized Views
  *

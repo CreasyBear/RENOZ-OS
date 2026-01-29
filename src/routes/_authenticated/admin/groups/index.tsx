@@ -87,7 +87,7 @@ const groupSearchSchema = z.object({
   includeInactive: z.coerce.boolean().default(false),
 });
 
-import { RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { AdminCardGridSkeleton } from '@/components/skeletons/admin';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -103,9 +103,11 @@ export const Route = createFileRoute('/_authenticated/admin/groups/' as any)({
     <RouteErrorFallback error={error} parentRoute="/admin" />
   ),
   pendingComponent: () => (
-    <div className="p-6">
-      <AdminCardGridSkeleton />
-    </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Content>
+        <AdminCardGridSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
   ),
 });
 
@@ -196,7 +198,8 @@ function GroupsAdminPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <PageLayout variant="full-width">
+      <PageLayout.Content className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -309,7 +312,8 @@ function GroupsAdminPage() {
           ))}
         </div>
       )}
-    </div>
+      </PageLayout.Content>
+    </PageLayout>
   );
 }
 

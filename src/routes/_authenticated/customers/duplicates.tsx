@@ -23,7 +23,7 @@ export const Route = createFileRoute('/_authenticated/customers/duplicates')({
     <RouteErrorFallback error={error} parentRoute="/customers" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header title="Duplicate Detection" />
       <PageLayout.Content>
         <InventoryTabsSkeleton tabCount={2} />
@@ -92,16 +92,13 @@ function CustomerDuplicatesPage() {
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Duplicate Management</h1>
-        <p className="text-muted-foreground">
-          Detect and merge duplicate customer records
-        </p>
-      </div>
-
-      {/* Error States */}
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="Duplicate Management"
+        description="Detect and merge duplicate customer records"
+      />
+      <PageLayout.Content>
+        {/* Error States */}
       {scan.isError && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
@@ -159,6 +156,7 @@ function CustomerDuplicatesPage() {
           )}
         </TabsContent>
       </Tabs>
-    </div>
+      </PageLayout.Content>
+    </PageLayout>
   )
 }

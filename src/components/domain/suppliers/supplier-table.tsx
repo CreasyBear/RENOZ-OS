@@ -5,6 +5,7 @@
  * Follows the pattern from customer-table.tsx.
  */
 
+import { useState, useMemo, useCallback } from 'react';
 import { Link } from '@tanstack/react-router';
 import {
   Table,
@@ -22,7 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal, Star, Building2, Phone, Mail } from 'lucide-react';
+import { MoreHorizontal, Star, Building2, Phone, Mail, ChevronUp, ChevronDown } from 'lucide-react';
 import type { SupplierStatus, SupplierType } from '@/lib/schemas/suppliers';
 
 // ============================================================================
@@ -42,6 +43,9 @@ export interface SupplierTableData {
   leadTimeDays: number | null;
   lastOrderDate: string | null;
 }
+
+type SortField = 'name' | 'status' | 'supplierType' | 'overallRating' | 'totalPurchaseOrders' | 'leadTimeDays' | 'lastOrderDate';
+type SortDirection = 'asc' | 'desc';
 
 interface SupplierTableProps {
   suppliers: SupplierTableData[];
@@ -112,10 +116,93 @@ function RatingStars({ rating }: { rating: number | null }) {
 }
 
 // ============================================================================
+// SORT HEADER COMPONENT
+// ============================================================================
+
+function SortHeader({
+  label,
+  field,
+  currentSort,
+  onSort,
+}: {
+  label: string;
+  field: SortField;
+  currentSort: { field: SortField; direction: SortDirection };
+  onSort: (field: SortField) => void;
+}) {
+  const isActive = currentSort.field === field;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-8 px-2 -ml-2 font-medium"
+      onClick={() => onSort(field)}
+    >
+      {label}
+      {isActive &&
+        (currentSort.direction === 'asc' ? (
+          <ChevronUp className="ml-1 h-4 w-4" />
+        ) : (
+          <ChevronDown className="ml-1 h-4 w-4" />
+        ))}
+    </Button>
+  );
+}
+
+// ============================================================================
 // COMPONENT
 // ============================================================================
 
 export function SupplierTable({ suppliers, isLoading, onDelete, onEdit }: SupplierTableProps) {
+  const [sort, setSort] = useState<{ field: SortField; direction: SortDirection }>({
+    field: 'name',
+    direction: 'asc',
+  });
+
+  const handleSort = useCallback((field: SortField) => {
+    setSort((current) => ({
+      field,
+      direction: current.field === field && current.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  }, []);
+
+  // Sort suppliers
+  const sortedSuppliers = useMemo(() => {
+    const sorted = [...suppliers];
+    sorted.sort((a, b) => {
+      let comparison = 0;
+      switch (sort.field) {
+        case 'name':
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case 'status':
+          comparison = a.status.localeCompare(b.status);
+          break;
+        case 'supplierType':
+          comparison = (a.supplierType || '').localeCompare(b.supplierType || '');
+          break;
+        case 'overallRating':
+          comparison = (a.overallRating ?? 0) - (b.overallRating ?? 0);
+          break;
+        case 'totalPurchaseOrders':
+          comparison = (a.totalPurchaseOrders ?? 0) - (b.totalPurchaseOrders ?? 0);
+          break;
+        case 'leadTimeDays':
+          comparison = (a.leadTimeDays ?? 0) - (b.leadTimeDays ?? 0);
+          break;
+        case 'lastOrderDate':
+          const dateA = a.lastOrderDate ? new Date(a.lastOrderDate).getTime() : 0;
+          const dateB = b.lastOrderDate ? new Date(b.lastOrderDate).getTime() : 0;
+          comparison = dateA - dateB;
+          break;
+        default:
+          comparison = 0;
+      }
+      return sort.direction === 'asc' ? comparison : -comparison;
+    });
+    return sorted;
+  }, [suppliers, sort]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -141,18 +228,28 @@ export function SupplierTable({ suppliers, isLoading, onDelete, onEdit }: Suppli
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[200px]">Supplier</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Rating</TableHead>
-            <TableHead className="text-right">Orders</TableHead>
+            <TableHead className="w-[200px]">
+              <SortHeader label="Supplier" field="name" currentSort={sort} onSort={handleSort} />
+            </TableHead>
+            <TableHead>
+              <SortHeader label="Type" field="supplierType" currentSort={sort} onSort={handleSort} />
+            </TableHead>
+            <TableHead>
+              <SortHeader label="Status" field="status" currentSort={sort} onSort={handleSort} />
+            </TableHead>
+            <TableHead>
+              <SortHeader label="Rating" field="overallRating" currentSort={sort} onSort={handleSort} />
+            </TableHead>
+            <TableHead className="text-right">
+              <SortHeader label="Orders" field="totalPurchaseOrders" currentSort={sort} onSort={handleSort} />
+            </TableHead>
             <TableHead className="text-right">Lead Time</TableHead>
             <TableHead>Last Order</TableHead>
             <TableHead className="w-[50px]"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {suppliers.map((supplier) => (
+          {sortedSuppliers.map((supplier) => (
             <TableRow key={supplier.id}>
               <TableCell>
                 <Link

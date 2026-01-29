@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Protected Server Function Utilities
  *
@@ -256,6 +258,9 @@ export async function withApiAuth(options: WithApiAuthOptions = {}): Promise<Api
   // Validate the token using the existing validateApiToken function
   const { validateApiToken, scopeIncludesPermission } = await import('./api-tokens')
   const tokenContext = await validateApiToken(token)
+  if (!tokenContext) {
+    throw new AuthError('Invalid or expired API token')
+  }
 
   // Check required scope if specified
   if (options.requiredScope && !scopeIncludesPermission(tokenContext.scopes, options.requiredScope)) {

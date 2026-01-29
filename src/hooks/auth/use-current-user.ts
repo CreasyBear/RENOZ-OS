@@ -10,6 +10,7 @@
 
 import { useRouteContext } from '@tanstack/react-router';
 import type { SSRSafeUser } from '@/lib/supabase/fetch-user-server-fn';
+import type { Role } from '@/lib/auth/permissions';
 
 // Re-export the type for convenience
 export type { SSRSafeUser as AuthenticatedUser };
@@ -17,15 +18,37 @@ export type { SSRSafeUser as AuthenticatedUser };
 /**
  * Hook to get the current authenticated user from route context.
  *
- * Returns basic auth info (email, authId) from Supabase.
- * For full profile (role, org, etc.), fetch in route loader or server function.
+ * Returns auth user enriched with app user data (role, org, status) when available.
  */
 export function useCurrentUser() {
   // User context is provided by the _authenticated layout route
   const context = useRouteContext({ from: '/_authenticated' });
+  const appUser = context.appUser as
+    | {
+        id: string;
+        organizationId: string;
+        role: Role;
+        status: string;
+      }
+    | undefined;
+
+  const user = context.user
+    ? ({
+        ...context.user,
+        appUserId: appUser?.id,
+        organizationId: appUser?.organizationId,
+        role: appUser?.role,
+        status: appUser?.status,
+      } as SSRSafeUser & {
+        appUserId?: string;
+        organizationId?: string;
+        role?: Role;
+        status?: string;
+      })
+    : null;
 
   return {
-    user: (context.user ?? null) as SSRSafeUser | null,
+    user,
     isLoading: false,
     isError: false,
     error: null,

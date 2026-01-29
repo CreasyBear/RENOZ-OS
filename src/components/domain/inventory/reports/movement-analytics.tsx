@@ -41,7 +41,15 @@ import {
 // TYPES
 // ============================================================================
 
-export type MovementType = "receive" | "issue" | "transfer" | "adjustment";
+export type MovementType =
+  | "receive"
+  | "allocate"
+  | "deallocate"
+  | "pick"
+  | "ship"
+  | "return"
+  | "transfer"
+  | "adjust";
 
 export interface MovementSummary {
   totalMovements: number;
@@ -101,11 +109,35 @@ const MOVEMENT_TYPE_CONFIG: Record<
     color: "text-green-600",
     bgColor: "bg-green-50",
   },
-  issue: {
-    label: "Issues",
+  allocate: {
+    label: "Allocations",
     icon: ArrowUpFromLine,
     color: "text-red-600",
     bgColor: "bg-red-50",
+  },
+  deallocate: {
+    label: "Deallocations",
+    icon: ArrowDownToLine,
+    color: "text-amber-600",
+    bgColor: "bg-amber-50",
+  },
+  pick: {
+    label: "Picks",
+    icon: ArrowUpFromLine,
+    color: "text-red-600",
+    bgColor: "bg-red-50",
+  },
+  ship: {
+    label: "Shipments",
+    icon: ArrowUpFromLine,
+    color: "text-red-600",
+    bgColor: "bg-red-50",
+  },
+  return: {
+    label: "Returns",
+    icon: ArrowDownToLine,
+    color: "text-green-600",
+    bgColor: "bg-green-50",
   },
   transfer: {
     label: "Transfers",
@@ -113,7 +145,7 @@ const MOVEMENT_TYPE_CONFIG: Record<
     color: "text-blue-600",
     bgColor: "bg-blue-50",
   },
-  adjustment: {
+  adjust: {
     label: "Adjustments",
     icon: Wrench,
     color: "text-orange-600",
@@ -280,7 +312,7 @@ export const MovementAnalytics = memo(function MovementAnalytics({
             ) : (
               <div className="space-y-4">
                 {byType.map((item) => {
-                  const config = MOVEMENT_TYPE_CONFIG[item.type];
+                  const config = MOVEMENT_TYPE_CONFIG[item.type] ?? MOVEMENT_TYPE_CONFIG.adjust;
                   const Icon = config.icon;
 
                   return (
@@ -309,9 +341,14 @@ export const MovementAnalytics = memo(function MovementAnalytics({
                         className={cn(
                           "h-2",
                           item.type === "receive" && "[&>div]:bg-green-600",
-                          item.type === "issue" && "[&>div]:bg-red-600",
+                          (item.type === "allocate" ||
+                            item.type === "pick" ||
+                            item.type === "ship") &&
+                            "[&>div]:bg-red-600",
+                          item.type === "deallocate" && "[&>div]:bg-amber-600",
+                          item.type === "return" && "[&>div]:bg-green-600",
                           item.type === "transfer" && "[&>div]:bg-blue-600",
-                          item.type === "adjustment" && "[&>div]:bg-orange-600"
+                          item.type === "adjust" && "[&>div]:bg-orange-600"
                         )}
                       />
                       <div className="flex justify-between text-xs text-muted-foreground">

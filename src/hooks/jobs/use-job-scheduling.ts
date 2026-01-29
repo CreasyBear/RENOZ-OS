@@ -28,7 +28,7 @@ import {
   removeJobFromCalendar,
   listAvailableCalendars,
   getCalendarOAuthConnection,
-} from '@/lib/jobs/oauth-bridge';
+} from '@/server/functions/jobs/oauth-bridge';
 import { useJobDataMutationSync } from './use-jobs-view-sync';
 import type {
   ListCalendarJobsInput,
@@ -329,10 +329,12 @@ export function useRescheduleJob() {
 /**
  * Hook to get the current calendar OAuth connection for the organization.
  */
-export function useCalendarOAuthConnection(organizationId: string) {
+export function useCalendarOAuthConnection() {
+  const getConnectionFn = useServerFn(getCalendarOAuthConnection);
+  
   return useQuery({
-    queryKey: [...queryKeys.jobCalendar.oauth.connection(), organizationId] as const,
-    queryFn: () => getCalendarOAuthConnection(organizationId),
+    queryKey: queryKeys.jobCalendar.oauth.connection(),
+    queryFn: () => getConnectionFn(),
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 1,
   });
@@ -341,20 +343,22 @@ export function useCalendarOAuthConnection(organizationId: string) {
 /**
  * Hook to list available calendars for OAuth sync.
  */
-export function useAvailableCalendars(organizationId: string) {
+export function useAvailableCalendars() {
+  const listCalendarsFn = useServerFn(listAvailableCalendars);
+  
   return useQuery({
-    queryKey: [...queryKeys.jobCalendar.oauth.calendars(), organizationId] as const,
-    queryFn: () => listAvailableCalendars(organizationId),
+    queryKey: queryKeys.jobCalendar.oauth.calendars(),
+    queryFn: () => listCalendarsFn(),
     staleTime: 10 * 60 * 1000, // 10 minutes
-    enabled: !!organizationId,
   });
 }
 
 /**
  * Hook to sync a job to the connected calendar.
  */
-export function useSyncJobToCalendar(organizationId: string) {
+export function useSyncJobToCalendar() {
   const queryClient = useQueryClient();
+  const syncFn = useServerFn(syncJobToCalendar);
 
   return useMutation({
     mutationFn: async (jobData: {
@@ -367,7 +371,7 @@ export function useSyncJobToCalendar(organizationId: string) {
       installerName?: string;
       location?: string;
     }) => {
-      const result = await syncJobToCalendar(organizationId, jobData);
+      const result = await syncFn({ data: jobData });
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to sync job to calendar');
@@ -394,8 +398,9 @@ export function useSyncJobToCalendar(organizationId: string) {
 /**
  * Hook to update an existing job calendar event.
  */
-export function useUpdateJobCalendarEvent(organizationId: string) {
+export function useUpdateJobCalendarEvent() {
   const queryClient = useQueryClient();
+  const updateFn = useServerFn(updateJobCalendarEvent);
 
   return useMutation({
     mutationFn: async (params: {
@@ -409,7 +414,7 @@ export function useUpdateJobCalendarEvent(organizationId: string) {
         location?: string;
       };
     }) => {
-      const result = await updateJobCalendarEvent(organizationId, params.jobId, params.updates);
+      const result = await updateFn({ data: params });
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to update calendar event');
@@ -436,12 +441,13 @@ export function useUpdateJobCalendarEvent(organizationId: string) {
 /**
  * Hook to remove a job from the calendar.
  */
-export function useRemoveJobFromCalendar(organizationId: string) {
+export function useRemoveJobFromCalendar() {
   const queryClient = useQueryClient();
+  const removeFn = useServerFn(removeJobFromCalendar);
 
   return useMutation({
     mutationFn: async (jobId: string) => {
-      const result = await removeJobFromCalendar(organizationId, jobId);
+      const result = await removeFn({ data: { jobId } });
 
       if (!result.success) {
         throw new Error(result.error || 'Failed to remove job from calendar');
@@ -468,8 +474,8 @@ export function useRemoveJobFromCalendar(organizationId: string) {
 /**
  * Hook to check if calendar OAuth is configured and active.
  */
-export function useCalendarOAuthStatus(organizationId: string) {
-  const { data: connection, isLoading } = useCalendarOAuthConnection(organizationId);
+export function useCalendarOAuthStatus() {
+  const { data: connection, isLoading } = useCalendarOAuthConnection();
 
   return {
     isConfigured: !!connection && connection.isActive,

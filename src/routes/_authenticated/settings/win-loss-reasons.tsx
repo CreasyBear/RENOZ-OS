@@ -35,7 +35,7 @@ export const Route = createFileRoute('/_authenticated/settings/win-loss-reasons'
  */
 function WinLossReasonsPage() {
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Win/Loss Reasons"
         description="Manage reasons for winning and losing opportunities"

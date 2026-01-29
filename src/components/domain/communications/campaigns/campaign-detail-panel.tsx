@@ -9,8 +9,10 @@
 
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import {
+  useCampaign,
+  useCampaignRecipients,
+} from "@/hooks/communications/use-campaigns";
 import { format, formatDistanceToNow } from "date-fns";
 import {
   Mail,
@@ -25,7 +27,6 @@ import {
   XCircle,
   Clock,
 } from "lucide-react";
-import { getCampaignById, getCampaignRecipients } from "@/lib/server/email-campaigns";
 import { CampaignStatusBadge, type CampaignStatus } from "./campaign-status-badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -280,18 +281,19 @@ export function CampaignDetailPanel({
   onBack,
   className,
 }: CampaignDetailPanelProps) {
-  const { data: campaignData, isLoading: campaignLoading } = useQuery({
-    queryKey: queryKeys.communications.campaignDetail(campaignId),
-    queryFn: () => getCampaignById({ data: { id: campaignId } }),
+  const { data: campaignData, isLoading: campaignLoading } = useCampaign({
+    campaignId,
   });
 
   const campaign = campaignData as Campaign | null;
 
-  const { data: recipientsData, isLoading: recipientsLoading } = useQuery({
-    queryKey: queryKeys.communications.campaignRecipients(campaignId),
-    queryFn: () => getCampaignRecipients({ data: { campaignId, limit: 50, offset: 0 } }),
-    enabled: !!campaign,
-  });
+  const { data: recipientsData, isLoading: recipientsLoading } =
+    useCampaignRecipients({
+      campaignId,
+      limit: 50,
+      offset: 0,
+      enabled: !!campaign,
+    });
 
   if (campaignLoading) {
     return <CampaignDetailSkeleton />;

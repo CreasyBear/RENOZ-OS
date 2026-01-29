@@ -68,7 +68,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     label: 'Create Quote',
     description: 'Start a new quote',
     icon: <FileText className="h-4 w-4" />,
-    route: '/pipeline/new',
+    route: '/pipeline/$opportunityId',
     requiredPermission: 'quote.create',
   },
   {
@@ -76,7 +76,7 @@ const QUICK_ACTIONS: QuickAction[] = [
     label: 'Create Order',
     description: 'Create a new order',
     icon: <Plus className="h-4 w-4" />,
-    route: '/orders/new',
+    route: '/orders/create',
     requiredPermission: 'order.create',
   },
 ]

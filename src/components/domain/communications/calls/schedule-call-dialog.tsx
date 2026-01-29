@@ -13,8 +13,6 @@ import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import { Phone, Loader2, CalendarClock } from "lucide-react";
 
 import {
@@ -47,7 +45,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { DateTimePicker } from "../date-time-picker";
 
-import { scheduleCall } from "@/lib/server/scheduled-calls";
+import { useScheduleCall } from "@/hooks/communications/use-scheduled-calls";
 import { toast } from "sonner";
 
 // ============================================================================
@@ -120,7 +118,7 @@ export function ScheduleCallDialog({
   onSuccess,
 }: ScheduleCallDialogProps) {
   const [open, setOpen] = React.useState(defaultOpen);
-  const queryClient = useQueryClient();
+  const scheduleMutation = useScheduleCall();
 
   const form = useForm<ScheduleCallFormValues>({
     resolver: zodResolver(scheduleCallFormSchema),
@@ -132,40 +130,36 @@ export function ScheduleCallDialog({
     },
   });
 
-  const scheduleMutation = useMutation({
-    mutationFn: async (values: ScheduleCallFormValues) => {
-      const reminderAt = values.enableReminder
-        ? new Date(
-            values.scheduledAt.getTime() - values.reminderMinutes * 60 * 1000
-          )
-        : undefined;
+  const handleSchedule = (values: ScheduleCallFormValues) => {
+    const reminderAt = values.enableReminder
+      ? new Date(values.scheduledAt.getTime() - values.reminderMinutes * 60 * 1000)
+      : undefined;
 
-      return scheduleCall({
-        data: {
-          customerId,
-          assigneeId,
-          scheduledAt: values.scheduledAt,
-          reminderAt,
-          purpose: values.purpose,
-          notes: values.notes,
+    scheduleMutation.mutate(
+      {
+        customerId,
+        assigneeId,
+        scheduledAt: values.scheduledAt,
+        reminderAt,
+        purpose: values.purpose,
+        notes: values.notes,
+      },
+      {
+        onSuccess: (data) => {
+          toast.success("Call scheduled successfully");
+          handleOpenChange(false);
+          form.reset();
+          const callData = data as { id: string };
+          onSuccess?.(callData.id);
         },
-      });
-    },
-    onSuccess: (data) => {
-      toast.success("Call scheduled successfully");
-      queryClient.invalidateQueries({ queryKey: queryKeys.communications.scheduledCalls() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.communications.upcomingCalls() });
-      handleOpenChange(false);
-      form.reset();
-      const callData = data as { id: string };
-      onSuccess?.(callData.id);
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to schedule call"
-      );
-    },
-  });
+        onError: (error) => {
+          toast.error(
+            error instanceof Error ? error.message : "Failed to schedule call"
+          );
+        },
+      }
+    );
+  };
 
   const handleOpenChange = (newOpen: boolean) => {
     setOpen(newOpen);
@@ -176,7 +170,7 @@ export function ScheduleCallDialog({
   };
 
   const onSubmit = (values: ScheduleCallFormValues) => {
-    scheduleMutation.mutate(values);
+    handleSchedule(values);
   };
 
   return (

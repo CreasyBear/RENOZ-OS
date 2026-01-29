@@ -3,11 +3,9 @@
  *
  * Cycle counting management with list, detail, and counting views.
  *
- * Features:
- * - Stock count list with filtering
- * - Create/edit count dialogs
- * - Count sheet for execution
- * - Variance analysis and reconciliation
+ * LAYOUT: full-width (data-dense views)
+ *
+ * @see UI_UX_STANDARDIZATION_PRD.md
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useCallback } from "react";
@@ -15,6 +13,24 @@ import { Plus, ClipboardList, Play, CheckCircle, ArrowLeft } from "lucide-react"
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { InventoryTableSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "@/hooks";
 import {
@@ -40,7 +56,10 @@ import {
   useStockCount,
   useStartStockCount,
   useUpdateStockCountItem,
-  useUpdateStockCount,
+  useCompleteStockCount,
+  useCancelStockCount,
+  useCreateStockCount,
+  useLocations,
 } from "@/hooks/inventory";
 
 // ============================================================================
@@ -54,7 +73,7 @@ export const Route = createFileRoute("/_authenticated/inventory/counts" as any)(
   ),
   pendingComponent: () => (
     <PageLayout variant="full-width">
-      <PageLayout.Header title="Stock Counts" />
+      <PageLayout.Header title="Stock Counts" description="Manage cycle counts and physical inventory" />
       <PageLayout.Content>
         <InventoryTableSkeleton />
       </PageLayout.Content>
@@ -75,7 +94,16 @@ function StockCountsPage() {
   // Dialog states
   const [showStartDialog, setShowStartDialog] = useState(false);
   const [showCompleteDialog, setShowCompleteDialog] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [countToStart, setCountToStart] = useState<StockCount | null>(null);
+  
+  // Create count form state
+  const [countCode, setCountCode] = useState("");
+  const [countType, setCountType] = useState<"cycle" | "full" | "spot">("cycle");
+  const [locationId, setLocationId] = useState<string>("");
+  const [varianceThreshold, setVarianceThreshold] = useState(5);
+  const [notes, setNotes] = useState("");
 
   // Data hooks - using TanStack Query via hooks
   const {
@@ -91,7 +119,12 @@ function StockCountsPage() {
   // Mutation hooks
   const startCountMutation = useStartStockCount();
   const updateItemMutation = useUpdateStockCountItem();
-  const updateCountMutation = useUpdateStockCount();
+  const completeCountMutation = useCompleteStockCount();
+  const cancelCountMutation = useCancelStockCount();
+  const createCountMutation = useCreateStockCount();
+  
+  // Locations for dropdown
+  const { locations: locationsData } = useLocations({ initialFilters: {}, autoFetch: true });
 
   // Transform data for list
   const counts: StockCount[] = (countsData?.counts ?? []).map((c: any) => ({
@@ -184,93 +217,104 @@ function StockCountsPage() {
 
   const handleConfirmComplete = useCallback(async () => {
     if (!selectedCountId) return;
-    await updateCountMutation.mutateAsync({
-      id: selectedCountId,
-      data: { status: "completed" },
-    });
+    await completeCountMutation.mutateAsync({ id: selectedCountId, applyAdjustments: true });
     setShowCompleteDialog(false);
     setView("list");
     setSelectedCountId(null);
-  }, [selectedCountId, updateCountMutation]);
+  }, [selectedCountId, completeCountMutation]);
+  
+  const handleCancelCount = useCallback(() => {
+    setShowCancelDialog(true);
+  }, []);
+  
+  const handleConfirmCancel = useCallback(async () => {
+    if (!selectedCountId) return;
+    await cancelCountMutation.mutateAsync(selectedCountId);
+    setShowCancelDialog(false);
+    setView("list");
+    setSelectedCountId(null);
+  }, [selectedCountId, cancelCountMutation]);
 
   const handleBack = useCallback(() => {
     setView("list");
     setSelectedCountId(null);
+    setShowCancelDialog(false);
+    setShowCompleteDialog(false);
   }, []);
 
   const handleNewCount = useCallback(() => {
-    toast.info("New Count", { description: "Count creation dialog coming soon" });
+    // Reset form
+    setCountCode("");
+    setCountType("cycle");
+    setLocationId("");
+    setVarianceThreshold(5);
+    setNotes("");
+    setShowCreateDialog(true);
   }, []);
+  
+  const handleCreateCount = useCallback(async () => {
+    if (!countCode.trim()) {
+      toast.error("Count code is required");
+      return;
+    }
+    
+    await createCountMutation.mutateAsync({
+      countCode: countCode.trim(),
+      countType,
+      locationId: locationId || undefined,
+      varianceThreshold,
+      notes: notes || undefined,
+    });
+    
+    setShowCreateDialog(false);
+  }, [countCode, countType, locationId, varianceThreshold, notes, createCountMutation]);
 
-  // List View
-  if (view === "list") {
-    return (
-      <PageLayout variant="full-width">
-        <PageLayout.Header
-          title="Stock Counts"
-          description="Manage cycle counts and physical inventory"
-          actions={
+  // Determine content based on view
+  const isListView = view === "list";
+  
+  const title = isListView ? "Stock Counts" : (selectedCount?.countCode ?? "Stock Count");
+  const description = isListView 
+    ? "Manage cycle counts and physical inventory" 
+    : (selectedCount?.status === "in_progress"
+        ? "Enter counted quantities for each item"
+        : `Count ${selectedCount?.status}`);
+
+  return (
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title={title}
+        description={description}
+        actions={
+          isListView ? (
             <Button onClick={handleNewCount}>
               <Plus className="h-4 w-4 mr-2" aria-hidden="true" />
               New Count
             </Button>
-          }
-        />
+          ) : (
+            <div className="flex items-center gap-2">
+              {selectedCount?.status === "in_progress" && (
+                <Button variant="destructive" onClick={handleCancelCount}>
+                  Cancel Count
+                </Button>
+              )}
+              <Button variant="outline" onClick={handleBack}>
+                <ArrowLeft className="h-4 w-4 mr-2" aria-hidden="true" />
+                Back to List
+              </Button>
+            </div>
+          )
+        }
+      />
 
-        <PageLayout.Content>
+      <PageLayout.Content>
+        {isListView ? (
           <StockCountList
             counts={counts}
             isLoading={isLoading}
             onView={handleViewCount}
             onStart={handleStartCount}
           />
-        </PageLayout.Content>
-
-        {/* Start Confirmation */}
-        <AlertDialog open={showStartDialog} onOpenChange={setShowStartDialog}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Start Stock Count</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will generate a count sheet with all inventory items
-                {countToStart?.locationName &&
-                  ` in ${countToStart.locationName}`}
-                . Are you ready to begin counting?
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmStart}>
-                <Play className="h-4 w-4 mr-2" aria-hidden="true" />
-                Start Count
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </PageLayout>
-    );
-  }
-
-  // Count/Detail View
-  return (
-    <PageLayout variant="container">
-      <PageLayout.Header
-        title={selectedCount?.countCode ?? "Stock Count"}
-        description={
-          selectedCount?.status === "in_progress"
-            ? "Enter counted quantities for each item"
-            : `Count ${selectedCount?.status}`
-        }
-        actions={
-          <Button variant="outline" onClick={handleBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" aria-hidden="true" />
-            Back to List
-          </Button>
-        }
-      />
-
-      <PageLayout.Content>
-        {selectedCount?.status === "in_progress" ? (
+        ) : selectedCount?.status === "in_progress" ? (
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
             <TabsList className="mb-4">
               <TabsTrigger value="count">
@@ -306,26 +350,160 @@ function StockCountsPage() {
         )}
       </PageLayout.Content>
 
-      {/* Complete Confirmation */}
-      <AlertDialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Complete Stock Count</AlertDialogTitle>
-            <AlertDialogDescription>
-              {progress?.varianceItems && progress.varianceItems > 0
-                ? `There are ${progress.varianceItems} items with variances. Completing the count will apply these adjustments to inventory.`
-                : "All items match expected quantities. Complete the count?"}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmComplete}>
-              <CheckCircle className="h-4 w-4 mr-2" aria-hidden="true" />
-              Complete Count
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* List View Dialogs */}
+      {isListView && (
+        <>
+          {/* Start Confirmation */}
+          <AlertDialog open={showStartDialog} onOpenChange={setShowStartDialog}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Start Stock Count</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will generate a count sheet with all inventory items
+                  {countToStart?.locationName &&
+                    ` in ${countToStart.locationName}`}
+                  . Are you ready to begin counting?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleConfirmStart}>
+                  <Play className="h-4 w-4 mr-2" aria-hidden="true" />
+                  Start Count
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Create Count Dialog */}
+          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Create Stock Count</DialogTitle>
+                <DialogDescription>
+                  Create a new stock count to track physical inventory.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="countCode">Count Code *</Label>
+                  <Input
+                    id="countCode"
+                    value={countCode}
+                    onChange={(e) => setCountCode(e.target.value)}
+                    placeholder="e.g., COUNT-2026-001"
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="countType">Count Type</Label>
+                  <Select value={countType} onValueChange={(v) => setCountType(v as any)}>
+                    <SelectTrigger id="countType">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cycle">Cycle Count</SelectItem>
+                      <SelectItem value="full">Full Count</SelectItem>
+                      <SelectItem value="spot">Spot Count</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="location">Location</Label>
+                  <Select value={locationId} onValueChange={setLocationId}>
+                    <SelectTrigger id="location">
+                      <SelectValue placeholder="All locations" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">All locations</SelectItem>
+                      {(locationsData ?? []).map((loc: any) => (
+                        <SelectItem key={loc.id} value={loc.id}>
+                          {loc.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="varianceThreshold">Variance Threshold (%)</Label>
+                  <Input
+                    id="varianceThreshold"
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={varianceThreshold}
+                    onChange={(e) => setVarianceThreshold(Number(e.target.value))}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="notes">Notes</Label>
+                  <Textarea
+                    id="notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="Optional notes about this count"
+                    rows={3}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowCreateDialog(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleCreateCount} 
+                  disabled={createCountMutation.isPending || !countCode.trim()}
+                >
+                  {createCountMutation.isPending ? "Creating..." : "Create Count"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
+
+      {/* Detail View Dialogs */}
+      {!isListView && (
+        <>
+          {/* Complete Confirmation */}
+          <AlertDialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Complete Stock Count</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {progress?.varianceItems && progress.varianceItems > 0
+                    ? `There are ${progress.varianceItems} items with variances. Completing the count will apply these adjustments to inventory.`
+                    : "All items match expected quantities. Complete the count?"}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleConfirmComplete}>
+                  <CheckCircle className="h-4 w-4 mr-2" aria-hidden="true" />
+                  Complete Count
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          
+          {/* Cancel Confirmation */}
+          <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Cancel Stock Count</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to cancel this stock count? All progress will be lost and this action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setShowCancelDialog(false)}>Keep Count</AlertDialogCancel>
+                <AlertDialogAction onClick={handleConfirmCancel} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Cancel Count
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </>
+      )}
     </PageLayout>
   );
 }

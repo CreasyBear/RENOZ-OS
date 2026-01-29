@@ -43,82 +43,6 @@ interface SupplierPerformanceProps {
 }
 
 // ============================================================================
-// SAMPLE DATA
-// ============================================================================
-
-const sampleSuppliers: SupplierPerformanceData[] = [
-  {
-    supplierId: '1',
-    supplierName: 'ABC Supplies',
-    onTimeDeliveryRate: 96.5,
-    qualityRating: 4.8,
-    communicationRating: 4.5,
-    overallRating: 4.6,
-    totalOrders: 145,
-    totalSpend: 125000,
-    avgLeadTime: 5,
-    rejectionRate: 1.2,
-  },
-  {
-    supplierId: '2',
-    supplierName: 'XYZ Materials',
-    onTimeDeliveryRate: 92.3,
-    qualityRating: 4.5,
-    communicationRating: 4.2,
-    overallRating: 4.3,
-    totalOrders: 98,
-    totalSpend: 98000,
-    avgLeadTime: 7,
-    rejectionRate: 2.5,
-  },
-  {
-    supplierId: '3',
-    supplierName: 'Premier Parts',
-    onTimeDeliveryRate: 88.0,
-    qualityRating: 4.2,
-    communicationRating: 3.8,
-    overallRating: 4.0,
-    totalOrders: 72,
-    totalSpend: 87000,
-    avgLeadTime: 8,
-    rejectionRate: 3.1,
-  },
-  {
-    supplierId: '4',
-    supplierName: 'Quality Components',
-    onTimeDeliveryRate: 94.2,
-    qualityRating: 4.7,
-    communicationRating: 4.3,
-    overallRating: 4.4,
-    totalOrders: 65,
-    totalSpend: 72000,
-    avgLeadTime: 6,
-    rejectionRate: 1.8,
-  },
-];
-
-const sampleRankings: SupplierRanking[] = [
-  { rank: 1, supplierId: '1', supplierName: 'ABC Supplies', score: 92, trend: 'up', change: 3 },
-  {
-    rank: 2,
-    supplierId: '4',
-    supplierName: 'Quality Components',
-    score: 88,
-    trend: 'up',
-    change: 5,
-  },
-  {
-    rank: 3,
-    supplierId: '2',
-    supplierName: 'XYZ Materials',
-    score: 85,
-    trend: 'stable',
-    change: 0,
-  },
-  { rank: 4, supplierId: '3', supplierName: 'Premier Parts', score: 78, trend: 'down', change: -2 },
-];
-
-// ============================================================================
 // HELPERS
 // ============================================================================
 
@@ -375,13 +299,34 @@ function PerformanceTable({ suppliers }: PerformanceTableProps) {
 // MAIN COMPONENT
 // ============================================================================
 
+/**
+ * Supplier Performance Presenter
+ * Displays supplier rankings and performance metrics.
+ * Receives all data via props - no sample data defaults.
+ * 
+ * @source suppliers from useSupplierMetrics or useProcurementDashboard hook
+ * @source rankings from useSupplierMetrics hook
+ */
 function SupplierPerformance({
-  suppliers = sampleSuppliers,
-  rankings = sampleRankings,
+  suppliers,
+  rankings,
   isLoading = false,
 }: SupplierPerformanceProps) {
   if (isLoading) {
     return <PerformanceSkeleton />;
+  }
+
+  // Show empty state if no data available
+  if (!suppliers?.length) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-muted-foreground text-center py-8">
+            No supplier data available. Data will appear once suppliers and purchase orders are created.
+          </p>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
@@ -390,7 +335,7 @@ function SupplierPerformance({
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="lg:col-span-1">
-          <SupplierRankings rankings={rankings} />
+          {rankings && <SupplierRankings rankings={rankings} />}
         </div>
         <div className="lg:col-span-2">
           <PerformanceTable suppliers={suppliers} />

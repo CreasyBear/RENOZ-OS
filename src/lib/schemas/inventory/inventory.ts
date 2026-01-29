@@ -256,7 +256,8 @@ export const stockTransferSchema = z.object({
   productId: z.string().uuid(),
   fromLocationId: z.string().uuid(),
   toLocationId: z.string().uuid(),
-  quantity: quantitySchema, // Can be negative for outbound
+  quantity: quantitySchema,
+  reason: z.string().max(500).optional(),
   notes: z.string().max(500).optional(),
 });
 

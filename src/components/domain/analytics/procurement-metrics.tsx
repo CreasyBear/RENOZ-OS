@@ -37,71 +37,6 @@ interface ProcurementMetricsProps {
 }
 
 // ============================================================================
-// SAMPLE DATA
-// ============================================================================
-
-const sampleKPIs: ProcurementKPI[] = [
-  {
-    id: 'po-cycle-time',
-    name: 'PO Cycle Time',
-    value: 4.2,
-    unit: 'days',
-    target: 5,
-    trend: 'down',
-    trendPercent: 12,
-    status: 'good',
-  },
-  {
-    id: 'supplier-compliance',
-    name: 'Supplier Compliance',
-    value: 94.5,
-    unit: '%',
-    target: 95,
-    trend: 'up',
-    trendPercent: 3,
-    status: 'warning',
-  },
-  {
-    id: 'first-time-fill',
-    name: 'First-Time Fill Rate',
-    value: 89.2,
-    unit: '%',
-    target: 90,
-    trend: 'up',
-    trendPercent: 5,
-    status: 'warning',
-  },
-  {
-    id: 'cost-per-po',
-    name: 'Cost per PO',
-    value: 125,
-    unit: 'AUD',
-    target: 150,
-    trend: 'down',
-    trendPercent: 8,
-    status: 'good',
-  },
-];
-
-const sampleOrderAnalytics: OrderAnalytics = {
-  totalOrders: 456,
-  totalValue: 485000,
-  avgOrderValue: 1063,
-  avgLeadTime: 6.5,
-  onTimeDeliveryRate: 92.5,
-  approvalRate: 98.2,
-  completionRate: 87.5,
-};
-
-const sampleCostSavings: CostSavings = {
-  negotiatedSavings: 45000,
-  volumeDiscounts: 28000,
-  processImprovement: 12000,
-  totalSavings: 85000,
-  savingsPercent: 14.9,
-};
-
-// ============================================================================
 // HELPERS
 // ============================================================================
 
@@ -379,23 +314,47 @@ function CostSavingsCard({ data }: CostSavingsCardProps) {
 // MAIN COMPONENT
 // ============================================================================
 
+/**
+ * Procurement Metrics Presenter
+ * Displays KPI cards, order analytics, and cost savings.
+ * Receives all data via props - no sample data defaults.
+ * 
+ * @source kpis from useProcurementDashboard or useSpendMetrics hook
+ * @source orderAnalytics from useOrderMetrics hook
+ * @source costSavings from useProcurementDashboard hook
+ */
 function ProcurementMetrics({
-  kpis = sampleKPIs,
-  orderAnalytics = sampleOrderAnalytics,
-  costSavings = sampleCostSavings,
+  kpis,
+  orderAnalytics,
+  costSavings,
   isLoading = false,
 }: ProcurementMetricsProps) {
   if (isLoading) {
     return <MetricsSkeleton />;
   }
 
+  // Show empty state if no data available
+  if (!kpis && !orderAnalytics && !costSavings) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="pt-6">
+            <p className="text-muted-foreground text-center py-8">
+              No procurement data available. Data will appear once purchase orders are created.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <KPICards kpis={kpis} />
+      {kpis && <KPICards kpis={kpis} />}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <OrderAnalyticsCard data={orderAnalytics} />
-        <CostSavingsCard data={costSavings} />
+        {orderAnalytics && <OrderAnalyticsCard data={orderAnalytics} />}
+        {costSavings && <CostSavingsCard data={costSavings} />}
       </div>
     </div>
   );

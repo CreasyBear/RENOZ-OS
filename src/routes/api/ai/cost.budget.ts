@@ -10,8 +10,8 @@
  */
 
 import { withAuth } from '@/lib/server/protected';
-import { getBudgetStatus } from '@/lib/ai/utils/budget';
-import { formatCost } from '@/lib/ai/utils/cost';
+import { getBudgetStatus } from '@/server/functions/ai/utils/budget';
+import { formatCost } from '@/server/functions/ai/utils/cost';
 
 export async function GET() {
   try {

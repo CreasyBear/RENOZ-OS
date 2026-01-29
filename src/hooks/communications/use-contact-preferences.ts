@@ -8,12 +8,14 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import type { UpdatePreferencesInput } from '@/lib/schemas/communications/communication-preferences';
 import {
   getContactPreferences,
   updateContactPreferences,
   getPreferenceHistory,
-} from '@/lib/server/communication-preferences';
+} from '@/server/functions/communications/communication-preferences';
 
 // ============================================================================
 // QUERY HOOKS
@@ -60,16 +62,17 @@ export function usePreferenceHistory(options: UsePreferenceHistoryOptions = {}) 
 
 export function useUpdateContactPreferences() {
   const queryClient = useQueryClient();
+  const updatePreferencesFn = useServerFn(updateContactPreferences);
 
   return useMutation({
-    mutationFn: updateContactPreferences,
+    mutationFn: (input: UpdatePreferencesInput) => updatePreferencesFn({ data: input }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.communications.contactPreference(variables.data.contactId),
+        queryKey: queryKeys.communications.contactPreference(variables.contactId),
       });
       // Also invalidate preference history since an update creates a new history entry
       queryClient.invalidateQueries({
-        queryKey: queryKeys.communications.preferenceHistory(variables.data.contactId),
+        queryKey: queryKeys.communications.preferenceHistory(variables.contactId),
       });
     },
   });

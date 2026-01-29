@@ -27,6 +27,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FormatAmount } from "@/components/shared/format";
+import { MetricCard } from "@/components/shared/metric-card";
 
 // ============================================================================
 // TYPES
@@ -34,6 +35,8 @@ import { FormatAmount } from "@/components/shared/format";
 
 export interface InventoryMetrics {
   totalItems: number;
+  totalSkus: number;
+  totalUnits: number;
   totalValue: number;
   locationsCount: number;
   lowStockCount: number;
@@ -70,88 +73,6 @@ export interface LocationUtilization {
 }
 
 // ============================================================================
-// METRIC CARD
-// ============================================================================
-
-interface MetricCardProps {
-  title: string;
-  value: React.ReactNode;
-  subtitle?: string;
-  icon: React.ReactNode;
-  trend?: string;
-  trendUp?: boolean;
-  isLoading?: boolean;
-  className?: string;
-}
-
-export const MetricCard = memo(function MetricCard({
-  title,
-  value,
-  subtitle,
-  icon,
-  trend,
-  trendUp,
-  isLoading,
-  className,
-}: MetricCardProps) {
-  if (isLoading) {
-    return (
-      <Card className={className}>
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-5 w-5 rounded" />
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-8 w-20 mb-1" />
-          <Skeleton className="h-3 w-32" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className={className}>
-      <CardHeader className="flex flex-row items-center justify-between pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
-          {title}
-        </CardTitle>
-        <div className="text-muted-foreground">{icon}</div>
-      </CardHeader>
-      <CardContent>
-        <div
-          className="text-2xl font-bold tabular-nums"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          {value}
-        </div>
-        <div className="flex items-center gap-2 mt-1">
-          {subtitle && (
-            <p className="text-xs text-muted-foreground">{subtitle}</p>
-          )}
-          {trend && (
-            <span
-              className={cn(
-                "flex items-center text-xs font-medium",
-                trendUp ? "text-green-600" : "text-red-600"
-              )}
-            >
-              {trendUp ? (
-                <TrendingUp className="h-3 w-3 mr-0.5" aria-hidden="true" />
-              ) : (
-                <TrendingDown className="h-3 w-3 mr-0.5" aria-hidden="true" />
-              )}
-              <span className="sr-only">{trendUp ? "Increased by" : "Decreased by"}</span>
-              {trend}
-            </span>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-});
-
-// ============================================================================
 // STOCK OVERVIEW WIDGET
 // ============================================================================
 
@@ -170,12 +91,12 @@ export const StockOverviewWidget = memo(function StockOverviewWidget({
         title="Total Inventory Value"
         value={
           metrics ? (
-            <FormatAmount amount={metrics.totalValue} />
+            <FormatAmount amount={metrics.totalValue} cents={false} />
           ) : (
             "$0.00"
           )
         }
-        subtitle={`${metrics?.totalItems ?? 0} total items`}
+        subtitle={`${metrics?.totalUnits ?? 0} total units`}
         icon={<DollarSign className="h-5 w-5" />}
         isLoading={isLoading}
       />
@@ -581,3 +502,7 @@ export const LocationUtilizationWidget = memo(function LocationUtilizationWidget
     </Card>
   );
 });
+
+
+// Re-export MetricCard from shared for backward compatibility
+export { MetricCard, type MetricCardProps } from "@/components/shared/metric-card";

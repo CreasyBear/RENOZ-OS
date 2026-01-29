@@ -26,6 +26,8 @@ import {
   customerHealthMetrics,
   customerPriorities,
 } from 'drizzle/schema';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { computeChanges } from '@/lib/activity-logger';
 import {
   createCustomerSchema,
   updateCustomerSchema,
@@ -62,6 +64,15 @@ import {
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ConflictError } from '@/lib/server/errors';
+
+// ============================================================================
+// ACTIVITY LOGGING HELPERS
+// ============================================================================
+
+/**
+ * Fields to exclude from activity change tracking (system-managed)
+ */
+const CUSTOMER_EXCLUDED_FIELDS: string[] = ['updatedAt', 'updatedBy', 'createdAt', 'createdBy', 'deletedAt'];
 
 // ============================================================================
 // CUSTOMER CRUD
@@ -131,7 +142,42 @@ export const getCustomers = createServerFn({ method: 'GET' })
         .from(customers)
         .where(whereClause),
       db
-        .select()
+        .select({
+          id: customers.id,
+          organizationId: customers.organizationId,
+          customerCode: customers.customerCode,
+          name: customers.name,
+          legalName: customers.legalName,
+          email: customers.email,
+          phone: customers.phone,
+          website: customers.website,
+          status: customers.status,
+          type: customers.type,
+          size: customers.size,
+          industry: customers.industry,
+          taxId: customers.taxId,
+          registrationNumber: customers.registrationNumber,
+          parentId: customers.parentId,
+          creditLimit: customers.creditLimit,
+          creditHold: customers.creditHold,
+          creditHoldReason: customers.creditHoldReason,
+          healthScore: customers.healthScore,
+          healthScoreUpdatedAt: customers.healthScoreUpdatedAt,
+          lifetimeValue: customers.lifetimeValue,
+          firstOrderDate: customers.firstOrderDate,
+          lastOrderDate: customers.lastOrderDate,
+          totalOrders: customers.totalOrders,
+          totalOrderValue: customers.totalOrderValue,
+          averageOrderValue: customers.averageOrderValue,
+          tags: customers.tags,
+          customFields: customers.customFields,
+          warrantyExpiryAlertOptOut: customers.warrantyExpiryAlertOptOut,
+          createdAt: customers.createdAt,
+          updatedAt: customers.updatedAt,
+          createdBy: customers.createdBy,
+          updatedBy: customers.updatedBy,
+          deletedAt: customers.deletedAt,
+        })
         .from(customers)
         .where(whereClause)
         .orderBy(orderDirection(orderColumn))
@@ -270,6 +316,7 @@ export const createCustomer = createServerFn({ method: 'POST' })
   .inputValidator(createCustomerSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.create });
+    const logger = createActivityLoggerWithContext(ctx);
 
     const created = await db.transaction(async (tx) => {
       const [newCustomer] = await tx
@@ -297,6 +344,19 @@ export const createCustomer = createServerFn({ method: 'POST' })
         tx
       );
 
+      // Log customer creation (fire-and-forget after transaction)
+      logger.logAsync({
+        entityType: 'customer',
+        entityId: newCustomer.id,
+        action: 'created',
+        changes: computeChanges({
+          before: null,
+          after: newCustomer,
+          excludeFields: CUSTOMER_EXCLUDED_FIELDS as never[],
+        }),
+        description: `Created customer: ${newCustomer.name}`,
+      });
+
       return newCustomer;
     });
 
@@ -310,8 +370,22 @@ export const updateCustomer = createServerFn({ method: 'POST' })
   .inputValidator(customerParamsSchema.merge(updateCustomerSchema))
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update });
+    const logger = createActivityLoggerWithContext(ctx);
 
     const { id, ...updateData } = data;
+
+    // Fetch before state for change tracking
+    const before = await db.query.customers.findFirst({
+      where: and(
+        eq(customers.id, id),
+        eq(customers.organizationId, ctx.organizationId),
+        sql`${customers.deletedAt} IS NULL`
+      ),
+    });
+
+    if (!before) {
+      throw new NotFoundError('Customer not found', 'customer');
+    }
 
     const updated = await db.transaction(async (tx) => {
       const result = await tx
@@ -351,6 +425,24 @@ export const updateCustomer = createServerFn({ method: 'POST' })
       return result[0];
     });
 
+    // Log customer update (fire-and-forget after transaction)
+    const changes = computeChanges({
+      before,
+      after: updated,
+      excludeFields: CUSTOMER_EXCLUDED_FIELDS as never[],
+    });
+
+    // Only log if there are actual changes
+    if (changes.fields && changes.fields.length > 0) {
+      logger.logAsync({
+        entityType: 'customer',
+        entityId: updated.id,
+        action: 'updated',
+        changes,
+        description: `Updated customer: ${updated.name}`,
+      });
+    }
+
     return updated;
   });
 
@@ -361,8 +453,22 @@ export const deleteCustomer = createServerFn({ method: 'POST' })
   .inputValidator(customerParamsSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.delete });
+    const logger = createActivityLoggerWithContext(ctx);
 
     const { id } = data;
+
+    // Fetch customer before deletion for activity log
+    const customerToDelete = await db.query.customers.findFirst({
+      where: and(
+        eq(customers.id, id),
+        eq(customers.organizationId, ctx.organizationId),
+        sql`${customers.deletedAt} IS NULL`
+      ),
+    });
+
+    if (!customerToDelete) {
+      throw new NotFoundError('Customer not found', 'customer');
+    }
 
     const deleted = await db.transaction(async (tx) => {
       const result = await tx
@@ -395,6 +501,19 @@ export const deleteCustomer = createServerFn({ method: 'POST' })
       );
 
       return { success: true, id: result[0].id };
+    });
+
+    // Log customer deletion (fire-and-forget after transaction)
+    logger.logAsync({
+      entityType: 'customer',
+      entityId: id,
+      action: 'deleted',
+      changes: computeChanges({
+        before: customerToDelete,
+        after: null,
+        excludeFields: CUSTOMER_EXCLUDED_FIELDS as never[],
+      }),
+      description: `Deleted customer: ${customerToDelete.name}`,
     });
 
     return deleted;
@@ -1122,6 +1241,7 @@ export const mergeCustomers = createServerFn({ method: 'POST' })
   .inputValidator(mergeCustomersSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.delete });
+    const logger = createActivityLoggerWithContext(ctx);
 
     const { primaryCustomerId, duplicateCustomerIds, fieldResolutions } = data;
 
@@ -1146,6 +1266,9 @@ export const mergeCustomers = createServerFn({ method: 'POST' })
     if (!primary) {
       throw new NotFoundError('Primary customer not found', 'customer');
     }
+
+    // Store primary customer before state for change tracking
+    const primaryBefore = { ...primary };
 
     // Wrap entire merge operation in transaction for atomicity
     await db.transaction(async (tx) => {
@@ -1307,6 +1430,58 @@ export const mergeCustomers = createServerFn({ method: 'POST' })
           eq(customers.organizationId, ctx.organizationId)
         ));
     });
+
+    // Fetch updated primary customer for change tracking
+    const primaryAfter = await db.query.customers.findFirst({
+      where: and(
+        eq(customers.id, primaryCustomerId),
+        eq(customers.organizationId, ctx.organizationId)
+      ),
+    });
+
+    // Log merge operations
+    if (primaryAfter) {
+      const changes = computeChanges({
+        before: primaryBefore,
+        after: primaryAfter,
+        excludeFields: CUSTOMER_EXCLUDED_FIELDS as never[],
+      });
+
+      logger.logAsync({
+        entityType: 'customer',
+        entityId: primaryCustomerId,
+        action: 'updated',
+        changes,
+        description: `Merged ${duplicateCustomerIds.length} duplicate(s) into customer: ${primaryAfter.name}`,
+        metadata: {
+          mergedCount: duplicateCustomerIds.length,
+          mergedCustomerIds: duplicateCustomerIds.join(','),
+          fieldResolutions: fieldResolutions ? JSON.stringify(fieldResolutions) : null,
+        },
+      });
+    }
+
+    // Log deletions for each merged customer
+    for (const duplicateId of duplicateCustomerIds) {
+      const duplicate = existingCustomers.find((c) => c.id === duplicateId);
+      if (duplicate) {
+        logger.logAsync({
+          entityType: 'customer',
+          entityId: duplicateId,
+          action: 'deleted',
+          changes: computeChanges({
+            before: duplicate,
+            after: null,
+            excludeFields: CUSTOMER_EXCLUDED_FIELDS as never[],
+          }),
+          description: `Merged into customer: ${primary?.name ?? primaryCustomerId}`,
+          metadata: {
+            mergedIntoCustomerId: primaryCustomerId,
+            mergeReason: 'duplicate_merge',
+          },
+        });
+      }
+    }
 
     return {
       success: true,

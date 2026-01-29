@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.regular,
-    color: colors.text.secondary,
+    color: colors.text.muted,
     fontStyle: "italic",
     marginBottom: spacing.md,
     lineHeight: 1.5,

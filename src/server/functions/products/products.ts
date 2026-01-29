@@ -18,6 +18,7 @@ import {
   productImages,
   productAttributeValues,
   productRelations,
+  inventory,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
@@ -42,8 +43,14 @@ export interface CategoryWithChildren extends Category {
   children: CategoryWithChildren[];
 }
 
+export interface ProductWithInventory extends Product {
+  categoryName: string | null;
+  totalQuantity: number;
+  stockStatus: 'in_stock' | 'low_stock' | 'out_of_stock' | 'not_tracked';
+}
+
 interface ListProductsResult {
-  products: Product[];
+  products: ProductWithInventory[];
   total: number;
   page: number;
   limit: number;
@@ -115,9 +122,16 @@ export const listProducts = createServerFn({ method: 'GET' })
         .from(products)
         .where(whereClause),
       db
-        .select()
+        .select({
+          product: products,
+          categoryName: categories.name,
+          totalQuantity: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::int`,
+        })
         .from(products)
+        .leftJoin(categories, eq(products.categoryId, categories.id))
+        .leftJoin(inventory, eq(products.id, inventory.productId))
         .where(whereClause)
+        .groupBy(products.id, categories.name)
         .orderBy(orderDir(orderColumn))
         .limit(limit)
         .offset(offset),
@@ -125,8 +139,34 @@ export const listProducts = createServerFn({ method: 'GET' })
 
     const total = countResult[0]?.count ?? 0;
 
+    // Map to ProductWithInventory with stock status calculation
+    const productsWithInventory: ProductWithInventory[] = productList.map((row) => {
+      const product = row.product;
+      const totalQty = row.totalQuantity ?? 0;
+      const categoryName = row.categoryName ?? null;
+      
+      // Calculate stock status
+      let stockStatus: ProductWithInventory['stockStatus'];
+      if (!product.trackInventory) {
+        stockStatus = 'not_tracked';
+      } else if (totalQty === 0) {
+        stockStatus = 'out_of_stock';
+      } else if (product.reorderPoint !== null && totalQty <= product.reorderPoint) {
+        stockStatus = 'low_stock';
+      } else {
+        stockStatus = 'in_stock';
+      }
+
+      return {
+        ...product,
+        categoryName,
+        totalQuantity: totalQty,
+        stockStatus,
+      };
+    });
+
     return {
-      products: productList,
+      products: productsWithInventory,
       total,
       page,
       limit,
@@ -435,6 +475,132 @@ export const deleteProduct = createServerFn({ method: 'POST' })
     });
 
     return { success: true };
+  });
+
+/**
+ * Duplicate a product with all its related data.
+ * Creates a copy with " (Copy)" suffix and a new SKU.
+ */
+export const duplicateProduct = createServerFn({ method: 'POST' })
+  .inputValidator(z.object({ id: z.string().uuid() }))
+  .handler(async ({ data }): Promise<Product> => {
+    const ctx = await withAuth({ permission: PERMISSIONS.product.create });
+
+    // Get the original product with all related data
+    const [original] = await db
+      .select()
+      .from(products)
+      .where(
+        and(
+          eq(products.id, data.id),
+          eq(products.organizationId, ctx.organizationId),
+          isNull(products.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!original) {
+      throw new NotFoundError('Product not found', 'product');
+    }
+
+    // Get related data
+    const [priceTiers, images, attributeValues, bundleComponents, relations] = await Promise.all([
+      db.select().from(productPriceTiers).where(eq(productPriceTiers.productId, data.id)),
+      db.select().from(productImages).where(eq(productImages.productId, data.id)),
+      db.select().from(productAttributeValues).where(eq(productAttributeValues.productId, data.id)),
+      db.select().from(productBundles).where(eq(productBundles.bundleProductId, data.id)),
+      db.select().from(productRelations).where(eq(productRelations.productId, data.id)),
+    ]);
+
+    // Generate new SKU by appending -COPY
+    const newSku = `${original.sku}-COPY`;
+
+    // Check if SKU already exists
+    const existingSku = await db
+      .select({ id: products.id })
+      .from(products)
+      .where(
+        and(
+          eq(products.organizationId, ctx.organizationId),
+          eq(products.sku, newSku),
+          isNull(products.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (existingSku.length > 0) {
+      throw new ConflictError(`Product with SKU "${newSku}" already exists. Please rename the original product first.`);
+    }
+
+    // Create the duplicated product
+    const { id: _, sku: __, name, createdAt, updatedAt, createdBy, updatedBy, deletedAt, ...productData } = original;
+    
+    const [newProduct] = await db
+      .insert(products)
+      .values({
+        ...productData,
+        sku: newSku,
+        name: `${name} (Copy)`,
+        organizationId: ctx.organizationId,
+        createdBy: ctx.user.id,
+        updatedBy: ctx.user.id,
+      })
+      .returning();
+
+    // Duplicate related data in parallel
+    await Promise.all([
+      // Price tiers (no updatedAt field)
+      priceTiers.length > 0
+        ? db.insert(productPriceTiers).values(
+            priceTiers.map(({ id, productId, createdAt, ...tier }) => ({
+              ...tier,
+              productId: newProduct.id,
+            }))
+          )
+        : Promise.resolve(),
+
+      // Images (no updatedAt field)
+      images.length > 0
+        ? db.insert(productImages).values(
+            images.map(({ id, productId, createdAt, ...image }) => ({
+              ...image,
+              productId: newProduct.id,
+            }))
+          )
+        : Promise.resolve(),
+
+      // Attribute values
+      attributeValues.length > 0
+        ? db.insert(productAttributeValues).values(
+            attributeValues.map(({ id, productId, createdAt, updatedAt, ...attr }) => ({
+              ...attr,
+              productId: newProduct.id,
+            }))
+          )
+        : Promise.resolve(),
+
+      // Bundle components (no updatedAt field)
+      bundleComponents.length > 0
+        ? db.insert(productBundles).values(
+            bundleComponents.map(({ id, bundleProductId, createdAt, ...bundle }) => ({
+              ...bundle,
+              bundleProductId: newProduct.id,
+            }))
+          )
+        : Promise.resolve(),
+
+      // Product relations (no updatedAt field)
+      relations.length > 0
+        ? db.insert(productRelations).values(
+            relations.map(({ id, createdAt, ...relation }) => ({
+              ...relation,
+              productId: newProduct.id,
+            }))
+          )
+        : Promise.resolve(),
+    ]);
+
+    return newProduct;
   });
 
 // ============================================================================

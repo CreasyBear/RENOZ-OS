@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Auto-Escalate Issues Job
  *
@@ -353,4 +355,3 @@ export const autoEscalateIssuesTask = schedules.task({
     };
   },
 });
-

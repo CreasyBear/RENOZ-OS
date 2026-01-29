@@ -17,12 +17,15 @@ import {
   createProduct,
   updateProduct,
   deleteProduct,
+  duplicateProduct,
   quickSearchProducts,
   listCategories,
   getCategoryTree,
   createCategory,
   updateCategory,
   deleteCategory,
+  parseImportFile,
+  importProducts,
 } from '@/server/functions/products';
 
 // ============================================================================
@@ -180,6 +183,25 @@ export function useDeleteProduct() {
 }
 
 /**
+ * Duplicate a product with all related data
+ */
+export function useDuplicateProduct() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (productId: string) => duplicateProduct({ data: { id: productId } }),
+    onSuccess: (newProduct) => {
+      toast.success('Product duplicated successfully');
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
+      return newProduct;
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to duplicate product');
+    },
+  });
+}
+
+/**
  * Create a new category
  */
 export function useCreateCategory() {
@@ -272,5 +294,100 @@ export function useProductsForJobMaterials(options: UseProductsForJobMaterialsOp
         description: product.description ?? null,
         unitPrice: product.basePrice ?? 0,
       })) ?? [],
+  });
+}
+
+// ============================================================================
+// IMPORT/EXPORT HOOKS
+// ============================================================================
+
+export interface ImportPreviewRow {
+  row: number;
+  data: {
+    sku: string;
+    name: string;
+    description?: string;
+    categoryName?: string;
+    type?: 'physical' | 'service' | 'digital' | 'bundle';
+    status?: 'active' | 'inactive' | 'discontinued';
+    basePrice: number;
+    costPrice?: number;
+    weight?: number;
+    barcode?: string;
+    tags?: string[];
+  };
+  isValid: boolean;
+  errors: string[];
+}
+
+export interface ImportPreview {
+  totalRows: number;
+  validCount: number;
+  invalidCount: number;
+  rows: ImportPreviewRow[];
+  headers: string[];
+}
+
+/**
+ * Parse and preview CSV import file
+ * Client-side: reads File, sends content to server
+ */
+export function useParseImportFile() {
+  return useMutation({
+    mutationFn: async ({ file, hasHeaders = true }: { file: File; hasHeaders?: boolean }) => {
+      const content = await file.text();
+      return parseImportFile({ data: { content, hasHeaders } }) as Promise<ImportPreview>;
+    },
+  });
+}
+
+export interface ImportProductsResult {
+  success: boolean;
+  totalProcessed: number;
+  created: number;
+  updated: number;
+  skipped: number;
+  errors: number;
+  results: Array<{
+    row: number;
+    sku: string;
+    status: 'created' | 'updated' | 'skipped' | 'error';
+    message?: string;
+    productId?: string;
+  }>;
+}
+
+/**
+ * Import products from parsed CSV data
+ */
+export function useImportProducts() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: {
+      rows: Array<{
+        sku: string;
+        name: string;
+        description?: string;
+        categoryName?: string;
+        type?: 'physical' | 'service' | 'digital' | 'bundle';
+        status?: 'active' | 'inactive' | 'discontinued';
+        basePrice: number;
+        costPrice?: number;
+        weight?: number;
+        barcode?: string;
+        tags?: string[];
+      }>;
+      mode?: 'create_only' | 'update_only' | 'create_or_update';
+      skipErrors?: boolean;
+    }) => importProducts({ data }),
+    onSuccess: (result) => {
+      toast.success(`Import complete: ${result.created} created, ${result.updated} updated`);
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
+      return result as ImportProductsResult;
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to import products');
+    },
   });
 }

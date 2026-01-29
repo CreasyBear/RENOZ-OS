@@ -8,8 +8,10 @@
  */
 
 import { useState, useCallback, useEffect } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import {
+  useScheduleEmail,
+  useUpdateScheduledEmail,
+} from "@/hooks/communications/use-scheduled-emails";
 import { addHours } from "date-fns";
 import { Send, Calendar, Clock, Loader2 } from "lucide-react";
 import {
@@ -36,10 +38,6 @@ import { toast } from "sonner";
 import { DateTimePicker } from "../date-time-picker";
 import { TimezoneSelect, getLocalTimezone } from "../timezone-select";
 import { SignatureSelector } from "../signatures/signature-selector";
-import {
-  scheduleEmail,
-  updateScheduledEmail,
-} from "@/lib/server/scheduled-emails";
 
 // ============================================================================
 // TYPES
@@ -101,7 +99,8 @@ export function ScheduleEmailDialog({
   onCreateSignature,
   onSuccess,
 }: ScheduleEmailDialogProps) {
-  const queryClient = useQueryClient();
+  const scheduleEmailMutation = useScheduleEmail();
+  const updateEmailMutation = useUpdateScheduledEmail();
   const isEditing = !!initialData?.id;
 
   // Form state
@@ -155,59 +154,73 @@ export function ScheduleEmailDialog({
     }
   }, [open, initialData, defaultRecipient]);
 
-  // Schedule mutation
-  const scheduleMutation = useMutation({
-    mutationFn: async () => {
-      if (!scheduledAt) throw new Error("Please select a date and time");
+  const submitScheduledEmail = () => {
+    if (!scheduledAt) {
+      throw new Error("Please select a date and time");
+    }
 
-      // Build templateData with signature info
-      const templateData: Record<string, unknown> = {};
-      if (templateType === "custom" && bodyOverride) {
-        templateData.bodyOverride = bodyOverride;
-      }
-      if (signatureId) {
-        templateData.signatureId = signatureId;
-        templateData.signatureContent = signatureContent;
-      }
+    const templateData: Record<string, unknown> = {};
+    if (templateType === "custom" && bodyOverride) {
+      templateData.bodyOverride = bodyOverride;
+    }
+    if (signatureId) {
+      templateData.signatureId = signatureId;
+      templateData.signatureContent = signatureContent;
+    }
 
-      const payload = {
-        recipientEmail,
-        recipientName: recipientName || undefined,
-        customerId: defaultRecipient?.customerId,
-        subject,
-        templateType,
-        templateData: Object.keys(templateData).length > 0 ? templateData : undefined,
-        scheduledAt,
-        timezone,
-      };
+    const payload = {
+      recipientEmail,
+      recipientName: recipientName || undefined,
+      customerId: defaultRecipient?.customerId,
+      subject,
+      templateType,
+      templateData: Object.keys(templateData).length > 0 ? templateData : undefined,
+      scheduledAt,
+      timezone,
+    };
 
-      if (isEditing && initialData?.id) {
-        return updateScheduledEmail({
-          data: {
-            id: initialData.id,
-            ...payload,
+    if (isEditing && initialData?.id) {
+      updateEmailMutation.mutate(
+        {
+          id: initialData.id,
+          ...payload,
+        },
+        {
+          onSuccess: () => {
+            toast.success("Email updated", {
+              description: "The scheduled email has been updated.",
+            });
+            onOpenChange(false);
+            onSuccess?.();
           },
-        });
-      } else {
-        return scheduleEmail({ data: payload });
+          onError: (error) => {
+            toast.error("Failed to update email", {
+              description: error instanceof Error ? error.message : "Please try again.",
+            });
+          },
+        }
+      );
+      return;
+    }
+
+    scheduleEmailMutation.mutate(
+      payload,
+      {
+        onSuccess: () => {
+          toast.success("Email scheduled", {
+            description: "Your email has been scheduled for delivery.",
+          });
+          onOpenChange(false);
+          onSuccess?.();
+        },
+        onError: (error) => {
+          toast.error("Failed to schedule email", {
+            description: error instanceof Error ? error.message : "Please try again.",
+          });
+        },
       }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.communications.scheduledEmails() });
-      toast.success(isEditing ? "Email updated" : "Email scheduled", {
-        description: isEditing
-          ? "The scheduled email has been updated."
-          : "Your email has been scheduled for delivery.",
-      });
-      onOpenChange(false);
-      onSuccess?.();
-    },
-    onError: (error) => {
-      toast.error(isEditing ? "Failed to update email" : "Failed to schedule email", {
-        description: error instanceof Error ? error.message : "Please try again.",
-      });
-    },
-  });
+    );
+  };
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -231,12 +244,25 @@ export function ScheduleEmailDialog({
         return;
       }
 
-      scheduleMutation.mutate();
+      try {
+        submitScheduledEmail();
+      } catch (error) {
+        toast.error(isEditing ? "Failed to update email" : "Failed to schedule email", {
+          description: error instanceof Error ? error.message : "Please try again.",
+        });
+      }
     },
-    [recipientEmail, subject, scheduledAt, scheduleMutation]
+    [
+      recipientEmail,
+      subject,
+      scheduledAt,
+      submitScheduledEmail,
+      isEditing,
+    ]
   );
 
-  const isSubmitting = scheduleMutation.isPending;
+  const isSubmitting =
+    scheduleEmailMutation.isPending || updateEmailMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

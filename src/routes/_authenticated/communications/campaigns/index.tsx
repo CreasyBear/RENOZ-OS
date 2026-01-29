@@ -64,7 +64,7 @@ function CampaignsContainer() {
   const handleCancel = useCallback(
     async (id: string) => {
       try {
-        await cancelMutation.mutateAsync({ data: { id } });
+        await cancelMutation.mutateAsync({ id });
         toastSuccess("Campaign paused");
       } catch {
         toastError("Failed to pause campaign");
@@ -76,7 +76,7 @@ function CampaignsContainer() {
   const handleDelete = useCallback(
     async (id: string) => {
       try {
-        await deleteMutation.mutateAsync({ data: { id } });
+        await deleteMutation.mutateAsync({ id });
         toastSuccess("Campaign deleted");
       } catch {
         toastError("Failed to delete campaign");

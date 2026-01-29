@@ -11,7 +11,7 @@
  * @see docs/plans/2026-01-24-communications-plumbing-review.md
  */
 import { createFileRoute } from "@tanstack/react-router";
-import { RouteErrorFallback } from "@/components/layout";
+import { RouteErrorFallback, PageLayout } from "@/components/layout";
 import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
 import {
   Card,
@@ -33,9 +33,11 @@ export const Route = createFileRoute(
     <RouteErrorFallback error={error} parentRoute="/communications" />
   ),
   pendingComponent: () => (
-    <div className="container py-6 max-w-4xl">
-      <CommunicationsListSkeleton />
-    </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Content>
+        <CommunicationsListSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
   ),
 });
 
@@ -45,39 +47,41 @@ export const Route = createFileRoute(
 
 function PreferencesSettingsContainer() {
   return (
-    <div className="container py-6 max-w-4xl space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold flex items-center gap-2">
-          <Settings className="h-6 w-6" />
-          Communication Preferences
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Manage communication preference settings and view audit history
-        </p>
-      </div>
-
-      {/* Info Card */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Info className="h-4 w-4" />
-            About Communication Preferences
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-2">
-          <p>
-            Communication preferences control whether contacts can receive email and SMS
-            communications from your organization. All preference changes are logged for
-            compliance and audit purposes.
-          </p>
-          <p>
-            To manage preferences for a specific contact, navigate to their profile page
-            in the Customers section. The preference history is shown on a per-contact basis.
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title={
+          <span className="flex items-center gap-2">
+            <Settings className="h-6 w-6" />
+            Communication Preferences
+          </span>
+        }
+        description="Manage communication preference settings and view audit history"
+      />
+      <PageLayout.Content>
+        <div className="max-w-4xl space-y-6">
+          {/* Info Card */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Info className="h-4 w-4" />
+                About Communication Preferences
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm text-muted-foreground space-y-2">
+              <p>
+                Communication preferences control whether contacts can receive email and SMS
+                communications from your organization. All preference changes are logged for
+                compliance and audit purposes.
+              </p>
+              <p>
+                To manage preferences for a specific contact, navigate to their profile page
+                in the Customers section. The preference history is shown on a per-contact basis.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </PageLayout.Content>
+    </PageLayout>
   );
 }
 

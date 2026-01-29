@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Generate Quote PDF Task (Trigger.dev v3)
  *

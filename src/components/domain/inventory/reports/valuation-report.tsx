@@ -41,7 +41,7 @@ export interface ValuationSummary {
   totalValue: number;
   totalUnits: number;
   averageUnitCost: number;
-  categoriesCount: number;
+  totalSkus: number;
   locationsCount: number;
   costMethod: "fifo" | "lifo" | "weighted_average";
 }
@@ -189,7 +189,7 @@ export const ValuationReport = memo(function ValuationReport({
               </span>
             </div>
             <div className="text-2xl font-bold mt-2 tabular-nums">
-              {summary.categoriesCount} / {summary.locationsCount}
+              {summary.totalSkus} / {summary.locationsCount}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Categories and locations

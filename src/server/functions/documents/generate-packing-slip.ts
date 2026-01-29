@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Packing Slip Generation Server Functions
  *

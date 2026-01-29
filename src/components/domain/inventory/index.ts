@@ -48,6 +48,20 @@ export {
 
 export { AllocationsTab } from './allocations-tab';
 
+// --- Dialogs ---
+export {
+  StockTransferDialog,
+  type TransferFormData,
+} from './stock-transfer-dialog';
+export {
+  StockAdjustmentDialog,
+  type AdjustmentFormData,
+} from './stock-adjustment-dialog';
+export {
+  InventoryItemEditDialog,
+  type InventoryItemEditDialogProps,
+} from './inventory-item-edit-dialog';
+
 // --- Alerts ---
 export * from './alerts';
 export type { AlertType, AlertSeverity, InventoryAlert } from './alerts/alerts-panel';

@@ -84,7 +84,7 @@ export const Route = createFileRoute('/_authenticated/support/claims/')({
     <RouteErrorFallback error={error} parentRoute="/support" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Warranty Claims"
         description="Manage warranty claims and track resolutions"
@@ -164,7 +164,7 @@ function ClaimsListPage() {
   const pagination = data?.pagination ?? { page: 1, pageSize: 20, total: 0, totalPages: 0 };
 
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title={
           <div className="flex items-center gap-2">
@@ -175,8 +175,9 @@ function ClaimsListPage() {
         description="Manage warranty claims and track resolutions"
       />
 
-      {/* Filter Bar */}
-      <Card className="mt-6">
+      <PageLayout.Content>
+        {/* Filter Bar */}
+        <Card>
         <CardContent className="p-4">
           {/* Desktop Filters */}
           <div className="hidden items-center gap-4 md:flex">
@@ -476,6 +477,7 @@ function ClaimsListPage() {
           )}
         </CardContent>
       </Card>
+      </PageLayout.Content>
     </PageLayout>
   );
 }

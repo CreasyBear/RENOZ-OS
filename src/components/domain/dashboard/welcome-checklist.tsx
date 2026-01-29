@@ -16,7 +16,7 @@
  * <WelcomeChecklist />
  * ```
  */
-import { useCallback, useId } from "react"
+import { useCallback, useId, useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useServerFn } from "@tanstack/react-start"
 import { Link } from "@tanstack/react-router"
@@ -28,6 +28,9 @@ import {
   Package,
   FileText,
   ArrowRight,
+  Shield,
+  Mail,
+  BarChart3,
 } from "lucide-react"
 import { cn } from "~/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
@@ -217,6 +220,45 @@ export const onboardingKeys = {
 }
 
 // ============================================================================
+// PHASE 2 ITEMS - Revealed after Phase 1 complete
+// ============================================================================
+
+const PHASE_2_ITEMS: ChecklistItem[] = [
+  {
+    id: "warranty",
+    title: "Set up warranty policies",
+    description: "Define warranty terms for your products",
+    icon: Shield,
+    completed: false,
+    href: "/settings/warranty-policies",
+  },
+  {
+    id: "email",
+    title: "Connect your email",
+    description: "Send campaigns and track communications",
+    icon: Mail,
+    completed: false,
+    href: "/communications",
+  },
+  {
+    id: "teammate",
+    title: "Invite a team member",
+    description: "Collaborate with your team in Renoz",
+    icon: Users,
+    completed: false,
+    href: "/admin/users",
+  },
+  {
+    id: "report",
+    title: "View your first report",
+    description: "Get insights into your business metrics",
+    icon: BarChart3,
+    completed: false,
+    href: "/reports",
+  },
+]
+
+// ============================================================================
 // WELCOME CHECKLIST COMPONENT
 // ============================================================================
 
@@ -228,6 +270,8 @@ export function WelcomeChecklist({ className }: WelcomeChecklistProps) {
   const queryClient = useQueryClient()
   const titleId = useId()
   const descriptionId = useId()
+  const [showPhase2, setShowPhase2] = useState(false)
+  const [celebratedPhase1, setCelebratedPhase1] = useState(false)
 
   // Server function bindings
   const getProgressFn = useServerFn(getOnboardingProgress)
@@ -263,8 +307,8 @@ export function WelcomeChecklist({ className }: WelcomeChecklistProps) {
     return null
   }
 
-  // Build checklist items from progress data
-  const checklistItems: ChecklistItem[] = [
+  // Build Phase 1 checklist items from progress data
+  const phase1Items: ChecklistItem[] = [
     {
       id: "customer",
       title: "Add your first customer",
@@ -294,10 +338,26 @@ export function WelcomeChecklist({ className }: WelcomeChecklistProps) {
     },
   ]
 
-  const completedCount = checklistItems.filter((item) => item.completed).length
-  const totalCount = checklistItems.length
-  const progress = (completedCount / totalCount) * 100
-  const allComplete = completedCount === totalCount
+  const phase1Completed = phase1Items.filter((item) => item.completed).length
+  const phase1Total = phase1Items.length
+  const phase1Progress = (phase1Completed / phase1Total) * 100
+  const phase1AllComplete = phase1Completed === phase1Total
+
+  // Auto-reveal Phase 2 when Phase 1 complete (with delay for celebration)
+  useEffect(() => {
+    if (phase1AllComplete && !celebratedPhase1) {
+      setCelebratedPhase1(true)
+      // Small delay for celebration effect
+      const timer = setTimeout(() => {
+        setShowPhase2(true)
+      }, 500)
+      return () => clearTimeout(timer)
+    }
+  }, [phase1AllComplete, celebratedPhase1])
+
+  const totalCompleted = phase1Completed + (showPhase2 ? 0 : 0) // Phase 2 not tracked yet
+  const totalItems = phase1Total + (showPhase2 ? PHASE_2_ITEMS.length : 0)
+  const totalProgress = (totalCompleted / totalItems) * 100
 
   return (
     <Card
@@ -312,17 +372,23 @@ export function WelcomeChecklist({ className }: WelcomeChecklistProps) {
       <CardHeader className="flex-row items-start justify-between space-y-0 pb-4">
         <div className="space-y-1">
           <CardTitle id={titleId} className="text-lg">
-            {allComplete ? "You're all set!" : "Getting Started"}
+            {phase1AllComplete && !showPhase2 
+              ? "🎉 Phase 1 Complete!" 
+              : phase1AllComplete && showPhase2
+              ? "Getting Started"
+              : "Getting Started"}
           </CardTitle>
           <p id={descriptionId} className="text-sm text-muted-foreground">
-            {allComplete
-              ? "Congratulations! You've completed all getting started tasks."
-              : `Complete these steps to get the most out of Renoz`}
+            {phase1AllComplete && !showPhase2
+              ? "Great job! Unlock more features to get even more from Renoz."
+              : phase1AllComplete && showPhase2
+              ? `Complete these steps to unlock the full power of Renoz (${totalCompleted}/${totalItems})`
+              : `Complete these steps to get the most out of Renoz (${phase1Completed}/${phase1Total})`}
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <ProgressRing progress={progress} />
+          <ProgressRing progress={showPhase2 ? totalProgress : phase1Progress} />
           <Button
             variant="ghost"
             size="icon"
@@ -337,21 +403,61 @@ export function WelcomeChecklist({ className }: WelcomeChecklistProps) {
       </CardHeader>
 
       <CardContent>
-        <ul role="list" className="space-y-2" aria-label="Onboarding tasks">
-          {checklistItems.map((item) => (
+        {/* Phase 1 Items */}
+        <ul role="list" className="space-y-2" aria-label="Onboarding tasks phase 1">
+          {phase1Items.map((item) => (
             <ChecklistItemRow key={item.id} item={item} />
           ))}
         </ul>
 
-        {allComplete && (
+        {/* Phase 2 Reveal */}
+        {phase1AllComplete && showPhase2 && (
+          <div className="mt-4 pt-4 border-t">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
+              Unlock More Features
+            </p>
+            <ul role="list" className="space-y-2" aria-label="Onboarding tasks phase 2">
+              {PHASE_2_ITEMS.map((item) => (
+                <ChecklistItemRow key={item.id} item={item} />
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Phase 2 Teaser (shown when Phase 1 complete but not yet revealed) */}
+        {phase1AllComplete && !showPhase2 && (
+          <div
+            className="mt-4 p-4 rounded-lg bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 text-center motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:duration-300"
+            role="status"
+            aria-live="polite"
+          >
+            <p className="text-sm font-medium text-amber-900">
+              🎉 Congratulations on completing the basics!
+            </p>
+            <p className="text-xs text-amber-700 mt-1">
+              Revealing more features...
+            </p>
+          </div>
+        )}
+
+        {/* Dismiss CTA when all complete */}
+        {phase1AllComplete && showPhase2 && (
           <div
             className="mt-4 p-3 rounded-lg bg-green-50 dark:bg-green-950/20 text-center"
             role="status"
             aria-live="polite"
           >
             <p className="text-sm text-green-700 dark:text-green-400 font-medium">
-              Great job! You can dismiss this checklist now.
+              You're on your way to becoming a Renoz expert!
             </p>
+            <Button 
+              variant="link" 
+              size="sm" 
+              className="text-green-600 mt-1 h-auto p-0"
+              onClick={handleDismiss}
+            >
+              Dismiss checklist
+            </Button>
           </div>
         )}
       </CardContent>

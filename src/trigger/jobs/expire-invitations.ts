@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Expire Old Invitations Job
  *
@@ -49,4 +51,3 @@ export const expireInvitationsTask = schedules.task({
     };
   },
 });
-

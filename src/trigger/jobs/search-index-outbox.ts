@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Search Index Outbox Processor
  *

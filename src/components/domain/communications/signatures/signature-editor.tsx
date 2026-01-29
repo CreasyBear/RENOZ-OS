@@ -13,8 +13,6 @@ import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import {
   Bold,
   Italic,
@@ -58,9 +56,9 @@ import {
 import { cn } from "@/lib/utils";
 
 import {
-  createEmailSignature,
-  updateEmailSignature,
-} from "@/lib/server/email-signatures";
+  useCreateSignature,
+  useUpdateSignature,
+} from "@/hooks/communications/use-signatures";
 import { toast } from "sonner";
 
 // ============================================================================
@@ -103,7 +101,8 @@ export function SignatureEditor({
 }: SignatureEditorProps) {
   const [activeTab, setActiveTab] = React.useState<"edit" | "preview">("edit");
   const editorRef = React.useRef<HTMLDivElement>(null);
-  const queryClient = useQueryClient();
+  const createSignature = useCreateSignature();
+  const updateSignature = useUpdateSignature();
 
   const form = useForm<SignatureFormValues>({
     resolver: zodResolver(signatureFormSchema),
@@ -114,51 +113,43 @@ export function SignatureEditor({
     },
   });
 
-  const createMutation = useMutation({
-    mutationFn: async (values: SignatureFormValues) => {
-      return createEmailSignature({ data: values });
-    },
-    onSuccess: () => {
-      toast.success("Signature created");
-      queryClient.invalidateQueries({ queryKey: queryKeys.communications.signatures() });
-      onSave?.();
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to create signature"
-      );
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: async (values: SignatureFormValues) => {
-      if (!signature?.id) throw new Error("No signature ID");
-      return updateEmailSignature({
-        data: {
-          id: signature.id,
-          ...values,
-        },
-      });
-    },
-    onSuccess: () => {
-      toast.success("Signature updated");
-      queryClient.invalidateQueries({ queryKey: queryKeys.communications.signatures() });
-      onSave?.();
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to update signature"
-      );
-    },
-  });
-
-  const isPending = createMutation.isPending || updateMutation.isPending;
+  const isPending =
+    createSignature.isPending || updateSignature.isPending;
 
   const onSubmit = (values: SignatureFormValues) => {
     if (signature?.id) {
-      updateMutation.mutate(values);
+      updateSignature.mutate(
+        {
+          id: signature.id,
+          ...values,
+        },
+        {
+          onSuccess: () => {
+            toast.success("Signature updated");
+            onSave?.();
+          },
+          onError: (error) => {
+            toast.error(
+              error instanceof Error ? error.message : "Failed to update signature"
+            );
+          },
+        }
+      );
     } else {
-      createMutation.mutate(values);
+      createSignature.mutate(
+        { ...values, isCompanyWide: false },
+        {
+          onSuccess: () => {
+            toast.success("Signature created");
+            onSave?.();
+          },
+          onError: (error) => {
+            toast.error(
+              error instanceof Error ? error.message : "Failed to create signature"
+            );
+          },
+        }
+      );
     }
   };
 

@@ -2,6 +2,10 @@
  * Edit Product Route
  *
  * Product editing page with pre-populated form.
+ *
+ * LAYOUT: full-width
+ *
+ * @see UI_UX_STANDARDIZATION_PRD.md
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
@@ -25,8 +29,11 @@ export const Route = createFileRoute("/_authenticated/products/$productId/edit")
     <RouteErrorFallback error={error} parentRoute="/products" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="container">
-      <FormSkeleton sections={4} />
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="Edit Product" />
+      <PageLayout.Content>
+        <FormSkeleton sections={4} />
+      </PageLayout.Content>
     </PageLayout>
   ),
 });
@@ -106,7 +113,7 @@ function EditProductPage() {
   };
 
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title={
           <div className="flex items-center gap-3">

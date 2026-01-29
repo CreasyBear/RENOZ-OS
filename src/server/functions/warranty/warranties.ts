@@ -10,7 +10,7 @@
 
 import { eq, and, gte, lte, sql, desc, asc, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
-import { warranties, warrantyPolicies, customers, products } from 'drizzle/schema';
+import { warranties, warrantyItems, warrantyPolicies, customers, products } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { typedGetFn, typedGetNoInput, typedPostFn } from '@/lib/server/typed-server-fn';
@@ -224,7 +224,13 @@ export const listWarranties = typedGetFn(
           ${warranties.warrantyNumber} ILIKE ${`%${search}%`} OR
           ${warranties.productSerial} ILIKE ${`%${search}%`} OR
           ${customers.name} ILIKE ${`%${search}%`} OR
-          ${products.name} ILIKE ${`%${search}%`}
+        ${products.name} ILIKE ${`%${search}%`} OR
+        exists (
+          select 1
+          from ${warrantyItems}
+          where ${warrantyItems.warrantyId} = ${warranties.id}
+            and ${warrantyItems.productSerial} ILIKE ${`%${search}%`}
+        )
         )`
       );
     }
@@ -241,9 +247,19 @@ export const listWarranties = typedGetFn(
     if (customerId) {
       conditions.push(eq(warranties.customerId, customerId));
     }
-    if (productId) {
-      conditions.push(eq(warranties.productId, productId));
-    }
+  if (productId) {
+    conditions.push(
+      sql`(
+        ${warranties.productId} = ${productId} OR
+        exists (
+          select 1
+          from ${warrantyItems}
+          where ${warrantyItems.warrantyId} = ${warranties.id}
+            and ${warrantyItems.productId} = ${productId}
+        )
+      )`
+    );
+  }
     if (policyId) {
       conditions.push(eq(warranties.warrantyPolicyId, policyId));
     }
@@ -536,6 +552,19 @@ export interface WarrantyDetail {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  items: WarrantyItemDetail[];
+}
+
+export interface WarrantyItemDetail {
+  id: string;
+  productId: string;
+  productName: string | null;
+  productSku: string | null;
+  productSerial: string | null;
+  warrantyStartDate: string;
+  warrantyEndDate: string;
+  warrantyPeriodMonths: number;
+  installationNotes: string | null;
 }
 
 /**
@@ -585,6 +614,27 @@ export const getWarranty = typedGetFn(
     }
 
     const w = result[0];
+    const items = await db
+      .select({
+        id: warrantyItems.id,
+        productId: warrantyItems.productId,
+        productName: products.name,
+        productSku: products.sku,
+        productSerial: warrantyItems.productSerial,
+        warrantyStartDate: warrantyItems.warrantyStartDate,
+        warrantyEndDate: warrantyItems.warrantyEndDate,
+        warrantyPeriodMonths: warrantyItems.warrantyPeriodMonths,
+        installationNotes: warrantyItems.installationNotes,
+      })
+      .from(warrantyItems)
+      .leftJoin(products, eq(products.id, warrantyItems.productId))
+      .where(
+        and(
+          eq(warrantyItems.warrantyId, w.id),
+          eq(warrantyItems.organizationId, ctx.organizationId)
+        )
+      )
+      .orderBy(asc(warrantyItems.warrantyStartDate));
     return {
       id: w.id,
       warrantyNumber: w.warrantyNumber,
@@ -609,6 +659,17 @@ export const getWarranty = typedGetFn(
       notes: w.notes,
       createdAt: w.createdAt.toISOString(),
       updatedAt: w.updatedAt.toISOString(),
+      items: items.map((item) => ({
+        id: item.id,
+        productId: item.productId,
+        productName: item.productName,
+        productSku: item.productSku,
+        productSerial: item.productSerial,
+        warrantyStartDate: item.warrantyStartDate,
+        warrantyEndDate: item.warrantyEndDate,
+        warrantyPeriodMonths: item.warrantyPeriodMonths,
+        installationNotes: item.installationNotes,
+      })),
     };
   }
 );

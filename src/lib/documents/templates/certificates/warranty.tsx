@@ -247,10 +247,21 @@ export interface WarrantyCertificateData {
   customerName: string;
   /** Customer address (optional for display) */
   customerAddress?: string;
-  /** Product name/description */
+  /** Primary product name/description */
   productName: string;
-  /** Product serial number (optional) */
+  /** Primary product serial number (optional) */
   productSerial?: string | null;
+  /** Covered items for multi-product certificates */
+  items?: Array<{
+    id: string;
+    productName: string | null;
+    productSku: string | null;
+    productSerial: string | null;
+    warrantyStartDate: string;
+    warrantyEndDate: string;
+    warrantyPeriodMonths: number;
+    installationNotes: string | null;
+  }>;
   /** Registration/start date */
   registrationDate: Date;
   /** Expiry date */
@@ -345,6 +356,24 @@ function WarrantyCertificateContent({
                 <Text style={styles.serialNumber}>
                   Serial Number: {data.productSerial}
                 </Text>
+              )}
+              {data.items && data.items.length > 0 && (
+                <View style={{ marginTop: spacing.sm }}>
+                  <Text style={styles.productLabel}>COVERED ITEMS</Text>
+                  {data.items.map((item) => (
+                    <View key={item.id} style={{ marginTop: spacing.xs }}>
+                      <Text style={styles.serialNumber}>
+                        {item.productName ?? "Unknown Product"}
+                        {item.productSku ? ` (${item.productSku})` : ""}
+                      </Text>
+                      {item.productSerial && (
+                        <Text style={styles.serialNumber}>
+                          Serial: {item.productSerial}
+                        </Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
               )}
             </View>
 

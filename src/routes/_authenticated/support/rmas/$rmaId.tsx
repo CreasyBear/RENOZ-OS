@@ -34,7 +34,7 @@ export const Route = createFileRoute('/_authenticated/support/rmas/$rmaId')({
     <RouteErrorFallback error={error} parentRoute="/support/rmas" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="RMA Details"
         description="View and manage return authorization"
@@ -123,7 +123,7 @@ function RmaDetailPage() {
     processMutation.isPending;
 
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title={
           <div className="flex items-center gap-2">

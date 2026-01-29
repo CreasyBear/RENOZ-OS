@@ -90,6 +90,13 @@ export interface WarrantyCertificateProps {
   productCategory?: string;
   /** Product SKU */
   productSku?: string;
+  /** Covered items for multi-product certificates */
+  items?: Array<{
+    id: string;
+    productName: string | null;
+    productSku: string | null;
+    productSerial: string | null;
+  }>;
 
   // === Warranty Policy Details ===
   /** Warranty policy type */
@@ -252,6 +259,7 @@ export function WarrantyCertificateTemplate({
   productSerial,
   productCategory,
   productSku,
+  items,
   // Policy
   policyType,
   policyName,
@@ -575,6 +583,36 @@ export function WarrantyCertificateTemplate({
                     >
                       SKU: {productSku}
                     </p>
+                  )}
+                  {items && items.length > 0 && (
+                    <div style={{ marginTop: '6px' }}>
+                      <p
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          color: '#6B7280',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                          margin: '6px 0 4px 0',
+                        }}
+                      >
+                        Covered Items
+                      </p>
+                      {items.map((item) => (
+                        <p
+                          key={item.id}
+                          style={{
+                            fontSize: '12px',
+                            color: '#4B5563',
+                            margin: '0 0 2px 0',
+                          }}
+                        >
+                          {item.productName ?? 'Unknown Product'}
+                          {item.productSku ? ` (${item.productSku})` : ''}
+                          {item.productSerial ? ` — ${item.productSerial}` : ''}
+                        </p>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>

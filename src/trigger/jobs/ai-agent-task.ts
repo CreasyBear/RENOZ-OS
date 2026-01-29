@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * AI Agent Task Job
  *
@@ -12,7 +14,7 @@ import { client } from '../client';
 import { db } from '@/lib/db';
 import { aiAgentTasks, type TaskError } from 'drizzle/schema/_ai';
 import { eq } from 'drizzle-orm';
-import { trackCostFromSDK } from '@/lib/ai/utils/cost';
+import { trackCostFromSDK } from '@/server/functions/ai/utils/cost';
 
 // ============================================================================
 // AI EVENTS

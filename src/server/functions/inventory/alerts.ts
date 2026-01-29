@@ -340,7 +340,11 @@ export const getTriggeredAlerts = createServerFn({ method: 'GET' }).handler(
  *
  * @internal
  */
-export const checkAndTriggerAlerts = createServerFn({ method: 'POST' }).handler(async () => {
+const checkAlertsSchema = z.object({});
+
+export const checkAndTriggerAlerts = createServerFn({ method: 'POST' })
+  .inputValidator(checkAlertsSchema)
+  .handler(async () => {
   const ctx = await withAuth({ permission: PERMISSIONS.inventory.manage });
 
   // Get all active alerts

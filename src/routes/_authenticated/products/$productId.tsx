@@ -3,16 +3,12 @@
  *
  * Complete product management interface with tabbed sections.
  *
- * Tabs:
- * - Overview: Product info, quick actions, recent activity
- * - Pricing: Price tiers and customer-specific prices
- * - Inventory: Stock levels and movement history
- * - Images: Image gallery management
- * - Attributes: Dynamic attribute values
- * - Relations: Related products management
+ * LAYOUT: full-width (data-rich detail view)
+ *
+ * @see UI_UX_STANDARDIZATION_PRD.md
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   ArrowLeft,
   Edit,
@@ -42,6 +38,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent } from "@/components/ui/card";
 import { getProduct } from "@/server/functions/products/products";
+import { useDeleteProduct, useDuplicateProduct } from "@/hooks/products";
+import { useConfirmation } from "@/hooks";
 import { ProductOverviewTab } from "@/components/domain/products/tabs/overview-tab";
 import { ProductPricingTab } from "@/components/domain/products/tabs/pricing-tab";
 import { ProductInventoryTab } from "@/components/domain/products/tabs/inventory-tab";
@@ -60,8 +58,11 @@ export const Route = createFileRoute("/_authenticated/products/$productId")({
     <RouteErrorFallback error={error} parentRoute="/products" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="container">
-      <ProductDetailSkeleton tabCount={6} />
+    <PageLayout variant="full-width">
+      <PageLayout.Header title="Loading..." />
+      <PageLayout.Content>
+        <ProductDetailSkeleton tabCount={6} />
+      </PageLayout.Content>
     </PageLayout>
   ),
 });
@@ -83,15 +84,44 @@ const typeLabels: Record<string, string> = {
 
 function ProductDetailPage() {
   const navigate = useNavigate();
+  const confirm = useConfirmation();
   const loaderData = Route.useLoaderData();
   const { product, category, images, priceTiers, attributeValues: _attributeValues, relations, bundleComponents } = loaderData;
 
   const [activeTab, setActiveTab] = useState("overview");
 
+  const deleteMutation = useDeleteProduct();
+  const duplicateMutation = useDuplicateProduct();
+
+  const handleDelete = useCallback(async () => {
+    const result = await confirm.confirm({
+      title: "Delete Product",
+      description: `Are you sure you want to delete "${product.name}"? This action cannot be undone.`,
+      confirmLabel: "Delete",
+      variant: "destructive",
+    });
+
+    if (result.confirmed) {
+      deleteMutation.mutate(product.id, {
+        onSuccess: () => {
+          navigate({ to: "/products" });
+        },
+      });
+    }
+  }, [confirm, deleteMutation, navigate, product.id, product.name]);
+
+  const handleDuplicate = useCallback(async () => {
+    duplicateMutation.mutate(product.id, {
+      onSuccess: (newProduct) => {
+        navigate({ to: "/products/$productId", params: { productId: newProduct.id } });
+      },
+    });
+  }, [duplicateMutation, navigate, product.id]);
+
   const statusStyle = statusStyles[product.status] ?? statusStyles.active;
 
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title={
           <div className="flex items-center gap-3">
@@ -132,12 +162,12 @@ function ProductDetailPage() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDuplicate}>
                   <Copy className="mr-2 h-4 w-4" />
                   Duplicate Product
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive">
+                <DropdownMenuItem className="text-destructive" onClick={handleDelete}>
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete Product
                 </DropdownMenuItem>

@@ -692,16 +692,16 @@ export const TemplateEditor = memo(function TemplateEditor({
                         <FormLabel>Payment Terms</FormLabel>
                         <FormControl>
                           <Select
-                            value={field.value?.toString() ?? ""}
+                            value={field.value?.toString() ?? "__NONE__"}
                             onValueChange={(v) =>
-                              field.onChange(v === "" ? undefined : parseInt(v))
+                              field.onChange(v === "__NONE__" ? undefined : parseInt(v))
                             }
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Select" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">None</SelectItem>
+                              <SelectItem value="__NONE__">None</SelectItem>
                               <SelectItem value="0">Due on Receipt</SelectItem>
                               <SelectItem value="7">Net 7</SelectItem>
                               <SelectItem value="14">Net 14</SelectItem>

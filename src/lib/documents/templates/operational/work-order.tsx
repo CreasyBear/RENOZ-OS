@@ -450,7 +450,7 @@ function MaterialsSection({ materials }: { materials: WorkOrderMaterial[] }) {
               <Text
                 style={{
                   fontSize: fontSize.xs,
-                  color: colors.text.secondary,
+                  color: colors.text.muted,
                   fontStyle: "italic",
                 }}
               >

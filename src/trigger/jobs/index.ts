@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Trigger.dev Tasks (v3)
  *

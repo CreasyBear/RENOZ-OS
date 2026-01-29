@@ -22,7 +22,7 @@ import {
 } from "@/components/domain/communications/templates-list";
 import { toastSuccess, toastError } from "@/hooks";
 import { ErrorState } from "@/components/shared";
-import { RouteErrorFallback } from "@/components/layout";
+import { RouteErrorFallback, PageLayout } from "@/components/layout";
 import { CommunicationsListSkeleton } from "@/components/skeletons/communications";
 import type { UseTemplatesOptions } from "@/hooks/communications/use-templates";
 
@@ -37,7 +37,13 @@ export const Route = createFileRoute(
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/communications" />
   ),
-  pendingComponent: () => <CommunicationsListSkeleton />,
+  pendingComponent: () => (
+    <PageLayout variant="full-width">
+      <PageLayout.Content>
+        <CommunicationsListSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
+  ),
 });
 
 // ============================================================================
@@ -99,14 +105,13 @@ function TemplatesContainer() {
     async (values: TemplateFormValues) => {
       try {
         await createMutation.mutateAsync({
-          data: {
-            name: values.name,
-            description: values.description,
-            category: values.category,
-            subject: values.subject,
-            bodyHtml: values.bodyHtml,
-            // Note: isActive not in create schema, templates are active by default
-          },
+          name: values.name,
+          description: values.description,
+          category: values.category,
+          subject: values.subject,
+          bodyHtml: values.bodyHtml,
+          variables: [],
+          // Note: isActive not in create schema, templates are active by default
         });
         toastSuccess("Template created");
       } catch {
@@ -121,16 +126,14 @@ function TemplatesContainer() {
     async (id: string, values: TemplateFormValues) => {
       try {
         await updateMutation.mutateAsync({
-          data: {
-            id,
-            name: values.name,
-            description: values.description,
-            category: values.category,
-            subject: values.subject,
-            bodyHtml: values.bodyHtml,
-            isActive: values.isActive,
-            createVersion: values.createVersion,
-          },
+          id,
+          name: values.name,
+          description: values.description,
+          category: values.category,
+          subject: values.subject,
+          bodyHtml: values.bodyHtml,
+          isActive: values.isActive,
+          createVersion: values.createVersion,
         });
         toastSuccess("Template updated");
       } catch {
@@ -144,7 +147,7 @@ function TemplatesContainer() {
   const handleDelete = useCallback(
     async (id: string) => {
       try {
-        await deleteMutation.mutateAsync({ data: { id } });
+        await deleteMutation.mutateAsync({ id });
         toastSuccess("Template deleted");
       } catch {
         toastError("Failed to delete template");
@@ -156,7 +159,7 @@ function TemplatesContainer() {
   const handleClone = useCallback(
     async (id: string, newName: string) => {
       try {
-        await cloneMutation.mutateAsync({ data: { id, newName } });
+        await cloneMutation.mutateAsync({ id, newName });
         toastSuccess("Template cloned");
       } catch {
         toastError("Failed to clone template");
@@ -174,11 +177,15 @@ function TemplatesContainer() {
   // ============================================================================
   if (error) {
     return (
-      <ErrorState
-        title="Failed to load templates"
-        message="There was an error loading your email templates."
-        onRetry={() => refetch()}
-      />
+      <PageLayout variant="full-width">
+        <PageLayout.Content>
+          <ErrorState
+            title="Failed to load templates"
+            message="There was an error loading your email templates."
+            onRetry={() => refetch()}
+          />
+        </PageLayout.Content>
+      </PageLayout>
     );
   }
 
@@ -190,26 +197,28 @@ function TemplatesContainer() {
   const versions = versionsData ?? [];
 
   return (
-    <div className="container py-6 max-w-5xl">
-      <TemplatesList
-        templates={templates}
-        isLoading={isLoading}
-        selectedCategory={selectedCategory}
-        onCategoryChange={handleCategoryChange}
-        searchQuery={searchQuery}
-        onSearchQueryChange={handleSearchQueryChange}
-        onCreate={handleCreate}
-        onUpdate={handleUpdate}
-        onDelete={handleDelete}
-        onClone={handleClone}
-        versions={versions}
-        versionsLoading={versionsLoading}
-        onFetchVersions={handleFetchVersions}
-        isDeleting={deleteMutation.isPending}
-        isCloning={cloneMutation.isPending}
-        isSaving={createMutation.isPending || updateMutation.isPending}
-      />
-    </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Content>
+        <TemplatesList
+          templates={templates}
+          isLoading={isLoading}
+          selectedCategory={selectedCategory}
+          onCategoryChange={handleCategoryChange}
+          searchQuery={searchQuery}
+          onSearchQueryChange={handleSearchQueryChange}
+          onCreate={handleCreate}
+          onUpdate={handleUpdate}
+          onDelete={handleDelete}
+          onClone={handleClone}
+          versions={versions}
+          versionsLoading={versionsLoading}
+          onFetchVersions={handleFetchVersions}
+          isDeleting={deleteMutation.isPending}
+          isCloning={cloneMutation.isPending}
+          isSaving={createMutation.isPending || updateMutation.isPending}
+        />
+      </PageLayout.Content>
+    </PageLayout>
   );
 }
 

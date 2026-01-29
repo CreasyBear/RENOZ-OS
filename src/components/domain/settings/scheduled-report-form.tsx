@@ -13,7 +13,7 @@
  * - Metrics configuration (multi-select + options)
  *
  * @see DASH-REPORTS-UI acceptance criteria
- * @see src/lib/schemas/dashboard/scheduled-reports.ts for validation
+ * @see src/lib/schemas/reports/scheduled-reports.ts for validation
  */
 
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -55,8 +55,8 @@ import {
   type ReportFrequency,
   type ReportFormat,
   type CreateScheduledReportInput,
-} from '@/lib/schemas/dashboard/scheduled-reports';
-import type { ScheduledReport } from 'drizzle/schema/dashboard/scheduled-reports';
+} from '@/lib/schemas/reports/scheduled-reports';
+import type { ScheduledReport } from 'drizzle/schema/reports/scheduled-reports';
 
 // ============================================================================
 // TYPES
@@ -69,6 +69,8 @@ export interface ScheduledReportFormProps {
   onOpenChange: (open: boolean) => void;
   /** Report being edited (null for create mode) */
   report?: ScheduledReport | null;
+  /** Default values for create mode */
+  defaultValues?: Partial<CreateScheduledReportInput>;
   /** @source useMutation(createScheduledReport/updateScheduledReport) in settings/scheduled-reports.tsx */
   onSubmit: (data: CreateScheduledReportInput) => Promise<void>;
   /** Whether submission is in progress */
@@ -126,8 +128,10 @@ const AVAILABLE_METRICS = [
 // UTILITIES
 // ============================================================================
 
-function getDefaultFormValues(): FormValues {
-  return {
+function getDefaultFormValues(
+  overrides?: Partial<CreateScheduledReportInput>
+): FormValues {
+  const baseValues: FormValues = {
     name: '',
     description: '',
     frequency: 'weekly',
@@ -142,6 +146,20 @@ function getDefaultFormValues(): FormValues {
       includeCharts: true,
       includeTrends: true,
       comparisonPeriod: 'previous_period',
+    },
+  };
+  if (!overrides) return baseValues;
+
+  return {
+    ...baseValues,
+    ...overrides,
+    recipients: {
+      ...baseValues.recipients,
+      ...overrides.recipients,
+    },
+    metrics: {
+      ...baseValues.metrics,
+      ...overrides.metrics,
     },
   };
 }
@@ -170,6 +188,7 @@ export const ScheduledReportForm = memo(function ScheduledReportForm({
   open,
   onOpenChange,
   report,
+  defaultValues,
   onSubmit,
   isSubmitting = false,
 }: ScheduledReportFormProps) {
@@ -178,7 +197,9 @@ export const ScheduledReportForm = memo(function ScheduledReportForm({
   const [emailError, setEmailError] = useState('');
 
   const form = useForm({
-    defaultValues: report ? reportToFormValues(report) : getDefaultFormValues(),
+    defaultValues: report
+      ? reportToFormValues(report)
+      : getDefaultFormValues(defaultValues),
     onSubmit: async ({ value }) => {
       await onSubmit(value as CreateScheduledReportInput);
       onOpenChange(false);
@@ -188,11 +209,13 @@ export const ScheduledReportForm = memo(function ScheduledReportForm({
   // Reset form when report changes or sheet opens
   useEffect(() => {
     if (open) {
-      form.reset(report ? reportToFormValues(report) : getDefaultFormValues());
+      form.reset(
+        report ? reportToFormValues(report) : getDefaultFormValues(defaultValues)
+      );
       setEmailInput('');
       setEmailError('');
     }
-  }, [open, report, form]);
+  }, [open, report, form, defaultValues]);
 
   const handleCancel = useCallback(() => {
     form.reset();

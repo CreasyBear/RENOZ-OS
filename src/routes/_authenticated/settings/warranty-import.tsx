@@ -84,7 +84,7 @@ function WarrantyImportSettingsPage() {
   }, [navigate]);
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Warranty Import"
         description="Bulk import warranty registrations from CSV files"

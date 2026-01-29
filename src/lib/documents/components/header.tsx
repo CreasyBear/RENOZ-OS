@@ -1,60 +1,128 @@
 /**
- * PDF Document Header Component
+ * PDF Document Header Component - Apple/Linear Style
  *
- * Displays organization logo, document title, and metadata (number, dates).
+ * Clean, minimal header with subtle branding and clear hierarchy.
+ * No accent bars - just typography and spacing.
  */
 
 import { Image, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { useOrgDocument } from "../context";
-import { colors, fontSize, spacing, FONT_FAMILY, FONT_WEIGHTS } from "./theme";
+import {
+  colors,
+  fontSize,
+  spacing,
+  lineHeight,
+  letterSpacing,
+  borderRadius,
+  FONT_FAMILY,
+  FONT_WEIGHTS,
+} from "./theme";
 import { formatDateForPdf } from "./theme";
 
 // ============================================================================
-// STYLES
+// STYLES - Clean, Minimal
 // ============================================================================
 
 const styles = StyleSheet.create({
   container: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: spacing.xl,
+    alignItems: "flex-start",
+    marginBottom: spacing["2xl"],
   },
-  logoContainer: {
-    maxWidth: 200,
+
+  // Logo section
+  logoSection: {
+    flex: 1,
   },
   logo: {
-    height: 60,
+    height: 40,
     objectFit: "contain",
   },
-  metaContainer: {
+  logoPlaceholder: {
+    fontSize: fontSize.xl,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.semibold,
+    color: colors.text.primary,
+  },
+
+  // Document meta section
+  metaSection: {
     alignItems: "flex-end",
   },
-  title: {
-    fontSize: fontSize["3xl"],
+  documentType: {
+    fontSize: fontSize.xs,
     fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.bold,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.muted,
+    textTransform: "uppercase",
+    letterSpacing: letterSpacing.wide,
+    marginBottom: spacing.xs,
+  },
+  documentNumber: {
+    fontSize: fontSize["2xl"],
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.semibold,
     color: colors.text.primary,
+    letterSpacing: letterSpacing.tight,
     marginBottom: spacing.sm,
   },
+
+  // Meta rows
   metaRow: {
     flexDirection: "row",
+    alignItems: "center",
     marginBottom: spacing.xs,
+    gap: spacing.sm,
   },
   metaLabel: {
     fontSize: fontSize.sm,
     fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.secondary,
-    marginRight: spacing.sm,
-    width: 80,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.muted,
     textAlign: "right",
   },
   metaValue: {
     fontSize: fontSize.sm,
     fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.regular,
-    color: colors.text.primary,
-    width: 100,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.secondary,
+    minWidth: 100,
+    textAlign: "right",
+  },
+
+  // Status pill
+  pill: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.full,
+    marginTop: spacing.sm,
+    gap: spacing.xs,
+  },
+  pillSuccess: {
+    backgroundColor: "#E8F5E9",
+  },
+  pillWarning: {
+    backgroundColor: "#FFF3E0",
+  },
+  pillError: {
+    backgroundColor: "#FFEBEE",
+  },
+  pillText: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.semibold,
+  },
+  pillTextSuccess: {
+    color: "#2E7D32",
+  },
+  pillTextWarning: {
+    color: "#E65100",
+  },
+  pillTextError: {
+    color: "#C62828",
   },
 });
 
@@ -73,94 +141,107 @@ export interface DocumentHeaderProps {
   validUntil?: Date | null;
   /** Optional due date (for invoices) */
   dueDate?: Date | null;
-  /** Labels for the header fields */
-  labels?: {
-    documentNumber?: string;
-    date?: string;
-    validUntil?: string;
-    dueDate?: string;
-  };
+  /** Optional reference number (PO number, etc.) */
+  reference?: string | null;
+  /** Optional status indicator */
+  status?: "draft" | "sent" | "paid" | "overdue" | "pending";
+  /** Status date (paid date, due date, etc.) */
+  statusDate?: Date | null;
 }
 
 // ============================================================================
 // COMPONENT
 // ============================================================================
 
-/**
- * Document header with logo and metadata
- *
- * @example
- * <DocumentHeader
- *   title="QUOTE"
- *   documentNumber="Q-2024-001"
- *   date={new Date()}
- *   validUntil={validUntilDate}
- * />
- */
 export function DocumentHeader({
   title,
   documentNumber,
   date,
   validUntil,
   dueDate,
-  labels = {},
+  reference,
+  status,
+  statusDate,
 }: DocumentHeaderProps) {
-  const { organization, locale, primaryColor } = useOrgDocument();
+  const { organization, locale } = useOrgDocument();
 
-  const {
-    documentNumber: numberLabel = "Number:",
-    date: dateLabel = "Date:",
-    validUntil: validUntilLabel = "Valid Until:",
-    dueDate: dueDateLabel = "Due Date:",
-  } = labels;
+  // Status pill config
+  const statusConfig = {
+    paid: { bg: styles.pillSuccess, text: styles.pillTextSuccess, label: "Paid" },
+    overdue: { bg: styles.pillError, text: styles.pillTextError, label: "Overdue" },
+    pending: { bg: styles.pillWarning, text: styles.pillTextWarning, label: "Payment Due" },
+    sent: { bg: styles.pillSuccess, text: styles.pillTextSuccess, label: "Sent" },
+    draft: { bg: styles.pillWarning, text: styles.pillTextWarning, label: "Draft" },
+  };
 
   return (
     <View style={styles.container}>
       {/* Logo Section */}
-      <View style={styles.logoContainer}>
+      <View style={styles.logoSection}>
         {organization.branding?.logoUrl ? (
           <Image src={organization.branding.logoUrl} style={styles.logo} />
         ) : (
-          <Text
-            style={[
-              styles.title,
-              { fontSize: fontSize["2xl"], color: primaryColor },
-            ]}
-          >
+          <Text style={styles.logoPlaceholder}>
             {organization.name}
           </Text>
         )}
       </View>
 
       {/* Meta Section */}
-      <View style={styles.metaContainer}>
-        <Text style={[styles.title, { color: primaryColor }]}>{title}</Text>
+      <View style={styles.metaSection}>
+        {/* Document Type */}
+        <Text style={styles.documentType}>{title}</Text>
 
+        {/* Document Number - Prominent */}
+        <Text style={styles.documentNumber}>{documentNumber}</Text>
+
+        {/* Date */}
         <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>{numberLabel}</Text>
-          <Text style={styles.metaValue}>{documentNumber}</Text>
+          <Text style={styles.metaLabel}>Date</Text>
+          <Text style={styles.metaValue}>
+            {formatDateForPdf(date, locale, "medium")}
+          </Text>
         </View>
 
-        <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>{dateLabel}</Text>
-          <Text style={styles.metaValue}>{formatDateForPdf(date, locale)}</Text>
-        </View>
-
-        {validUntil && (
+        {/* Due Date */}
+        {dueDate && (
           <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>{validUntilLabel}</Text>
+            <Text style={styles.metaLabel}>Due</Text>
             <Text style={styles.metaValue}>
-              {formatDateForPdf(validUntil, locale)}
+              {formatDateForPdf(dueDate, locale, "medium")}
             </Text>
           </View>
         )}
 
-        {dueDate && (
+        {/* Valid Until */}
+        {validUntil && (
           <View style={styles.metaRow}>
-            <Text style={styles.metaLabel}>{dueDateLabel}</Text>
+            <Text style={styles.metaLabel}>Valid until</Text>
             <Text style={styles.metaValue}>
-              {formatDateForPdf(dueDate, locale)}
+              {formatDateForPdf(validUntil, locale, "medium")}
             </Text>
+          </View>
+        )}
+
+        {/* Reference */}
+        {reference && (
+          <View style={styles.metaRow}>
+            <Text style={styles.metaLabel}>Reference</Text>
+            <Text style={styles.metaValue}>{reference}</Text>
+          </View>
+        )}
+
+        {/* Status Pill */}
+        {status && statusConfig[status] && (
+          <View style={[styles.pill, statusConfig[status].bg]}>
+            <Text style={[styles.pillText, statusConfig[status].text]}>
+              {statusConfig[status].label}
+            </Text>
+            {statusDate && (
+              <Text style={[styles.pillText, statusConfig[status].text]}>
+                {formatDateForPdf(statusDate, locale, "short")}
+              </Text>
+            )}
           </View>
         )}
       </View>

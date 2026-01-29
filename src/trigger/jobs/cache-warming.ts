@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Cache Warming Background Tasks (Trigger.dev v3)
  *

@@ -21,8 +21,8 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
-import { TEMPLATE_VARIABLES } from "@/lib/server/email-templates";
-import type { TemplateVariable } from "../../../../drizzle/schema";
+import { TEMPLATE_VARIABLES } from "@/lib/communications/template-variables";
+import type { TemplateVariable } from "@/lib/schemas/communications";
 
 // ============================================================================
 // TYPES

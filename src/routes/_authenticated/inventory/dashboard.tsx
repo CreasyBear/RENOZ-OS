@@ -234,7 +234,7 @@ function InventoryDashboard() {
 
         {/* Empty State for New Users */}
         {!isDashboardLoading &&
-          !metrics?.totalItems &&
+          !metrics?.totalUnits &&
           movements.length === 0 && (
             <div className="mt-8 rounded-lg border-2 border-dashed border-muted-foreground/25 p-12 text-center">
               <Package className="mx-auto h-12 w-12 text-muted-foreground/50" />
@@ -247,12 +247,12 @@ function InventoryDashboard() {
               </p>
               <div className="mt-6 flex justify-center gap-3">
                 <Button asChild>
-                  <Link to={"/_authenticated/inventory" as any}>
+                  <Link to="/inventory">
                     Receive Inventory
                   </Link>
                 </Button>
                 <Button variant="outline" asChild>
-                  <Link to={"/_authenticated/settings" as any}>
+                  <Link to="/settings">
                     Set Up Locations
                   </Link>
                 </Button>

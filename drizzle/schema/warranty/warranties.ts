@@ -29,6 +29,8 @@ import { products } from "../products/products";
 import { users } from "../users/users";
 import { warrantyPolicies } from "./warranty-policies";
 import { orders } from "../orders/orders";
+import { projects } from "../jobs/projects";
+import { warrantyItems } from "./warranty-items";
 
 // ============================================================================
 // WARRANTY STATUS ENUM
@@ -71,6 +73,11 @@ export const warranties = pgTable(
 
     // Order this warranty was registered from (if auto-registered from delivery)
     orderId: uuid("order_id"),
+
+    // Optional project link (job-based warranties)
+    projectId: uuid("project_id").references(() => projects.id, {
+      onDelete: "set null",
+    }),
 
     // Registration and expiry dates
     registrationDate: timestamp("registration_date", { withTimezone: true })
@@ -175,7 +182,7 @@ export const warranties = pgTable(
 // RELATIONS
 // ============================================================================
 
-export const warrantiesRelations = relations(warranties, ({ one }) => ({
+export const warrantiesRelations = relations(warranties, ({ one, many }) => ({
   organization: one(organizations, {
     fields: [warranties.organizationId],
     references: [organizations.id],
@@ -196,6 +203,10 @@ export const warrantiesRelations = relations(warranties, ({ one }) => ({
     fields: [warranties.orderId],
     references: [orders.id],
   }),
+  project: one(projects, {
+    fields: [warranties.projectId],
+    references: [projects.id],
+  }),
   assignedUser: one(users, {
     fields: [warranties.assignedUserId],
     references: [users.id],
@@ -215,6 +226,7 @@ export const warrantiesRelations = relations(warranties, ({ one }) => ({
     references: [users.id],
     relationName: "updatedBy",
   }),
+  items: many(warrantyItems),
 }));
 
 // ============================================================================

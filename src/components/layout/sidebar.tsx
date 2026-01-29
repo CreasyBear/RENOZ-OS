@@ -4,30 +4,29 @@
  * Navigation sidebar with collapsible functionality.
  * Uses SidebarProvider context for state management.
  *
- * Features:
- * - Three collapse modes: offcanvas, icon, none
- * - Icon-only mode when collapsed (icon mode)
- * - Active route highlighting
- * - Keyboard navigable (Cmd/Ctrl+B to toggle)
- * - Cookie persistence
- * - ARIA labels for accessibility
- * - Uses centralized ROUTE_METADATA for navigation items
- * - Role-based navigation filtering (hides items user can't access)
+ * CRO Improvements Applied:
+ * - Grouped navigation with collapsible sections (progressive disclosure)
+ * - "New" badges for recently added features
+ * - Clear visual hierarchy (Core always visible, others collapsed)
+ *
+ * @see src/lib/routing/routes.ts for navigation configuration
  */
-import { useMemo } from 'react'
-import { useNavigate } from '@tanstack/react-router'
+import { useMemo, useState, useEffect } from 'react'
+import { useNavigate, useRouterState } from '@tanstack/react-router'
 import {
   Settings,
   LogOut,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ChevronRightIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SidebarNavItem } from './sidebar-nav-item'
 import { SidebarRail } from './sidebar-rail'
 import { OrgSwitcher } from './org-switcher'
 import { useSignOut } from '@/lib/auth/hooks'
-import { getNavRoutes } from '@/lib/routing'
+import { getNavRoutesByGroup, NAV_GROUPS, type NavGroup } from '@/lib/routing'
 import {
   useSidebarSafe,
   SIDEBAR_WIDTH,
@@ -36,27 +35,15 @@ import {
 } from './sidebar-provider'
 import { toast } from '@/hooks'
 import { useCurrentUser } from '@/hooks'
-import { hasPermission, type Role } from '@/lib/auth/permissions'
+import { hasAnyPermission, hasPermission, type Role } from '@/lib/auth/permissions'
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
 interface SidebarProps {
-  /**
-   * Legacy prop - use SidebarProvider instead
-   * @deprecated
-   */
   collapsed?: boolean
-  /**
-   * Legacy prop - use SidebarProvider instead
-   * @deprecated
-   */
   onCollapsedChange?: (collapsed: boolean) => void
-  /**
-   * Collapse mode - only used if not using SidebarProvider
-   * @default 'icon'
-   */
   collapsible?: SidebarCollapsible
 }
 
@@ -73,6 +60,14 @@ export function Sidebar({
   const signOut = useSignOut()
   const sidebarContext = useSidebarSafe()
   const { user } = useCurrentUser()
+  const router = useRouterState()
+  const currentPath = router.location.pathname
+
+  // Track expanded groups (persisted in component state, could use localStorage)
+  const [expandedGroups, setExpandedGroups] = useState<Set<NavGroup>>(() => {
+    // Start with 'core' expanded
+    return new Set(['core'])
+  })
 
   // Use context if available, otherwise fall back to legacy props
   const isCollapsed = sidebarContext?.isCollapsed ?? legacyCollapsed ?? false
@@ -86,34 +81,73 @@ export function Sidebar({
     try {
       await signOut.mutateAsync()
       toast.success('Signed out successfully')
-      navigate({ to: '/login' })
+      navigate({ to: '/login', search: { redirect: undefined } })
     } catch {
       toast.error('Failed to sign out')
     }
   }
 
-  // Get navigation items filtered by user permissions
-  const navItems = useMemo(() => {
-    const allRoutes = getNavRoutes()
+  // Get grouped navigation items filtered by user permissions
+  const groupedNavItems = useMemo(() => {
+    const allGrouped = getNavRoutesByGroup()
 
     // If no user yet, show all routes (loading state)
     if (!user?.role) {
-      return allRoutes
+      return allGrouped
     }
 
-    // Filter routes based on user's role and required permissions
-    return allRoutes.filter((route) => {
-      // Routes without requiredPermission are accessible to all
-      if (!route.requiredPermission) {
-        return true
-      }
-      // Check if user has the required permission
-      return hasPermission(user.role as Role, route.requiredPermission)
-    })
+    // Filter each group based on user's role and required permissions
+    const filtered: typeof allGrouped = {
+      core: [],
+      operations: [],
+      support: [],
+      financial: [],
+      administration: [],
+    }
+
+    for (const [group, routes] of Object.entries(allGrouped)) {
+      filtered[group as NavGroup] = routes.filter((route) => {
+        if (!route.requiredPermission) return true
+        if (Array.isArray(route.requiredPermission)) {
+          return hasAnyPermission(user.role as Role, route.requiredPermission)
+        }
+        return hasPermission(user.role as Role, route.requiredPermission)
+      })
+    }
+
+    return filtered
   }, [user])
+
+  // Auto-expand group when navigating to a route in that group
+  useEffect(() => {
+    for (const [group, routes] of Object.entries(groupedNavItems)) {
+      if (routes.some(route => currentPath.startsWith(route.path))) {
+        setExpandedGroups(prev => {
+          if (prev.has(group as NavGroup)) return prev
+          return new Set([...prev, group as NavGroup])
+        })
+        break
+      }
+    }
+  }, [currentPath, groupedNavItems])
+
+  const toggleGroup = (group: NavGroup) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(group)) {
+        next.delete(group)
+      } else {
+        next.add(group)
+      }
+      return next
+    })
+  }
 
   // Width based on collapse state and mode
   const width = showCollapsedView ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH
+
+  // Get group config
+  const getGroupConfig = (key: NavGroup) => NAV_GROUPS.find(g => g.key === key)!
 
   return (
     <aside
@@ -166,17 +200,99 @@ export function Sidebar({
         <OrgSwitcher collapsed={showCollapsedView} />
       </div>
 
-      {/* Main navigation */}
-      <nav className="flex-1 space-y-1 overflow-y-auto p-2" aria-label="Primary navigation">
-        {navItems.map((item) => (
-          <SidebarNavItem
-            key={item.path}
-            href={item.path}
-            label={item.title}
-            icon={item.icon!}
-            collapsed={showCollapsedView}
-          />
-        ))}
+      {/* Main navigation - Grouped */}
+      <nav className="flex-1 overflow-y-auto py-2" aria-label="Primary navigation">
+        {showCollapsedView ? (
+          // Collapsed view: flat list with icons only
+          <div className="px-2 space-y-1">
+            {groupedNavItems.core.map((item) => (
+              <SidebarNavItem
+                key={item.path}
+                href={item.path}
+                label={item.title}
+                icon={item.icon!}
+                collapsed={true}
+              />
+            ))}
+            <div className="border-t border-gray-200 my-2" />
+            {Object.entries(groupedNavItems)
+              .filter(([key]) => key !== 'core')
+              .flatMap(([, routes]) => routes)
+              .slice(0, 6) // Show first 6 non-core items
+              .map((item) => (
+                <SidebarNavItem
+                  key={item.path}
+                  href={item.path}
+                  label={item.title}
+                  icon={item.icon!}
+                  collapsed={true}
+                />
+              ))}
+          </div>
+        ) : (
+          // Expanded view: grouped with collapsible sections
+          <div className="space-y-1">
+            {/* Core Group - Always Expanded */}
+            <div className="px-3 pb-2">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-3 py-2">
+                {getGroupConfig('core').title}
+              </p>
+              <div className="space-y-0.5">
+                {groupedNavItems.core.map((item) => (
+                  <SidebarNavItem
+                    key={item.path}
+                    href={item.path}
+                    label={item.title}
+                    icon={item.icon!}
+                    badge={item.badge}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Other Groups - Collapsible */}
+            {(['operations', 'support', 'financial', 'administration'] as NavGroup[]).map((groupKey) => {
+              const groupItems = groupedNavItems[groupKey]
+              if (groupItems.length === 0) return null
+
+              const config = getGroupConfig(groupKey)
+              const isExpanded = expandedGroups.has(groupKey)
+
+              return (
+                <div key={groupKey} className="border-t border-gray-100">
+                  <button
+                    onClick={() => toggleGroup(groupKey)}
+                    className={cn(
+                      'w-full flex items-center justify-between px-6 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider',
+                      'hover:text-gray-700 hover:bg-gray-50 transition-colors'
+                    )}
+                  >
+                    <span>{config.title}</span>
+                    {isExpanded ? (
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronRightIcon className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+
+                  {isExpanded && (
+                    <div className="px-3 pb-2 space-y-0.5 motion-safe:animate-in motion-safe:slide-in-from-top-1 motion-safe:duration-200">
+                      {groupItems.map((item) => (
+                        <SidebarNavItem
+                          key={item.path}
+                          href={item.path}
+                          label={item.title}
+                          icon={item.icon!}
+                          badge={item.badge}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
       </nav>
 
       {/* Bottom section */}

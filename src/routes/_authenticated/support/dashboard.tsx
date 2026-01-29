@@ -1,7 +1,11 @@
 /**
  * Support Dashboard Route
  *
+ * LAYOUT: full-width
+ *
  * Support team performance overview with metrics, charts, and quick actions.
+ *
+ * LAYOUT: full-width
  *
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-006
  */
@@ -44,7 +48,7 @@ export const Route = createFileRoute('/_authenticated/support/dashboard')({
     <RouteErrorFallback error={error} parentRoute="/support" />
   ),
   pendingComponent: () => (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Support Dashboard"
         description="Monitor support performance and team metrics"
@@ -214,24 +218,25 @@ function SupportDashboardPage() {
   const { data: csatMetrics, isLoading: csatLoading, error: csatError } = useCsatMetrics();
 
   return (
-    <div className="container space-y-6 py-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Support Dashboard</h1>
-          <p className="text-muted-foreground">Monitor support performance and team metrics</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Refresh
-          </Button>
-          <Button size="sm">
-            <Plus className="mr-2 h-4 w-4" />
-            New Issue
-          </Button>
-        </div>
-      </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="Support Dashboard"
+        description="Monitor support performance and team metrics"
+        actions={
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Refresh
+            </Button>
+            <Button size="sm">
+              <Plus className="mr-2 h-4 w-4" />
+              New Issue
+            </Button>
+          </div>
+        }
+      />
+
+      <PageLayout.Content>
 
       {/* Error State */}
       {error && (
@@ -425,6 +430,7 @@ function SupportDashboardPage() {
           limit={3}
         />
       </div>
-    </div>
+      </PageLayout.Content>
+    </PageLayout>
   );
 }

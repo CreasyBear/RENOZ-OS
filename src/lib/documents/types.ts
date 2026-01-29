@@ -231,7 +231,7 @@ export interface InvoiceDocumentData extends BaseDocumentData {
  *   if (data.type === 'quote') {
  *     // TypeScript knows this is QuoteDocumentData
  *     console.log(data.validUntil);
- *   } else {
+ *   } else if (data.type === 'invoice') {
  *     // TypeScript knows this is InvoiceDocumentData
  *     console.log(data.isPaid);
  *   }

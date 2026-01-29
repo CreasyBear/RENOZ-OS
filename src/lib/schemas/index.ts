@@ -32,8 +32,7 @@ export * from "./files";
 // Jobs domain (field work assignments)
 export * from "./jobs";
 
-// Communications
-export * from "./communications";
+// Communications (import directly from '@/lib/schemas/communications' to avoid name collisions)
 
 // Financial
 export * from "./financial";

@@ -1,6 +1,6 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { pgClient } from '@/lib/db';
+import { getPgClient } from '@/lib/db';
 
 const POLICY_NAMES = [
   'orders_portal_select_policy',
@@ -14,7 +14,7 @@ async function main() {
   const sqlPath = join(process.cwd(), 'tests/unit/rls/portal/portal-rls.sql');
   const sql = readFileSync(sqlPath, 'utf-8');
 
-  const rows = (await pgClient.unsafe(sql)) as Array<{ policyname: string }>;
+  const rows = (await getPgClient().unsafe(sql)) as Array<{ policyname: string }>;
   const found = new Set(rows.map((row) => row.policyname));
 
   const missing = POLICY_NAMES.filter((name) => !found.has(name));

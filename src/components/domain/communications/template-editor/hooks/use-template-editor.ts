@@ -17,7 +17,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   substituteTemplateVariables,
   getSampleTemplateData,
-} from '@/lib/server/email-templates';
+} from '@/lib/communications/template-utils';
 import { templateFormSchema, type TemplateFormValues, type TemplateEditorProps } from '../types';
 
 export function useTemplateEditor({

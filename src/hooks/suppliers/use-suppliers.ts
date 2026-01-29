@@ -21,6 +21,7 @@ import {
   updateSupplierRating,
   getSupplierPerformance,
 } from '@/server/functions/suppliers';
+import type { CreateSupplierInput, UpdateSupplierInput, UpdateSupplierRatingInput } from '@/lib/schemas/suppliers';
 
 // ============================================================================
 // QUERY KEYS
@@ -81,7 +82,7 @@ export function useCreateSupplier() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: createSupplier,
+    mutationFn: (input: { data: CreateSupplierInput }) => createSupplier(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.suppliersList() });
     },
@@ -92,7 +93,7 @@ export function useUpdateSupplier() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: updateSupplier,
+    mutationFn: (input: { data: UpdateSupplierInput & { id: string } }) => updateSupplier(input),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.suppliersList() });
       queryClient.invalidateQueries({
@@ -106,7 +107,7 @@ export function useDeleteSupplier() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: deleteSupplier,
+    mutationFn: (input: { data: { id: string } }) => deleteSupplier(input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.suppliersList() });
     },
@@ -117,7 +118,7 @@ export function useUpdateSupplierRating() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: updateSupplierRating,
+    mutationFn: (input: { data: UpdateSupplierRatingInput }) => updateSupplierRating(input),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.suppliersList() });
       queryClient.invalidateQueries({

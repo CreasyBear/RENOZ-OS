@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Generate Packing Slip PDF Task (Trigger.dev v3)
  *

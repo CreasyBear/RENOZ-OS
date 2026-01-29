@@ -150,7 +150,7 @@ function IssueTemplatesSettingsPage() {
   };
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Issue Templates"
         description="Create and manage templates for support issue intake"

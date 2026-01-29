@@ -108,7 +108,7 @@ function SupplierDetailPage() {
   // Error state
   if (error || !supplier) {
     return (
-      <PageLayout variant="container">
+      <PageLayout variant="full-width">
         <PageLayout.Header title="Supplier Not Found" />
         <PageLayout.Content>
           <div className="text-center py-12">
@@ -142,16 +142,11 @@ function SupplierDetailPage() {
                 Back
               </Link>
             </Button>
-            {/* TODO: Add edit route at /suppliers/$supplierId/edit */}
-            <Button
-              variant="outline"
-              onClick={() => {
-                // For now, show a toast indicating edit is not yet implemented
-                toast.info('Edit functionality coming soon');
-              }}
-            >
-              <Edit className="mr-2 h-4 w-4" />
-              Edit
+            <Button variant="outline" asChild>
+              <Link to="/suppliers/$supplierId/edit" params={{ supplierId }}>
+                <Edit className="mr-2 h-4 w-4" />
+                Edit
+              </Link>
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -168,7 +163,11 @@ function SupplierDetailPage() {
                   <Package className="mr-2 h-4 w-4" />
                   View Purchase Orders
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    navigate({ to: '/purchase-orders/create', search: { supplierId } })
+                  }
+                >
                   <FileText className="mr-2 h-4 w-4" />
                   Create Purchase Order
                 </DropdownMenuItem>

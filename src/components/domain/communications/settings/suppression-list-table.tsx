@@ -6,7 +6,7 @@
  * @see INT-RES-005
  */
 
-import { memo, useState, useCallback } from "react";
+import { memo, useState, useCallback, useMemo } from "react";
 import {
   Table,
   TableBody,
@@ -43,6 +43,8 @@ import {
   ChevronRight,
   Loader2,
   AlertTriangle,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "@/hooks";
@@ -63,6 +65,9 @@ export interface SuppressionListTableProps {
   className?: string;
 }
 
+type SortField = 'email' | 'reason' | 'bounceType' | 'createdAt';
+type SortDirection = 'asc' | 'desc';
+
 // ============================================================================
 // REASON BADGE
 // ============================================================================
@@ -81,6 +86,40 @@ function ReasonBadge({ reason }: { reason: SuppressionReason }) {
   const config = variants[reason];
 
   return <Badge variant={config.variant}>{config.label}</Badge>;
+}
+
+// ============================================================================
+// SORT HEADER COMPONENT
+// ============================================================================
+
+function SortHeader({
+  label,
+  field,
+  currentSort,
+  onSort,
+}: {
+  label: string;
+  field: SortField;
+  currentSort: { field: SortField; direction: SortDirection };
+  onSort: (field: SortField) => void;
+}) {
+  const isActive = currentSort.field === field;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-8 px-2 -ml-2 font-medium"
+      onClick={() => onSort(field)}
+    >
+      {label}
+      {isActive &&
+        (currentSort.direction === "asc" ? (
+          <ChevronUp className="ml-1 h-4 w-4" />
+        ) : (
+          <ChevronDown className="ml-1 h-4 w-4" />
+        ))}
+    </Button>
+  );
 }
 
 // ============================================================================
@@ -140,6 +179,10 @@ export const SuppressionListTable = memo(function SuppressionListTable({
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [reason, setReason] = useState<SuppressionReason | "all">("all");
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<{ field: SortField; direction: SortDirection }>({
+    field: 'createdAt',
+    direction: 'desc',
+  });
   const pageSize = 20;
 
   // Delete confirmation state
@@ -156,6 +199,14 @@ export const SuppressionListTable = memo(function SuppressionListTable({
       setPage(1);
     }, 300);
     return () => clearTimeout(timer);
+  }, []);
+
+  // Handle sort
+  const handleSort = useCallback((field: SortField) => {
+    setSort((current) => ({
+      field,
+      direction: current.field === field && current.direction === "asc" ? "desc" : "asc",
+    }));
   }, []);
 
   // Query suppression list
@@ -189,6 +240,33 @@ export const SuppressionListTable = memo(function SuppressionListTable({
     setPage(1);
   }, []);
 
+  // Sort items client-side
+  const sortedItems = useMemo(() => {
+    const items = data?.items ?? [];
+    const sorted = [...items];
+    sorted.sort((a, b) => {
+      let comparison = 0;
+      switch (sort.field) {
+        case 'email':
+          comparison = a.email.localeCompare(b.email);
+          break;
+        case 'reason':
+          comparison = a.reason.localeCompare(b.reason);
+          break;
+        case 'bounceType':
+          comparison = (a.bounceType || '').localeCompare(b.bounceType || '');
+          break;
+        case 'createdAt':
+          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
+        default:
+          comparison = 0;
+      }
+      return sort.direction === "asc" ? comparison : -comparison;
+    });
+    return sorted;
+  }, [data?.items, sort]);
+
   if (isLoading) {
     return <SuppressionListTableSkeleton />;
   }
@@ -202,7 +280,7 @@ export const SuppressionListTable = memo(function SuppressionListTable({
     );
   }
 
-  const items = data?.items ?? [];
+  const items = sortedItems;
   const total = data?.total ?? 0;
   const hasMore = data?.hasMore ?? false;
   const totalPages = Math.ceil(total / pageSize);
@@ -239,10 +317,18 @@ export const SuppressionListTable = memo(function SuppressionListTable({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Email</TableHead>
-              <TableHead>Reason</TableHead>
-              <TableHead>Bounce Type</TableHead>
-              <TableHead>Suppressed At</TableHead>
+              <TableHead>
+                <SortHeader label="Email" field="email" currentSort={sort} onSort={handleSort} />
+              </TableHead>
+              <TableHead>
+                <SortHeader label="Reason" field="reason" currentSort={sort} onSort={handleSort} />
+              </TableHead>
+              <TableHead>
+                <SortHeader label="Bounce Type" field="bounceType" currentSort={sort} onSort={handleSort} />
+              </TableHead>
+              <TableHead>
+                <SortHeader label="Suppressed At" field="createdAt" currentSort={sort} onSort={handleSort} />
+              </TableHead>
               <TableHead className="w-[60px]">Actions</TableHead>
             </TableRow>
           </TableHeader>

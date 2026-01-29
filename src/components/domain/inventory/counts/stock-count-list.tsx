@@ -8,7 +8,7 @@
  * - Progress bars have aria-labels
  * - Sortable columns have aria-sort
  */
-import { memo } from "react";
+import { memo, useState, useMemo, useCallback } from "react";
 import {
   ClipboardList,
   Play,
@@ -22,6 +22,8 @@ import {
   Eye,
   Edit,
   Trash2,
+  ChevronUp,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -71,6 +73,9 @@ export interface StockCount {
     completionPercentage: number;
   };
 }
+
+type SortField = 'countCode' | 'countType' | 'status' | 'locationName' | 'assignedToName' | 'createdAt';
+type SortDirection = 'asc' | 'desc';
 
 interface StockCountListProps {
   counts: StockCount[];
@@ -124,6 +129,40 @@ const COUNT_TYPE_LABELS: Record<CountType, string> = {
 };
 
 // ============================================================================
+// SORT HEADER COMPONENT
+// ============================================================================
+
+function SortHeader({
+  label,
+  field,
+  currentSort,
+  onSort,
+}: {
+  label: string;
+  field: SortField;
+  currentSort: { field: SortField; direction: SortDirection };
+  onSort: (field: SortField) => void;
+}) {
+  const isActive = currentSort.field === field;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-8 px-2 -ml-2 font-medium"
+      onClick={() => onSort(field)}
+    >
+      {label}
+      {isActive &&
+        (currentSort.direction === "asc" ? (
+          <ChevronUp className="ml-1 h-4 w-4" />
+        ) : (
+          <ChevronDown className="ml-1 h-4 w-4" />
+        ))}
+    </Button>
+  );
+}
+
+// ============================================================================
 // COMPONENT
 // ============================================================================
 
@@ -136,6 +175,50 @@ export const StockCountList = memo(function StockCountList({
   onStart,
   className,
 }: StockCountListProps) {
+  const [sort, setSort] = useState<{ field: SortField; direction: SortDirection }>({
+    field: 'createdAt',
+    direction: 'desc',
+  });
+
+  const handleSort = useCallback((field: SortField) => {
+    setSort((current) => ({
+      field,
+      direction: current.field === field && current.direction === "asc" ? "desc" : "asc",
+    }));
+  }, []);
+
+  // Sort counts
+  const sortedCounts = useMemo(() => {
+    const sorted = [...counts];
+    sorted.sort((a, b) => {
+      let comparison = 0;
+      switch (sort.field) {
+        case 'countCode':
+          comparison = a.countCode.localeCompare(b.countCode);
+          break;
+        case 'countType':
+          comparison = a.countType.localeCompare(b.countType);
+          break;
+        case 'status':
+          comparison = a.status.localeCompare(b.status);
+          break;
+        case 'locationName':
+          comparison = (a.locationName || '').localeCompare(b.locationName || '');
+          break;
+        case 'assignedToName':
+          comparison = (a.assignedToName || '').localeCompare(b.assignedToName || '');
+          break;
+        case 'createdAt':
+          comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+          break;
+        default:
+          comparison = 0;
+      }
+      return sort.direction === "asc" ? comparison : -comparison;
+    });
+    return sorted;
+  }, [counts, sort]);
+
   // Loading state
   if (isLoading) {
     return (
@@ -201,17 +284,27 @@ export const StockCountList = memo(function StockCountList({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Count Code</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Status</TableHead>
+            <TableHead>
+              <SortHeader label="Count Code" field="countCode" currentSort={sort} onSort={handleSort} />
+            </TableHead>
+            <TableHead>
+              <SortHeader label="Type" field="countType" currentSort={sort} onSort={handleSort} />
+            </TableHead>
+            <TableHead>
+              <SortHeader label="Status" field="status" currentSort={sort} onSort={handleSort} />
+            </TableHead>
             <TableHead>Progress</TableHead>
-            <TableHead>Location</TableHead>
-            <TableHead>Assigned To</TableHead>
+            <TableHead>
+              <SortHeader label="Location" field="locationName" currentSort={sort} onSort={handleSort} />
+            </TableHead>
+            <TableHead>
+              <SortHeader label="Assigned To" field="assignedToName" currentSort={sort} onSort={handleSort} />
+            </TableHead>
             <TableHead className="w-[50px]" />
           </TableRow>
         </TableHeader>
         <TableBody>
-          {counts.map((count) => {
+          {sortedCounts.map((count) => {
             const statusConfig = STATUS_CONFIG[count.status];
             const StatusIcon = statusConfig.icon;
 

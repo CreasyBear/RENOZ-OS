@@ -33,7 +33,7 @@ const userSearchSchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('asc'),
 });
 
-import { RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { AdminTableSkeleton } from '@/components/skeletons/admin';
 
 export const Route = createFileRoute('/_authenticated/admin/users/')({
@@ -107,9 +107,11 @@ function UsersAdminPage() {
   // Handle loading state
   if (isLoadingUsers || isLoadingStats) {
     return (
-      <div className="p-6">
-        <AdminTableSkeleton />
-      </div>
+      <PageLayout variant="full-width">
+        <PageLayout.Content>
+          <AdminTableSkeleton />
+        </PageLayout.Content>
+      </PageLayout>
     );
   }
 
@@ -259,7 +261,8 @@ function UsersAdminPage() {
   };
 
   return (
-    <div className="space-y-6 p-6">
+    <PageLayout variant="full-width">
+      <PageLayout.Content className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -765,6 +768,7 @@ function UsersAdminPage() {
           Export All (JSON)
         </button>
       </div>
-    </div>
+      </PageLayout.Content>
+    </PageLayout>
   );
 }

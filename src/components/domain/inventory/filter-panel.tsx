@@ -265,11 +265,11 @@ export const FilterPanel = memo(function FilterPanel({
                   Product
                 </Label>
                 <Select
-                  value={filters.productId || ""}
+                  value={filters.productId || "__ALL__"}
                   onValueChange={(value) =>
                     onFiltersChange({
                       ...filters,
-                      productId: value || undefined,
+                      productId: value !== "__ALL__" ? value : undefined,
                     })
                   }
                 >
@@ -277,7 +277,7 @@ export const FilterPanel = memo(function FilterPanel({
                     <SelectValue placeholder="All products" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All products</SelectItem>
+                    <SelectItem value="__ALL__">All products</SelectItem>
                     {products.map((product) => (
                       <SelectItem key={product.id} value={product.id}>
                         {product.sku} - {product.name}
@@ -294,11 +294,11 @@ export const FilterPanel = memo(function FilterPanel({
                   Location
                 </Label>
                 <Select
-                  value={filters.locationId || ""}
+                  value={filters.locationId || "__ALL__"}
                   onValueChange={(value) =>
                     onFiltersChange({
                       ...filters,
-                      locationId: value || undefined,
+                      locationId: value !== "__ALL__" ? value : undefined,
                     })
                   }
                 >
@@ -306,7 +306,7 @@ export const FilterPanel = memo(function FilterPanel({
                     <SelectValue placeholder="All locations" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All locations</SelectItem>
+                    <SelectItem value="__ALL__">All locations</SelectItem>
                     {locations.map((location) => (
                       <SelectItem key={location.id} value={location.id}>
                         {location.code} - {location.name}

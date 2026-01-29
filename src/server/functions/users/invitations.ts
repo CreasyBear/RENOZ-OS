@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * User Invitation Server Functions
  *
@@ -631,7 +633,11 @@ export const resendInvitation = createServerFn({ method: 'POST' })
  *
  * @internal
  */
-export const expireOldInvitations = createServerFn({ method: 'POST' }).handler(async () => {
+const expireInvitationsSchema = z.object({});
+
+export const expireOldInvitations = createServerFn({ method: 'POST' })
+  .inputValidator(expireInvitationsSchema)
+  .handler(async () => {
   const result = await db
     .update(userInvitations)
     .set({ status: 'expired' })

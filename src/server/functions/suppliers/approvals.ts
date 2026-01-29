@@ -580,7 +580,11 @@ export const escalateApproval = createServerFn({ method: 'POST' })
  *
  * @internal
  */
-export const autoEscalateOverdue = createServerFn({ method: 'POST' }).handler(async () => {
+const autoEscalateSchema = z.object({});
+
+export const autoEscalateOverdue = createServerFn({ method: 'POST' })
+  .inputValidator(autoEscalateSchema)
+  .handler(async () => {
   const ctx = await withAuth({ permission: PERMISSIONS.suppliers.approve });
 
   // Find overdue pending approvals

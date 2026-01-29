@@ -11,7 +11,6 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
   listPurchaseOrders,
@@ -59,23 +58,20 @@ export interface UsePurchaseOrdersOptions extends Partial<ListPurchaseOrdersInpu
 
 export function usePurchaseOrders(options: UsePurchaseOrdersOptions = {}) {
   const { enabled = true, ...filters } = options;
-  const listFn = useServerFn(listPurchaseOrders);
 
   return useQuery({
     queryKey: queryKeys.suppliers.purchaseOrdersList(filters),
-    queryFn: () => listFn({ data: filters as PurchaseOrderFilters }),
+    queryFn: () => listPurchaseOrders({ data: filters as PurchaseOrderFilters }),
     enabled,
     staleTime: 30 * 1000,
   });
 }
 
 export function usePendingApprovals() {
-  const listFn = useServerFn(listPurchaseOrders);
-
   return useQuery({
     queryKey: queryKeys.suppliers.purchaseOrdersPendingApprovals(),
     queryFn: () =>
-      listFn({
+      listPurchaseOrders({
         data: { status: 'pending_approval', page: 1, pageSize: 100 } as PurchaseOrderFilters,
       }),
     staleTime: 30 * 1000,
@@ -88,11 +84,10 @@ export function usePendingApprovals() {
 
 export function usePurchaseOrder(id: string, options: { enabled?: boolean } = {}) {
   const { enabled = true } = options;
-  const getFn = useServerFn(getPurchaseOrder);
 
   return useQuery({
     queryKey: queryKeys.suppliers.purchaseOrderDetail(id),
-    queryFn: () => getFn({ data: { id } }),
+    queryFn: () => getPurchaseOrder({ data: { id } }),
     enabled: enabled && !!id,
     staleTime: 60 * 1000,
   });
@@ -104,10 +99,9 @@ export function usePurchaseOrder(id: string, options: { enabled?: boolean } = {}
 
 export function useCreatePurchaseOrder() {
   const queryClient = useQueryClient();
-  const createFn = useServerFn(createPurchaseOrder);
 
   return useMutation({
-    mutationFn: (data: CreatePurchaseOrderInput) => createFn({ data }),
+    mutationFn: (data: CreatePurchaseOrderInput) => createPurchaseOrder({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
     },
@@ -116,10 +110,9 @@ export function useCreatePurchaseOrder() {
 
 export function useUpdatePurchaseOrder() {
   const queryClient = useQueryClient();
-  const updateFn = useServerFn(updatePurchaseOrder);
 
   return useMutation({
-    mutationFn: (data: UpdatePurchaseOrderInput) => updateFn({ data }),
+    mutationFn: (data: UpdatePurchaseOrderInput) => updatePurchaseOrder({ data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
       queryClient.invalidateQueries({
@@ -131,10 +124,9 @@ export function useUpdatePurchaseOrder() {
 
 export function useDeletePurchaseOrder() {
   const queryClient = useQueryClient();
-  const deleteFn = useServerFn(deletePurchaseOrder);
 
   return useMutation({
-    mutationFn: (data: DeletePurchaseOrderInput) => deleteFn({ data }),
+    mutationFn: (data: DeletePurchaseOrderInput) => deletePurchaseOrder({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
     },
@@ -147,10 +139,9 @@ export function useDeletePurchaseOrder() {
 
 export function useSubmitForApproval() {
   const queryClient = useQueryClient();
-  const submitFn = useServerFn(submitForApproval);
 
   return useMutation({
-    mutationFn: (data: SubmitForApprovalInput) => submitFn({ data }),
+    mutationFn: (data: SubmitForApprovalInput) => submitForApproval({ data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
       queryClient.invalidateQueries({
@@ -165,10 +156,9 @@ export function useSubmitForApproval() {
 
 export function useApprovePurchaseOrder() {
   const queryClient = useQueryClient();
-  const approveFn = useServerFn(approvePurchaseOrder);
 
   return useMutation({
-    mutationFn: (data: ApprovePurchaseOrderInput) => approveFn({ data }),
+    mutationFn: (data: ApprovePurchaseOrderInput) => approvePurchaseOrder({ data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
       queryClient.invalidateQueries({
@@ -183,10 +173,9 @@ export function useApprovePurchaseOrder() {
 
 export function useRejectPurchaseOrder() {
   const queryClient = useQueryClient();
-  const rejectFn = useServerFn(rejectPurchaseOrder);
 
   return useMutation({
-    mutationFn: (data: RejectPurchaseOrderInput) => rejectFn({ data }),
+    mutationFn: (data: RejectPurchaseOrderInput) => rejectPurchaseOrder({ data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
       queryClient.invalidateQueries({
@@ -201,10 +190,9 @@ export function useRejectPurchaseOrder() {
 
 export function useMarkAsOrdered() {
   const queryClient = useQueryClient();
-  const markFn = useServerFn(markAsOrdered);
 
   return useMutation({
-    mutationFn: (data: MarkAsOrderedInput) => markFn({ data }),
+    mutationFn: (data: MarkAsOrderedInput) => markAsOrdered({ data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
       queryClient.invalidateQueries({
@@ -218,10 +206,9 @@ export function useMarkAsOrdered() {
 
 export function useCancelPurchaseOrder() {
   const queryClient = useQueryClient();
-  const cancelFn = useServerFn(cancelPurchaseOrder);
 
   return useMutation({
-    mutationFn: (data: CancelPurchaseOrderInput) => cancelFn({ data }),
+    mutationFn: (data: CancelPurchaseOrderInput) => cancelPurchaseOrder({ data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
       queryClient.invalidateQueries({
@@ -233,10 +220,9 @@ export function useCancelPurchaseOrder() {
 
 export function useClosePurchaseOrder() {
   const queryClient = useQueryClient();
-  const closeFn = useServerFn(closePurchaseOrder);
 
   return useMutation({
-    mutationFn: (data: ClosePurchaseOrderInput) => closeFn({ data }),
+    mutationFn: (data: ClosePurchaseOrderInput) => closePurchaseOrder({ data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrdersList() });
       queryClient.invalidateQueries({
@@ -254,10 +240,9 @@ export function useClosePurchaseOrder() {
 
 export function useAddPurchaseOrderItem() {
   const queryClient = useQueryClient();
-  const addFn = useServerFn(addPurchaseOrderItem);
 
   return useMutation({
-    mutationFn: (data: AddPurchaseOrderItemInput) => addFn({ data }),
+    mutationFn: (data: AddPurchaseOrderItemInput) => addPurchaseOrderItem({ data }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.suppliers.purchaseOrderDetail(variables.purchaseOrderId),
@@ -268,10 +253,9 @@ export function useAddPurchaseOrderItem() {
 
 export function useRemovePurchaseOrderItem() {
   const queryClient = useQueryClient();
-  const removeFn = useServerFn(removePurchaseOrderItem);
 
   return useMutation({
-    mutationFn: (data: RemovePurchaseOrderItemInput) => removeFn({ data }),
+    mutationFn: (data: RemovePurchaseOrderItemInput) => removePurchaseOrderItem({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.suppliers.purchaseOrders() });
     },

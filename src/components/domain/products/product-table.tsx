@@ -35,6 +35,7 @@ import {
   type TypeConfigItem,
 } from "@/components/shared/data-table/cells";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -50,16 +51,35 @@ import {
 interface Product {
   id: string;
   sku: string;
+  barcode?: string | null;
   name: string;
   description: string | null;
   categoryId: string | null;
+  categoryName?: string | null;
   type: string;
   status: string;
   basePrice: number;
   costPrice: number | null;
   isActive: boolean;
+  trackInventory?: boolean;
+  totalQuantity?: number;
+  stockStatus?: 'in_stock' | 'low_stock' | 'out_of_stock' | 'not_tracked';
   createdAt: Date | string;
   updatedAt: Date | string;
+}
+
+// Calculate margin percentage
+function calculateMargin(basePrice: number, costPrice: number | null): number | null {
+  if (!costPrice || costPrice <= 0 || basePrice <= 0) return null;
+  return ((basePrice - costPrice) / basePrice) * 100;
+}
+
+// Format margin with color coding
+function formatMargin(margin: number | null): { text: string; color: string } {
+  if (margin === null) return { text: '-', color: 'text-muted-foreground' };
+  if (margin < 0) return { text: `${margin.toFixed(1)}%`, color: 'text-red-600' };
+  if (margin < 20) return { text: `${margin.toFixed(1)}%`, color: 'text-amber-600' };
+  return { text: `${margin.toFixed(1)}%`, color: 'text-green-600' };
 }
 
 interface ProductTableProps {
@@ -147,6 +167,20 @@ export function ProductTable({
         ),
         size: 120,
       },
+      // Barcode
+      {
+        accessorKey: "barcode",
+        header: "Barcode",
+        cell: ({ row }) => {
+          const barcode = row.original.barcode;
+          return (
+            <span className="text-sm text-muted-foreground font-mono">
+              {barcode || "-"}
+            </span>
+          );
+        },
+        size: 140,
+      },
       // Name
       {
         accessorKey: "name",
@@ -159,6 +193,20 @@ export function ProductTable({
           />
         ),
         size: 250,
+      },
+      // Category
+      {
+        accessorKey: "categoryName",
+        header: "Category",
+        cell: ({ row }) => {
+          const categoryName = row.original.categoryName;
+          return (
+            <span className="text-sm text-muted-foreground">
+              {categoryName || "-"}
+            </span>
+          );
+        },
+        size: 120,
       },
       // Type
       {
@@ -183,6 +231,37 @@ export function ProductTable({
           />
         ),
         size: 100,
+      },
+      // Stock Status
+      {
+        accessorKey: "stockStatus",
+        header: "Stock",
+        cell: ({ row }) => {
+          const stockStatus = row.original.stockStatus;
+          const totalQty = row.original.totalQuantity;
+          
+          if (stockStatus === 'not_tracked') {
+            return <span className="text-muted-foreground text-sm">—</span>;
+          }
+          
+          const config = {
+            in_stock: { label: 'In Stock', variant: 'default', color: 'text-green-600 bg-green-50' },
+            low_stock: { label: 'Low', variant: 'secondary', color: 'text-amber-600 bg-amber-50' },
+            out_of_stock: { label: 'Out', variant: 'destructive', color: 'text-red-600 bg-red-50' },
+          }[stockStatus ?? 'in_stock'];
+          
+          return (
+            <div className="flex items-center gap-2">
+              <Badge variant={config.variant as any} className={config.color}>
+                {config.label}
+              </Badge>
+              {totalQty !== undefined && (
+                <span className="text-sm text-muted-foreground">{totalQty}</span>
+              )}
+            </div>
+          );
+        },
+        size: 120,
       },
       // Base Price
       {
@@ -211,6 +290,24 @@ export function ProductTable({
             className="text-muted-foreground"
           />
         ),
+        size: 100,
+      },
+      // Margin %
+      {
+        id: "margin",
+        header: () => <div className="text-right">Margin</div>,
+        cell: ({ row }) => {
+          const basePrice = row.original.basePrice;
+          const costPrice = row.original.costPrice;
+          const margin = calculateMargin(basePrice, costPrice);
+          const { text, color } = formatMargin(margin);
+          
+          return (
+            <div className={`text-right font-medium ${color}`}>
+              {text}
+            </div>
+          );
+        },
         size: 100,
       },
       // Actions

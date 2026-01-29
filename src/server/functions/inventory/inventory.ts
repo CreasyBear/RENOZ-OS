@@ -46,6 +46,7 @@ interface ListInventoryResult {
   totals: {
     totalValue: number;
     totalItems: number;
+    totalSkus: number;
     lowStockCount: number;
   };
 }
@@ -136,7 +137,10 @@ const _listInventory = cache(
       .select({
         totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
         totalItems: sql<number>`COUNT(*)::int`,
-        lowStockCount: sql<number>`COUNT(*) FILTER (WHERE ${inventory.quantityAvailable} < 10)::int`,
+        totalSkus: sql<number>`COUNT(DISTINCT ${inventory.productId})::int`,
+        lowStockCount: sql<number>`
+          COUNT(DISTINCT CASE WHEN ${inventory.quantityAvailable} < 10 THEN ${inventory.productId} END)::int
+        `,
       })
       .from(inventory)
       .where(and(...conditions));
@@ -183,6 +187,7 @@ const _listInventory = cache(
       totals: {
         totalValue: Number(totalsResult?.totalValue ?? 0),
         totalItems: totalsResult?.totalItems ?? 0,
+        totalSkus: totalsResult?.totalSkus ?? 0,
         lowStockCount: totalsResult?.lowStockCount ?? 0,
       },
     };
@@ -942,10 +947,23 @@ export const getInventoryDashboard = createServerFn({ method: 'GET' }).handler(a
   const [metrics] = await db
     .select({
       totalItems: sql<number>`COUNT(*)::int`,
+      totalSkus: sql<number>`
+        (
+          SELECT COUNT(*)::int
+          FROM products p
+          WHERE p.organization_id = ${ctx.organizationId}
+            AND p.deleted_at IS NULL
+        )
+      `,
+      totalUnits: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::numeric`,
       totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
       locationsCount: sql<number>`COUNT(DISTINCT ${inventory.locationId})::int`,
-      lowStockCount: sql<number>`COUNT(*) FILTER (WHERE ${inventory.quantityAvailable} < 10)::int`,
-      outOfStockCount: sql<number>`COUNT(*) FILTER (WHERE ${inventory.quantityAvailable} <= 0)::int`,
+      lowStockCount: sql<number>`
+        COUNT(DISTINCT CASE WHEN ${inventory.quantityAvailable} < 10 THEN ${inventory.productId} END)::int
+      `,
+      outOfStockCount: sql<number>`
+        COUNT(DISTINCT CASE WHEN ${inventory.quantityAvailable} <= 0 THEN ${inventory.productId} END)::int
+      `,
       allocatedCount: sql<number>`COUNT(*) FILTER (WHERE ${inventory.quantityAllocated} > 0)::int`,
     })
     .from(inventory)
@@ -995,7 +1013,7 @@ export const getInventoryDashboard = createServerFn({ method: 'GET' }).handler(a
     );
 
   // Turnover = (total outbound / average inventory) - simplified to outbound / current inventory
-  const avgInventory = metrics?.totalItems ?? 1;
+  const avgInventory = Number(metrics?.totalUnits ?? 0) || 1;
   const turnoverRate = avgInventory > 0 ? Number(turnoverData?.totalOutbound ?? 0) / avgInventory : 0;
 
   // Count pending purchase orders (status: ordered or partial_received)
@@ -1015,6 +1033,8 @@ export const getInventoryDashboard = createServerFn({ method: 'GET' }).handler(a
   return {
     metrics: {
       totalItems: metrics?.totalItems ?? 0,
+      totalSkus: metrics?.totalSkus ?? 0,
+      totalUnits: Number(metrics?.totalUnits ?? 0),
       totalValue: Number(metrics?.totalValue ?? 0),
       locationsCount: metrics?.locationsCount ?? 0,
       lowStockCount: metrics?.lowStockCount ?? 0,

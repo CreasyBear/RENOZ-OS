@@ -1,62 +1,82 @@
 /**
  * Storage Utilities
  *
- * Cloudflare R2 storage operations for file management.
+ * Supabase Storage operations for file management.
+ *
+ * Note: The legacy R2/S3 implementation has been removed.
+ * All storage operations now use Supabase Storage.
  *
  * @example
  * ```typescript
  * import {
- *   generatePresignedUploadUrl,
- *   generatePresignedDownloadUrl,
- *   deleteObject,
- *   headObject,
- *   StorageError,
- * } from "~/lib/storage";
+ *   uploadFile,
+ *   createSignedUrl,
+ *   deleteFile,
+ * } from "@/lib/storage";
  *
- * // Generate upload URL
- * const { uploadUrl } = await generatePresignedUploadUrl({
- *   key: "org-123/general/photo.jpg",
- *   mimeType: "image/jpeg",
+ * // Upload
+ * const { path, publicUrl } = await uploadFile({
+ *   path: "org-123/general/photo.jpg",
+ *   fileBody: fileBuffer,
+ *   contentType: "image/jpeg",
  * });
  *
- * // Check if file exists
- * const exists = await headObject({ key: "org-123/general/photo.jpg" });
- *
- * // Generate download URL
- * const { downloadUrl } = await generatePresignedDownloadUrl({
- *   key: "org-123/general/photo.jpg",
+ * // Create signed URL
+ * const { signedUrl } = await createSignedUrl({
+ *   path: "org-123/private/document.pdf",
+ *   expiresIn: 3600,
  * });
  *
- * // Delete file
- * await deleteObject({ key: "org-123/general/photo.jpg" });
+ * // Delete
+ * await deleteFile({ path: "org-123/general/photo.jpg" });
  * ```
  */
 
-// Client
-export { getR2Client, getDefaultBucket, resetR2Client } from "./r2-client";
+// ============================================================================
+// SUPABASE STORAGE
+// ============================================================================
 
-// Operations
+export { createStorageClient } from "./supabase-storage";
+
+// Upload
 export {
-  generatePresignedUploadUrl,
-  type GeneratePresignedUploadUrlOptions,
-  type PresignedUploadUrlResult,
-} from "./upload";
+  uploadFile,
+  type UploadFileOptions,
+  type UploadFileResult,
+} from "./supabase-storage";
 
+// Download
 export {
-  generatePresignedDownloadUrl,
-  type GeneratePresignedDownloadUrlOptions,
-  type PresignedDownloadUrlResult,
-} from "./download";
+  downloadFile,
+  type DownloadFileOptions,
+  type DownloadFileResult,
+} from "./supabase-storage";
 
-export { deleteObject, type DeleteObjectOptions } from "./delete";
-
+// URL Generation
 export {
-  headObject,
-  type HeadObjectOptions,
-  type HeadObjectResult,
-} from "./head";
+  createSignedUrl,
+  createSignedUrls,
+  getPublicUrl,
+  type CreateSignedUrlOptions,
+  type SignedUrlResult,
+} from "./supabase-storage";
 
-// Errors
+// Metadata
+export { getFileMetadata } from "./supabase-storage";
+
+// Delete
+export { deleteFile, deleteFiles } from "./supabase-storage";
+
+// List
+export { listFiles } from "./supabase-storage";
+
+// Admin
+export { ensureBucket } from "./supabase-storage";
+
+// ============================================================================
+// ERRORS
+// ============================================================================
+
 export {
   StorageError,
   StorageNotFoundError,

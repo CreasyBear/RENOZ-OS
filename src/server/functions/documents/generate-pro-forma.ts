@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Pro Forma Invoice Generation Server Functions
  *

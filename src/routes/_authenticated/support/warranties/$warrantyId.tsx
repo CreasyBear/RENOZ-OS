@@ -89,7 +89,7 @@ export const Route = createFileRoute('/_authenticated/support/warranties/$warran
     <RouteErrorFallback error={error} parentRoute="/support/warranties" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Warranty Details"
         description="Loading warranty information..."
@@ -305,7 +305,7 @@ function WarrantyDetailPage() {
   };
 
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title={
           <div className="flex items-center gap-3">
@@ -573,6 +573,52 @@ function WarrantyDetailPage() {
                     </>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  Covered Items
+                </CardTitle>
+                <CardDescription>
+                  Products and components covered under this certificate.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {warranty.items.length === 0 ? (
+                  <div className="text-muted-foreground text-sm">No items recorded.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Product</TableHead>
+                        <TableHead>SKU</TableHead>
+                        <TableHead>Serial</TableHead>
+                        <TableHead>Start</TableHead>
+                        <TableHead>End</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {warranty.items.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell>{item.productName ?? 'Unknown'}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {item.productSku ?? '—'}
+                          </TableCell>
+                          <TableCell className="font-mono">
+                            {item.productSerial ?? '—'}
+                          </TableCell>
+                          <TableCell>{formatDate(item.warrantyStartDate)}</TableCell>
+                          <TableCell>{formatDate(item.warrantyEndDate)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </div>

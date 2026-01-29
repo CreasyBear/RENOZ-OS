@@ -217,3 +217,11 @@ export {
   type BaseActivity,
   type ActivityTimelineProps,
 } from "./activity-timeline"
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Metric Card
+// ─────────────────────────────────────────────────────────────────────────────
+export {
+  MetricCard,
+  type MetricCardProps,
+} from "./metric-card"

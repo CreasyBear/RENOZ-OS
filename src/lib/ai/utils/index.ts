@@ -1,49 +1,24 @@
 /**
- * AI Utilities
+ * AI Utilities (Types Only)
  *
- * Budget enforcement, cost tracking, and parameter resolution utilities.
+ * Type definitions for AI utilities.
+ *
+ * ⚠️ NOTE: Implementations are in src/server/functions/ai/utils/
  */
 
-export {
-  checkBudget,
-  getBudgetStatus,
-  getOrgDailyLimitCents,
-  getUserDailyLimitCents,
-  createBudgetExceededResponse,
-  type BudgetCheckResult,
-  type BudgetStatus,
-} from './budget';
+export type {
+  BudgetStatus,
+  BudgetAlert,
+  BudgetCheckResult,
+  CostBreakdown,
+  CostTrackingResult,
+} from './types';
 
-export {
-  trackCost,
-  trackCostFromSDK,
-  calculateCostCents,
-  estimateCost,
-  formatCost,
-  getModelDisplayName,
-  COST_PER_1K_TOKENS,
-  type TokenUsage,
-  type TrackCostInput,
-  type CostEstimate,
-} from './cost';
-
-export {
-  createSmoothStream,
-  getSmoothStreamForContent,
-  DEFAULT_SMOOTH_STREAM,
-  FAST_SMOOTH_STREAM,
-  SLOW_SMOOTH_STREAM,
-  LINE_SMOOTH_STREAM,
-  NO_SMOOTH_STREAM,
-  type SmoothStreamOptions,
-  type ChunkingMode,
-} from './smooth-stream';
-
-export {
-  resolveToolParams,
-  resolveToolParamsSafe,
-  getPeriodDates,
-  formatDateString,
-  mapMetricsFilterToParams,
-  getSchemaDefaults,
-} from './resolve-params';
+// ============================================================================
+// NOTE: Implementations are in src/server/functions/ai/utils/
+//
+// - budget.ts
+// - cost.ts
+//
+// Import from there in server code.
+// ============================================================================

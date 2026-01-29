@@ -14,10 +14,14 @@ export {
   pageMargins,
   fontSize,
   lineHeight,
+  letterSpacing,
+  borderRadius,
   commonStyles,
   formatCurrencyForPdf,
   formatDateForPdf,
   formatNumberForPdf,
+  FONT_FAMILY,
+  FONT_WEIGHTS,
 } from "./theme";
 
 // ============================================================================
@@ -64,6 +68,7 @@ export {
   type NotesProps,
   type PaymentDetailsProps,
   type DocumentFooterProps,
+  type PageNumberProps,
 } from "./footer";
 
 // ============================================================================

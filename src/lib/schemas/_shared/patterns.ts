@@ -132,22 +132,45 @@ export type DateRange = z.infer<typeof dateRangeSchema>;
 /**
  * Email field with proper validation.
  */
+const emptyStringToUndefined = (value: unknown) => (value === '' ? undefined : value);
+const trimStringToUndefined = (value: unknown) => {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
+};
+
 export const emailSchema = z.string().email('Invalid email address').max(255);
+export const optionalEmailSchema = z
+  .preprocess(trimStringToUndefined, z.string().email('Invalid email address').max(255))
+  .optional();
 
 /**
  * Phone number - flexible for international formats.
  */
+const normalizeUrl = (value: unknown) => {
+  if (typeof value !== 'string') return value;
+  if (value === '') return value;
+  if (/^https?:\/\//i.test(value)) return value;
+  return `https://${value}`;
+};
+
 export const phoneSchema = z
-  .string()
-  .min(6, 'Phone number too short')
-  .max(20, 'Phone number too long')
-  .regex(/^[+\d\s()-]+$/, 'Invalid phone format')
+  .preprocess(emptyStringToUndefined, z
+    .string()
+    .min(6, 'Phone number too short')
+    .max(20, 'Phone number too long')
+    .regex(/^[+\d\s()-]+$/, 'Invalid phone format'))
   .optional();
 
 /**
  * URL field.
  */
-export const urlSchema = z.string().url('Invalid URL').max(2000).optional();
+export const urlSchema = z
+  .preprocess(
+    (value) => normalizeUrl(emptyStringToUndefined(value)),
+    z.string().url('Invalid URL').max(2000)
+  )
+  .optional();
 
 /**
  * Currency amount (positive, 2 decimal places).

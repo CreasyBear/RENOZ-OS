@@ -127,7 +127,7 @@ export function OrderBulkOperationsDialog({
                   {orders.length} order{orders.length !== 1 ? 's' : ''} selected
                 </p>
                 <p className="text-muted-foreground text-xs">
-                  Total value: <FormatAmount amount={totalValue} />
+                  Total value: <FormatAmount amount={totalValue} cents={false} />
                 </p>
               </div>
               <Badge variant="secondary" className="text-xs">
@@ -164,7 +164,7 @@ export function OrderBulkOperationsDialog({
                   </div>
                   <div className="text-right">
                     <div className="font-medium">
-                      <FormatAmount amount={order.total} />
+                      <FormatAmount amount={order.total} cents={false} />
                     </div>
                     <Badge variant="outline" className="text-xs capitalize">
                       {order.currentStatus}

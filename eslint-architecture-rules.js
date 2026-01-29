@@ -252,11 +252,135 @@ export const queryKeyEnforcementRules = {
  */
 
 /**
+ * UI/UX Layout Rules
+ * Rules to enforce consistent layout patterns across the application
+ */
+
+/**
+ * Rule: No PageLayout in domain components
+ * Domain components should NOT import PageLayout - routes own layout
+ */
+export const layoutRules = {
+  files: ['src/components/domain/**/*.{ts,tsx}'],
+  rules: {
+    'no-restricted-imports': [
+      'error',
+      {
+        patterns: [
+          {
+            group: ['@/components/layout'],
+            importNames: ['PageLayout', 'RouteShell'],
+            message: `
+              ❌ PageLayout/RouteShell cannot be used in domain components.
+
+              🏗️  ARCHITECTURE RULE:
+              - Domain components own CONTENT, not layout
+              - Routes own PageLayout and page structure
+              - This prevents duplicate breadcrumbs/headers
+
+              ✅ CORRECT PATTERN:
+              // routes/_authenticated/orders/index.tsx
+              <PageLayout variant="full-width">
+                <PageLayout.Header title="Orders" actions={...} />
+                <PageLayout.Content>
+                  <OrdersListContainer onCreate={...} />
+                </PageLayout.Content>
+              </PageLayout>
+
+              // components/domain/orders/orders-list-container.tsx
+              export function OrdersListContainer({ onCreate }) {
+                // Just return content, no PageLayout
+                return (
+                  <div className="space-y-6">
+                    <OrderFilters />
+                    <OrderTable />
+                  </div>
+                );
+              }
+
+              📖 Read: UI_UX_STANDARDIZATION_PRD.md
+            `.trim(),
+          },
+        ],
+      },
+    ],
+  },
+};
+
+/**
+ * Rule: Enforce variant prop on PageLayout in routes
+ * Prevents accidental use of default (container) variant
+ */
+export const pageLayoutVariantRules = {
+  files: ['src/routes/**/*.{ts,tsx}'],
+  plugins: {
+    'jsx-a11y': {}, // Placeholder - we'll use no-restricted-syntax instead
+  },
+  rules: {
+    'no-restricted-syntax': [
+      'error',
+      {
+        selector: 'JSXOpeningElement[name.name="PageLayout"]:not(:has(JSXAttribute[name.name="variant"]))',
+        message: `
+          ❌ PageLayout must have an explicit variant prop.
+
+          🏗️  ARCHITECTURE RULE:
+          - Always specify variant="full-width" or variant="container"
+          - Default variant is deprecated and should not be used
+          - Per UI_UX_STANDARDIZATION_PRD, use full-width for most pages
+
+          ✅ CORRECT PATTERN:
+          <PageLayout variant="full-width">
+            ...
+          </PageLayout>
+
+          📖 Read: UI_UX_STANDARDIZATION_PRD.md
+        `.trim(),
+      },
+    ],
+  },
+};
+
+/**
+ * Rule: No hardcoded padding/max-width in routes
+ * Routes should use PageLayout for consistent spacing
+ */
+export const noHardcodedLayoutRules = {
+  files: ['src/routes/**/*.{ts,tsx}'],
+  rules: {
+    'no-restricted-syntax': [
+      'error',
+      {
+        selector: 'JSXAttribute[name.name="className"] > Literal[value=/(\\bp-\\d+\\b|\\bpx-\\d+\\b|\\bpy-\\d+\\b|\\bmax-w-\\w+\\b)/]',
+        message: `
+          ❌ Hardcoded padding/max-width detected in route.
+
+          🏗️  ARCHITECTURE RULE:
+          - Routes should use PageLayout for consistent spacing
+          - Use PageLayout variant="full-width" | "container" | "narrow"
+          - Don't hardcode p-6, px-4, max-w-4xl, etc.
+
+          ✅ CORRECT PATTERN:
+          <PageLayout variant="full-width">
+            <PageLayout.Content>
+              <YourContent />
+            </PageLayout.Content>
+          </PageLayout>
+
+          📖 Read: UI_UX_STANDARDIZATION_PRD.md
+        `.trim(),
+      },
+    ],
+  },
+};
+
+/**
  * Summary of Rules
  *
  * DOMAIN PRESENTER RULES (src/components/domain):
  * ✅ Cannot import useQuery, useMutation, etc.
  * ✅ Cannot import @/server/functions
+ * ✅ Cannot import PageLayout/RouteShell from @/components/layout
  * ✅ Should only receive data via props
  * ✅ Can use useState for UI state only
  *
@@ -265,6 +389,8 @@ export const queryKeyEnforcementRules = {
  * ✅ Can import server functions
  * ✅ Must use centralized queryKeys.*
  * ✅ Should invalidate caches on mutations
+ * ✅ Must specify variant on PageLayout
+ * ✅ No hardcoded padding/max-width (use PageLayout)
  *
  * SHARED/UI RULES (src/components/shared, src/components/ui):
  * ✅ Can use hooks for UI state
@@ -276,4 +402,5 @@ export const queryKeyEnforcementRules = {
  * ✅ Never define query keys inline
  * ✅ Use TanStack Query for all data fetching
  * ✅ Use refetchInterval instead of setInterval
+ * ✅ Domain components don't own layout
  */

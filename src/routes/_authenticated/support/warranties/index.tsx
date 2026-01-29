@@ -44,7 +44,7 @@ export const Route = createFileRoute(
     <RouteErrorFallback error={error} parentRoute="/support" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Warranties"
         description="View and manage warranty registrations"
@@ -107,7 +107,7 @@ function WarrantyListPage() {
   };
 
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title={
           <div className="flex items-center gap-2">

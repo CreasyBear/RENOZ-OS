@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Process Scheduled Calls Job (Trigger.dev v3)
  *

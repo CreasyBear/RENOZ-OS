@@ -8,14 +8,17 @@
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
-import { createCampaign } from '@/lib/server/email-campaigns';
+import type { CreateCampaignInput } from '@/lib/schemas/communications/email-campaigns';
+import { createCampaign } from '@/server/functions/communications/email-campaigns';
 
 export function useCreateCampaign() {
   const queryClient = useQueryClient();
+  const createCampaignFn = useServerFn(createCampaign);
 
   return useMutation({
-    mutationFn: createCampaign,
+    mutationFn: (input: CreateCampaignInput) => createCampaignFn({ data: input }),
     onSuccess: () => {
       // Invalidate campaigns
       queryClient.invalidateQueries({

@@ -35,7 +35,7 @@ export const Route = createFileRoute('/_authenticated/pipeline/quotes/$quoteId')
     <RouteErrorFallback error={error} parentRoute="/pipeline" />
   ),
   pendingComponent: () => (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header title="Loading Quote..." />
       <PageLayout.Content>
         <div className="space-y-6">
@@ -114,7 +114,7 @@ function QuoteDetailPage() {
   // Loading state
   if (isLoading) {
     return (
-      <PageLayout>
+      <PageLayout variant="full-width">
         <PageLayout.Header title="Loading Quote..." />
         <PageLayout.Content>
           <div className="space-y-6">
@@ -133,7 +133,7 @@ function QuoteDetailPage() {
   // Error state
   if (quoteError || !quoteData?.quoteVersion) {
     return (
-      <PageLayout variant="container">
+      <PageLayout variant="full-width">
         <PageLayout.Header title="Quote Not Found" />
         <PageLayout.Content>
           <div className="text-center py-12">

@@ -443,6 +443,12 @@ export const activityEntityTypeEnum = pgEnum("activity_entity_type", [
   "user",
   "email",
   "call",
+  "project",
+  "workstream",
+  "task",
+  "purchase_order",
+  "shipment",
+  "quote",
 ]);
 
 export const activitySourceEnum = pgEnum("activity_source", [

@@ -38,67 +38,6 @@ interface SpendAnalysisProps {
 }
 
 // ============================================================================
-// SAMPLE DATA
-// ============================================================================
-
-const sampleData: SpendAnalysisData = {
-  totalSpend: 485000,
-  budgetTotal: 600000,
-  budgetUsed: 485000,
-  spendBySupplier: [
-    {
-      supplierId: '1',
-      supplierName: 'ABC Supplies',
-      totalSpend: 125000,
-      orderCount: 45,
-      percentOfTotal: 25.8,
-    },
-    {
-      supplierId: '2',
-      supplierName: 'XYZ Materials',
-      totalSpend: 98000,
-      orderCount: 32,
-      percentOfTotal: 20.2,
-    },
-    {
-      supplierId: '3',
-      supplierName: 'Premier Parts',
-      totalSpend: 87000,
-      orderCount: 28,
-      percentOfTotal: 17.9,
-    },
-    {
-      supplierId: '4',
-      supplierName: 'Quality Components',
-      totalSpend: 72000,
-      orderCount: 22,
-      percentOfTotal: 14.8,
-    },
-    {
-      supplierId: '5',
-      supplierName: 'Trade Wholesale',
-      totalSpend: 53000,
-      orderCount: 18,
-      percentOfTotal: 10.9,
-    },
-  ],
-  spendByCategory: [
-    { category: 'Raw Materials', totalSpend: 195000, orderCount: 65, percentOfTotal: 40.2 },
-    { category: 'Components', totalSpend: 145000, orderCount: 48, percentOfTotal: 29.9 },
-    { category: 'Packaging', totalSpend: 85000, orderCount: 35, percentOfTotal: 17.5 },
-    { category: 'Services', totalSpend: 60000, orderCount: 15, percentOfTotal: 12.4 },
-  ],
-  spendTrends: [
-    { period: 'Jan', spend: 42000, budget: 50000, variance: 8000 },
-    { period: 'Feb', spend: 38000, budget: 50000, variance: 12000 },
-    { period: 'Mar', spend: 55000, budget: 50000, variance: -5000 },
-    { period: 'Apr', spend: 48000, budget: 50000, variance: 2000 },
-    { period: 'May', spend: 52000, budget: 50000, variance: -2000 },
-    { period: 'Jun', spend: 45000, budget: 50000, variance: 5000 },
-  ],
-};
-
-// ============================================================================
 // LOADING SKELETON
 // ============================================================================
 
@@ -373,9 +312,29 @@ function SpendTrends({ data }: SpendTrendsProps) {
 // MAIN COMPONENT
 // ============================================================================
 
-function SpendAnalysis({ data = sampleData, isLoading = false }: SpendAnalysisProps) {
+/**
+ * Spend Analysis Presenter
+ * Displays spend breakdown by supplier, category, and trends.
+ * Receives all data via props - no sample data defaults.
+ * 
+ * @source data from useSpendMetrics or useProcurementDashboard hook
+ */
+function SpendAnalysis({ data, isLoading = false }: SpendAnalysisProps) {
   if (isLoading) {
     return <SpendAnalysisSkeleton />;
+  }
+
+  // Show empty state if no data available
+  if (!data) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-muted-foreground text-center py-8">
+            No spend data available. Data will appear once purchase orders are created.
+          </p>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (

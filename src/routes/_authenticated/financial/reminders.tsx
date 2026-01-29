@@ -31,7 +31,7 @@ export const Route = createFileRoute('/_authenticated/financial/reminders')({
     <RouteErrorFallback error={error} parentRoute="/financial" />
   ),
   pendingComponent: () => (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Payment Reminders"
         description="Manage reminder templates and view sending history"
@@ -74,7 +74,7 @@ function PaymentRemindersPage() {
   const error = templatesError || historyError;
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Payment Reminders"
         description="Manage reminder templates and view sending history"

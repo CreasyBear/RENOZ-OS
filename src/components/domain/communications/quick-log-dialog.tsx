@@ -15,8 +15,6 @@
 "use client";
 
 import * as React from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -26,6 +24,8 @@ import {
   Users,
   Clock,
   Loader2,
+  ArrowLeft,
+  User,
 } from "lucide-react";
 
 import {
@@ -51,7 +51,9 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-import { createQuickLog } from "@/lib/server/quick-log";
+import { useCreateQuickLog } from "@/hooks/communications/use-quick-log";
+import { CustomerSelectorContainer } from "@/components/domain/orders/creation/customer-selector-container";
+import type { SelectedCustomer } from "@/components/domain/orders/creation/customer-selector";
 
 // ============================================================================
 // TYPES
@@ -66,6 +68,13 @@ interface QuickLogDialogProps {
   opportunityId?: string;
   customerName?: string;
   className?: string;
+}
+
+interface QuickLogDialogPresenterProps extends QuickLogDialogProps {
+  /** @source useCreateQuickLog mutation in container */
+  onSubmit: (values: QuickLogFormValues & { customerId?: string }) => Promise<boolean>;
+  /** @source useCreateQuickLog mutation state in container */
+  isSubmitting: boolean;
 }
 
 // ============================================================================
@@ -129,17 +138,19 @@ const LOG_TYPES: { value: LogType; label: string; icon: typeof Phone; descriptio
 // COMPONENT
 // ============================================================================
 
-export function QuickLogDialog({
+function QuickLogDialogPresenter({
   open,
   onOpenChange,
-  customerId,
-  opportunityId,
-  customerName,
+  customerName: initialCustomerName,
   className,
-}: QuickLogDialogProps) {
-  const queryClient = useQueryClient();
+  onSubmit,
+  isSubmitting,
+  requireCustomerSelection,
+}: QuickLogDialogPresenterProps & { requireCustomerSelection?: boolean }) {
   const notesRef = React.useRef<HTMLTextAreaElement>(null);
   const [submitSuccess, setSubmitSuccess] = React.useState(false);
+  const [selectedCustomer, setSelectedCustomer] = React.useState<SelectedCustomer | null>(null);
+  const [showCustomerSelector, setShowCustomerSelector] = React.useState(requireCustomerSelection);
 
   const form = useForm<QuickLogFormValues>({
     resolver: zodResolver(quickLogSchema),
@@ -151,17 +162,25 @@ export function QuickLogDialog({
   });
 
   const selectedType = form.watch("type");
+  const customerName = selectedCustomer?.name || initialCustomerName;
 
-  // Focus notes field when dialog opens
+  // Reset state when dialog opens/closes
   React.useEffect(() => {
-    if (open && notesRef.current) {
-      // Small delay to ensure dialog is fully rendered
+    if (open) {
+      setShowCustomerSelector(requireCustomerSelection);
+      setSelectedCustomer(null);
+    }
+  }, [open, requireCustomerSelection]);
+
+  // Focus notes field when dialog opens (and not showing customer selector)
+  React.useEffect(() => {
+    if (open && !showCustomerSelector && notesRef.current) {
       const timer = setTimeout(() => {
         notesRef.current?.focus();
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [open]);
+  }, [open, showCustomerSelector]);
 
   // Reset form only after successful submission
   React.useEffect(() => {
@@ -172,88 +191,76 @@ export function QuickLogDialog({
         duration: undefined,
       });
       setSubmitSuccess(false);
+      setSelectedCustomer(null);
     }
   }, [open, submitSuccess, form]);
 
-  // Create activity mutation
-  const createMutation = useMutation({
-    mutationFn: async (values: QuickLogFormValues) => {
-      // Remember the log type for next time
-      setLastLogType(values.type);
+  const handleCustomerSelect = (customer: SelectedCustomer | null) => {
+    if (customer) {
+      setSelectedCustomer(customer);
+      setShowCustomerSelector(false);
+    }
+  };
 
-      // Use the server function to create the quick log
-      return createQuickLog({
-        data: {
-          type: values.type,
-          notes: values.notes,
-          duration: values.duration,
-          customerId: customerId ?? null,
-          opportunityId: opportunityId ?? null,
-        },
-      });
-    },
-    onSuccess: () => {
+  const handleBackToCustomerSelector = () => {
+    setShowCustomerSelector(true);
+    setSelectedCustomer(null);
+  };
+
+  const handleSubmit = form.handleSubmit(async (values) => {
+    // Remember the log type for next time
+    setLastLogType(values.type);
+
+    const didSucceed = await onSubmit({
+      ...values,
+      customerId: selectedCustomer?.id,
+    });
+    if (didSucceed) {
       setSubmitSuccess(true);
-      toast.success(
-        selectedType === "call"
-          ? "Call logged"
-          : selectedType === "note"
-            ? "Note added"
-            : "Meeting recorded"
-      );
-      queryClient.invalidateQueries({ queryKey: queryKeys.activities.all });
-      if (customerId) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.activities.byCustomer(customerId) });
-      }
       onOpenChange(false);
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to save log",
-        {
-          action: {
-            label: "Retry",
-            onClick: () => {
-              const values = form.getValues();
-              createMutation.mutate(values);
-            },
-          },
-        }
-      );
-    },
-  });
-
-  const handleSubmit = form.handleSubmit((values) => {
-    createMutation.mutate(values);
+    }
   });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className={cn("sm:max-w-[425px]", className)}
+        className={cn("sm:max-w-[500px]", showCustomerSelector && "sm:max-w-[600px]", className)}
         onInteractOutside={(e) => {
-          if (createMutation.isPending) {
+          if (isSubmitting) {
             e.preventDefault();
           }
         }}
         onEscapeKeyDown={(e) => {
-          if (createMutation.isPending) {
+          if (isSubmitting) {
             e.preventDefault();
           }
         }}
       >
         <DialogHeader>
-          <DialogTitle>Quick Log</DialogTitle>
+          <DialogTitle>
+            {showCustomerSelector ? "Select Customer" : "Quick Log"}
+          </DialogTitle>
           <DialogDescription>
-            {customerName
-              ? `Log activity for ${customerName}`
-              : "Log a call, note, or meeting"}
+            {showCustomerSelector
+              ? "Choose a customer to log activity for"
+              : customerName
+                ? `Log activity for ${customerName}`
+                : "Log a call, note, or meeting"}
           </DialogDescription>
         </DialogHeader>
 
+        {showCustomerSelector ? (
+          <div className="py-4">
+            <CustomerSelectorContainer
+              selectedCustomerId={selectedCustomer?.id || null}
+              onSelect={handleCustomerSelect}
+            />
+          </div>
+        ) : (
+
         <Form {...form}>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <fieldset disabled={createMutation.isPending} className="space-y-4">
+            <fieldset disabled={isSubmitting} className="space-y-4">
               {/* Log Type Selection */}
               <FormField
                 control={form.control}
@@ -362,17 +369,28 @@ export function QuickLogDialog({
             )}
             </fieldset>
 
-            <DialogFooter>
+            <DialogFooter className="gap-2">
+              {requireCustomerSelection && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={handleBackToCustomerSelector}
+                  disabled={isSubmitting}
+                >
+                  <ArrowLeft className="mr-2 h-4 w-4" />
+                  Back
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => onOpenChange(false)}
-                disabled={createMutation.isPending}
+                disabled={isSubmitting}
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={createMutation.isPending}>
-                {createMutation.isPending && (
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}
                 Save Log
@@ -380,8 +398,68 @@ export function QuickLogDialog({
             </DialogFooter>
           </form>
         </Form>
+        )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+export function QuickLogDialog(props: QuickLogDialogProps) {
+  const { customerId, opportunityId } = props;
+  const createQuickLogMutation = useCreateQuickLog();
+  
+  // Require customer selection if no context provided
+  const requireCustomerSelection = !customerId && !opportunityId;
+
+  const handleSubmit = async (values: QuickLogFormValues & { customerId?: string }) => {
+    try {
+      // Use customerId from form values (selected in dialog) or from props
+      const finalCustomerId = values.customerId || customerId || null;
+      
+      await createQuickLogMutation.mutateAsync({
+        type: values.type,
+        notes: values.notes,
+        duration: values.duration,
+        customerId: finalCustomerId,
+        opportunityId: opportunityId ?? null,
+      });
+
+      toast.success(
+        values.type === 'call'
+          ? 'Call logged'
+          : values.type === 'note'
+            ? 'Note added'
+            : 'Meeting recorded'
+      );
+
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save log';
+      toast.error(message, {
+        action: {
+          label: 'Retry',
+          onClick: () => {
+            createQuickLogMutation.mutate({
+              type: values.type,
+              notes: values.notes,
+              duration: values.duration,
+              customerId: values.customerId || customerId || null,
+              opportunityId: opportunityId ?? null,
+            });
+          },
+        },
+      });
+      return false;
+    }
+  };
+
+  return (
+    <QuickLogDialogPresenter
+      {...props}
+      onSubmit={handleSubmit}
+      isSubmitting={createQuickLogMutation.isPending}
+      requireCustomerSelection={requireCustomerSelection}
+    />
   );
 }
 

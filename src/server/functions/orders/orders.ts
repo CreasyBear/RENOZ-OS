@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Order Server Functions
  *
@@ -29,6 +31,8 @@ import {
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, ValidationError, ConflictError } from '@/lib/server/errors';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { computeChanges } from '@/lib/activity-logger';
 import {
   createOrderSchema,
   updateOrderSchema,
@@ -53,6 +57,22 @@ import {
 } from '@/trigger/jobs';
 
 // ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Fields to exclude from activity change tracking (system-managed)
+ */
+const ORDER_EXCLUDED_FIELDS: string[] = [
+  'updatedAt',
+  'updatedBy',
+  'createdAt',
+  'createdBy',
+  'deletedAt',
+  'version',
+];
+
+// ============================================================================
 // TYPES
 // ============================================================================
 
@@ -63,7 +83,7 @@ interface OrderWithLineItems extends Order {
   lineItems: OrderLineItem[];
 }
 
-interface OrderListItem {
+export interface OrderListItem {
   id: string;
   orderNumber: string;
   customerId: string;
@@ -368,6 +388,42 @@ export const listOrders = createServerFn({ method: 'GET' })
   });
 
 // ============================================================================
+// ORDER STATS
+// ============================================================================
+
+/**
+ * Get order statistics for dashboard/summary cards
+ */
+export const getOrderStats = createServerFn({ method: 'GET' })
+  .handler(async () => {
+    const ctx = await withAuth();
+
+    const [stats] = await db
+      .select({
+        totalOrders: sql<number>`count(*)::int`,
+        totalRevenue: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
+        pendingOrders: sql<number>`count(CASE WHEN ${orders.status} = 'pending' THEN 1 END)::int`,
+        unpaidOrders: sql<number>`count(CASE WHEN ${orders.paymentStatus} = 'pending' AND ${orders.status} = 'delivered' THEN 1 END)::int`,
+        draftOrders: sql<number>`count(CASE WHEN ${orders.status} = 'draft' THEN 1 END)::int`,
+      })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.organizationId, ctx.organizationId),
+          isNull(orders.deletedAt)
+        )
+      );
+
+    return {
+      totalOrders: stats?.totalOrders ?? 0,
+      totalRevenue: stats?.totalRevenue ?? 0,
+      pendingOrders: stats?.pendingOrders ?? 0,
+      unpaidOrders: stats?.unpaidOrders ?? 0,
+      draftOrders: stats?.draftOrders ?? 0,
+    };
+  });
+
+// ============================================================================
 // LIST ORDERS (cursor pagination)
 // ============================================================================
 
@@ -551,6 +607,7 @@ export const createOrder = createServerFn({ method: 'POST' })
   .inputValidator(createOrderSchema)
   .handler(async ({ data }): Promise<OrderWithLineItems> => {
     const ctx = await withAuth();
+    const logger = createActivityLoggerWithContext(ctx);
 
     // Validate customer exists and belongs to org
     const [customer] = await db
@@ -701,6 +758,26 @@ export const createOrder = createServerFn({ method: 'POST' })
       console.error('[INT-DOC-007] Failed to trigger quote PDF generation:', error);
     });
 
+    // Log order creation
+    logger.logAsync({
+      entityType: 'order',
+      entityId: result.order.id,
+      action: 'created',
+      changes: computeChanges({
+        before: null,
+        after: result.order,
+        excludeFields: ORDER_EXCLUDED_FIELDS as never[],
+      }),
+      description: `Created order: ${result.order.orderNumber}`,
+      metadata: {
+        orderNumber: result.order.orderNumber,
+        customerId: result.order.customerId,
+        total: result.order.total,
+        status: result.order.status,
+        lineItemCount: result.lineItems.length,
+      },
+    });
+
     return {
       ...result.order,
       lineItems: result.lineItems,
@@ -723,8 +800,9 @@ export const updateOrder = createServerFn({ method: 'POST' })
   )
   .handler(async ({ data: { id, data } }): Promise<Order> => {
     const ctx = await withAuth();
+    const logger = createActivityLoggerWithContext(ctx);
 
-    // Get existing order
+    // Get existing order (for change tracking)
     const [existing] = await db
       .select()
       .from(orders)
@@ -740,6 +818,8 @@ export const updateOrder = createServerFn({ method: 'POST' })
     if (!existing) {
       throw new NotFoundError('Order not found', 'order');
     }
+
+    const before = existing;
 
     // Validate customer if changing
     if (data.customerId && data.customerId !== existing.customerId) {
@@ -809,6 +889,27 @@ export const updateOrder = createServerFn({ method: 'POST' })
       return result;
     });
 
+    // Log order update
+    const changes = computeChanges({
+      before,
+      after: updated,
+      excludeFields: ORDER_EXCLUDED_FIELDS as never[],
+    });
+
+    if (changes.fields && changes.fields.length > 0) {
+      logger.logAsync({
+        entityType: 'order',
+        entityId: updated.id,
+        action: 'updated',
+        changes,
+        description: `Updated order: ${updated.orderNumber}`,
+        metadata: {
+          orderNumber: updated.orderNumber,
+          changedFields: changes.fields,
+        },
+      });
+    }
+
     return updated;
   });
 
@@ -828,6 +929,7 @@ export const updateOrderStatus = createServerFn({ method: 'POST' })
   )
   .handler(async ({ data: { id, data } }): Promise<Order> => {
     const ctx = await withAuth();
+    const logger = createActivityLoggerWithContext(ctx);
 
     // Get existing order
     const [existing] = await db
@@ -845,6 +947,8 @@ export const updateOrderStatus = createServerFn({ method: 'POST' })
     if (!existing) {
       throw new NotFoundError('Order not found', 'order');
     }
+
+    const before = existing;
 
     // Validate status transition
     const currentStatus = existing.status as OrderStatus;
@@ -927,6 +1031,25 @@ export const updateOrderStatus = createServerFn({ method: 'POST' })
       });
     }
 
+    // Log status change
+    logger.logAsync({
+      entityType: 'order',
+      entityId: updated.id,
+      action: 'updated',
+      changes: {
+        before: { status: currentStatus },
+        after: { status: newStatus },
+        fields: ['status'],
+      },
+      description: `Status changed: ${currentStatus} → ${newStatus}`,
+      metadata: {
+        orderNumber: updated.orderNumber,
+        previousStatus: currentStatus,
+        newStatus,
+        notes: data.notes ?? null,
+      },
+    });
+
     return updated;
   });
 
@@ -941,6 +1064,7 @@ export const deleteOrder = createServerFn({ method: 'POST' })
   .inputValidator(orderParamsSchema)
   .handler(async ({ data }): Promise<{ success: boolean }> => {
     const ctx = await withAuth();
+    const logger = createActivityLoggerWithContext(ctx);
 
     // Get existing order
     const [existing] = await db
@@ -958,6 +1082,8 @@ export const deleteOrder = createServerFn({ method: 'POST' })
     if (!existing) {
       throw new NotFoundError('Order not found', 'order');
     }
+
+    const orderToDelete = existing;
 
     // Only allow deletion of draft orders
     if (existing.status !== 'draft') {
@@ -985,6 +1111,24 @@ export const deleteOrder = createServerFn({ method: 'POST' })
         },
         tx
       );
+    });
+
+    // Log order deletion
+    logger.logAsync({
+      entityType: 'order',
+      entityId: data.id,
+      action: 'deleted',
+      changes: computeChanges({
+        before: orderToDelete,
+        after: null,
+        excludeFields: ORDER_EXCLUDED_FIELDS as never[],
+      }),
+      description: `Deleted order: ${orderToDelete.orderNumber}`,
+      metadata: {
+        orderNumber: orderToDelete.orderNumber,
+        status: orderToDelete.status,
+        total: orderToDelete.total,
+      },
     });
 
     return { success: true };

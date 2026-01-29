@@ -80,7 +80,7 @@ function JobTemplatesSettingsPage() {
   };
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Job Templates"
         description="Create and manage templates for quick job creation"

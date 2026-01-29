@@ -19,7 +19,7 @@ import {
   formatContextForLLM,
   type UserContext,
 } from '../prompts/shared';
-import { formatMemoryContext, buildMemoryContext } from '../memory';
+import { formatMemoryContext, buildMemoryContext } from '@/server/functions/ai/memory';
 import type { AgentConfig, AgentConfigOptions, ModelId } from './config';
 import { createAgentConfig as createBaseAgentConfig, SPECIALIST_DEFAULTS } from './config';
 

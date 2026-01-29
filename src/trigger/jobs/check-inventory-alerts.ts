@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Check Inventory Alerts Job
  *
@@ -298,4 +300,3 @@ export const checkInventoryAlertsTask = schedules.task({
     };
   },
 });
-

@@ -15,7 +15,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { toast } from "sonner";
+
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -46,7 +46,12 @@ import {
   Settings,
   Loader2,
 } from "lucide-react";
-import { useOrganization } from "@/hooks/organizations";
+import {
+  useOrganizationQuery,
+  useUpdateOrganization,
+  useUpdateOrganizationSettings,
+  useUpdateOrganizationBranding,
+} from "@/hooks/organizations";
 
 // ============================================================================
 // SCHEMAS
@@ -156,7 +161,7 @@ export const Route = createFileRoute("/_authenticated/settings/organization" as 
 
 function OrganizationSettingsSkeleton() {
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Organization Settings"
         description="Manage your organization profile, address, branding, and preferences"
@@ -177,14 +182,19 @@ function OrganizationSettingsSkeleton() {
 
 function OrganizationSettingsPage() {
   const [activeTab, setActiveTab] = useState("general");
-  const { organization, isLoading, updateOrganization } = useOrganization();
+  
+  // Use separate query and mutation hooks
+  const { data: organization, isLoading } = useOrganizationQuery();
+  const updateOrganization = useUpdateOrganization();
+  const updateSettings = useUpdateOrganizationSettings();
+  const updateBranding = useUpdateOrganizationBranding();
 
   if (isLoading) {
     return <OrganizationSettingsSkeleton />;
   }
 
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Organization Settings"
         description="Manage your organization profile, address, branding, and preferences"
@@ -213,10 +223,7 @@ function OrganizationSettingsPage() {
           <TabsContent value="general">
             <GeneralTab
               organization={organization}
-              onSubmit={async (data) => {
-                await updateOrganization.mutateAsync(data);
-                toast.success("Organization updated successfully");
-              }}
+              onSubmit={(data) => updateOrganization.mutate(data)}
               isSubmitting={updateOrganization.isPending}
             />
           </TabsContent>
@@ -224,10 +231,7 @@ function OrganizationSettingsPage() {
           <TabsContent value="address">
             <AddressTab
               address={organization?.address}
-              onSubmit={async (data) => {
-                await updateOrganization.mutateAsync({ address: data });
-                toast.success("Address updated successfully");
-              }}
+              onSubmit={(data) => updateOrganization.mutate({ address: data })}
               isSubmitting={updateOrganization.isPending}
             />
           </TabsContent>
@@ -235,22 +239,16 @@ function OrganizationSettingsPage() {
           <TabsContent value="branding">
             <BrandingTab
               branding={organization?.branding}
-              onSubmit={async (data) => {
-                await updateOrganization.mutateAsync({ branding: data });
-                toast.success("Branding updated successfully");
-              }}
-              isSubmitting={updateOrganization.isPending}
+              onSubmit={(data) => updateBranding.mutate(data)}
+              isSubmitting={updateBranding.isPending}
             />
           </TabsContent>
 
           <TabsContent value="settings">
             <SettingsTab
               settings={organization?.settings}
-              onSubmit={async (data) => {
-                await updateOrganization.mutateAsync({ settings: data });
-                toast.success("Settings updated successfully");
-              }}
-              isSubmitting={updateOrganization.isPending}
+              onSubmit={(data) => updateSettings.mutate(data)}
+              isSubmitting={updateSettings.isPending}
             />
           </TabsContent>
         </Tabs>
@@ -264,7 +262,7 @@ function OrganizationSettingsPage() {
 // ============================================================================
 
 interface TabProps<T> {
-  onSubmit: (data: T) => Promise<void>;
+  onSubmit: (data: T) => void;
   isSubmitting: boolean;
 }
 

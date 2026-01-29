@@ -16,6 +16,13 @@ import {
   getLifecycleStages,
   getValueTiers,
   getTopCustomers,
+  getQuickStats,
+  getValueKpis,
+  getLifecycleCohorts,
+  getChurnMetrics,
+  getConversionFunnel,
+  getAcquisitionMetrics,
+  getProfitabilitySegments,
 } from '@/server/functions/customers/customer-analytics';
 
 // ============================================================================
@@ -98,12 +105,89 @@ export function useLifecycleStages() {
 }
 
 /**
+ * Fetch lifecycle cohort retention metrics
+ */
+export function useLifecycleCohorts(range: '3m' | '6m' | '1y' = '6m') {
+  return useQuery({
+    queryKey: queryKeys.customerAnalytics.lifecycleCohorts({ range }),
+    queryFn: () => getLifecycleCohorts({ data: { range } }),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Fetch churn metrics
+ */
+export function useChurnMetrics(range: '3m' | '6m' | '1y' = '6m') {
+  return useQuery({
+    queryKey: queryKeys.customerAnalytics.churnMetrics({ range }),
+    queryFn: () => getChurnMetrics({ data: { range } }),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Fetch conversion funnel metrics
+ */
+export function useConversionFunnel(range: '3m' | '6m' | '1y' = '6m') {
+  return useQuery({
+    queryKey: queryKeys.customerAnalytics.conversionFunnel({ range }),
+    queryFn: () => getConversionFunnel({ data: { range } }),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Fetch acquisition metrics
+ */
+export function useAcquisitionMetrics(range: '3m' | '6m' | '1y' = '6m') {
+  return useQuery({
+    queryKey: queryKeys.customerAnalytics.acquisitionMetrics({ range }),
+    queryFn: () => getAcquisitionMetrics({ data: { range } }),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Fetch quick stats for the customer dashboard
+ */
+export function useQuickStats(range: '7d' | '30d' | '90d' | '365d' | 'all' = '30d') {
+  return useQuery({
+    queryKey: queryKeys.customerAnalytics.quickStats({ range }),
+    queryFn: () => getQuickStats({ data: { range } }),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
  * Fetch value tier distribution
  */
 export function useValueTiers() {
   return useQuery({
     queryKey: queryKeys.customerAnalytics.valueTiers(),
     queryFn: () => getValueTiers({ data: {} }),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Fetch value KPIs for value analysis
+ */
+export function useValueKpis(range: '3m' | '6m' | '1y' = '6m') {
+  return useQuery({
+    queryKey: queryKeys.customerAnalytics.valueKpis({ range }),
+    queryFn: () => getValueKpis({ data: { range } }),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/**
+ * Fetch profitability segments (revenue-based)
+ */
+export function useProfitabilitySegments(range: '3m' | '6m' | '1y' = '6m') {
+  return useQuery({
+    queryKey: queryKeys.customerAnalytics.profitabilitySegments({ range }),
+    queryFn: () => getProfitabilitySegments({ data: { range } }),
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -170,13 +254,37 @@ export function useValueAnalytics() {
 /**
  * Fetch all lifecycle analytics data
  */
-export function useLifecycleAnalytics() {
+export function useLifecycleAnalytics(range: '3m' | '6m' | '1y' = '6m') {
   const stages = useLifecycleStages();
+  const cohorts = useLifecycleCohorts(range);
+  const churn = useChurnMetrics(range);
+  const conversion = useConversionFunnel(range);
+  const acquisition = useAcquisitionMetrics(range);
 
   return {
     stages: stages.data,
-    isLoading: stages.isLoading,
-    isError: stages.isError,
-    refetch: stages.refetch,
+    cohorts: cohorts.data,
+    churn: churn.data,
+    conversion: conversion.data,
+    acquisition: acquisition.data,
+    isLoading:
+      stages.isLoading ||
+      cohorts.isLoading ||
+      churn.isLoading ||
+      conversion.isLoading ||
+      acquisition.isLoading,
+    isError:
+      stages.isError ||
+      cohorts.isError ||
+      churn.isError ||
+      conversion.isError ||
+      acquisition.isError,
+    refetch: () => {
+      stages.refetch();
+      cohorts.refetch();
+      churn.refetch();
+      conversion.refetch();
+      acquisition.refetch();
+    },
   };
 }

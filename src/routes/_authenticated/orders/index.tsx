@@ -3,24 +3,28 @@
  *
  * Main order list page with filtering, bulk actions, and export.
  *
+ * LAYOUT: full-width (data-dense table view)
+ * ACTIONS: Refresh → Export → New Order (left to right, secondary to primary)
+ *
+ * @see UI_UX_STANDARDIZATION_PRD.md
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json (ORD-LIST-UI)
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useCallback } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Download, RefreshCw } from "lucide-react";
+import { useState, useCallback, useMemo } from "react";
+import { Plus, Download, RefreshCw, Loader2, ShoppingCart, DollarSign, Package, Clock } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
-import { OrdersTableSkeleton } from "@/components/skeletons/orders";
 import { Button } from "@/components/ui/button";
-import { toastSuccess, toastError } from "@/hooks";
+import { toastSuccess } from "@/hooks";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/query-keys";
+import { OrdersTableSkeleton } from "@/components/skeletons/orders";
 import {
-  OrderList,
-  OrderFiltersComponent,
+  OrdersListContainer,
   type OrderFiltersState,
 } from "@/components/domain/orders";
-import { useDeleteOrder } from "@/hooks/orders";
-import { duplicateOrder } from "@/server/functions/orders/orders";
-import { queryKeys } from "@/lib/query-keys";
+import { MetricCard } from "@/components/shared/metric-card";
+import { useDashboardMetrics } from "@/hooks/dashboard";
+import { formatCurrency } from "@/lib/formatters";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -32,7 +36,7 @@ export const Route = createFileRoute("/_authenticated/orders/")({
     <RouteErrorFallback error={error} parentRoute="/" />
   ),
   pendingComponent: () => (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Orders"
         description="Manage customer orders and fulfillment"
@@ -65,121 +69,126 @@ const DEFAULT_FILTERS: OrderFiltersState = {
 function OrdersPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [filters, setFilters] = useState<OrderFiltersState>(DEFAULT_FILTERS);
+  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const [isExporting, setIsExporting] = useState(false);
 
-  // Duplicate order mutation (no hook exists yet, using centralized keys)
-  const duplicateMutation = useMutation({
-    mutationFn: async (orderId: string) => {
-      return duplicateOrder({ data: { id: orderId } });
-    },
-    onSuccess: (result) => {
-      toastSuccess(`Order duplicated as ${result.orderNumber}`);
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
-      navigate({
-        to: "/orders/$orderId",
-        params: { orderId: result.id },
-      });
-    },
-    onError: () => {
-      toastError("Failed to duplicate order");
-    },
+  // Fetch dashboard metrics for order stats
+  const { data: metrics, isLoading: isMetricsLoading } = useDashboardMetrics({
+    dateFrom: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    dateTo: new Date().toISOString().split('T')[0],
   });
 
-  // Delete order using centralized hook
-  const deleteMutation = useDeleteOrder();
+  const summary = metrics?.summary;
 
-  // Handlers
-  const handleViewOrder = useCallback(
-    (orderId: string) => {
-      navigate({
-        to: "/orders/$orderId",
-        params: { orderId },
-      });
+  const orderStats = useMemo(() => [
+    {
+      title: 'Total Orders',
+      value: summary?.ordersCount?.current ?? 0,
+      subtitle: 'Last 30 days',
+      icon: ShoppingCart,
     },
-    [navigate]
-  );
-
-  const handleDuplicateOrder = useCallback(
-    (orderId: string) => {
-      duplicateMutation.mutate(orderId);
+    {
+      title: 'Revenue',
+      value: formatCurrency(summary?.revenue?.current ?? 0),
+      subtitle: 'Last 30 days',
+      trend: summary?.revenue?.change ? `${summary.revenue.change > 0 ? '+' : ''}${summary.revenue.change}%` : undefined,
+      trendUp: summary?.revenue?.change ? summary.revenue.change > 0 : undefined,
+      icon: DollarSign,
     },
-    [duplicateMutation]
-  );
-
-  const handleDeleteOrder = useCallback(
-    async (orderId: string) => {
-      if (!confirm("Are you sure you want to delete this order?")) return;
-      try {
-        await deleteMutation.mutateAsync(orderId);
-        toastSuccess("Order deleted");
-      } catch {
-        toastError("Failed to delete order");
-      }
+    {
+      title: 'Pending',
+      value: summary?.activeJobs?.current ?? 0,
+      subtitle: 'Active jobs',
+      icon: Package,
     },
-    [deleteMutation]
-  );
+    {
+      title: 'Avg Order',
+      value: summary?.ordersCount?.current && summary?.revenue?.current
+        ? formatCurrency(summary.revenue.current / summary.ordersCount.current)
+        : formatCurrency(0),
+      subtitle: 'Per order',
+      icon: Clock,
+    },
+  ], [summary]);
 
   const handleCreateOrder = useCallback(() => {
     navigate({ to: "/orders/create" });
   }, [navigate]);
-
-  const handleExport = useCallback(() => {
-    // TODO: Implement CSV export
-    toastSuccess("Export functionality coming soon");
-  }, []);
 
   const handleRefresh = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
     toastSuccess("Orders refreshed");
   }, [queryClient]);
 
+  const handleExport = useCallback(() => {
+    // Export is handled by the container for data access
+    // This triggers the container's internal export
+    setIsExporting(true);
+    // Reset after a delay (container handles the actual export)
+    setTimeout(() => setIsExporting(false), 2000);
+  }, []);
+
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Orders"
         description="Manage customer orders and fulfillment"
         actions={
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleRefresh}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleExport}>
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
-          <Button onClick={handleCreateOrder}>
-            <Plus className="h-4 w-4 mr-2" />
-            New Order
-          </Button>
-        </div>
+          <div className="flex items-center gap-2">
+            {/* Secondary: Refresh */}
+            <Button variant="outline" size="sm" onClick={handleRefresh}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+            
+            {/* Secondary: Export */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={isExporting}
+            >
+              {isExporting ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Download className="h-4 w-4 mr-2" />
+              )}
+              Export
+            </Button>
+            
+            {/* Primary: Create */}
+            <Button onClick={handleCreateOrder}>
+              <Plus className="h-4 w-4 mr-2" />
+              New Order
+            </Button>
+          </div>
         }
       />
-
-      <PageLayout.Content>
-        <div className="space-y-6">
-          {/* Filters */}
-          <OrderFiltersComponent
-            filters={filters}
-            onFiltersChange={setFilters}
-          />
-
-          {/* Order List */}
-          <OrderList
-            filters={{
-              search: filters.search || undefined,
-              status: filters.status ?? undefined,
-              paymentStatus: (filters.paymentStatus as "pending" | "partial" | "paid" | "refunded" | "overdue" | undefined) ?? undefined,
-              dateFrom: filters.dateFrom ?? undefined,
-              dateTo: filters.dateTo ?? undefined,
-              minTotal: filters.minTotal ?? undefined,
-              maxTotal: filters.maxTotal ?? undefined,
-            }}
-            onViewOrder={handleViewOrder}
-            onDuplicateOrder={handleDuplicateOrder}
-            onDeleteOrder={handleDeleteOrder}
-          />
+      <PageLayout.Content className="space-y-6">
+        {/* Summary Stats */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {orderStats.map((stat) => (
+            <MetricCard
+              key={stat.title}
+              title={stat.title}
+              value={stat.value}
+              subtitle={stat.subtitle}
+              icon={stat.icon}
+              trend={stat.trend}
+              trendUp={stat.trendUp}
+              isLoading={isMetricsLoading}
+            />
+          ))}
         </div>
+
+        <OrdersListContainer 
+          filters={filters} 
+          onFiltersChange={setFilters}
+          onCreateOrder={handleCreateOrder}
+          onRefresh={handleRefresh}
+          onExport={handleExport}
+          isExporting={isExporting}
+        />
       </PageLayout.Content>
     </PageLayout>
   );

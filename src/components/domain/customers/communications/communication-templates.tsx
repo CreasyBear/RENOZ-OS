@@ -82,137 +82,8 @@ interface CommunicationTemplatesProps {
 }
 
 // ============================================================================
-// MOCK DATA
+// CONSTANTS
 // ============================================================================
-
-const MOCK_TEMPLATES: Template[] = [
-  {
-    id: '1',
-    name: 'Welcome Email',
-    category: 'welcome',
-    type: 'email',
-    subject: 'Welcome to {{company_name}}, {{first_name}}!',
-    body: `Hi {{first_name}},
-
-Welcome to {{company_name}}! We're thrilled to have you as a customer.
-
-Your account has been set up and you're ready to start placing orders. Here's what you can do next:
-
-• Browse our product catalog
-• Set up your delivery preferences
-• Contact your dedicated account manager: {{account_manager}}
-
-If you have any questions, don't hesitate to reach out.
-
-Best regards,
-The {{company_name}} Team`,
-    variables: ['first_name', 'company_name', 'account_manager'],
-    usageCount: 156,
-    createdAt: '2023-06-15',
-    updatedAt: '2024-01-10',
-    isActive: true,
-  },
-  {
-    id: '2',
-    name: 'Quote Follow-up',
-    category: 'follow_up',
-    type: 'email',
-    subject: 'Following up on your quote - {{quote_number}}',
-    body: `Hi {{first_name}},
-
-I wanted to follow up on the quote we sent you on {{quote_date}} for {{quote_total}}.
-
-Have you had a chance to review it? I'm happy to answer any questions or make adjustments to better meet your needs.
-
-Let me know if you'd like to schedule a call to discuss.
-
-Best regards,
-{{sender_name}}`,
-    variables: ['first_name', 'quote_number', 'quote_date', 'quote_total', 'sender_name'],
-    usageCount: 89,
-    createdAt: '2023-08-20',
-    updatedAt: '2024-01-15',
-    isActive: true,
-  },
-  {
-    id: '3',
-    name: 'Complaint Resolution',
-    category: 'complaint_resolution',
-    type: 'email',
-    subject: 'Resolution for your concern - Case #{{ticket_number}}',
-    body: `Dear {{first_name}},
-
-Thank you for bringing this matter to our attention. I wanted to personally reach out regarding your recent concern.
-
-We've investigated the issue and {{resolution_details}}.
-
-To make things right, we'd like to offer {{compensation}}.
-
-We value your business and appreciate your patience. Please don't hesitate to contact me directly if you have any further concerns.
-
-Sincerely,
-{{sender_name}}
-{{sender_title}}`,
-    variables: ['first_name', 'ticket_number', 'resolution_details', 'compensation', 'sender_name', 'sender_title'],
-    usageCount: 34,
-    createdAt: '2023-09-10',
-    updatedAt: '2024-01-12',
-    isActive: true,
-  },
-  {
-    id: '4',
-    name: 'Reactivation - Lapsed Customer',
-    category: 'reactivation',
-    type: 'email',
-    subject: "We miss you, {{first_name}}! Here's a special offer",
-    body: `Hi {{first_name}},
-
-It's been a while since your last order on {{last_order_date}}, and we miss having you as a customer!
-
-To welcome you back, we'd like to offer you {{discount_offer}} on your next order.
-
-Use code: {{discount_code}}
-
-This offer expires on {{offer_expiry}}.
-
-Is there anything we can do better? We'd love to hear your feedback.
-
-Warm regards,
-The {{company_name}} Team`,
-    variables: ['first_name', 'last_order_date', 'discount_offer', 'discount_code', 'offer_expiry', 'company_name'],
-    usageCount: 67,
-    createdAt: '2023-10-05',
-    updatedAt: '2024-01-18',
-    isActive: true,
-  },
-  {
-    id: '5',
-    name: 'Upsell - Premium Products',
-    category: 'upsell',
-    type: 'email',
-    subject: 'Upgrade your {{product_category}} experience',
-    body: `Hi {{first_name}},
-
-Based on your recent purchases, I thought you might be interested in our premium {{product_category}} range.
-
-Our customers who upgraded have seen {{benefit_stat}}.
-
-Key features:
-• {{feature_1}}
-• {{feature_2}}
-• {{feature_3}}
-
-Would you like to learn more? I can arrange a demo or send you samples.
-
-Best,
-{{sender_name}}`,
-    variables: ['first_name', 'product_category', 'benefit_stat', 'feature_1', 'feature_2', 'feature_3', 'sender_name'],
-    usageCount: 45,
-    createdAt: '2023-11-20',
-    updatedAt: '2024-01-08',
-    isActive: true,
-  },
-]
 
 const CATEGORIES: { id: TemplateCategory; label: string; color: string }[] = [
   { id: 'welcome', label: 'Welcome', color: 'bg-green-100 text-green-700' },
@@ -567,8 +438,8 @@ export function CommunicationTemplates({
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null)
 
-  // Use mock data if not provided
-  const templates = propTemplates ?? MOCK_TEMPLATES
+  // Use provided templates or empty array
+  const templates = propTemplates ?? []
 
   // Filter templates
   const filteredTemplates = templates.filter(t => {

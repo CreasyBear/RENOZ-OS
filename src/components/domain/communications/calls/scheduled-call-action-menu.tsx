@@ -9,8 +9,6 @@
 "use client";
 
 import * as React from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import {
   MoreHorizontal,
   Clock,
@@ -43,9 +41,9 @@ import {
 import { Button } from "@/components/ui/button";
 
 import {
-  rescheduleCall,
-  cancelScheduledCall,
-} from "@/lib/server/scheduled-calls";
+  useCancelCall,
+  useRescheduleCall,
+} from "@/hooks/communications/use-scheduled-calls";
 import { toast } from "sonner";
 
 // ============================================================================
@@ -84,54 +82,47 @@ export function ScheduledCallActionMenu({
   trigger,
 }: ScheduledCallActionMenuProps) {
   const [cancelDialogOpen, setCancelDialogOpen] = React.useState(false);
-  const queryClient = useQueryClient();
-
-  const snoozeMutation = useMutation({
-    mutationFn: async (minutes: number) => {
-      const newScheduledAt = new Date(scheduledAt.getTime() + minutes * 60 * 1000);
-      return rescheduleCall({
-        data: {
-          id: callId,
-          newScheduledAt,
-        },
-      });
-    },
-    onSuccess: () => {
-      toast.success("Call snoozed");
-      queryClient.invalidateQueries({ queryKey: queryKeys.communications.scheduledCalls() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.communications.upcomingCalls() });
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to snooze call"
-      );
-    },
-  });
-
-  const cancelMutation = useMutation({
-    mutationFn: async () => {
-      return cancelScheduledCall({
-        data: {
-          id: callId,
-          reason: "Cancelled by user",
-        },
-      });
-    },
-    onSuccess: () => {
-      toast.success("Call cancelled");
-      queryClient.invalidateQueries({ queryKey: queryKeys.communications.scheduledCalls() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.communications.upcomingCalls() });
-      setCancelDialogOpen(false);
-    },
-    onError: (error) => {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to cancel call"
-      );
-    },
-  });
+  const snoozeMutation = useRescheduleCall();
+  const cancelMutation = useCancelCall();
 
   const handleSnooze = (minutes: number) => {
-    snoozeMutation.mutate(minutes);
+    const newScheduledAt = new Date(scheduledAt.getTime() + minutes * 60 * 1000);
+    snoozeMutation.mutate(
+      {
+        id: callId,
+        newScheduledAt,
+      },
+      {
+        onSuccess: () => {
+          toast.success("Call snoozed");
+        },
+        onError: (error) => {
+          toast.error(
+            error instanceof Error ? error.message : "Failed to snooze call"
+          );
+        },
+      }
+    );
+  };
+
+  const handleCancel = () => {
+    cancelMutation.mutate(
+      {
+        id: callId,
+        reason: "Cancelled by user",
+      },
+      {
+        onSuccess: () => {
+          toast.success("Call cancelled");
+          setCancelDialogOpen(false);
+        },
+        onError: (error) => {
+          toast.error(
+            error instanceof Error ? error.message : "Failed to cancel call"
+          );
+        },
+      }
+    );
   };
 
   return (
@@ -214,7 +205,7 @@ export function ScheduledCallActionMenu({
           <AlertDialogFooter>
             <AlertDialogCancel>Keep Call</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => cancelMutation.mutate()}
+              onClick={handleCancel}
               disabled={cancelMutation.isPending}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >

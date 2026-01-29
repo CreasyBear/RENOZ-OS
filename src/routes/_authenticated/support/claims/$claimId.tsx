@@ -87,7 +87,7 @@ export const Route = createFileRoute('/_authenticated/support/claims/$claimId')(
     <RouteErrorFallback error={error} parentRoute="/support/claims" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Claim Details"
         description="Loading warranty claim information..."
@@ -220,7 +220,7 @@ function ClaimDetailPage() {
   };
 
   return (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title={
           <div className="flex items-center gap-3">
@@ -288,7 +288,8 @@ function ClaimDetailPage() {
         }
       />
 
-      <div className="mt-6 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <PageLayout.Content>
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {/* Claim Details Card */}
         <Card className="lg:col-span-2">
           <CardHeader>
@@ -578,6 +579,8 @@ function ClaimDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      </PageLayout.Content>
 
       {/* Approve Dialog */}
       <Dialog open={approveDialogOpen} onOpenChange={setApproveDialogOpen}>

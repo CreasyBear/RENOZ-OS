@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Send Invitation Email Job
  *

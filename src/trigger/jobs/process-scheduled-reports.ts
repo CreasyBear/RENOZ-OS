@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Process Scheduled Reports Tasks (Trigger.dev v3)
  *
@@ -11,10 +13,33 @@
 import { task, schedules, logger } from "@trigger.dev/sdk/v3";
 import { eq, and, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { scheduledReports } from "drizzle/schema/dashboard";
+import { scheduledReports } from "drizzle/schema/reports";
 import { orders } from "drizzle/schema/orders/orders";
 import { customers } from "drizzle/schema/customers/customers";
 import { opportunities } from "drizzle/schema/pipeline";
+import { organizations } from "drizzle/schema/settings/organizations";
+import { warranties } from "drizzle/schema/warranty/warranties";
+import { warrantyClaims } from "drizzle/schema/warranty/warranty-claims";
+import { slaTracking } from "drizzle/schema/support/sla-tracking";
+import { uploadFile, createSignedUrl } from "@/lib/storage";
+import {
+  renderPdfToBuffer,
+  ReportSummaryPdfDocument,
+  type DocumentOrganization,
+} from "@/lib/documents";
+import { Resend } from "resend";
+import { createHash } from "crypto";
+import { TextEncoder } from "util";
+import { createElement } from "react";
+import type { ReactElement } from "react";
+import type { DocumentProps } from "@react-pdf/renderer";
+import type {
+  OrganizationAddress,
+  OrganizationBranding,
+  OrganizationSettings,
+} from "drizzle/schema/settings/organizations";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ============================================================================
 // EVENT NAMES
@@ -66,6 +91,7 @@ export interface GenerateReportResult {
   filename: string;
   format: string;
   generatedAt: string;
+  reportUrl?: string;
 }
 
 // ============================================================================
@@ -77,11 +103,34 @@ interface MetricValues {
   orders_count: number;
   customer_count: number;
   pipeline_value: number;
+  forecasted_revenue: number;
   average_order_value: number;
   quote_win_rate: number;
+  win_rate: number;
+  won_revenue: number;
+  lost_revenue: number;
+  warranty_count: number;
+  claim_count: number;
+  sla_compliance: number;
+  expiring_warranties: number;
+  warranty_value: number;
   kwh_deployed: number;
   active_installations: number;
   [key: string]: number;
+}
+
+interface OrganizationRow {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  abn: string | null;
+  address: OrganizationAddress | null;
+  currency: string;
+  locale: string;
+  branding: OrganizationBranding | null;
+  settings: OrganizationSettings | null;
 }
 
 /**
@@ -94,6 +143,10 @@ async function calculateMetrics(
   metricIds: string[]
 ): Promise<Partial<MetricValues>> {
   const results: Partial<MetricValues> = {};
+  const dateFromIso = dateFrom.toISOString();
+  const dateToIso = dateTo.toISOString();
+  const dateFromDate = dateFromIso.split("T")[0];
+  const dateToDate = dateToIso.split("T")[0];
 
   for (const metricId of metricIds) {
     try {
@@ -107,9 +160,9 @@ async function calculateMetrics(
             .where(
               and(
                 eq(orders.organizationId, organizationId),
-                sql`${orders.status} IN ('delivered', 'completed')`,
-                sql`${orders.deliveredDate} >= ${dateFrom.toISOString()}`,
-                sql`${orders.deliveredDate} <= ${dateTo.toISOString()}`,
+                sql`${orders.status} IN ('delivered')`,
+                sql`${orders.deliveredDate} >= ${dateFromIso}`,
+                sql`${orders.deliveredDate} <= ${dateToIso}`,
                 sql`${orders.deletedAt} IS NULL`
               )
             );
@@ -126,8 +179,8 @@ async function calculateMetrics(
             .where(
               and(
                 eq(orders.organizationId, organizationId),
-                sql`${orders.createdAt} >= ${dateFrom.toISOString()}`,
-                sql`${orders.createdAt} <= ${dateTo.toISOString()}`,
+                sql`${orders.createdAt} >= ${dateFromIso}`,
+                sql`${orders.createdAt} <= ${dateToIso}`,
                 sql`${orders.deletedAt} IS NULL`
               )
             );
@@ -144,8 +197,8 @@ async function calculateMetrics(
             .where(
               and(
                 eq(customers.organizationId, organizationId),
-                sql`${customers.createdAt} >= ${dateFrom.toISOString()}`,
-                sql`${customers.createdAt} <= ${dateTo.toISOString()}`,
+                sql`${customers.createdAt} >= ${dateFromIso}`,
+                sql`${customers.createdAt} <= ${dateToIso}`,
                 sql`${customers.deletedAt} IS NULL`
               )
             );
@@ -170,6 +223,25 @@ async function calculateMetrics(
           break;
         }
 
+        case "forecasted_revenue": {
+          const [result] = await db
+            .select({
+              total: sql<number>`COALESCE(SUM(${opportunities.weightedValue}), 0)`,
+            })
+            .from(opportunities)
+            .where(
+              and(
+                eq(opportunities.organizationId, organizationId),
+                sql`${opportunities.stage} IN ('new', 'qualified', 'proposal', 'negotiation')`,
+                sql`${opportunities.expectedCloseDate} >= ${dateFromDate}`,
+                sql`${opportunities.expectedCloseDate} <= ${dateToDate}`,
+                sql`${opportunities.deletedAt} IS NULL`
+              )
+            );
+          results.forecasted_revenue = Number(result?.total ?? 0);
+          break;
+        }
+
         case "average_order_value": {
           const [result] = await db
             .select({
@@ -179,12 +251,164 @@ async function calculateMetrics(
             .where(
               and(
                 eq(orders.organizationId, organizationId),
-                sql`${orders.createdAt} >= ${dateFrom.toISOString()}`,
-                sql`${orders.createdAt} <= ${dateTo.toISOString()}`,
+                sql`${orders.createdAt} >= ${dateFromIso}`,
+                sql`${orders.createdAt} <= ${dateToIso}`,
                 sql`${orders.deletedAt} IS NULL`
               )
             );
           results.average_order_value = Number(result?.avg ?? 0);
+          break;
+        }
+
+        case "win_rate": {
+          const [result] = await db
+            .select({
+              won: sql<number>`SUM(CASE WHEN ${opportunities.stage} = 'won' THEN 1 ELSE 0 END)`,
+              lost: sql<number>`SUM(CASE WHEN ${opportunities.stage} = 'lost' THEN 1 ELSE 0 END)`,
+            })
+            .from(opportunities)
+            .where(
+              and(
+                eq(opportunities.organizationId, organizationId),
+                sql`${opportunities.actualCloseDate} >= ${dateFromDate}`,
+                sql`${opportunities.actualCloseDate} <= ${dateToDate}`,
+                sql`${opportunities.deletedAt} IS NULL`
+              )
+            );
+          const won = Number(result?.won ?? 0);
+          const lost = Number(result?.lost ?? 0);
+          const total = won + lost;
+          results.win_rate = total > 0 ? (won / total) * 100 : 0;
+          break;
+        }
+
+        case "won_revenue": {
+          const [result] = await db
+            .select({
+              total: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
+            })
+            .from(opportunities)
+            .where(
+              and(
+                eq(opportunities.organizationId, organizationId),
+                sql`${opportunities.stage} = 'won'`,
+                sql`${opportunities.actualCloseDate} >= ${dateFromDate}`,
+                sql`${opportunities.actualCloseDate} <= ${dateToDate}`,
+                sql`${opportunities.deletedAt} IS NULL`
+              )
+            );
+          results.won_revenue = Number(result?.total ?? 0);
+          break;
+        }
+
+        case "lost_revenue": {
+          const [result] = await db
+            .select({
+              total: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
+            })
+            .from(opportunities)
+            .where(
+              and(
+                eq(opportunities.organizationId, organizationId),
+                sql`${opportunities.stage} = 'lost'`,
+                sql`${opportunities.actualCloseDate} >= ${dateFromDate}`,
+                sql`${opportunities.actualCloseDate} <= ${dateToDate}`,
+                sql`${opportunities.deletedAt} IS NULL`
+              )
+            );
+          results.lost_revenue = Number(result?.total ?? 0);
+          break;
+        }
+
+        case "warranty_count": {
+          const [result] = await db
+            .select({
+              count: sql<number>`COUNT(*)`,
+            })
+            .from(warranties)
+            .where(
+              and(
+                eq(warranties.organizationId, organizationId),
+                sql`${warranties.registrationDate} >= ${dateFromIso}`,
+                sql`${warranties.registrationDate} <= ${dateToIso}`
+              )
+            );
+          results.warranty_count = Number(result?.count ?? 0);
+          break;
+        }
+
+        case "claim_count": {
+          const [result] = await db
+            .select({
+              count: sql<number>`COUNT(*)`,
+            })
+            .from(warrantyClaims)
+            .where(
+              and(
+                eq(warrantyClaims.organizationId, organizationId),
+                sql`${warrantyClaims.submittedAt} >= ${dateFromIso}`,
+                sql`${warrantyClaims.submittedAt} <= ${dateToIso}`
+              )
+            );
+          results.claim_count = Number(result?.count ?? 0);
+          break;
+        }
+
+        case "sla_compliance": {
+          const [result] = await db
+            .select({
+              total: sql<number>`COUNT(*)`,
+              breached: sql<number>`SUM(CASE WHEN ${slaTracking.responseBreached} OR ${slaTracking.resolutionBreached} THEN 1 ELSE 0 END)`,
+            })
+            .from(slaTracking)
+            .where(
+              and(
+                eq(slaTracking.organizationId, organizationId),
+                eq(slaTracking.domain, "warranty"),
+                sql`${slaTracking.startedAt} >= ${dateFromIso}`,
+                sql`${slaTracking.startedAt} <= ${dateToIso}`
+              )
+            );
+          const total = Number(result?.total ?? 0);
+          const breached = Number(result?.breached ?? 0);
+          results.sla_compliance = total > 0 ? ((total - breached) / total) * 100 : 0;
+          break;
+        }
+
+        case "expiring_warranties": {
+          const [result] = await db
+            .select({
+              count: sql<number>`COUNT(*)`,
+            })
+            .from(warranties)
+            .where(
+              and(
+                eq(warranties.organizationId, organizationId),
+                sql`${warranties.expiryDate} >= ${dateFromIso}`,
+                sql`${warranties.expiryDate} <= ${dateToIso}`,
+                sql`${warranties.status} IN ('active', 'expiring_soon')`
+              )
+            );
+          results.expiring_warranties = Number(result?.count ?? 0);
+          break;
+        }
+
+        case "warranty_value": {
+          const [result] = await db
+            .select({
+              total: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
+            })
+            .from(warranties)
+            .leftJoin(orders, eq(warranties.orderId, orders.id))
+            .where(
+              and(
+                eq(warranties.organizationId, organizationId),
+                sql`${warranties.expiryDate} >= ${dateFromIso}`,
+                sql`${warranties.expiryDate} <= ${dateToIso}`,
+                sql`${orders.deletedAt} IS NULL`
+              )
+            );
+          results.warranty_value = Number(result?.total ?? 0);
           break;
         }
 
@@ -212,12 +436,18 @@ function formatMetricValue(metricId: string, value: number): string {
     case "revenue":
     case "pipeline_value":
     case "average_order_value":
+    case "forecasted_revenue":
+    case "won_revenue":
+    case "lost_revenue":
+    case "warranty_value":
       return new Intl.NumberFormat("en-AU", {
         style: "currency",
         currency: "AUD",
         maximumFractionDigits: 0,
       }).format(value);
     case "quote_win_rate":
+    case "win_rate":
+    case "sla_compliance":
       return `${value.toFixed(1)}%`;
     default:
       return value.toLocaleString();
@@ -233,8 +463,17 @@ function getMetricLabel(metricId: string): string {
     orders_count: "Orders",
     customer_count: "New Customers",
     pipeline_value: "Pipeline Value",
+    forecasted_revenue: "Forecasted Revenue",
     average_order_value: "Average Order Value",
     quote_win_rate: "Quote Win Rate",
+    win_rate: "Win Rate",
+    won_revenue: "Won Revenue",
+    lost_revenue: "Lost Revenue",
+    warranty_count: "Warranties",
+    claim_count: "Claims",
+    sla_compliance: "SLA Compliance",
+    expiring_warranties: "Expiring Warranties",
+    warranty_value: "Warranty Value",
     kwh_deployed: "kWh Deployed",
     active_installations: "Active Installations",
   };
@@ -405,6 +644,136 @@ function calculateNextRun(frequency: string): Date {
 }
 
 // ============================================================================
+// STORAGE + EMAIL HELPERS
+// ============================================================================
+
+function buildReportStoragePath(params: {
+  organizationId: string;
+  reportId: string;
+  filename: string;
+}) {
+  return `organizations/${params.organizationId}/reports/${params.reportId}/${params.filename}`;
+}
+
+async function uploadReportContent(params: {
+  organizationId: string;
+  reportId: string;
+  filename: string;
+  content: string | ArrayBuffer;
+  contentType: string;
+}) {
+  const encoded =
+    typeof params.content === "string"
+      ? new TextEncoder().encode(params.content).buffer
+      : params.content;
+  const { path } = await uploadFile({
+    path: buildReportStoragePath(params),
+    fileBody: encoded,
+    contentType: params.contentType,
+    upsert: true,
+  });
+
+  const { signedUrl } = await createSignedUrl({
+    path,
+    expiresIn: 24 * 60 * 60,
+    download: params.filename,
+  });
+
+  return { path, signedUrl };
+}
+
+function bufferToArrayBuffer(buffer: Buffer): ArrayBuffer {
+  return buffer.buffer.slice(
+    buffer.byteOffset,
+    buffer.byteOffset + buffer.byteLength
+  ) as ArrayBuffer;
+}
+
+function buildDocumentOrganization(org: OrganizationRow): DocumentOrganization {
+  const address = org.address as OrganizationAddress | null;
+  const branding = org.branding as OrganizationBranding | null;
+
+  return {
+    id: org.id,
+    name: org.name,
+    email: org.email,
+    phone: org.phone,
+    website: org.website || branding?.websiteUrl,
+    taxId: org.abn,
+    currency: org.currency || "AUD",
+    locale: org.locale || "en-AU",
+    address: address
+      ? {
+          addressLine1: address.street1,
+          addressLine2: address.street2,
+          city: address.city,
+          state: address.state,
+          postalCode: address.postalCode,
+          country: address.country,
+        }
+      : undefined,
+    branding: {
+      logoUrl: branding?.logoUrl,
+      primaryColor: branding?.primaryColor,
+      secondaryColor: branding?.secondaryColor,
+      websiteUrl: branding?.websiteUrl,
+    },
+    settings: org.settings ?? undefined,
+  };
+}
+
+function hashEmail(email: string): string {
+  return createHash("sha256").update(email.toLowerCase().trim()).digest("hex").slice(0, 8);
+}
+
+async function sendReportEmail(params: {
+  to: string;
+  reportName: string;
+  reportUrl: string;
+  format: string;
+  dateFrom: Date;
+  dateTo: Date;
+  organizationName?: string | null;
+}) {
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY is not configured");
+  }
+
+  const fromEmail = process.env.EMAIL_FROM || "noreply@resend.dev";
+  const fromName = process.env.EMAIL_FROM_NAME || "Renoz";
+  const fromAddress = `${fromName} <${fromEmail}>`;
+
+  const subject = `${params.reportName} (${params.format.toUpperCase()})`;
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5;">
+      <h2 style="margin-bottom: 8px;">${params.reportName}</h2>
+      <p style="margin: 0 0 16px; color: #4b5563;">
+        Report period: ${params.dateFrom.toLocaleDateString("en-AU")} - ${params.dateTo.toLocaleDateString("en-AU")}
+      </p>
+      <p style="margin-bottom: 16px;">
+        <a href="${params.reportUrl}" style="color: #2563eb; text-decoration: none;">
+          Download ${params.format.toUpperCase()} report
+        </a>
+      </p>
+      <p style="color: #9ca3af; font-size: 12px;">
+        This report was generated by ${params.organizationName ?? "Renoz CRM"}.
+      </p>
+    </div>
+  `;
+
+  const { error } = await resend.emails.send({
+    from: fromAddress,
+    to: [params.to],
+    subject,
+    html,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+// ============================================================================
 // TASK: Process Due Reports
 // ============================================================================
 
@@ -478,17 +847,68 @@ export const processScheduledReportsTask = schedules.task({
           metricCount: Object.keys(metrics).length,
         });
 
+        const [org] = await db
+          .select({
+            id: organizations.id,
+            name: organizations.name,
+            email: organizations.email,
+            phone: organizations.phone,
+            website: organizations.website,
+            abn: organizations.abn,
+            address: organizations.address,
+            currency: organizations.currency,
+            locale: organizations.locale,
+            branding: organizations.branding,
+            settings: organizations.settings,
+          })
+          .from(organizations)
+          .where(eq(organizations.id, report.organizationId))
+          .limit(1);
+
+        if (!org) {
+          throw new Error(`Organization ${report.organizationId} not found`);
+        }
+
         // Generate report content based on format
         let content: string;
+        let contentBody: string | ArrayBuffer;
         let filename: string;
+        let contentType: string;
+        let storageFilename: string;
 
         switch (report.format) {
           case "csv":
+          case "xlsx":
             content = generateCsvReport(metrics, metricIds);
-            filename = `${report.name.replace(/\s+/g, "-")}-${dateTo.toISOString().split("T")[0]}.csv`;
+            storageFilename = `${report.name.replace(/\s+/g, "-")}-${dateTo.toISOString().split("T")[0]}.${report.format === "xlsx" ? "xlsx" : "csv"}`;
+            filename = storageFilename;
+            contentType = "text/csv";
+            contentBody = content;
             break;
+          case "pdf": {
+            const orgData = buildDocumentOrganization(org);
+            const pdfElement = createElement(ReportSummaryPdfDocument, {
+              organization: orgData,
+              data: {
+                reportName: report.name,
+                dateFrom,
+                dateTo,
+                metrics: metricIds.map((id) => ({
+                  label: getMetricLabel(id),
+                  value: formatMetricValue(id, metrics[id] ?? 0),
+                })),
+                generatedAt: new Date(),
+              },
+            }) as unknown as ReactElement<DocumentProps>;
+            const pdfResult = await renderPdfToBuffer(pdfElement);
+            storageFilename = `${report.name.replace(/\s+/g, "-")}-${dateTo.toISOString().split("T")[0]}.pdf`;
+            filename = storageFilename;
+            contentType = "application/pdf";
+            contentBody = bufferToArrayBuffer(pdfResult.buffer);
+            content = "";
+            break;
+          }
           case "html":
-          case "pdf": // PDF generation would use HTML as base
           default:
             content = generateHtmlReport(
               report.name,
@@ -501,26 +921,53 @@ export const processScheduledReportsTask = schedules.task({
                 includeTrends: report.metrics?.includeTrends ?? true,
               }
             );
-            filename = `${report.name.replace(/\s+/g, "-")}-${dateTo.toISOString().split("T")[0]}.html`;
+            storageFilename = `${report.name.replace(/\s+/g, "-")}-${dateTo.toISOString().split("T")[0]}.html`;
+            filename = storageFilename;
+            contentType = "text/html";
+            contentBody = content;
             break;
         }
 
-        // TODO: Upload to Supabase Storage
-        // const { data: uploadData, error: uploadError } = await supabase.storage
-        //   .from('reports')
-        //   .upload(`${report.organizationId}/${filename}`, content, { contentType })
+        const upload = await uploadReportContent({
+          organizationId: report.organizationId,
+          reportId: report.id,
+          filename: storageFilename,
+          content: contentBody,
+          contentType,
+        });
 
-        // TODO: Send email to recipients
-        // For each email in report.recipients.emails, send the report
+        const recipientEmails = report.recipients?.emails ?? [];
+        const recipientCount = recipientEmails.length;
 
-        const recipientCount = report.recipients?.emails?.length ?? 0;
+        for (const email of recipientEmails) {
+          try {
+            await sendReportEmail({
+              to: email,
+              reportName: report.name,
+              reportUrl: upload.signedUrl,
+              format: report.format,
+              dateFrom,
+              dateTo,
+              organizationName: org?.name ?? null,
+            });
+          } catch (error) {
+            logger.error("Failed to send report email", {
+              reportId: report.id,
+              emailHash: hashEmail(email),
+              error: error instanceof Error ? error.message : String(error),
+            });
+            throw error;
+          }
+        }
 
         logger.info("Report generated successfully", {
           reportId: report.id,
           format: report.format,
           filename,
-          contentLength: content.length,
+          contentLength:
+            typeof contentBody === "string" ? contentBody.length : contentBody.byteLength,
           recipientCount,
+          storagePath: upload.path,
         });
 
         // Update report record
@@ -631,15 +1078,68 @@ export const generateReportTask = task({
       metricIds
     );
 
+    const [org] = await db
+      .select({
+        id: organizations.id,
+        name: organizations.name,
+        email: organizations.email,
+        phone: organizations.phone,
+        website: organizations.website,
+        abn: organizations.abn,
+        address: organizations.address,
+        currency: organizations.currency,
+        locale: organizations.locale,
+        branding: organizations.branding,
+        settings: organizations.settings,
+      })
+      .from(organizations)
+      .where(eq(organizations.id, organizationId))
+      .limit(1);
+
+    if (!org) {
+      throw new Error(`Organization ${organizationId} not found`);
+    }
+
     // Generate report content
     let content: string;
+    let contentBody: string | ArrayBuffer;
     let filename: string;
+    let storageFilename: string;
+    let contentType: string;
 
     switch (report.format) {
       case "csv":
+      case "xlsx":
         content = generateCsvReport(metrics, metricIds);
-        filename = `${report.name.replace(/\s+/g, "-")}-${dateTo.toISOString().split("T")[0]}.csv`;
+        storageFilename = `${report.name.replace(/\s+/g, "-")}-${dateTo.toISOString().split("T")[0]}.${report.format === "xlsx" ? "xlsx" : "csv"}`;
+        filename = storageFilename;
+        contentType = "text/csv";
+        contentBody = content;
         break;
+      case "pdf": {
+        const orgData = buildDocumentOrganization(org);
+        const pdfElement = createElement(ReportSummaryPdfDocument, {
+          organization: orgData,
+          data: {
+            reportName: report.name,
+            dateFrom,
+            dateTo,
+            metrics: metricIds.map((id) => ({
+              label: getMetricLabel(id),
+              value: formatMetricValue(id, metrics[id] ?? 0),
+            })),
+            generatedAt: new Date(),
+          },
+        }) as unknown as ReactElement<DocumentProps>;
+        const pdfResult = await renderPdfToBuffer(pdfElement);
+        storageFilename = `${report.name.replace(/\s+/g, "-")}-${dateTo.toISOString().split("T")[0]}.pdf`;
+        filename = storageFilename;
+        contentType = "application/pdf";
+        contentBody = bufferToArrayBuffer(pdfResult.buffer);
+        content = "";
+        break;
+      }
+      case "html":
       default:
         content = generateHtmlReport(
           report.name,
@@ -652,11 +1152,20 @@ export const generateReportTask = task({
             includeTrends: report.metrics?.includeTrends ?? true,
           }
         );
-        filename = `${report.name.replace(/\s+/g, "-")}-${dateTo.toISOString().split("T")[0]}.html`;
+        storageFilename = `${report.name.replace(/\s+/g, "-")}-${dateTo.toISOString().split("T")[0]}.html`;
+        filename = storageFilename;
+        contentType = "text/html";
+        contentBody = content;
         break;
     }
 
-    // TODO: Upload to storage and send emails
+    const upload = await uploadReportContent({
+      organizationId,
+      reportId,
+      filename: storageFilename,
+      content: contentBody,
+      contentType,
+    });
 
     // Update report record
     await db
@@ -672,7 +1181,9 @@ export const generateReportTask = task({
     logger.info("Report generated successfully", {
       reportId,
       filename,
-      contentLength: content.length,
+      contentLength:
+        typeof contentBody === "string" ? contentBody.length : contentBody.byteLength,
+      storagePath: upload.path,
     });
 
     return {
@@ -681,6 +1192,7 @@ export const generateReportTask = task({
       filename,
       format: report.format,
       generatedAt: new Date().toISOString(),
+      reportUrl: upload.signedUrl,
     };
   },
 });

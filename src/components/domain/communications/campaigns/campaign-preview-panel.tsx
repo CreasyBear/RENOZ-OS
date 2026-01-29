@@ -9,11 +9,9 @@
 
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
 import { useEffect } from "react";
 import { Users, Mail, Eye, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
-import { previewCampaignRecipients } from "@/lib/server/email-campaigns";
+import { useCampaignPreview } from "@/hooks/communications/use-campaigns";
 import type { RecipientCriteria } from "./recipient-filter-builder";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -131,16 +129,10 @@ export function CampaignPreviewPanel({
     isLoading,
     isError,
     error,
-  } = useQuery({
-    queryKey: queryKeys.communications.campaignPreview(recipientCriteria),
-    queryFn: () =>
-      previewCampaignRecipients({
-        data: {
-          recipientCriteria,
-          sampleSize: 5,
-        },
-      }),
-    staleTime: 30000, // Cache for 30s
+  } = useCampaignPreview({
+    recipientCriteria,
+    sampleSize: 5,
+    enabled: Object.keys(recipientCriteria).length > 0,
   });
 
   // Notify parent of recipient count changes

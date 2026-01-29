@@ -3,6 +3,10 @@
  *
  * Form for editing existing customer information.
  * Uses the CustomerForm component with pre-populated data.
+ *
+ * LAYOUT: container (form view)
+ *
+ * @see UI_UX_STANDARDIZATION_PRD.md
  */
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useMutation } from '@tanstack/react-query'
@@ -10,7 +14,6 @@ import { ArrowLeft } from 'lucide-react'
 import { PageLayout, RouteErrorFallback } from '@/components/layout'
 import { FormSkeleton } from '@/components/skeletons/shared/form-skeleton'
 import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
 import { CustomerForm } from '@/components/domain/customers/customer-form'
 import { ContactManager, type ManagedContact } from '@/components/domain/customers/contact-manager'
 import { AddressManager, type ManagedAddress } from '@/components/domain/customers/address-manager'
@@ -36,7 +39,7 @@ export const Route = createFileRoute('/_authenticated/customers/$customerId_/edi
     <RouteErrorFallback error={error} parentRoute="/customers" />
   ),
   pendingComponent: () => (
-    <PageLayout variant="container">
+    <PageLayout variant="full-width">
       <PageLayout.Header title="Edit Customer" />
       <PageLayout.Content>
         <FormSkeleton sections={3} />
@@ -276,27 +279,35 @@ function EditCustomerPage() {
     updateAddressMutation.isPending ||
     deleteAddressMutation.isPending
 
-  // Loading state
-  if (isLoadingCustomer) {
-    return (
-      <PageLayout variant="container">
-        <PageLayout.Header title="Loading..." />
-        <PageLayout.Content>
-          <div className="space-y-6">
-            <Skeleton className="h-64 w-full" />
-            <Skeleton className="h-48 w-full" />
-          </div>
-        </PageLayout.Content>
-      </PageLayout>
-    )
-  }
+  // Determine title and content based on state
+  const title = isLoadingCustomer 
+    ? "Loading..." 
+    : error || !customer 
+      ? "Customer Not Found" 
+      : `Edit ${customer.name}`
+  
+  const description = !isLoadingCustomer && !error && customer 
+    ? `${customer.customerCode} · ${customer.type}` 
+    : undefined
 
-  // Error state
-  if (error || !customer) {
-    return (
-      <PageLayout variant="container">
-        <PageLayout.Header title="Customer Not Found" />
-        <PageLayout.Content>
+  return (
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title={title}
+        description={description}
+        actions={
+          !isLoadingCustomer && !error && customer ? (
+            <Button variant="ghost" onClick={handleCancel}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Customer
+            </Button>
+          ) : undefined
+        }
+      />
+      <PageLayout.Content>
+        {isLoadingCustomer ? (
+          <FormSkeleton sections={3} />
+        ) : error || !customer ? (
           <div className="text-center py-12">
             <p className="text-muted-foreground mb-4">
               The customer you're trying to edit doesn't exist or you don't have access.
@@ -306,63 +317,47 @@ function EditCustomerPage() {
               Back to Customers
             </Button>
           </div>
-        </PageLayout.Content>
-      </PageLayout>
-    )
-  }
-
-  return (
-    <PageLayout variant="container">
-      <PageLayout.Header
-        title={`Edit ${customer.name}`}
-        description={`${customer.customerCode} · ${customer.type}`}
-        actions={
-          <Button variant="ghost" onClick={handleCancel}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Customer
-          </Button>
-        }
-      />
-      <PageLayout.Content>
-        <div className="space-y-6">
-          <CustomerForm
-            mode="edit"
-            defaultValues={{
-              name: customer.name,
-              legalName: customer.legalName ?? undefined,
-              email: customer.email ?? undefined,
-              phone: customer.phone ?? undefined,
-              website: customer.website ?? undefined,
-              status: customer.status as 'prospect' | 'active' | 'inactive' | 'suspended' | 'blacklisted',
-              type: customer.type as 'individual' | 'business' | 'government' | 'non_profit',
-              size: (customer.size ?? undefined) as 'micro' | 'small' | 'medium' | 'large' | 'enterprise' | undefined,
-              industry: customer.industry ?? undefined,
-              taxId: customer.taxId ?? undefined,
-              registrationNumber: customer.registrationNumber ?? undefined,
-              creditLimit: customer.creditLimit ? Number(customer.creditLimit) : undefined,
-              creditHold: customer.creditHold,
-              creditHoldReason: customer.creditHoldReason ?? undefined,
-              tags: customer.tags ?? [],
-            }}
-            onSubmit={handleSubmit}
-            onCancel={handleCancel}
-            isLoading={isLoading}
-            availableTags={availableTags}
-          />
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <ContactManager
-              contacts={contacts}
-              onChange={setContacts}
-              disabled={isLoading}
+        ) : (
+          <div className="space-y-6">
+            <CustomerForm
+              mode="edit"
+              defaultValues={{
+                name: customer.name,
+                legalName: customer.legalName ?? undefined,
+                email: customer.email ?? undefined,
+                phone: customer.phone ?? undefined,
+                website: customer.website ?? undefined,
+                status: customer.status as 'prospect' | 'active' | 'inactive' | 'suspended' | 'blacklisted',
+                type: customer.type as 'individual' | 'business' | 'government' | 'non_profit',
+                size: (customer.size ?? undefined) as 'micro' | 'small' | 'medium' | 'large' | 'enterprise' | undefined,
+                industry: customer.industry ?? undefined,
+                taxId: customer.taxId ?? undefined,
+                registrationNumber: customer.registrationNumber ?? undefined,
+                creditLimit: customer.creditLimit ? Number(customer.creditLimit) : undefined,
+                creditHold: customer.creditHold,
+                creditHoldReason: customer.creditHoldReason ?? undefined,
+                tags: customer.tags ?? [],
+              }}
+              onSubmit={handleSubmit}
+              onCancel={handleCancel}
+              isLoading={isLoading}
+              availableTags={availableTags}
             />
-            <AddressManager
-              addresses={addresses}
-              onChange={setAddresses}
-              disabled={isLoading}
-            />
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <ContactManager
+                contacts={contacts}
+                onChange={setContacts}
+                disabled={isLoading}
+              />
+              <AddressManager
+                addresses={addresses}
+                onChange={setAddresses}
+                disabled={isLoading}
+              />
+            </div>
           </div>
-        </div>
+        )}
       </PageLayout.Content>
     </PageLayout>
   )

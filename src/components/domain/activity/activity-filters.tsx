@@ -116,16 +116,16 @@ export function ActivityFilters({ value, onChange, users, className }: ActivityF
       <div className="flex flex-wrap items-center gap-2">
         {/* Entity type filter */}
         <Select
-          value={value.entityType ?? ''}
+          value={value.entityType ?? '__ALL__'}
           onValueChange={(val) =>
-            handleChange({ entityType: val ? (val as ActivityEntityType) : undefined })
+            handleChange({ entityType: val !== '__ALL__' ? (val as ActivityEntityType) : undefined })
           }
         >
           <SelectTrigger className="w-[140px]" aria-label="Filter by entity type">
             <SelectValue placeholder="Entity type" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All types</SelectItem>
+            <SelectItem value="__ALL__">All types</SelectItem>
             {activityEntityTypeValues.map((type) => {
               const Icon = ENTITY_ICONS[type];
               return (
@@ -142,16 +142,16 @@ export function ActivityFilters({ value, onChange, users, className }: ActivityF
 
         {/* Action filter */}
         <Select
-          value={value.action ?? ''}
+          value={value.action ?? '__ALL__'}
           onValueChange={(val) =>
-            handleChange({ action: val ? (val as ActivityAction) : undefined })
+            handleChange({ action: val !== '__ALL__' ? (val as ActivityAction) : undefined })
           }
         >
           <SelectTrigger className="w-[130px]" aria-label="Filter by action">
             <SelectValue placeholder="Action" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">All actions</SelectItem>
+            <SelectItem value="__ALL__">All actions</SelectItem>
             {activityActionValues.map((action) => {
               const Icon = ACTION_ICONS[action];
               return (
@@ -169,14 +169,14 @@ export function ActivityFilters({ value, onChange, users, className }: ActivityF
         {/* User filter (if users provided) */}
         {users && users.length > 0 && (
           <Select
-            value={value.userId ?? ''}
-            onValueChange={(val) => handleChange({ userId: val || undefined })}
+            value={value.userId ?? '__ALL__'}
+            onValueChange={(val) => handleChange({ userId: val !== '__ALL__' ? val : undefined })}
           >
             <SelectTrigger className="w-[160px]" aria-label="Filter by user">
               <SelectValue placeholder="User" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All users</SelectItem>
+              <SelectItem value="__ALL__">All users</SelectItem>
               {users.map((user) => (
                 <SelectItem key={user.id} value={user.id}>
                   {user.name ?? user.email}

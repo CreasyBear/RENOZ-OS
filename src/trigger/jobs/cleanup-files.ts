@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * File Cleanup Tasks (Trigger.dev v3)
  *
@@ -12,7 +14,7 @@ import { schedules, logger } from "@trigger.dev/sdk/v3";
 import { eq, and, isNotNull, lt } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { attachments } from "drizzle/schema";
-import { deleteObject } from "@/lib/storage";
+import { deleteFile } from "@/lib/storage";
 
 // ============================================================================
 // TYPES
@@ -73,14 +75,14 @@ export const cleanupPendingUploadsTask = schedules.task({
 
     for (const upload of staleUploads) {
       try {
-        // Delete from R2 (may already be gone if upload failed)
+        // Delete from Supabase Storage (may already be gone if upload failed)
         try {
-          await deleteObject({ key: upload.storageKey });
-          logger.debug(`Deleted R2 object: ${upload.storageKey}`);
+          await deleteFile({ path: upload.storageKey });
+          logger.debug(`Deleted storage object: ${upload.storageKey}`);
         } catch (error) {
-          // Ignore - file may not exist in R2
+          // Ignore - file may not exist in storage
           logger.debug(
-            `R2 delete skipped (may not exist): ${upload.storageKey}`
+            `Storage delete skipped (may not exist): ${upload.storageKey}`
           );
         }
 
@@ -112,7 +114,7 @@ export const cleanupPendingUploadsTask = schedules.task({
 // ============================================================================
 
 /**
- * Clean up soft-deleted files from R2 storage.
+ * Clean up soft-deleted files from Supabase Storage.
  *
  * Files that are truly deleted (not pending) have:
  * - deletedAt set to a past timestamp
@@ -160,14 +162,14 @@ export const cleanupSoftDeletedFilesTask = schedules.task({
 
     for (const file of deletedFiles) {
       try {
-        // Delete from R2
+        // Delete from Supabase Storage
         try {
-          await deleteObject({ key: file.storageKey });
-          logger.debug(`Deleted R2 object: ${file.storageKey}`);
+          await deleteFile({ path: file.storageKey });
+          logger.debug(`Deleted storage object: ${file.storageKey}`);
         } catch (error) {
           // Ignore - file may already be deleted
           logger.debug(
-            `R2 delete skipped (may not exist): ${file.storageKey}`
+            `Storage delete skipped (may not exist): ${file.storageKey}`
           );
         }
 

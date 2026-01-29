@@ -28,6 +28,8 @@ import { jobTimeCategoryEnum } from "../_shared/enums";
 import { organizations } from "../settings/organizations";
 import { users } from "../users/users";
 import { jobAssignments } from "./job-assignments";
+import { projects } from "./projects";
+import { siteVisits } from "./site-visits";
 
 // ============================================================================
 // JOB TIME ENTRIES TABLE
@@ -60,6 +62,14 @@ export const jobTimeEntries = pgTable(
     jobId: uuid("job_id")
       .notNull()
       .references(() => jobAssignments.id, { onDelete: "cascade" }),
+
+    // SPRINT-03: Project-centric linking
+    projectId: uuid("project_id").references(() => projects.id, {
+      onDelete: "cascade",
+    }),
+    siteVisitId: uuid("site_visit_id").references(() => siteVisits.id, {
+      onDelete: "set null",
+    }),
 
     // User who performed the work (not just who created the entry)
     userId: uuid("user_id")
@@ -111,6 +121,10 @@ export const jobTimeEntries = pgTable(
       table.category
     ),
 
+    // SPRINT-03: Project/site visit indexes
+    projectIdx: index("idx_job_time_entries_project").on(table.projectId),
+    siteVisitIdx: index("idx_job_time_entries_site_visit").on(table.siteVisitId),
+
     // Standard CRUD RLS policies for org isolation
     selectPolicy: pgPolicy("job_time_entries_select_policy", {
       for: "select",
@@ -155,6 +169,14 @@ export const jobTimeEntriesRelations = relations(jobTimeEntries, ({ one }) => ({
   job: one(jobAssignments, {
     fields: [jobTimeEntries.jobId],
     references: [jobAssignments.id],
+  }),
+  project: one(projects, {
+    fields: [jobTimeEntries.projectId],
+    references: [projects.id],
+  }),
+  siteVisit: one(siteVisits, {
+    fields: [jobTimeEntries.siteVisitId],
+    references: [siteVisits.id],
   }),
   user: one(users, {
     fields: [jobTimeEntries.userId],

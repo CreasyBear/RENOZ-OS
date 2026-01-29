@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Check Expiring Warranties Job
  *

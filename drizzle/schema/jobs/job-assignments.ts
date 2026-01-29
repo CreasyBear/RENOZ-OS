@@ -31,6 +31,7 @@ import { users } from "../users/users";
 import { orders } from "../orders/orders";
 import { customers } from "../customers/customers";
 import { slaTracking } from "../support/sla-tracking";
+import { projects } from "./projects";
 
 // ============================================================================
 // ENUMS
@@ -153,6 +154,11 @@ export const jobAssignments = pgTable(
 
     // Optional SLA tracking (set when job created from template with SLA config)
     slaTrackingId: uuid("sla_tracking_id").references(() => slaTracking.id, {
+      onDelete: "set null",
+    }),
+
+    // SPRINT-03: Migration tracking
+    migratedToProjectId: uuid("migrated_to_project_id").references(() => projects.id, {
       onDelete: "set null",
     }),
 

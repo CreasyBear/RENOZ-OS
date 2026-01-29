@@ -1,8 +1,11 @@
 /**
  * AI Infrastructure Module
  *
- * Central export point for all AI functionality.
- * Includes agents, tools, prompts, and utilities.
+ * Central export point for AI types, agents, and utilities.
+ * 
+ * ⚠️ NOTE: Tool implementations that use database are in:
+ *    src/server/functions/ai/tools/
+ *    Import from there in server code.
  *
  * @see _Initiation/_prd/3-integrations/ai-infrastructure/ai-infrastructure.prd.json
  */
@@ -52,47 +55,18 @@ export {
 } from './agents';
 
 // ============================================================================
-// TOOLS
+// TOOLS (Types and Utilities Only)
 // ============================================================================
 
 export {
-  // Handoff/triage tools
+  // Handoff/triage tools (safe for client)
   handoffToAgentTool,
   triageTools,
   type HandoffParams,
   type HandoffResult,
   type TriageTools,
 
-  // Customer tools
-  getCustomerTool,
-  searchCustomersTool,
-  updateCustomerNotesTool,
-  customerTools,
-  type CustomerTools,
-
-  // Order tools
-  getOrdersTool,
-  getInvoicesTool,
-  createOrderDraftTool,
-  createQuoteDraftTool,
-  orderTools,
-  type OrderTools,
-
-  // Analytics tools
-  runReportTool,
-  getMetricsTool,
-  getTrendsTool,
-  analyticsTools,
-  type AnalyticsTools,
-
-  // Quote tools
-  configureSystemTool,
-  calculatePriceTool,
-  checkCompatibilityTool,
-  quoteTools,
-  type QuoteTools,
-
-  // Types
+  // Tool types and utilities
   type ToolResult,
   type ApprovalRequiredResult,
   type ToolErrorResult,

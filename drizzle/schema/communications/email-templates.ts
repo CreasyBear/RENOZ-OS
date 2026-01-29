@@ -15,6 +15,7 @@ import {
   integer,
   jsonb,
   index,
+  uniqueIndex,
   pgEnum,
   pgPolicy,
 } from "drizzle-orm/pg-core";
@@ -119,6 +120,72 @@ export const emailTemplates = pgTable(
 );
 
 // ============================================================================
+// EMAIL TEMPLATE VERSIONS TABLE
+// ============================================================================
+
+export const emailTemplateVersions = pgTable(
+  "email_template_versions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+
+    // Link back to the template
+    templateId: uuid("template_id")
+      .notNull()
+      .references(() => emailTemplates.id, { onDelete: "cascade" }),
+
+    // Version tracking
+    version: integer("version").notNull(),
+
+    // Snapshot of template content
+    name: text("name").notNull(),
+    description: text("description"),
+    category: templateCategoryEnum("category").notNull().default("custom"),
+    subject: text("subject").notNull(),
+    bodyHtml: text("body_html").notNull(),
+    variables: jsonb("variables").$type<TemplateVariable[]>().default([]),
+
+    // Audit
+    ...timestampColumns,
+    ...auditColumns,
+  },
+  (table) => ({
+    templateVersionUnique: uniqueIndex(
+      "idx_email_template_versions_template_version"
+    ).on(table.templateId, table.version),
+    orgTemplateIdx: index("idx_email_template_versions_org_template").on(
+      table.organizationId,
+      table.templateId
+    ),
+    templateIdx: index("idx_email_template_versions_template").on(
+      table.templateId
+    ),
+    orgCreatedIdx: index("idx_email_template_versions_org_created").on(
+      table.organizationId,
+      table.createdAt.desc(),
+      table.id.desc()
+    ),
+    selectPolicy: pgPolicy("email_template_versions_select_policy", {
+      for: "select",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    insertPolicy: pgPolicy("email_template_versions_insert_policy", {
+      for: "insert",
+      to: "authenticated",
+      withCheck: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+    deletePolicy: pgPolicy("email_template_versions_delete_policy", {
+      for: "delete",
+      to: "authenticated",
+      using: sql`organization_id = (SELECT current_setting('app.organization_id', true)::uuid)`,
+    }),
+  })
+);
+
+// ============================================================================
 // RELATIONS
 // ============================================================================
 
@@ -137,8 +204,21 @@ export const emailTemplatesRelations = relations(emailTemplates, ({ one, many })
     references: [emailTemplates.id],
     relationName: "templateVersions",
   }),
-  versions: many(emailTemplates, {
-    relationName: "templateVersions",
+  versions: many(emailTemplateVersions),
+}));
+
+export const emailTemplateVersionsRelations = relations(emailTemplateVersions, ({ one }) => ({
+  template: one(emailTemplates, {
+    fields: [emailTemplateVersions.templateId],
+    references: [emailTemplates.id],
+  }),
+  createdByUser: one(users, {
+    fields: [emailTemplateVersions.createdBy],
+    references: [users.id],
+  }),
+  updatedByUser: one(users, {
+    fields: [emailTemplateVersions.updatedBy],
+    references: [users.id],
   }),
 }));
 
@@ -156,3 +236,5 @@ export interface TemplateVariable {
 export type EmailTemplate = typeof emailTemplates.$inferSelect;
 export type NewEmailTemplate = typeof emailTemplates.$inferInsert;
 export type TemplateCategory = (typeof templateCategoryEnum.enumValues)[number];
+export type EmailTemplateVersion = typeof emailTemplateVersions.$inferSelect;
+export type NewEmailTemplateVersion = typeof emailTemplateVersions.$inferInsert;

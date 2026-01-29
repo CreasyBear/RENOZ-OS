@@ -509,3 +509,64 @@ export const getJobMaterial = createServerFn({ method: 'GET' })
 
     return { material: response };
   });
+
+// ============================================================================
+// RECORD MATERIAL INSTALLATION
+// ============================================================================
+
+import { recordMaterialInstallationSchema } from '@/lib/schemas/jobs/job-materials';
+
+/**
+ * Record material installation with serial numbers, location, and photos.
+ */
+export const recordMaterialInstallation = createServerFn({ method: 'POST' })
+  .inputValidator(recordMaterialInstallationSchema)
+  .handler(async ({ data }) => {
+    const ctx = await withAuth({
+      permission: PERMISSIONS.job?.update ?? 'customer.update',
+    });
+
+    // Verify material access
+    await verifyMaterialAccess(data.materialId, ctx.organizationId);
+
+    // Update the material with installation details
+    const [material] = await db
+      .update(jobMaterials)
+      .set({
+        quantityUsed: data.quantityUsed,
+        notes: data.installedLocation
+          ? `Installed at: ${data.installedLocation}${data.serialNumbers?.length ? ` | Serials: ${data.serialNumbers.join(', ')}` : ''}`
+          : data.serialNumbers?.length
+            ? `Serials: ${data.serialNumbers.join(', ')}`
+            : null,
+        updatedBy: ctx.user.id,
+        updatedAt: new Date(),
+      })
+      .where(eq(jobMaterials.id, data.materialId))
+      .returning();
+
+    // TODO: Save serial numbers to a dedicated table if schema exists
+    // TODO: Save photos to a dedicated table if schema exists
+
+    const response: MaterialResponse = {
+      id: material.id,
+      jobId: material.jobId,
+      productId: material.productId,
+      quantityRequired: Number(material.quantityRequired),
+      quantityUsed: Number(material.quantityUsed),
+      unitCost: Number(material.unitCost),
+      notes: material.notes,
+      createdAt: material.createdAt,
+      updatedAt: material.updatedAt,
+      createdBy: material.createdBy,
+      updatedBy: material.updatedBy,
+      product: {
+        id: material.productId,
+        sku: '', // Would need to fetch product details
+        name: '',
+        description: null,
+      },
+    };
+
+    return { material: response };
+  });

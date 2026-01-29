@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Send Campaign Job (Trigger.dev v3)
  *

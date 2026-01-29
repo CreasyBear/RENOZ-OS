@@ -1,10 +1,11 @@
 /**
  * Purchase Order Table Component
  *
- * Data table displaying purchase orders with status badges and quick actions.
+ * Data table displaying purchase orders with sorting, status badges and quick actions.
  */
 
-import { MoreHorizontal, Truck } from 'lucide-react';
+import { useState, useMemo, useCallback } from 'react';
+import { MoreHorizontal, Truck, ChevronUp, ChevronDown } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,6 +31,9 @@ import type { PurchaseOrderTableData, PurchaseOrderStatus } from '@/lib/schemas/
 // ============================================================================
 // TYPES
 // ============================================================================
+
+type SortField = 'poNumber' | 'supplierName' | 'status' | 'orderDate' | 'requiredDate' | 'totalAmount';
+type SortDirection = 'asc' | 'desc';
 
 interface POTableProps {
   orders: PurchaseOrderTableData[];
@@ -61,6 +65,40 @@ const statusConfig: Record<
 function StatusBadge({ status }: { status: PurchaseOrderStatus }) {
   const config = statusConfig[status] || { label: status, variant: 'secondary' as const };
   return <Badge variant={config.variant}>{config.label}</Badge>;
+}
+
+// ============================================================================
+// SORT HEADER COMPONENT
+// ============================================================================
+
+function SortHeader({
+  label,
+  field,
+  currentSort,
+  onSort,
+}: {
+  label: string;
+  field: SortField;
+  currentSort: { field: SortField; direction: SortDirection };
+  onSort: (field: SortField) => void;
+}) {
+  const isActive = currentSort.field === field;
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-8 px-2 -ml-2 font-medium"
+      onClick={() => onSort(field)}
+    >
+      {label}
+      {isActive &&
+        (currentSort.direction === 'asc' ? (
+          <ChevronUp className="ml-1 h-4 w-4" />
+        ) : (
+          <ChevronDown className="ml-1 h-4 w-4" />
+        ))}
+    </Button>
+  );
 }
 
 // ============================================================================
@@ -140,6 +178,54 @@ export function POTable({
   onDelete,
   onReceive,
 }: POTableProps) {
+  const [sort, setSort] = useState<{ field: SortField; direction: SortDirection }>({
+    field: 'orderDate',
+    direction: 'desc',
+  });
+
+  const handleSort = useCallback((field: SortField) => {
+    setSort((current) => ({
+      field,
+      direction: current.field === field && current.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  }, []);
+
+  // Sort orders
+  const sortedOrders = useMemo(() => {
+    const sorted = [...orders];
+    sorted.sort((a, b) => {
+      let comparison = 0;
+      switch (sort.field) {
+        case 'poNumber':
+          comparison = a.poNumber.localeCompare(b.poNumber);
+          break;
+        case 'supplierName':
+          comparison = (a.supplierName || '').localeCompare(b.supplierName || '');
+          break;
+        case 'status':
+          comparison = a.status.localeCompare(b.status);
+          break;
+        case 'orderDate':
+          const dateA = a.orderDate ? new Date(a.orderDate).getTime() : 0;
+          const dateB = b.orderDate ? new Date(b.orderDate).getTime() : 0;
+          comparison = dateA - dateB;
+          break;
+        case 'requiredDate':
+          const reqA = a.requiredDate ? new Date(a.requiredDate).getTime() : 0;
+          const reqB = b.requiredDate ? new Date(b.requiredDate).getTime() : 0;
+          comparison = reqA - reqB;
+          break;
+        case 'totalAmount':
+          comparison = a.totalAmount - b.totalAmount;
+          break;
+        default:
+          comparison = 0;
+      }
+      return sort.direction === 'asc' ? comparison : -comparison;
+    });
+    return sorted;
+  }, [orders, sort]);
+
   if (isLoading) {
     return <TableSkeleton />;
   }
@@ -161,17 +247,29 @@ export function POTable({
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>PO #</TableHead>
-          <TableHead>Supplier</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Order Date</TableHead>
-          <TableHead>Required</TableHead>
-          <TableHead className="text-right">Value</TableHead>
+          <TableHead>
+            <SortHeader label="PO #" field="poNumber" currentSort={sort} onSort={handleSort} />
+          </TableHead>
+          <TableHead>
+            <SortHeader label="Supplier" field="supplierName" currentSort={sort} onSort={handleSort} />
+          </TableHead>
+          <TableHead>
+            <SortHeader label="Status" field="status" currentSort={sort} onSort={handleSort} />
+          </TableHead>
+          <TableHead>
+            <SortHeader label="Order Date" field="orderDate" currentSort={sort} onSort={handleSort} />
+          </TableHead>
+          <TableHead>
+            <SortHeader label="Required" field="requiredDate" currentSort={sort} onSort={handleSort} />
+          </TableHead>
+          <TableHead className="text-right">
+            <SortHeader label="Value" field="totalAmount" currentSort={sort} onSort={handleSort} />
+          </TableHead>
           <TableHead className="w-12" />
         </TableRow>
       </TableHeader>
       <TableBody>
-        {orders.map((order) => (
+        {sortedOrders.map((order) => (
           <TableRow
             key={order.id}
             className={cn('hover:bg-muted/50 cursor-pointer')}

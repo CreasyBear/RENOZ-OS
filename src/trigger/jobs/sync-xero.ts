@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Sync Xero Job (Trigger.dev v3)
  *

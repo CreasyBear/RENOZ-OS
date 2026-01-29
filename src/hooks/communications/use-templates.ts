@@ -8,7 +8,15 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import type {
+  CreateTemplateInput,
+  UpdateTemplateInput,
+  DeleteTemplateInput,
+  CloneTemplateInput,
+  RestoreVersionInput,
+} from '@/lib/schemas/communications/email-templates';
 import {
   getEmailTemplates,
   getEmailTemplate,
@@ -18,7 +26,7 @@ import {
   cloneEmailTemplate,
   getTemplateVersionHistory,
   restoreTemplateVersion,
-} from '@/lib/server/email-templates';
+} from '@/server/functions/communications/email-templates';
 
 // ============================================================================
 // QUERY HOOKS
@@ -79,9 +87,10 @@ export function useTemplateVersions(options: UseTemplateVersionsOptions) {
 
 export function useCreateTemplate() {
   const queryClient = useQueryClient();
+  const createTemplateFn = useServerFn(createEmailTemplate);
 
   return useMutation({
-    mutationFn: createEmailTemplate,
+    mutationFn: (input: CreateTemplateInput) => createTemplateFn({ data: input }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.templates(),
@@ -92,19 +101,20 @@ export function useCreateTemplate() {
 
 export function useUpdateTemplate() {
   const queryClient = useQueryClient();
+  const updateTemplateFn = useServerFn(updateEmailTemplate);
 
   return useMutation({
-    mutationFn: updateEmailTemplate,
+    mutationFn: (input: UpdateTemplateInput) => updateTemplateFn({ data: input }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.templates(),
       });
       queryClient.invalidateQueries({
-        queryKey: queryKeys.communications.templateDetail(variables.data.id),
+        queryKey: queryKeys.communications.templateDetail(variables.id),
       });
-      if (variables.data.createVersion) {
+      if (variables.createVersion) {
         queryClient.invalidateQueries({
-          queryKey: queryKeys.communications.templateVersions(variables.data.id),
+          queryKey: queryKeys.communications.templateVersions(variables.id),
         });
       }
     },
@@ -113,9 +123,10 @@ export function useUpdateTemplate() {
 
 export function useDeleteTemplate() {
   const queryClient = useQueryClient();
+  const deleteTemplateFn = useServerFn(deleteEmailTemplate);
 
   return useMutation({
-    mutationFn: deleteEmailTemplate,
+    mutationFn: (input: DeleteTemplateInput) => deleteTemplateFn({ data: input }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.templates(),
@@ -126,9 +137,10 @@ export function useDeleteTemplate() {
 
 export function useCloneTemplate() {
   const queryClient = useQueryClient();
+  const cloneTemplateFn = useServerFn(cloneEmailTemplate);
 
   return useMutation({
-    mutationFn: cloneEmailTemplate,
+    mutationFn: (input: CloneTemplateInput) => cloneTemplateFn({ data: input }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.templates(),
@@ -139,9 +151,10 @@ export function useCloneTemplate() {
 
 export function useRestoreTemplateVersion() {
   const queryClient = useQueryClient();
+  const restoreVersionFn = useServerFn(restoreTemplateVersion);
 
   return useMutation({
-    mutationFn: restoreTemplateVersion,
+    mutationFn: (input: RestoreVersionInput) => restoreVersionFn({ data: input }),
     onSuccess: () => {
       // Invalidate all template-related queries since restore affects everything
       queryClient.invalidateQueries({

@@ -1,10 +1,11 @@
 /**
- * Procurement Dashboard Component
+ * Procurement Dashboard Component (Presenter)
  *
  * Main dashboard view combining widgets, alerts, and spend trends.
- * Integrates with server functions for real-time data.
+ * Receives all data via props from the container route.
  *
  * @see SUPP-PROCUREMENT-DASHBOARD story
+ * @see src/routes/_authenticated/procurement/dashboard.tsx (Container)
  */
 
 import { Link } from '@tanstack/react-router';
@@ -34,118 +35,40 @@ import type { ProcurementAlert } from './procurement-alerts';
 // ============================================================================
 
 interface ProcurementDashboardProps {
+  /** @source useSpendMetrics hook in container */
   spendMetrics?: SpendMetrics;
+  /** @source useOrderMetrics hook in container */
   orderMetrics?: OrderMetrics;
+  /** @source useSupplierMetrics hook in container */
   supplierMetrics?: SupplierMetrics;
+  /** @source usePendingApprovals hook in container */
   pendingApprovals?: ApprovalItem[];
+  /** @source useProcurementAlerts hook in container */
   alerts?: ProcurementAlert[];
+  /** @source Combined loading state from all hooks in container */
   isLoading?: boolean;
+  /** @source refetch from useProcurementDashboard in container */
   onRefresh?: () => void;
+  /** @source Mutation handler in container */
   onDismissAlert?: (id: string) => void;
+  /** @source useState in container */
   dateRange?: 'week' | 'month' | 'quarter' | 'year';
+  /** @source setState handler in container */
   onDateRangeChange?: (range: 'week' | 'month' | 'quarter' | 'year') => void;
 }
-
-// ============================================================================
-// PLACEHOLDER DATA
-// ============================================================================
-
-// Sample data for demonstration - in production, this would come from server
-const sampleSpendMetrics: SpendMetrics = {
-  totalSpend: 125000,
-  monthlySpend: 32500,
-  budgetTotal: 150000,
-  budgetUsed: 125000,
-  trendPercent: 12,
-  trendDirection: 'up',
-};
-
-const sampleOrderMetrics: OrderMetrics = {
-  totalOrders: 45,
-  pendingApproval: 8,
-  awaitingDelivery: 12,
-  completedThisMonth: 25,
-};
-
-const sampleSupplierMetrics: SupplierMetrics = {
-  totalSuppliers: 32,
-  activeSuppliers: 28,
-  avgRating: 4.2,
-  topPerformers: [
-    { id: '1', name: 'ABC Supplies', rating: 4.9 },
-    { id: '2', name: 'XYZ Materials', rating: 4.8 },
-    { id: '3', name: 'Premier Parts', rating: 4.7 },
-  ],
-};
-
-const sampleApprovals: ApprovalItem[] = [
-  {
-    id: 'po-1',
-    poNumber: 'PO-2026-0145',
-    supplierName: 'ABC Supplies',
-    amount: 12500,
-    currency: 'AUD',
-    submittedAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-    priority: 'high',
-  },
-  {
-    id: 'po-2',
-    poNumber: 'PO-2026-0146',
-    supplierName: 'XYZ Materials',
-    amount: 8200,
-    currency: 'AUD',
-    submittedAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
-    priority: 'normal',
-  },
-];
-
-const sampleAlerts: ProcurementAlert[] = [
-  {
-    id: 'alert-1',
-    type: 'approval_overdue',
-    severity: 'warning',
-    title: 'Approval Overdue',
-    message: 'PO-2026-0142 has been pending approval for more than 48 hours.',
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-    linkTo: '/purchase-orders/$poId',
-    linkParams: { poId: 'po-abc' },
-    linkLabel: 'View Order',
-    dismissible: true,
-  },
-  {
-    id: 'alert-2',
-    type: 'delivery_delayed',
-    severity: 'warning',
-    title: 'Delivery Delayed',
-    message: 'Expected delivery for PO-2026-0138 is 3 days overdue.',
-    createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-    dismissible: true,
-  },
-  {
-    id: 'alert-3',
-    type: 'price_expiring',
-    severity: 'info',
-    title: 'Price Agreement Expiring',
-    message: '5 price agreements with ABC Supplies expire in 30 days.',
-    createdAt: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-    linkTo: '/suppliers/$supplierId',
-    linkParams: { supplierId: 'supplier-abc' },
-    linkLabel: 'Review Agreements',
-    dismissible: true,
-  },
-];
 
 // ============================================================================
 // RECENT ACTIVITY
 // ============================================================================
 
+/**
+ * Recent Activity Widget
+ * Shows latest procurement-related activities.
+ * @TODO: Replace with real activity feed from useActivityLog hook
+ */
 function RecentActivity() {
-  const activities = [
-    { action: 'Order approved', detail: 'PO-2026-0143 approved by John', time: '15 min ago' },
-    { action: 'Goods received', detail: '24 items from XYZ Materials', time: '1 hour ago' },
-    { action: 'New supplier added', detail: 'Premier Parts onboarded', time: '3 hours ago' },
-    { action: 'Price updated', detail: 'ABC Supplies - 5% discount applied', time: '5 hours ago' },
-  ];
+  // Placeholder - will be replaced with real activity data
+  const activities: { action: string; detail: string; time: string }[] = [];
 
   return (
     <Card>
@@ -153,18 +76,22 @@ function RecentActivity() {
         <CardTitle className="text-base">Recent Activity</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
-          {activities.map((activity, idx) => (
-            <div key={idx} className="flex items-start gap-3">
-              <div className="bg-primary mt-1 h-2 w-2 rounded-full" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">{activity.action}</p>
-                <p className="text-muted-foreground text-xs">{activity.detail}</p>
+        {activities.length === 0 ? (
+          <p className="text-muted-foreground text-sm">No recent activity</p>
+        ) : (
+          <div className="space-y-4">
+            {activities.map((activity, idx) => (
+              <div key={idx} className="flex items-start gap-3">
+                <div className="bg-primary mt-1 h-2 w-2 rounded-full" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">{activity.action}</p>
+                  <p className="text-muted-foreground text-xs">{activity.detail}</p>
+                </div>
+                <span className="text-muted-foreground text-xs">{activity.time}</span>
               </div>
-              <span className="text-muted-foreground text-xs">{activity.time}</span>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -207,12 +134,17 @@ function QuickActions() {
 // MAIN COMPONENT
 // ============================================================================
 
+/**
+ * Procurement Dashboard Presenter
+ * Pure UI component - all data received via props from container.
+ * Shows loading states and empty states when data is not available.
+ */
 function ProcurementDashboard({
-  spendMetrics = sampleSpendMetrics,
-  orderMetrics = sampleOrderMetrics,
-  supplierMetrics = sampleSupplierMetrics,
-  pendingApprovals = sampleApprovals,
-  alerts = sampleAlerts,
+  spendMetrics,
+  orderMetrics,
+  supplierMetrics,
+  pendingApprovals,
+  alerts,
   isLoading = false,
   onRefresh,
   onDismissAlert,

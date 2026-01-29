@@ -8,7 +8,14 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import type {
+  CreateSignatureInput,
+  UpdateSignatureInput,
+  DeleteSignatureInput,
+  SetDefaultSignatureInput,
+} from '@/lib/schemas/communications/email-signatures';
 import {
   getEmailSignatures,
   getEmailSignature,
@@ -16,7 +23,7 @@ import {
   updateEmailSignature,
   deleteEmailSignature,
   setDefaultSignature,
-} from '@/lib/server/email-signatures';
+} from '@/server/functions/communications/email-signatures';
 
 // ============================================================================
 // QUERY HOOKS
@@ -60,9 +67,10 @@ export function useSignature(options: UseSignatureOptions) {
 
 export function useCreateSignature() {
   const queryClient = useQueryClient();
+  const createSignatureFn = useServerFn(createEmailSignature);
 
   return useMutation({
-    mutationFn: createEmailSignature,
+    mutationFn: (input: CreateSignatureInput) => createSignatureFn({ data: input }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.signatures(),
@@ -73,15 +81,16 @@ export function useCreateSignature() {
 
 export function useUpdateSignature() {
   const queryClient = useQueryClient();
+  const updateSignatureFn = useServerFn(updateEmailSignature);
 
   return useMutation({
-    mutationFn: updateEmailSignature,
+    mutationFn: (input: UpdateSignatureInput) => updateSignatureFn({ data: input }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.signatures(),
       });
       queryClient.invalidateQueries({
-        queryKey: queryKeys.communications.signatureDetail(variables.data.id),
+        queryKey: queryKeys.communications.signatureDetail(variables.id),
       });
     },
   });
@@ -89,9 +98,10 @@ export function useUpdateSignature() {
 
 export function useDeleteSignature() {
   const queryClient = useQueryClient();
+  const deleteSignatureFn = useServerFn(deleteEmailSignature);
 
   return useMutation({
-    mutationFn: deleteEmailSignature,
+    mutationFn: (input: DeleteSignatureInput) => deleteSignatureFn({ data: input }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.signatures(),
@@ -102,9 +112,10 @@ export function useDeleteSignature() {
 
 export function useSetDefaultSignature() {
   const queryClient = useQueryClient();
+  const setDefaultSignatureFn = useServerFn(setDefaultSignature);
 
   return useMutation({
-    mutationFn: setDefaultSignature,
+    mutationFn: (input: SetDefaultSignatureInput) => setDefaultSignatureFn({ data: input }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.signatures(),

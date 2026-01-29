@@ -115,6 +115,14 @@ export const ForecastChart = memo(function ForecastChart({
               tickLine={false}
               axisLine={false}
             />
+            <YAxis
+              yAxisId="count"
+              orientation="right"
+              tick={{ fontSize: 12 }}
+              tickLine={false}
+              axisLine={false}
+              allowDecimals={false}
+            />
             <Tooltip
               formatter={(value: number, name: string) => [
                 formatTooltipValue(value * 100), // Convert back to cents for formatting
@@ -180,7 +188,7 @@ export const ForecastChart = memo(function ForecastChart({
               stroke="hsl(var(--muted-foreground))"
               strokeWidth={2}
               dot={{ fill: "hsl(var(--muted-foreground))", r: 4 }}
-              yAxisId={1}
+              yAxisId="count"
             />
           </ComposedChart>
         </ResponsiveContainer>

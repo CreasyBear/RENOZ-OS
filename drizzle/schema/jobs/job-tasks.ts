@@ -28,6 +28,9 @@ import {
 import { organizations } from "../settings/organizations";
 import { users } from "../users/users";
 import { jobAssignments } from "./job-assignments";
+import { siteVisits } from "./site-visits";
+import { projectWorkstreams } from "./workstreams-notes";
+import { projects } from "./projects";
 
 // ============================================================================
 // ENUMS
@@ -61,10 +64,21 @@ export const jobTasks = pgTable(
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
 
-    // Link to job assignment
+    // Link to job assignment (legacy - will be removed after migration)
     jobId: uuid("job_id")
       .notNull()
       .references(() => jobAssignments.id, { onDelete: "cascade" }),
+
+    // SPRINT-03: New domain model links
+    siteVisitId: uuid("site_visit_id").references(() => siteVisits.id, {
+      onDelete: "set null",
+    }),
+    projectId: uuid("project_id").references(() => projects.id, {
+      onDelete: "cascade",
+    }),
+    workstreamId: uuid("workstream_id").references(() => projectWorkstreams.id, {
+      onDelete: "set null",
+    }),
 
     // Task details
     title: varchar("title", { length: 255 }).notNull(),
@@ -128,6 +142,16 @@ export const jobTasks = pgTable(
       table.position
     ),
 
+    // SPRINT-03: New indexes
+    siteVisitIdx: index("idx_job_tasks_site_visit").on(table.siteVisitId),
+    projectIdx: index("idx_job_tasks_project").on(table.projectId),
+    workstreamIdx: index("idx_job_tasks_workstream").on(table.workstreamId),
+    // Compound index for project + status queries (common filtering pattern)
+    projectStatusIdx: index("idx_job_tasks_project_status").on(
+      table.projectId,
+      table.status
+    ),
+
     // Standard CRUD RLS policies for org isolation
     selectPolicy: pgPolicy("job_tasks_select_policy", {
       for: "select",
@@ -169,6 +193,19 @@ export const jobTasksRelations = relations(jobTasks, ({ one }) => ({
   assignee: one(users, {
     fields: [jobTasks.assigneeId],
     references: [users.id],
+  }),
+  // SPRINT-03: New domain relations
+  siteVisit: one(siteVisits, {
+    fields: [jobTasks.siteVisitId],
+    references: [siteVisits.id],
+  }),
+  project: one(projects, {
+    fields: [jobTasks.projectId],
+    references: [projects.id],
+  }),
+  workstream: one(projectWorkstreams, {
+    fields: [jobTasks.workstreamId],
+    references: [projectWorkstreams.id],
   }),
 }));
 

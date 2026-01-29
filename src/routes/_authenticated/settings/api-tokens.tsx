@@ -10,7 +10,7 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useCallback } from "react";
-import { RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { SettingsTableSkeleton } from '@/components/skeletons/settings';
 import {
   PermissionGuard,
@@ -46,14 +46,14 @@ function ApiTokensPage() {
     <PermissionGuard
       permission="api_token.read"
       fallback={
-        <div className="p-6">
-          <h1 className="text-2xl font-semibold text-gray-900 mb-4">
-            Access Denied
-          </h1>
-          <p className="text-gray-600">
-            You don't have permission to view API tokens.
-          </p>
-        </div>
+        <PageLayout variant="full-width">
+          <PageLayout.Header title="Access Denied" />
+          <PageLayout.Content>
+            <p className="text-gray-600">
+              You don't have permission to view API tokens.
+            </p>
+          </PageLayout.Content>
+        </PageLayout>
       }
     >
       <ApiTokensContent />
@@ -113,23 +113,22 @@ function ApiTokensContent() {
   );
 
   return (
-    <div className="p-6 max-w-4xl">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">API Tokens</h1>
-          <p className="text-sm text-gray-600 mt-1">
-            Create and manage API tokens for third-party integrations.
-          </p>
-        </div>
-        {canCreate && (
-          <button
-            onClick={() => setShowCreateDialog(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-          >
-            Create Token
-          </button>
-        )}
-      </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="API Tokens"
+        description="Create and manage API tokens for third-party integrations."
+        actions={
+          canCreate && (
+            <button
+              onClick={() => setShowCreateDialog(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Create Token
+            </button>
+          )
+        }
+      />
+      <PageLayout.Content>
 
       {/* Newly created token display */}
       {newlyCreatedToken && (
@@ -139,15 +138,15 @@ function ApiTokensContent() {
         />
       )}
 
-      {/* Token list */}
-      {isLoading ? (
-        <div className="text-gray-500">Loading tokens...</div>
-      ) : tokens && tokens.length > 0 ? (
-        <TokenList
-          tokens={tokens}
-          onRevoke={setTokenToRevoke}
-          canRevoke={canRevoke}
-        />
+        {/* Token list */}
+        {isLoading ? (
+          <div className="text-gray-500">Loading tokens...</div>
+        ) : tokens && tokens.length > 0 ? (
+          <TokenList
+            tokens={tokens}
+            onRevoke={setTokenToRevoke}
+            canRevoke={canRevoke}
+          />
       ) : (
         <EmptyState onCreateClick={() => setShowCreateDialog(true)} />
       )}
@@ -171,7 +170,8 @@ function ApiTokensContent() {
           isLoading={revokeMutation.isPending}
         />
       )}
-    </div>
+      </PageLayout.Content>
+    </PageLayout>
   );
 }
 

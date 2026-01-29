@@ -8,7 +8,15 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import type {
+  CreateCampaignInput,
+  UpdateCampaignInput,
+  CancelCampaignInput,
+  DeleteCampaignInput,
+  PopulateCampaignRecipientsInput,
+} from '@/lib/schemas/communications/email-campaigns';
 import {
   getCampaigns,
   getCampaignById,
@@ -19,7 +27,7 @@ import {
   deleteCampaign,
   previewCampaignRecipients,
   populateCampaignRecipients,
-} from '@/lib/server/email-campaigns';
+} from '@/server/functions/communications/email-campaigns';
 
 // ============================================================================
 // QUERY HOOKS
@@ -122,15 +130,19 @@ export function useCampaignPreview(options: UseCampaignPreviewOptions) {
   });
 }
 
+// Backwards-compatible alias
+export const usePreviewCampaignRecipients = useCampaignPreview;
+
 // ============================================================================
 // MUTATION HOOKS
 // ============================================================================
 
 export function useCreateCampaign() {
   const queryClient = useQueryClient();
+  const createCampaignFn = useServerFn(createCampaign);
 
   return useMutation({
-    mutationFn: createCampaign,
+    mutationFn: (input: CreateCampaignInput) => createCampaignFn({ data: input }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.campaigns(),
@@ -141,15 +153,16 @@ export function useCreateCampaign() {
 
 export function useUpdateCampaign() {
   const queryClient = useQueryClient();
+  const updateCampaignFn = useServerFn(updateCampaign);
 
   return useMutation({
-    mutationFn: updateCampaign,
+    mutationFn: (input: UpdateCampaignInput) => updateCampaignFn({ data: input }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.campaigns(),
       });
       queryClient.invalidateQueries({
-        queryKey: queryKeys.communications.campaignDetail(variables.data.id),
+        queryKey: queryKeys.communications.campaignDetail(variables.id),
       });
     },
   });
@@ -157,15 +170,16 @@ export function useUpdateCampaign() {
 
 export function useCancelCampaign() {
   const queryClient = useQueryClient();
+  const cancelCampaignFn = useServerFn(cancelCampaign);
 
   return useMutation({
-    mutationFn: cancelCampaign,
+    mutationFn: (input: CancelCampaignInput) => cancelCampaignFn({ data: input }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.campaigns(),
       });
       queryClient.invalidateQueries({
-        queryKey: queryKeys.communications.campaignDetail(variables.data.id),
+        queryKey: queryKeys.communications.campaignDetail(variables.id),
       });
     },
   });
@@ -173,9 +187,10 @@ export function useCancelCampaign() {
 
 export function useDeleteCampaign() {
   const queryClient = useQueryClient();
+  const deleteCampaignFn = useServerFn(deleteCampaign);
 
   return useMutation({
-    mutationFn: deleteCampaign,
+    mutationFn: (input: DeleteCampaignInput) => deleteCampaignFn({ data: input }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.campaigns(),
@@ -186,15 +201,17 @@ export function useDeleteCampaign() {
 
 export function usePopulateCampaignRecipients() {
   const queryClient = useQueryClient();
+  const populateRecipientsFn = useServerFn(populateCampaignRecipients);
 
   return useMutation({
-    mutationFn: populateCampaignRecipients,
+    mutationFn: (input: PopulateCampaignRecipientsInput) =>
+      populateRecipientsFn({ data: input }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
-        queryKey: queryKeys.communications.campaignDetail(variables.data.campaignId),
+        queryKey: queryKeys.communications.campaignDetail(variables.campaignId),
       });
       queryClient.invalidateQueries({
-        queryKey: queryKeys.communications.campaignRecipients(variables.data.campaignId, {}),
+        queryKey: queryKeys.communications.campaignRecipients(variables.campaignId, {}),
       });
     },
   });

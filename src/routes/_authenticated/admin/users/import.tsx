@@ -49,7 +49,7 @@ import {
   Download,
 } from 'lucide-react';
 
-import { RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { AdminFormSkeleton } from '@/components/skeletons/admin';
 
 // Route definition
@@ -59,9 +59,11 @@ export const Route = createFileRoute('/_authenticated/admin/users/import' as any
     <RouteErrorFallback error={error} parentRoute="/admin/users" />
   ),
   pendingComponent: () => (
-    <div className="p-6">
-      <AdminFormSkeleton />
-    </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Content>
+        <AdminFormSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
   ),
 });
 
@@ -355,7 +357,8 @@ function BulkUserImport() {
   const invalidCount = validationResults.filter((r) => !r.valid).length;
 
   return (
-    <div className="max-w-4xl p-6">
+    <PageLayout variant="full-width">
+      <PageLayout.Content className="max-w-4xl">
       {/* Header */}
       <div className="mb-6 flex items-center gap-4">
         <a href="/admin/users" className="text-muted-foreground hover:text-foreground">
@@ -682,6 +685,7 @@ function BulkUserImport() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </PageLayout.Content>
+    </PageLayout>
   );
 }

@@ -47,10 +47,24 @@ import {
 import { withAuth } from '@/lib/server/protected';
 import { ConflictError, NotFoundError, ValidationError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { computeChanges } from '@/lib/activity-logger';
 
 // ============================================================================
 // HELPERS
 // ============================================================================
+
+/**
+ * Fields to exclude from activity change tracking (system-managed)
+ */
+const OPPORTUNITY_EXCLUDED_FIELDS: string[] = [
+  'updatedAt',
+  'updatedBy',
+  'createdAt',
+  'createdBy',
+  'deletedAt',
+  'actualCloseDate',
+];
 
 /**
  * Calculate weighted value: value * probability / 100
@@ -303,6 +317,7 @@ export const createOpportunity = createServerFn({ method: 'POST' })
     const ctx = await withAuth({
       permission: PERMISSIONS.opportunity?.create ?? 'opportunity:create',
     });
+    const logger = createActivityLoggerWithContext(ctx);
 
     const {
       title,
@@ -364,6 +379,25 @@ export const createOpportunity = createServerFn({ method: 'POST' })
       return result[0];
     });
 
+    // Log opportunity creation
+    logger.logAsync({
+      entityType: 'opportunity',
+      entityId: created.id,
+      action: 'created',
+      changes: computeChanges({
+        before: null,
+        after: created,
+        excludeFields: OPPORTUNITY_EXCLUDED_FIELDS as never[],
+      }),
+      description: `Created opportunity: ${created.title} (${stage})`,
+      metadata: {
+        value: created.value,
+        stage: created.stage,
+        probability: created.probability,
+        customerId: created.customerId,
+      },
+    });
+
     return { opportunity: created };
   });
 
@@ -380,10 +414,11 @@ export const updateOpportunity = createServerFn({ method: 'POST' })
     const ctx = await withAuth({
       permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
     });
+    const logger = createActivityLoggerWithContext(ctx);
 
     const { id, version, ...updates } = data;
 
-    // Get current opportunity
+    // Get current opportunity (for change tracking)
     const current = await db
       .select()
       .from(opportunities)
@@ -399,6 +434,8 @@ export const updateOpportunity = createServerFn({ method: 'POST' })
     if (!current[0]) {
       throw new NotFoundError('Opportunity not found', 'opportunity');
     }
+
+    const before = current[0];
 
     // Prepare update data (version will be incremented atomically in SQL)
     const updateData: Record<string, unknown> = {
@@ -470,6 +507,26 @@ export const updateOpportunity = createServerFn({ method: 'POST' })
       return result[0];
     });
 
+    // Log opportunity update
+    const changes = computeChanges({
+      before,
+      after: updated,
+      excludeFields: OPPORTUNITY_EXCLUDED_FIELDS as never[],
+    });
+
+    if (changes.fields && changes.fields.length > 0) {
+      logger.logAsync({
+        entityType: 'opportunity',
+        entityId: updated.id,
+        action: 'updated',
+        changes,
+        description: `Updated opportunity: ${updated.title}`,
+        metadata: {
+          changedFields: changes.fields,
+        },
+      });
+    }
+
     return { opportunity: updated };
   });
 
@@ -486,6 +543,7 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
     const ctx = await withAuth({
       permission: PERMISSIONS.opportunity?.update ?? 'opportunity:update',
     });
+    const logger = createActivityLoggerWithContext(ctx);
 
     const { id, stage, probability, winLossReasonId, lostNotes, competitorName, version } = data;
 
@@ -505,6 +563,9 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
     if (!current[0]) {
       throw new NotFoundError('Opportunity not found', 'opportunity');
     }
+
+    const before = current[0];
+    const previousStage = before.stage;
 
     // Validate win/loss reason for closed stages
     if ((stage === 'won' || stage === 'lost') && !winLossReasonId) {
@@ -581,6 +642,25 @@ export const updateOpportunityStage = createServerFn({ method: 'POST' })
       return updateResult[0];
     });
 
+    // Log stage change to audit trail
+    logger.logAsync({
+      entityType: 'opportunity',
+      entityId: result.id,
+      action: 'updated',
+      changes: {
+        before: { stage: previousStage },
+        after: { stage: result.stage },
+        fields: ['stage'],
+      },
+      description: `Stage changed: ${previousStage} → ${result.stage}${result.stage === 'won' ? ' (Won)' : result.stage === 'lost' ? ' (Lost)' : ''}`,
+      metadata: {
+        previousStage,
+        newStage: result.stage,
+        probability: result.probability,
+        winLossReasonId: winLossReasonId ?? null,
+      },
+    });
+
     return { opportunity: result };
   });
 
@@ -597,6 +677,7 @@ export const deleteOpportunity = createServerFn({ method: 'POST' })
     const ctx = await withAuth({
       permission: PERMISSIONS.opportunity?.delete ?? 'opportunity:delete',
     });
+    const logger = createActivityLoggerWithContext(ctx);
 
     const { id } = data;
 
@@ -617,6 +698,8 @@ export const deleteOpportunity = createServerFn({ method: 'POST' })
       throw new NotFoundError('Opportunity not found', 'opportunity');
     }
 
+    const opportunityToDelete = current[0];
+
     await db.transaction(async (tx) => {
       await tx
         .update(opportunities)
@@ -635,6 +718,23 @@ export const deleteOpportunity = createServerFn({ method: 'POST' })
         },
         tx
       );
+    });
+
+    // Log opportunity deletion
+    logger.logAsync({
+      entityType: 'opportunity',
+      entityId: id,
+      action: 'deleted',
+      changes: computeChanges({
+        before: opportunityToDelete,
+        after: null,
+        excludeFields: OPPORTUNITY_EXCLUDED_FIELDS as never[],
+      }),
+      description: `Deleted opportunity: ${opportunityToDelete.title}`,
+      metadata: {
+        stage: opportunityToDelete.stage,
+        value: opportunityToDelete.value,
+      },
     });
 
     return { success: true };

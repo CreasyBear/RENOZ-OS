@@ -5,3 +5,4 @@
  */
 
 export * from './use-users';
+export { useUserLookup, useUserNames } from './use-user-lookup';

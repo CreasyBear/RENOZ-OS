@@ -11,19 +11,18 @@
  * - Progress visualization
  *
  * @see DASH-TARGETS-UI acceptance criteria
- * @see src/hooks/dashboard/use-dashboard-targets.ts
+ * @see src/hooks/reports/use-targets.ts
  */
 
 import { useState, useCallback } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { Plus, Trash2, Target, Filter, Calendar, Loader2 } from 'lucide-react';
-import { RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { SettingsPageSkeleton } from '@/components/skeletons/settings';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PageLayout } from '@/components/layout/page-layout';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -62,13 +61,13 @@ import {
   useUpdateTarget,
   useDeleteTarget,
   useBulkDeleteTargets,
-} from '@/hooks/dashboard';
+} from '@/hooks/reports';
 import type {
   Target as TargetType,
   TargetMetric,
   TargetPeriod,
   CreateTargetInput,
-} from '@/lib/schemas/dashboard/targets';
+} from '@/lib/schemas/reports/targets';
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -299,21 +298,18 @@ function TargetsSettingsPage() {
   // ============================================================================
 
   return (
-    <PageLayout>
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold">KPI Targets</h1>
-            <p className="text-muted-foreground mt-1">
-              Set and track performance targets for your organization.
-            </p>
-          </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Header
+        title="KPI Targets"
+        description="Set and track performance targets for your organization."
+        actions={
           <Button onClick={handleCreateClick}>
             <Plus className="h-4 w-4 mr-2" />
             Create Target
           </Button>
-        </div>
+        }
+      />
+      <PageLayout.Content className="space-y-6">
 
         {/* Progress Summary */}
         <div className="grid gap-6 md:grid-cols-2">
@@ -546,7 +542,7 @@ function TargetsSettingsPage() {
             Showing {targets.length} of {pagination.totalItems} targets
           </div>
         )}
-      </div>
+      </PageLayout.Content>
 
       {/* Form Sheet */}
       <TargetForm

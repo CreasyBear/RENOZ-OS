@@ -10,7 +10,7 @@
  */
 
 import { withAuth } from '@/lib/server/protected';
-import { executeAction, rejectAction } from '@/lib/ai/approvals';
+import { executeAction, rejectAction } from '@/server/functions/ai/approvals';
 import { z } from 'zod';
 
 // ============================================================================

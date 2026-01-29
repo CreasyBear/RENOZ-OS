@@ -45,7 +45,7 @@ export const Route = createFileRoute('/_authenticated/financial/payment-plans')(
     <RouteErrorFallback error={error} parentRoute="/financial" />
   ),
   pendingComponent: () => (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Payment Plans"
         description="Customer payment plans and installment tracking"
@@ -158,7 +158,7 @@ function PaymentPlansPage() {
   // Show placeholder if no orderId provided
   if (!orderId) {
     return (
-      <PageLayout>
+      <PageLayout variant="full-width">
         <PageLayout.Header
           title="Payment Plans"
           description="Customer payment plans and installment tracking"
@@ -177,7 +177,7 @@ function PaymentPlansPage() {
   }
 
   return (
-    <PageLayout>
+    <PageLayout variant="full-width">
       <PageLayout.Header
         title="Payment Plans"
         description="Customer payment plans and installment tracking"

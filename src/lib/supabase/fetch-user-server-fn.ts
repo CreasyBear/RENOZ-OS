@@ -1,3 +1,5 @@
+'use server'
+
 import type { Factor, User } from '@supabase/supabase-js';
 import { createServerFn } from '@tanstack/react-start';
 

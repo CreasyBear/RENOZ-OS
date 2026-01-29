@@ -12,7 +12,6 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
   getSpendMetrics,
@@ -60,7 +59,6 @@ export interface UseProcurementDashboardOptions extends Partial<DashboardInput> 
  */
 export function useSpendMetrics(options: UseSpendMetricsOptions = {}) {
   const { enabled = true, ...params } = options;
-  const fn = useServerFn(getSpendMetrics);
 
   // Build input with schema defaults (groupBy defaults to 'month' in schema)
   const input: SpendMetricsInput = {
@@ -70,7 +68,7 @@ export function useSpendMetrics(options: UseSpendMetricsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.procurement.spend(params),
-    queryFn: () => fn({ data: input }),
+    queryFn: () => getSpendMetrics({ data: input }),
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -85,14 +83,13 @@ export function useSpendMetrics(options: UseSpendMetricsOptions = {}) {
  */
 export function useOrderMetrics(options: UseOrderMetricsOptions = {}) {
   const { enabled = true, ...params } = options;
-  const fn = useServerFn(getOrderMetrics);
 
   // OrderMetricsInput has all optional fields, so params is already valid
   const input: OrderMetricsInput = { ...params };
 
   return useQuery({
     queryKey: queryKeys.procurement.orders(params),
-    queryFn: () => fn({ data: input }),
+    queryFn: () => getOrderMetrics({ data: input }),
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -107,7 +104,6 @@ export function useOrderMetrics(options: UseOrderMetricsOptions = {}) {
  */
 export function useSupplierMetrics(options: UseSupplierMetricsOptions = {}) {
   const { enabled = true, ...params } = options;
-  const fn = useServerFn(getSupplierMetrics);
 
   // Build input with schema defaults (limit=10, sortBy='spend' in schema)
   const input: SupplierMetricsInput = {
@@ -118,7 +114,7 @@ export function useSupplierMetrics(options: UseSupplierMetricsOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.procurement.suppliers(params),
-    queryFn: () => fn({ data: input }),
+    queryFn: () => getSupplierMetrics({ data: input }),
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });
@@ -134,11 +130,10 @@ export function useSupplierMetrics(options: UseSupplierMetricsOptions = {}) {
  */
 export function useProcurementAlerts(options: UseProcurementAlertsOptions = {}) {
   const { enabled = true } = options;
-  const fn = useServerFn(getProcurementAlerts);
 
   return useQuery({
     queryKey: queryKeys.procurement.alerts(),
-    queryFn: () => fn({}),
+    queryFn: () => getProcurementAlerts({}),
     enabled,
     staleTime: 30 * 1000, // 30 seconds
     refetchInterval: 2 * 60 * 1000, // Refresh every 2 minutes
@@ -155,7 +150,6 @@ export function useProcurementAlerts(options: UseProcurementAlertsOptions = {}) 
  */
 export function useProcurementDashboard(options: UseProcurementDashboardOptions = {}) {
   const { enabled = true, ...params } = options;
-  const fn = useServerFn(getProcurementDashboard);
 
   // Build input with schema default (includePreviousPeriod=true in schema)
   const input: DashboardInput = {
@@ -165,7 +159,7 @@ export function useProcurementDashboard(options: UseProcurementDashboardOptions 
 
   return useQuery({
     queryKey: queryKeys.procurement.dashboard(params),
-    queryFn: () => fn({ data: input }),
+    queryFn: () => getProcurementDashboard({ data: input }),
     enabled,
     staleTime: 60 * 1000, // 1 minute
   });

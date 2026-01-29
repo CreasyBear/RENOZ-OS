@@ -6,6 +6,7 @@
  */
 import { Link, useRouterState } from '@tanstack/react-router'
 import { cn } from '@/lib/utils'
+import { Badge } from '@/components/ui/badge'
 import type { LucideIcon } from 'lucide-react'
 
 export interface NavItemProps {
@@ -13,9 +14,10 @@ export interface NavItemProps {
   label: string
   icon: LucideIcon
   collapsed?: boolean
+  badge?: string
 }
 
-export function SidebarNavItem({ href, label, icon: Icon, collapsed }: NavItemProps) {
+export function SidebarNavItem({ href, label, icon: Icon, collapsed, badge }: NavItemProps) {
   const router = useRouterState()
   const isActive = router.location.pathname === href ||
     router.location.pathname.startsWith(href + '/')
@@ -38,7 +40,14 @@ export function SidebarNavItem({ href, label, icon: Icon, collapsed }: NavItemPr
         className={cn('h-5 w-5 flex-shrink-0', isActive ? 'text-gray-900' : 'text-gray-500')}
         aria-hidden="true"
       />
-      {!collapsed && <span>{label}</span>}
+      {!collapsed && (
+        <span className="flex-1 truncate">{label}</span>
+      )}
+      {!collapsed && badge && (
+        <Badge variant="secondary" className="ml-auto text-[10px] px-1.5 py-0 h-4">
+          {badge}
+        </Badge>
+      )}
     </Link>
   )
 }

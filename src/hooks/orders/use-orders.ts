@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * Order Hooks
  *
@@ -6,29 +8,22 @@
  * - Order detail view
  * - Order mutations (create, update, delete)
  * - Order line item management
+ * 
+ * Uses dynamic imports to prevent server-only code from being bundled to client.
  */
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import {
-  listOrders,
-  getOrder,
-  createOrder,
-  updateOrder,
-  deleteOrder,
-  addOrderLineItem,
-  updateOrderLineItem,
-  deleteOrderLineItem,
-} from '@/server/functions/orders/orders';
 import type { OrderListQuery, CreateOrder, UpdateOrder } from '@/lib/schemas/orders';
 import { queryKeys } from '@/lib/query-keys';
 
-type OrderListResult = Awaited<ReturnType<typeof listOrders>>;
-type OrderDetail = Awaited<ReturnType<typeof getOrder>>;
-type UpdateOrderContext = {
-  previousDetail?: OrderDetail;
-  previousLists: Array<[unknown, OrderListResult | undefined]>;
-};
+// Dynamic imports to prevent server-only code from being bundled to client
+const loadOrdersModule = async () => import('@/server/functions/orders/orders');
+
+// Types are inferred from the server functions
+type OrdersModule = Awaited<ReturnType<typeof loadOrdersModule>>;
+type OrderListResult = Awaited<ReturnType<OrdersModule['listOrders']>>;
+type OrderDetail = Awaited<ReturnType<OrdersModule['getOrder']>>;
 
 // ============================================================================
 // LIST HOOKS
@@ -41,9 +36,14 @@ export interface UseOrdersOptions extends Partial<OrderListQuery> {
 export function useOrders(options: UseOrdersOptions = {}) {
   const { enabled = true, ...filters } = options;
 
+  const listOrdersFn = useServerFn(async ({ data }: { data: OrderListQuery }) => {
+    const { listOrders } = await loadOrdersModule();
+    return listOrders({ data });
+  });
+
   return useQuery({
     queryKey: queryKeys.orders.list(filters),
-    queryFn: () => listOrders({ data: filters as OrderListQuery }),
+    queryFn: () => listOrdersFn({ data: filters as OrderListQuery }),
     enabled,
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -53,10 +53,15 @@ export function useOrders(options: UseOrdersOptions = {}) {
  * Infinite scroll orders list
  */
 export function useOrdersInfinite(filters: Partial<OrderListQuery> = {}) {
+  const listOrdersFn = useServerFn(async ({ data }: { data: OrderListQuery }) => {
+    const { listOrders } = await loadOrdersModule();
+    return listOrders({ data });
+  });
+
   return useInfiniteQuery({
-    queryKey: queryKeys.orders.list(filters), // Use list key for infinite queries too
+    queryKey: queryKeys.orders.list(filters),
     queryFn: ({ pageParam }) =>
-      listOrders({
+      listOrdersFn({
         data: {
           ...filters,
           page: pageParam,
@@ -81,9 +86,14 @@ export interface UseOrderOptions {
 }
 
 export function useOrder({ orderId, enabled = true }: UseOrderOptions) {
+  const getOrderFn = useServerFn(async ({ data }: { data: { id: string } }) => {
+    const { getOrder } = await loadOrdersModule();
+    return getOrder({ data });
+  });
+
   return useQuery({
     queryKey: queryKeys.orders.detail(orderId),
-    queryFn: () => getOrder({ data: { id: orderId } }),
+    queryFn: () => getOrderFn({ data: { id: orderId } }),
     enabled: enabled && !!orderId,
     staleTime: 60 * 1000, // 60 seconds for details
   });
@@ -95,9 +105,13 @@ export function useOrder({ orderId, enabled = true }: UseOrderOptions) {
 
 export function useCreateOrder() {
   const queryClient = useQueryClient();
-  const createFn = useServerFn(createOrder);
+  
+  const createFn = useServerFn(async ({ data }: { data: CreateOrder }) => {
+    const { createOrder } = await loadOrdersModule();
+    return createOrder({ data });
+  });
 
-  return useMutation<Awaited<ReturnType<typeof createOrder>>, Error, CreateOrder>({
+  return useMutation({
     mutationFn: (input: CreateOrder) => createFn({ data: input }),
     onSuccess: (result) => {
       queryClient.setQueryData(queryKeys.orders.detail(result.id), result);
@@ -115,14 +129,13 @@ export function useCreateOrder() {
 
 export function useUpdateOrder() {
   const queryClient = useQueryClient();
-  const updateFn = useServerFn(updateOrder);
+  
+  const updateFn = useServerFn(async ({ data }: { data: { id: string; data: UpdateOrder } }) => {
+    const { updateOrder } = await loadOrdersModule();
+    return updateOrder({ data });
+  });
 
-  return useMutation<
-    Awaited<ReturnType<typeof updateOrder>>,
-    Error,
-    UpdateOrder & { id: string },
-    UpdateOrderContext
-  >({
+  return useMutation({
     mutationFn: (input: UpdateOrder & { id: string }) => {
       const { id, ...data } = input;
       return updateFn({ data: { id, data } });
@@ -195,9 +208,13 @@ export function useUpdateOrder() {
 
 export function useDeleteOrder() {
   const queryClient = useQueryClient();
-  const deleteFn = useServerFn(deleteOrder);
+  
+  const deleteFn = useServerFn(async ({ data }: { data: { id: string } }) => {
+    const { deleteOrder } = await loadOrdersModule();
+    return deleteOrder({ data });
+  });
 
-  return useMutation<Awaited<ReturnType<typeof deleteOrder>>, Error, string>({
+  return useMutation({
     mutationFn: (orderId: string) => deleteFn({ data: { id: orderId } }),
     onSuccess: (_result, orderId) => {
       // Remove the specific order from cache
@@ -208,15 +225,53 @@ export function useDeleteOrder() {
   });
 }
 
+export function useDuplicateOrder() {
+  const queryClient = useQueryClient();
+  
+  const duplicateFn = useServerFn(async ({ data }: { data: { id: string } }) => {
+    const { duplicateOrder } = await loadOrdersModule();
+    return duplicateOrder({ data });
+  });
+
+  return useMutation({
+    mutationFn: (orderId: string) => duplicateFn({ data: { id: orderId } }),
+    onSuccess: () => {
+      // Invalidate order lists to show the new duplicated order
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
+    },
+  });
+}
+
+// ============================================================================
+// ORDER STATS HOOK
+// ============================================================================
+
+export function useOrderStats() {
+  const statsFn = useServerFn(async () => {
+    const { getOrderStats } = await loadOrdersModule();
+    return getOrderStats({ data: undefined });
+  });
+
+  return useQuery({
+    queryKey: queryKeys.orders.stats(),
+    queryFn: () => statsFn({ data: undefined }),
+    staleTime: 60 * 1000, // 1 minute
+  });
+}
+
 // ============================================================================
 // ORDER LINE ITEM HOOKS
 // ============================================================================
 
 export function useAddOrderLineItem() {
   const queryClient = useQueryClient();
-  const addFn = useServerFn(addOrderLineItem);
+  
+  const addFn = useServerFn(async ({ data }: { data: any }) => {
+    const { addOrderLineItem } = await loadOrdersModule();
+    return addOrderLineItem({ data });
+  });
 
-  return useMutation<Awaited<ReturnType<typeof addOrderLineItem>>, Error, any>({
+  return useMutation({
     mutationFn: (input: any) => addFn({ data: input }),
     onSuccess: (_result, variables) => {
       // Invalidate the order
@@ -229,9 +284,13 @@ export function useAddOrderLineItem() {
 
 export function useUpdateOrderLineItem() {
   const queryClient = useQueryClient();
-  const updateLineItemFn = useServerFn(updateOrderLineItem);
+  
+  const updateLineItemFn = useServerFn(async ({ data }: { data: any }) => {
+    const { updateOrderLineItem } = await loadOrdersModule();
+    return updateOrderLineItem({ data });
+  });
 
-  return useMutation<Awaited<ReturnType<typeof updateOrderLineItem>>, Error, any>({
+  return useMutation({
     mutationFn: (input: any) => updateLineItemFn({ data: input }),
     onSuccess: (_result, variables) => {
       // Invalidate the order
@@ -244,9 +303,13 @@ export function useUpdateOrderLineItem() {
 
 export function useDeleteOrderLineItem() {
   const queryClient = useQueryClient();
-  const deleteLineItemFn = useServerFn(deleteOrderLineItem);
+  
+  const deleteLineItemFn = useServerFn(async ({ data }: { data: any }) => {
+    const { deleteOrderLineItem } = await loadOrdersModule();
+    return deleteOrderLineItem({ data });
+  });
 
-  return useMutation<Awaited<ReturnType<typeof deleteOrderLineItem>>, Error, any>({
+  return useMutation({
     mutationFn: (input: any) => deleteLineItemFn({ data: input }),
     onSuccess: (_, variables) => {
       // Invalidate the order

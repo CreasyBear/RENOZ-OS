@@ -4,3 +4,4 @@
 export { DemandForecastChart } from './demand-forecast-chart';
 export { ForecastChart } from './forecast-chart';
 export { ReorderRecommendations } from './reorder-recommendations';
+export { CreatePOFromRecommendationDialog } from './create-po-from-recommendation-dialog';

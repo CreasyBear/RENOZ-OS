@@ -8,14 +8,20 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
+import type {
+  ScheduleEmailInput,
+  UpdateScheduledEmailInput,
+  CancelScheduledEmailInput,
+} from '@/lib/schemas/communications/scheduled-emails';
 import {
   getScheduledEmails,
   getScheduledEmailById,
   scheduleEmail,
   updateScheduledEmail,
   cancelScheduledEmail,
-} from '@/lib/server/scheduled-emails';
+} from '@/server/functions/communications/scheduled-emails';
 
 // ============================================================================
 // QUERY HOOKS
@@ -62,9 +68,10 @@ export function useScheduledEmail(options: UseScheduledEmailOptions) {
 
 export function useScheduleEmail() {
   const queryClient = useQueryClient();
+  const scheduleEmailFn = useServerFn(scheduleEmail);
 
   return useMutation({
-    mutationFn: scheduleEmail,
+    mutationFn: (input: ScheduleEmailInput) => scheduleEmailFn({ data: input }),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.scheduledEmails(),
@@ -75,15 +82,16 @@ export function useScheduleEmail() {
 
 export function useUpdateScheduledEmail() {
   const queryClient = useQueryClient();
+  const updateEmailFn = useServerFn(updateScheduledEmail);
 
   return useMutation({
-    mutationFn: updateScheduledEmail,
+    mutationFn: (input: UpdateScheduledEmailInput) => updateEmailFn({ data: input }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.scheduledEmails(),
       });
       queryClient.invalidateQueries({
-        queryKey: queryKeys.communications.scheduledEmailDetail(variables.data.id),
+        queryKey: queryKeys.communications.scheduledEmailDetail(variables.id),
       });
     },
   });
@@ -91,15 +99,16 @@ export function useUpdateScheduledEmail() {
 
 export function useCancelScheduledEmail() {
   const queryClient = useQueryClient();
+  const cancelEmailFn = useServerFn(cancelScheduledEmail);
 
   return useMutation({
-    mutationFn: cancelScheduledEmail,
+    mutationFn: (input: CancelScheduledEmailInput) => cancelEmailFn({ data: input }),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.communications.scheduledEmails(),
       });
       queryClient.invalidateQueries({
-        queryKey: queryKeys.communications.scheduledEmailDetail(variables.data.id),
+        queryKey: queryKeys.communications.scheduledEmailDetail(variables.id),
       });
     },
   });

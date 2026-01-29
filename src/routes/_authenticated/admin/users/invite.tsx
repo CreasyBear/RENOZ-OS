@@ -10,7 +10,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { useSendInvitation } from '@/hooks/users/use-users';
-import { RouteErrorFallback } from '@/components/layout';
+import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { AdminFormSkeleton } from '@/components/skeletons/admin';
 
 export const Route = createFileRoute('/_authenticated/admin/users/invite')({
@@ -19,9 +19,11 @@ export const Route = createFileRoute('/_authenticated/admin/users/invite')({
     <RouteErrorFallback error={error} parentRoute="/admin/users" />
   ),
   pendingComponent: () => (
-    <div className="p-6">
-      <AdminFormSkeleton />
-    </div>
+    <PageLayout variant="full-width">
+      <PageLayout.Content>
+        <AdminFormSkeleton />
+      </PageLayout.Content>
+    </PageLayout>
   ),
 });
 
@@ -68,7 +70,8 @@ function InviteUserPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 p-6">
+    <PageLayout variant="full-width">
+      <PageLayout.Content className="mx-auto max-w-2xl space-y-6">
       {/* Breadcrumb */}
       <nav className="flex" aria-label="Breadcrumb">
         <ol className="flex items-center space-x-2">
@@ -202,6 +205,7 @@ function InviteUserPage() {
           <li>You can manage their role and permissions at any time</li>
         </ul>
       </div>
-    </div>
+      </PageLayout.Content>
+    </PageLayout>
   );
 }

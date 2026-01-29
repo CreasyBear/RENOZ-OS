@@ -9,7 +9,7 @@
 
 import { z } from 'zod';
 import {
-  emailSchema,
+  optionalEmailSchema,
   phoneSchema,
   urlSchema,
   paginationSchema,
@@ -87,7 +87,7 @@ export const createCustomerSchema = z.object({
 
   // Optional basic info
   legalName: z.string().max(255).optional(),
-  email: emailSchema.optional(),
+  email: optionalEmailSchema,
   phone: phoneSchema,
   website: urlSchema,
 
@@ -192,7 +192,7 @@ export const createContactSchema = z.object({
   firstName: z.string().min(1, 'First name is required').max(100),
   lastName: z.string().min(1, 'Last name is required').max(100),
   title: z.string().max(100).optional(),
-  email: emailSchema.optional(),
+  email: optionalEmailSchema,
   phone: phoneSchema,
   mobile: phoneSchema,
   department: z.string().max(100).optional(),

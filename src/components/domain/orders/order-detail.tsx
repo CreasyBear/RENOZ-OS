@@ -23,6 +23,7 @@ import {
   XCircle,
   Clock,
   AlertCircle,
+  Activity,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -72,6 +73,8 @@ import {
   deleteOrder,
 } from "@/server/functions/orders/orders";
 import type { OrderStatus } from "@/lib/schemas/orders";
+import { UnifiedActivityTimeline } from "@/components/shared/unified-activity-timeline";
+import { useUnifiedActivities } from "@/hooks/use-unified-activities";
 
 // ============================================================================
 // TYPES
@@ -144,6 +147,35 @@ const PAYMENT_STATUS_CONFIG: Record<string, { label: string; variant: "default" 
   overdue: { label: "Overdue", variant: "destructive" },
   refunded: { label: "Refunded", variant: "outline" },
 };
+
+// ============================================================================
+// SUB-COMPONENT: Order Activity Timeline
+// ============================================================================
+
+interface OrderActivityTimelineProps {
+  orderId: string;
+}
+
+function OrderActivityTimeline({ orderId }: OrderActivityTimelineProps) {
+  const { activities, isLoading, error } = useUnifiedActivities({
+    entityType: 'order',
+    entityId: orderId,
+  });
+
+  return (
+    <UnifiedActivityTimeline
+      activities={activities}
+      isLoading={isLoading}
+      hasError={!!error}
+      error={error || undefined}
+      title="Activity Timeline"
+      description="Complete history of order changes, status updates, and system events"
+      showFilters={true}
+      emptyMessage="No activity recorded yet"
+      emptyDescription="Order activities will appear here when changes are made to this order."
+    />
+  );
+}
 
 // ============================================================================
 // COMPONENT
@@ -389,38 +421,38 @@ export const OrderDetail = memo(function OrderDetail({
               <CardContent className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal</span>
-                  <span><FormatAmount amount={Number(order.subtotal)} /></span>
+                  <span><FormatAmount amount={Number(order.subtotal)} cents={false} /></span>
                 </div>
                 {Number(order.discountAmount) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Discount</span>
                     <span className="text-red-600">
-                      -<FormatAmount amount={Number(order.discountAmount)} />
+                      -<FormatAmount amount={Number(order.discountAmount)} cents={false} />
                     </span>
                   </div>
                 )}
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Tax (GST)</span>
-                  <span><FormatAmount amount={Number(order.taxAmount)} /></span>
+                  <span><FormatAmount amount={Number(order.taxAmount)} cents={false} /></span>
                 </div>
                 {Number(order.shippingAmount) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Shipping</span>
-                    <span><FormatAmount amount={Number(order.shippingAmount)} /></span>
+                    <span><FormatAmount amount={Number(order.shippingAmount)} cents={false} /></span>
                   </div>
                 )}
                 <Separator />
                 <div className="flex justify-between font-medium">
                   <span>Total</span>
-                  <span><FormatAmount amount={Number(order.total)} /></span>
+                  <span><FormatAmount amount={Number(order.total)} cents={false} /></span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Paid</span>
-                  <span><FormatAmount amount={Number(order.paidAmount)} /></span>
+                  <span><FormatAmount amount={Number(order.paidAmount)} cents={false} /></span>
                 </div>
                 <div className="flex justify-between text-sm font-medium">
                   <span>Balance Due</span>
-                  <span><FormatAmount amount={Number(order.balanceDue)} /></span>
+                  <span><FormatAmount amount={Number(order.balanceDue)} cents={false} /></span>
                 </div>
               </CardContent>
             </Card>
@@ -539,13 +571,13 @@ export const OrderDetail = memo(function OrderDetail({
                         {item.quantity}
                       </TableCell>
                       <TableCell className="text-right">
-                        <FormatAmount amount={Number(item.unitPrice)} />
+                        <FormatAmount amount={Number(item.unitPrice)} cents={false} />
                       </TableCell>
                       <TableCell className="text-right">
-                        <FormatAmount amount={Number(item.taxAmount)} />
+                        <FormatAmount amount={Number(item.taxAmount)} cents={false} />
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        <FormatAmount amount={Number(item.lineTotal)} />
+                        <FormatAmount amount={Number(item.lineTotal)} cents={false} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -690,20 +722,7 @@ export const OrderDetail = memo(function OrderDetail({
 
         {/* Activity Tab */}
         <TabsContent value="activity" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Activity Log</CardTitle>
-              <CardDescription>
-                Order history and status changes
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p>Activity logging coming soon</p>
-              </div>
-            </CardContent>
-          </Card>
+          <OrderActivityTimeline orderId={orderId} />
         </TabsContent>
       </Tabs>
 
