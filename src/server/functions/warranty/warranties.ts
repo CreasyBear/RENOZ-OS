@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Warranty Server Functions
  *
@@ -13,7 +15,7 @@ import { db } from '@/lib/db';
 import { warranties, warrantyItems, warrantyPolicies, customers, products } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { typedGetFn, typedGetNoInput, typedPostFn } from '@/lib/server/typed-server-fn';
+import { createServerFn } from '@tanstack/react-start';
 import {
   getExpiringWarrantiesSchema,
   getExpiringWarrantiesReportSchema,
@@ -105,9 +107,9 @@ function getUrgencyLevel(daysUntilExpiry: number): ExpiringWarrantyItem['urgency
  * @param limit - Maximum number of results to return (default: 10)
  * @param sortOrder - Sort by expiry date 'asc' (soonest first) or 'desc'
  */
-export const getExpiringWarranties = typedGetFn(
-  getExpiringWarrantiesSchema,
-  async ({ data }): Promise<GetExpiringWarrantiesResult> => {
+export const getExpiringWarranties = createServerFn({ method: 'GET' })
+  .inputValidator(getExpiringWarrantiesSchema)
+  .handler(async ({ data }): Promise<GetExpiringWarrantiesResult> => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
     const { days, limit, sortOrder } = data;
 
@@ -190,15 +192,14 @@ export const getExpiringWarranties = typedGetFn(
       warranties: warrantiesResult,
       totalCount,
     };
-  }
-);
+  });
 
 /**
  * List warranties with filtering, sorting, and pagination.
  */
-export const listWarranties = typedGetFn(
-  warrantyFiltersSchema,
-  async ({ data }): Promise<ListWarrantiesResult> => {
+export const listWarranties = createServerFn({ method: 'GET' })
+  .inputValidator(warrantyFiltersSchema)
+  .handler(async ({ data }): Promise<ListWarrantiesResult> => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
     const {
       search,
@@ -330,8 +331,7 @@ export const listWarranties = typedGetFn(
       hasMore: offset + warrantiesList.length < total,
       nextOffset: offset + warrantiesList.length < total ? offset + warrantiesList.length : undefined,
     };
-  }
-);
+  });
 
 // ============================================================================
 // REPORT SERVER FUNCTIONS (DOM-WAR-003c)
@@ -355,9 +355,9 @@ export interface ExpiringWarrantiesReportResult {
  *
  * @see _Initiation/_prd/2-domains/warranty/wireframes/WAR-003c.wireframe.md
  */
-export const getExpiringWarrantiesReport = typedGetFn(
-  getExpiringWarrantiesReportSchema,
-  async ({ data }): Promise<ExpiringWarrantiesReportResult> => {
+export const getExpiringWarrantiesReport = createServerFn({ method: 'GET' })
+  .inputValidator(getExpiringWarrantiesReportSchema)
+  .handler(async ({ data }): Promise<ExpiringWarrantiesReportResult> => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
     const { days, customerId, productId, status, sortBy, page, limit } = data;
 
@@ -483,14 +483,14 @@ export const getExpiringWarrantiesReport = typedGetFn(
       limit,
       totalPages: Math.ceil(totalCount / limit),
     };
-  }
-);
+  });
 
 /**
  * Get filter options for expiring warranties report.
  * Returns lists of customers and products with active warranties.
  */
-export const getExpiringWarrantiesFilterOptions = typedGetNoInput(async () => {
+export const getExpiringWarrantiesFilterOptions = createServerFn({ method: 'GET' })
+  .handler(async () => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
 
     // Get customers with warranties
@@ -570,9 +570,9 @@ export interface WarrantyItemDetail {
 /**
  * Get a single warranty by ID with full details.
  */
-export const getWarranty = typedGetFn(
-  getWarrantySchema,
-  async ({ data }): Promise<WarrantyDetail | null> => {
+export const getWarranty = createServerFn({ method: 'GET' })
+  .inputValidator(getWarrantySchema)
+  .handler(async ({ data }): Promise<WarrantyDetail | null> => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
     const { id } = data;
 
@@ -671,8 +671,7 @@ export const getWarranty = typedGetFn(
         installationNotes: item.installationNotes,
       })),
     };
-  }
-);
+  });
 
 /**
  * Update warranty expiry alert opt-out setting.
@@ -682,9 +681,9 @@ export const getWarranty = typedGetFn(
  *
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-003d
  */
-export const updateWarrantyOptOut = typedPostFn(
-  updateWarrantyOptOutSchema,
-  async ({ data }): Promise<{ success: boolean; optOut: boolean }> => {
+export const updateWarrantyOptOut = createServerFn({ method: 'POST' })
+  .inputValidator(updateWarrantyOptOutSchema)
+  .handler(async ({ data }): Promise<{ success: boolean; optOut: boolean }> => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.update });
     const { warrantyId, optOut } = data;
 
@@ -709,8 +708,7 @@ export const updateWarrantyOptOut = typedPostFn(
       .where(eq(warranties.id, warrantyId));
 
     return { success: true, optOut };
-  }
-);
+  });
 
 /**
  * Update customer warranty expiry alert opt-out setting.
@@ -720,9 +718,9 @@ export const updateWarrantyOptOut = typedPostFn(
  *
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-003d
  */
-export const updateCustomerWarrantyOptOut = typedPostFn(
-  updateCustomerWarrantyOptOutSchema,
-  async ({ data }): Promise<{ success: boolean; optOut: boolean }> => {
+export const updateCustomerWarrantyOptOut = createServerFn({ method: 'POST' })
+  .inputValidator(updateCustomerWarrantyOptOutSchema)
+  .handler(async ({ data }): Promise<{ success: boolean; optOut: boolean }> => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.update });
     const { customerId, optOut } = data;
 
@@ -747,5 +745,4 @@ export const updateCustomerWarrantyOptOut = typedPostFn(
       .where(eq(customers.id, customerId));
 
     return { success: true, optOut };
-  }
-);
+  });

@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * Warranty Hooks
  *
@@ -5,8 +7,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
-import { listWarranties, updateWarrantyOptOut } from '@/server/functions/warranty/warranties';
+import { getWarranty, listWarranties, updateWarrantyOptOut } from '@/server/functions/warranty';
 import { queryKeys } from '@/lib/query-keys';
 import type { WarrantyFilters } from '@/lib/schemas/warranty/warranties';
 
@@ -14,8 +15,9 @@ export interface UseWarrantiesOptions extends Partial<WarrantyFilters> {
   enabled?: boolean;
 }
 
+export type WarrantyDetail = NonNullable<Awaited<ReturnType<typeof getWarranty>>>;
+
 export function useWarranties(options: UseWarrantiesOptions = {}) {
-  const listFn = useServerFn(listWarranties);
   const { enabled = true, ...filters } = options;
 
   const queryFilters: WarrantyFilters = {
@@ -28,8 +30,22 @@ export function useWarranties(options: UseWarrantiesOptions = {}) {
 
   return useQuery({
     queryKey: queryKeys.warranties.list(queryFilters),
-    queryFn: () => listFn({ data: queryFilters }),
+    queryFn: () => listWarranties({ data: queryFilters }),
     enabled,
+  });
+}
+
+export interface UseWarrantyOptions {
+  id: string;
+  enabled?: boolean;
+}
+
+export function useWarranty({ id, enabled = true }: UseWarrantyOptions) {
+  return useQuery({
+    queryKey: queryKeys.warranties.detail(id),
+    queryFn: () => getWarranty({ data: { id } }),
+    enabled: enabled && !!id,
+    staleTime: 60 * 1000,
   });
 }
 
@@ -40,6 +56,9 @@ export function useUpdateWarrantyOptOut() {
     mutationFn: ({ warrantyId, optOut }: { warrantyId: string; optOut: boolean }) =>
       updateWarrantyOptOut({ data: { warrantyId, optOut } }),
     onSuccess: (result, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.warranties.lists(),
+      });
       queryClient.invalidateQueries({
         queryKey: queryKeys.warranties.detail(variables.warrantyId),
       });

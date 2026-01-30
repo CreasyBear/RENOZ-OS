@@ -11,7 +11,6 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
   generateWarrantyCertificate,
@@ -41,11 +40,9 @@ import { toast } from '../_shared/use-toast';
  * @param warrantyId - The warranty ID to check certificate status for
  */
 export function useWarrantyCertificate(warrantyId: string | undefined) {
-  const getCertificateFn = useServerFn(getWarrantyCertificate);
-
   return useQuery({
     queryKey: queryKeys.warrantyCertificates.detail(warrantyId ?? ''),
-    queryFn: () => getCertificateFn({ data: { warrantyId: warrantyId! } }),
+    queryFn: () => getWarrantyCertificate({ data: { warrantyId: warrantyId! } }),
     enabled: !!warrantyId,
     // Certificates don't change often, so we can use longer stale time
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -68,10 +65,10 @@ export function useWarrantyCertificate(warrantyId: string | undefined) {
  */
 export function useGenerateWarrantyCertificate() {
   const queryClient = useQueryClient();
-  const generateFn = useServerFn(generateWarrantyCertificate);
 
   return useMutation({
-    mutationFn: (data: GenerateWarrantyCertificateInput) => generateFn({ data }),
+    mutationFn: (data: GenerateWarrantyCertificateInput) =>
+      generateWarrantyCertificate({ data }),
     onSuccess: (result, variables) => {
       // Invalidate the certificate status query
       queryClient.invalidateQueries({
@@ -115,10 +112,10 @@ export function useGenerateWarrantyCertificate() {
  */
 export function useRegenerateWarrantyCertificate() {
   const queryClient = useQueryClient();
-  const regenerateFn = useServerFn(regenerateWarrantyCertificate);
 
   return useMutation({
-    mutationFn: (data: RegenerateWarrantyCertificateInput) => regenerateFn({ data }),
+    mutationFn: (data: RegenerateWarrantyCertificateInput) =>
+      regenerateWarrantyCertificate({ data }),
     onSuccess: (result, variables) => {
       // Invalidate the certificate status query
       queryClient.invalidateQueries({

@@ -10,6 +10,7 @@
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-001b
  */
 
+import { createServerFn } from '@tanstack/react-start';
 import { eq, and, asc } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
@@ -23,7 +24,6 @@ import {
 import { withAuth } from '@/lib/server/protected';
 import { tasks } from '@trigger.dev/sdk/v3';
 import { NotFoundError, ConflictError, ValidationError } from '@/lib/server/errors';
-import { typedGetFn, typedPostFn } from '@/lib/server/typed-server-fn';
 import type { WarrantyRegisteredPayload } from '@/trigger/client';
 import {
   createWarrantyPolicySchema,
@@ -43,9 +43,9 @@ import {
 /**
  * Create a new warranty policy
  */
-export const createWarrantyPolicy = typedPostFn(
-  createWarrantyPolicySchema,
-  async ({ data }) => {
+export const createWarrantyPolicy = createServerFn({ method: 'POST' })
+  .inputValidator(createWarrantyPolicySchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     const [policy] = await db
@@ -65,17 +65,18 @@ export const createWarrantyPolicy = typedPostFn(
       .returning();
 
     return policy;
-  }
-);
+  });
 
 /**
  * Update an existing warranty policy
  */
-export const updateWarrantyPolicy = typedPostFn(
-  updateWarrantyPolicySchema.extend({
-    policyId: getWarrantyPolicyByIdSchema.shape.policyId,
-  }),
-  async ({ data }) => {
+export const updateWarrantyPolicy = createServerFn({ method: 'POST' })
+  .inputValidator(
+    updateWarrantyPolicySchema.extend({
+      policyId: getWarrantyPolicyByIdSchema.shape.policyId,
+    })
+  )
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
     const { policyId, ...updates } = data;
 
@@ -102,15 +103,14 @@ export const updateWarrantyPolicy = typedPostFn(
     }
 
     return policy;
-  }
-);
+  });
 
 /**
  * List warranty policies with optional filters
  */
-export const listWarrantyPolicies = typedGetFn(
-  getWarrantyPoliciesSchema,
-  async ({ data }) => {
+export const listWarrantyPolicies = createServerFn({ method: 'GET' })
+  .inputValidator(getWarrantyPoliciesSchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     const conditions = [eq(warrantyPolicies.organizationId, ctx.organizationId)];
@@ -134,15 +134,14 @@ export const listWarrantyPolicies = typedGetFn(
       );
 
     return policies;
-  }
-);
+  });
 
 /**
  * Get a single warranty policy by ID
  */
-export const getWarrantyPolicy = typedGetFn(
-  getWarrantyPolicyByIdSchema,
-  async ({ data }) => {
+export const getWarrantyPolicy = createServerFn({ method: 'GET' })
+  .inputValidator(getWarrantyPolicyByIdSchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     const [policy] = await db
@@ -161,15 +160,14 @@ export const getWarrantyPolicy = typedGetFn(
     }
 
     return policy;
-  }
-);
+  });
 
 /**
  * Delete a warranty policy (soft delete by setting isActive = false)
  */
-export const deleteWarrantyPolicy = typedPostFn(
-  getWarrantyPolicyByIdSchema,
-  async ({ data }) => {
+export const deleteWarrantyPolicy = createServerFn({ method: 'POST' })
+  .inputValidator(getWarrantyPolicyByIdSchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     const [policy] = await db
@@ -188,8 +186,7 @@ export const deleteWarrantyPolicy = typedPostFn(
     }
 
     return policy;
-  }
-);
+  });
 
 // ============================================================================
 // DEFAULT POLICY OPERATIONS
@@ -198,9 +195,9 @@ export const deleteWarrantyPolicy = typedPostFn(
 /**
  * Get the default policy for a specific type
  */
-export const getDefaultWarrantyPolicy = typedGetFn(
-  getWarrantyPoliciesSchema.pick({ type: true }),
-  async ({ data }) => {
+export const getDefaultWarrantyPolicy = createServerFn({ method: 'GET' })
+  .inputValidator(getWarrantyPoliciesSchema.pick({ type: true }))
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     if (!data.type) {
@@ -240,15 +237,14 @@ export const getDefaultWarrantyPolicy = typedGetFn(
       .limit(1);
 
     return fallback ?? null;
-  }
-);
+  });
 
 /**
  * Set a policy as the default for its type
  */
-export const setDefaultWarrantyPolicy = typedPostFn(
-  getWarrantyPolicyByIdSchema,
-  async ({ data }) => {
+export const setDefaultWarrantyPolicy = createServerFn({ method: 'POST' })
+  .inputValidator(getWarrantyPolicyByIdSchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     // Get the policy to find its type
@@ -287,8 +283,7 @@ export const setDefaultWarrantyPolicy = typedPostFn(
       .returning();
 
     return policy;
-  }
-);
+  });
 
 // ============================================================================
 // POLICY RESOLUTION
@@ -298,9 +293,9 @@ export const setDefaultWarrantyPolicy = typedPostFn(
  * Resolve which warranty policy applies for a product.
  * Resolution hierarchy: product > category > org default
  */
-export const resolveWarrantyPolicy = typedGetFn(
-  resolveWarrantyPolicySchema,
-  async ({ data }) => {
+export const resolveWarrantyPolicy = createServerFn({ method: 'GET' })
+  .inputValidator(resolveWarrantyPolicySchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     // 1. If product specified, check product's direct policy
@@ -440,8 +435,7 @@ export const resolveWarrantyPolicy = typedGetFn(
     }
 
     return { policy: null, source: null };
-  }
-);
+  });
 
 // ============================================================================
 // POLICY ASSIGNMENT
@@ -450,9 +444,9 @@ export const resolveWarrantyPolicy = typedGetFn(
 /**
  * Assign a warranty policy to a product
  */
-export const assignWarrantyPolicyToProduct = typedPostFn(
-  assignWarrantyPolicyToProductSchema,
-  async ({ data }) => {
+export const assignWarrantyPolicyToProduct = createServerFn({ method: 'POST' })
+  .inputValidator(assignWarrantyPolicyToProductSchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     // Verify policy belongs to org if not null
@@ -484,15 +478,14 @@ export const assignWarrantyPolicyToProduct = typedPostFn(
     }
 
     return product;
-  }
-);
+  });
 
 /**
  * Set the default warranty policy for a category
  */
-export const assignDefaultWarrantyPolicyToCategory = typedPostFn(
-  assignDefaultWarrantyPolicyToCategorySchema,
-  async ({ data }) => {
+export const assignDefaultWarrantyPolicyToCategory = createServerFn({ method: 'POST' })
+  .inputValidator(assignDefaultWarrantyPolicyToCategorySchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     // Verify policy belongs to org if not null
@@ -526,8 +519,7 @@ export const assignDefaultWarrantyPolicyToCategory = typedPostFn(
     }
 
     return category;
-  }
-);
+  });
 
 // ============================================================================
 // SEED DEFAULT POLICIES
@@ -537,9 +529,9 @@ export const assignDefaultWarrantyPolicyToCategory = typedPostFn(
  * Seed default warranty policies for a new organization.
  * Creates: Battery (120 months/10k cycles), Inverter (60 months), Installation (24 months)
  */
-export const seedDefaultWarrantyPolicies = typedPostFn(
-  seedDefaultPoliciesSchema,
-  async ({ data }) => {
+export const seedDefaultWarrantyPolicies = createServerFn({ method: 'POST' })
+  .inputValidator(seedDefaultPoliciesSchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     // Check if policies already exist
@@ -659,8 +651,7 @@ export const seedDefaultWarrantyPolicies = typedPostFn(
       policies,
       slaConfiguration: warrantySlaConfig,
     };
-  }
-);
+  });
 
 // ============================================================================
 // GET POLICIES WITH SLA INFO
@@ -669,9 +660,9 @@ export const seedDefaultWarrantyPolicies = typedPostFn(
 /**
  * Get warranty policies with their SLA configuration details
  */
-export const getWarrantyPoliciesWithSla = typedGetFn(
-  getWarrantyPoliciesSchema,
-  async ({ data }) => {
+export const getWarrantyPoliciesWithSla = createServerFn({ method: 'GET' })
+  .inputValidator(getWarrantyPoliciesSchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     const conditions = [eq(warrantyPolicies.organizationId, ctx.organizationId)];
@@ -702,8 +693,7 @@ export const getWarrantyPoliciesWithSla = typedGetFn(
       ...policy,
       slaConfiguration: slaConfig,
     }));
-  }
-);
+  });
 
 // ============================================================================
 // WARRANTY REGISTRATION NOTIFICATION

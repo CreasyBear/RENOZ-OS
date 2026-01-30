@@ -8,6 +8,13 @@
 export { ReportsIndexPage } from './reports-index-page'
 export { CustomerReportsPage } from './customer-reports-page'
 export { WarrantyAnalyticsPage } from './warranty-analytics-page'
+export {
+  WarrantyAnalyticsView,
+  type WarrantyAnalyticsViewProps,
+  type SearchParams,
+  type FilterOption,
+  type AnalyticsFilterBadge,
+} from './warranty-analytics-view'
 export { PipelineForecastPage } from './pipeline-forecast-page'
 export { JobCostingReportPage } from './job-costing-report-page'
 export { ExpiringWarrantiesReportPage } from './expiring-warranties-page'

@@ -9,7 +9,6 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
   getExpiringWarranties,
@@ -55,11 +54,9 @@ export interface UseExpiringWarrantiesOptions {
 export function useExpiringWarranties(options?: UseExpiringWarrantiesOptions) {
   const { days = 30, limit = 10, sortOrder = 'asc', enabled = true } = options ?? {};
 
-  const getFn = useServerFn(getExpiringWarranties);
-
   return useQuery<GetExpiringWarrantiesResult>({
     queryKey: queryKeys.expiringWarranties.list({ days, limit, sortOrder }),
-    queryFn: () => getFn({ data: { days, limit, sortOrder } }),
+    queryFn: () => getExpiringWarranties({ data: { days, limit, sortOrder } }),
     enabled,
     // Stale after 5 minutes since warranty expiry changes slowly
     staleTime: 5 * 60 * 1000,
@@ -98,8 +95,6 @@ export function useExpiringWarrantiesReport(options?: UseExpiringWarrantiesRepor
     enabled = true,
   } = options ?? {};
 
-  const getFn = useServerFn(getExpiringWarrantiesReport);
-
   return useQuery<ExpiringWarrantiesReportResult>({
     queryKey: queryKeys.expiringWarrantiesReport.list({
       days,
@@ -110,7 +105,10 @@ export function useExpiringWarrantiesReport(options?: UseExpiringWarrantiesRepor
       page,
       limit,
     }),
-    queryFn: () => getFn({ data: { days, customerId, productId, status, sortBy, page, limit } }),
+    queryFn: () =>
+      getExpiringWarrantiesReport({
+        data: { days, customerId, productId, status, sortBy, page, limit },
+      }),
     enabled,
     staleTime: 2 * 60 * 1000, // 2 minutes for report data
   });
@@ -120,11 +118,9 @@ export function useExpiringWarrantiesReport(options?: UseExpiringWarrantiesRepor
  * Hook for fetching filter options (customers and products with warranties).
  */
 export function useExpiringWarrantiesFilterOptions() {
-  const getFn = useServerFn(getExpiringWarrantiesFilterOptions);
-
   return useQuery({
     queryKey: queryKeys.expiringWarrantiesReport.filterOptions,
-    queryFn: () => getFn(),
+    queryFn: () => getExpiringWarrantiesFilterOptions(),
     staleTime: 10 * 60 * 1000, // 10 minutes for filter options
   });
 }

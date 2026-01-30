@@ -8,7 +8,6 @@
  */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
   previewBulkWarrantyImport,
@@ -37,10 +36,8 @@ import { toast } from '../_shared/use-toast';
  * Parses and validates CSV without creating records.
  */
 export function usePreviewWarrantyImport() {
-  const previewFn = useServerFn(previewBulkWarrantyImport);
-
   return useMutation<PreviewResult, Error, PreviewBulkWarrantyImportInput>({
-    mutationFn: (data) => previewFn({ data }),
+    mutationFn: (data) => previewBulkWarrantyImport({ data }),
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Failed to parse CSV');
     },
@@ -57,10 +54,9 @@ export function usePreviewWarrantyImport() {
  */
 export function useBulkRegisterWarranties() {
   const queryClient = useQueryClient();
-  const registerFn = useServerFn(bulkRegisterWarrantiesFromCsv);
 
   return useMutation<BulkRegisterResult, Error, BulkRegisterWarrantiesInput>({
-    mutationFn: (data) => registerFn({ data }),
+    mutationFn: (data) => bulkRegisterWarrantiesFromCsv({ data }),
     onSuccess: (data) => {
       // Invalidate warranty-related queries
       queryClient.invalidateQueries({ queryKey: queryKeys.warranties.lists() });

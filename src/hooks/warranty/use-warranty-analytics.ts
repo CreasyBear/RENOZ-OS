@@ -9,7 +9,6 @@
  */
 
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
   getWarrantyAnalyticsSummary,
@@ -92,11 +91,9 @@ export function useWarrantyAnalyticsSummary(options: UseWarrantyAnalyticsSummary
     claimType,
   };
 
-  const serverFn = useServerFn(getWarrantyAnalyticsSummary);
-
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.summary(filters),
-    queryFn: () => serverFn({ data: filters }),
+    queryFn: () => getWarrantyAnalyticsSummary({ data: filters }),
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
   });
@@ -127,11 +124,9 @@ export function useClaimsByProduct(options: UseClaimsByProductOptions = {}) {
     claimType,
   };
 
-  const serverFn = useServerFn(getClaimsByProduct);
-
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.claimsByProduct(filters),
-    queryFn: () => serverFn({ data: filters }),
+    queryFn: () => getClaimsByProduct({ data: filters }),
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
   });
@@ -160,11 +155,9 @@ export function useClaimsTrend(options: UseClaimsTrendOptions = {}) {
     claimType,
   };
 
-  const serverFn = useServerFn(getClaimsTrend);
-
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.claimsTrend(input),
-    queryFn: () => serverFn({ data: input }),
+    queryFn: () => getClaimsTrend({ data: input }),
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
   });
@@ -194,11 +187,9 @@ export function useClaimsByType(options: UseClaimsByTypeOptions = {}) {
     claimType: 'all', // Not filtered here since we're grouping by type
   };
 
-  const serverFn = useServerFn(getClaimsByType);
-
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.claimsByType(filters),
-    queryFn: () => serverFn({ data: filters }),
+    queryFn: () => getClaimsByType({ data: filters }),
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
   });
@@ -229,11 +220,9 @@ export function useSlaComplianceMetrics(options: UseSlaComplianceMetricsOptions 
     claimType,
   };
 
-  const serverFn = useServerFn(getSlaComplianceMetrics);
-
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.slaCompliance(filters),
-    queryFn: () => serverFn({ data: filters }),
+    queryFn: () => getSlaComplianceMetrics({ data: filters }),
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
   });
@@ -264,11 +253,9 @@ export function useCycleCountAtClaim(options: UseCycleCountAtClaimOptions = {}) 
     claimType,
   };
 
-  const serverFn = useServerFn(getCycleCountAtClaim);
-
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.cycleCount(filters),
-    queryFn: () => serverFn({ data: filters }),
+    queryFn: () => getCycleCountAtClaim({ data: filters }),
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
   });
@@ -297,11 +284,9 @@ export function useExtensionVsResolution(options: UseExtensionVsResolutionOption
     claimType: 'all',
   };
 
-  const serverFn = useServerFn(getExtensionVsResolution);
-
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.extensionVsResolution(filters),
-    queryFn: () => serverFn({ data: filters }),
+    queryFn: () => getExtensionVsResolution({ data: filters }),
     staleTime: ANALYTICS_STALE_TIME,
     enabled,
   });
@@ -315,11 +300,9 @@ export function useExtensionVsResolution(options: UseExtensionVsResolutionOption
  * Fetch filter options for the analytics UI.
  */
 export function useWarrantyAnalyticsFilterOptions() {
-  const serverFn = useServerFn(getWarrantyAnalyticsFilterOptions);
-
   return useQuery({
     queryKey: queryKeys.warrantyAnalytics.filterOptions(),
-    queryFn: () => serverFn({}),
+    queryFn: () => getWarrantyAnalyticsFilterOptions(),
     staleTime: FILTER_OPTIONS_STALE_TIME,
   });
 }
@@ -338,10 +321,9 @@ export interface UseExportWarrantyAnalyticsOptions {
  */
 export function useExportWarrantyAnalytics(options: UseExportWarrantyAnalyticsOptions = {}) {
   const { onSuccess, onError } = options;
-  const serverFn = useServerFn(exportWarrantyAnalytics);
 
   return useMutation({
-    mutationFn: (input: ExportWarrantyAnalyticsInput) => serverFn({ data: input }),
+    mutationFn: (input: ExportWarrantyAnalyticsInput) => exportWarrantyAnalytics({ data: input }),
     onSuccess: (result) => {
       // Trigger download
       const blob = new Blob([result.data], { type: result.mimeType });

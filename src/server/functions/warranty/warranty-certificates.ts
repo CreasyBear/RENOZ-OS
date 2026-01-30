@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Warranty Certificate Server Functions
  *
@@ -16,6 +18,7 @@
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-004b
  */
 
+import { createServerFn } from '@tanstack/react-start';
 import { eq, and, asc } from 'drizzle-orm';
 import * as React from 'react';
 import { db } from '@/lib/db';
@@ -39,7 +42,6 @@ import {
   type CertificateGenerationResult,
   type GetCertificateResult,
 } from '@/lib/schemas/warranty/certificates';
-import { typedGetFn, typedPostFn } from '@/lib/server/typed-server-fn';
 
 // PDF Generation imports
 import {
@@ -159,9 +161,9 @@ async function uploadCertificateToStorage(
  *
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-004b
  */
-export const generateWarrantyCertificate = typedPostFn(
-  generateWarrantyCertificateSchema,
-  async ({ data }): Promise<CertificateGenerationResult> => {
+export const generateWarrantyCertificate = createServerFn({ method: 'POST' })
+  .inputValidator(generateWarrantyCertificateSchema)
+  .handler(async ({ data }): Promise<CertificateGenerationResult> => {
     const ctx = await withAuth();
     const { warrantyId, forceRegenerate } = data;
 
@@ -264,8 +266,8 @@ export const generateWarrantyCertificate = typedPostFn(
           productName: item.productName,
           productSku: item.productSku,
           productSerial: item.productSerial,
-          warrantyStartDate: item.warrantyStartDate.toISOString(),
-          warrantyEndDate: item.warrantyEndDate.toISOString(),
+          warrantyStartDate: item.warrantyStartDate,
+          warrantyEndDate: item.warrantyEndDate,
           warrantyPeriodMonths: item.warrantyPeriodMonths,
           installationNotes: item.installationNotes,
         })),
@@ -332,8 +334,7 @@ export const generateWarrantyCertificate = typedPostFn(
         error: error instanceof Error ? error.message : 'Certificate generation failed',
       };
     }
-  }
-);
+  });
 
 /**
  * Get existing warranty certificate URL for a warranty.
@@ -341,9 +342,9 @@ export const generateWarrantyCertificate = typedPostFn(
  * Returns the certificate URL if it exists, or null if not generated yet.
  * Does NOT trigger generation - use generateWarrantyCertificate for that.
  */
-export const getWarrantyCertificate = typedGetFn(
-  getWarrantyCertificateSchema,
-  async ({ data }): Promise<GetCertificateResult> => {
+export const getWarrantyCertificate = createServerFn({ method: 'GET' })
+  .inputValidator(getWarrantyCertificateSchema)
+  .handler(async ({ data }): Promise<GetCertificateResult> => {
     const ctx = await withAuth();
     const { warrantyId } = data;
 
@@ -390,8 +391,7 @@ export const getWarrantyCertificate = typedGetFn(
         expiryDate: warranty.expiryDate.toISOString(),
       },
     };
-  }
-);
+  });
 
 /**
  * Regenerate a warranty certificate.
@@ -401,9 +401,9 @@ export const getWarrantyCertificate = typedGetFn(
  *
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-004b
  */
-export const regenerateWarrantyCertificate = typedPostFn(
-  regenerateWarrantyCertificateSchema,
-  async ({ data }): Promise<CertificateGenerationResult> => {
+export const regenerateWarrantyCertificate = createServerFn({ method: 'POST' })
+  .inputValidator(regenerateWarrantyCertificateSchema)
+  .handler(async ({ data }): Promise<CertificateGenerationResult> => {
     // Auth check - ensures user has access (auth context used for audit logging)
     const ctx = await withAuth();
     const { warrantyId, reason } = data;
@@ -421,5 +421,4 @@ export const regenerateWarrantyCertificate = typedPostFn(
         forceRegenerate: true,
       },
     });
-  }
-);
+  });

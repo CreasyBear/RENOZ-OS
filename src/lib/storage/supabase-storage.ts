@@ -30,12 +30,13 @@ import { StorageConfigError, StorageOperationError, StorageNotFoundError } from 
  * Get Supabase credentials from environment (server-side only)
  */
 function getSupabaseCredentials(): { url: string; serviceRoleKey: string } {
-  const url = process.env.SUPABASE_URL;
+  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
   if (!url || !serviceRoleKey) {
     throw new StorageConfigError(
-      'SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables are required'
+      'SUPABASE_SERVICE_ROLE_KEY and SUPABASE_URL (or VITE_SUPABASE_URL) are required. ' +
+        'The anon key cannot be used for server-side storage operations.'
     );
   }
 

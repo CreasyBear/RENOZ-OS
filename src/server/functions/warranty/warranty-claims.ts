@@ -10,6 +10,7 @@
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-006b
  */
 
+import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc, asc, sql, count } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
@@ -34,10 +35,10 @@ import {
 import type {
   SlaConfiguration,
   BusinessHoursConfig as BusinessHoursConfigType,
+  SlaTracking,
 } from '@/lib/sla/types';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
-import { typedGetFn, typedPostFn } from '@/lib/server/typed-server-fn';
 import {
   client,
   warrantyEvents,
@@ -221,7 +222,7 @@ async function startSlaTrackingForClaim(
     organizationId,
     slaTrackingId: tracking.id,
     eventType: 'started',
-    eventData: buildStartedEventData(tracking as any),
+    eventData: buildStartedEventData(tracking as SlaTracking),
     triggeredByUserId: userId,
   });
 
@@ -238,9 +239,9 @@ async function startSlaTrackingForClaim(
  * - Creates SLA tracking entry
  * - Triggers notification event
  */
-export const createWarrantyClaim = typedPostFn(
-  createWarrantyClaimSchema,
-  async ({ data }) => {
+export const createWarrantyClaim = createServerFn({ method: 'POST' })
+  .inputValidator(createWarrantyClaimSchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.create });
 
     // Get warranty with related data
@@ -339,8 +340,7 @@ export const createWarrantyClaim = typedPostFn(
     });
 
     return claim;
-  }
-);
+  });
 
 // ============================================================================
 // UPDATE CLAIM STATUS
@@ -349,9 +349,9 @@ export const createWarrantyClaim = typedPostFn(
 /**
  * Update claim status with optional notes
  */
-export const updateClaimStatus = typedPostFn(
-  updateClaimStatusSchema,
-  async ({ data }) => {
+export const updateClaimStatus = createServerFn({ method: 'POST' })
+  .inputValidator(updateClaimStatusSchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.update });
 
     const [existingClaim] = await db
@@ -415,8 +415,7 @@ export const updateClaimStatus = typedPostFn(
       .returning();
 
     return claim;
-  }
-);
+  });
 
 // ============================================================================
 // APPROVE CLAIM
@@ -426,9 +425,9 @@ export const updateClaimStatus = typedPostFn(
  * Approve a warranty claim
  * Sets status to 'approved' and records approver
  */
-export const approveClaim = typedPostFn(
-  approveClaimSchema,
-  async ({ data }) => {
+export const approveClaim = createServerFn({ method: 'POST' })
+  .inputValidator(approveClaimSchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.approve });
 
     const [existingClaim] = await db
@@ -483,8 +482,7 @@ export const approveClaim = typedPostFn(
       .returning();
 
     return claim;
-  }
-);
+  });
 
 // ============================================================================
 // DENY CLAIM
@@ -494,9 +492,9 @@ export const approveClaim = typedPostFn(
  * Deny a warranty claim
  * Sets status to 'denied' and records reason
  */
-export const denyClaim = typedPostFn(
-  denyClaimSchema,
-  async ({ data }) => {
+export const denyClaim = createServerFn({ method: 'POST' })
+  .inputValidator(denyClaimSchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.approve });
 
     const [existingClaim] = await db
@@ -530,7 +528,7 @@ export const denyClaim = typedPostFn(
 
       if (currentTracking) {
         // Calculate resolution update
-        const resolutionUpdate = calculateResolutionUpdate(currentTracking as any, now);
+        const resolutionUpdate = calculateResolutionUpdate(currentTracking as SlaTracking, now);
 
         // Update tracking record
         await db
@@ -544,7 +542,7 @@ export const denyClaim = typedPostFn(
           organizationId: ctx.organizationId,
           slaTrackingId: existingClaim.slaTrackingId,
           eventType: 'resolved',
-          eventData: buildResolvedEventData(updatedTracking as any, now),
+          eventData: buildResolvedEventData(updatedTracking as SlaTracking, now),
           triggeredByUserId: ctx.user.id,
         });
       }
@@ -570,8 +568,7 @@ export const denyClaim = typedPostFn(
       .returning();
 
     return claim;
-  }
-);
+  });
 
 // ============================================================================
 // RESOLVE CLAIM
@@ -582,9 +579,9 @@ export const denyClaim = typedPostFn(
  * Sets status to 'resolved' with resolution type and details
  * Can extend warranty if resolution type is 'warranty_extension'
  */
-export const resolveClaim = typedPostFn(
-  resolveClaimSchema,
-  async ({ data }) => {
+export const resolveClaim = createServerFn({ method: 'POST' })
+  .inputValidator(resolveClaimSchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.resolve });
 
     const [existingClaim] = await db
@@ -629,7 +626,7 @@ export const resolveClaim = typedPostFn(
 
       if (currentTracking) {
         // Calculate resolution update
-        const resolutionUpdate = calculateResolutionUpdate(currentTracking as any, now);
+        const resolutionUpdate = calculateResolutionUpdate(currentTracking as SlaTracking, now);
 
         // Update tracking record
         await db
@@ -643,7 +640,7 @@ export const resolveClaim = typedPostFn(
           organizationId: ctx.organizationId,
           slaTrackingId: existingClaim.claim.slaTrackingId,
           eventType: 'resolved',
-          eventData: buildResolvedEventData(updatedTracking as any, now),
+          eventData: buildResolvedEventData(updatedTracking as SlaTracking, now),
           triggeredByUserId: ctx.user.id,
         });
       }
@@ -714,8 +711,7 @@ export const resolveClaim = typedPostFn(
     });
 
     return claim;
-  }
-);
+  });
 
 // ============================================================================
 // LIST WARRANTY CLAIMS
@@ -724,9 +720,9 @@ export const resolveClaim = typedPostFn(
 /**
  * List warranty claims with filters and pagination
  */
-export const listWarrantyClaims = typedGetFn(
-  listWarrantyClaimsSchema,
-  async ({ data }) => {
+export const listWarrantyClaims = createServerFn({ method: 'GET' })
+  .inputValidator(listWarrantyClaimsSchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
 
     // Build conditions
@@ -820,8 +816,7 @@ export const listWarrantyClaims = typedGetFn(
         totalPages: Math.ceil(total / data.pageSize),
       },
     };
-  }
-);
+  });
 
 // ============================================================================
 // GET WARRANTY CLAIM
@@ -830,9 +825,9 @@ export const listWarrantyClaims = typedGetFn(
 /**
  * Get a single warranty claim with full details
  */
-export const getWarrantyClaim = typedGetFn(
-  getWarrantyClaimSchema,
-  async ({ data }) => {
+export const getWarrantyClaim = createServerFn({ method: 'GET' })
+  .inputValidator(getWarrantyClaimSchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.read });
 
     const [result] = await db
@@ -904,9 +899,9 @@ export const getWarrantyClaim = typedGetFn(
 /**
  * Assign a warranty claim to a user for processing
  */
-export const assignClaim = typedPostFn(
-  assignClaimSchema,
-  async ({ data }) => {
+export const assignClaim = createServerFn({ method: 'POST' })
+  .inputValidator(assignClaimSchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.warranty.assign });
 
     const [existingClaim] = await db
@@ -947,5 +942,4 @@ export const assignClaim = typedPostFn(
       .returning();
 
     return claim;
-  }
-);
+  });

@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Warranty Analytics Server Functions
  *
@@ -8,6 +10,7 @@
  * @see src/lib/schemas/warranty/analytics.ts for schema definitions
  */
 
+import { createServerFn } from '@tanstack/react-start';
 import { eq, and, gte, lte, sql, count, sum, avg } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
@@ -37,7 +40,6 @@ import {
   type ExportWarrantyAnalyticsResult,
   type WarrantyAnalyticsFilterOptions,
 } from '@/lib/schemas/warranty/analytics';
-import { typedGetFn, typedGetNoInput } from '@/lib/server/typed-server-fn';
 
 // ============================================================================
 // HELPERS
@@ -119,11 +121,11 @@ function getResolutionTypeLabel(resolutionType: string): string {
 /**
  * Get summary metrics for warranty analytics dashboard.
  */
-export const getWarrantyAnalyticsSummary = typedGetFn(
-  getWarrantyAnalyticsSummarySchema,
-  async ({ data }): Promise<WarrantyAnalyticsSummary> => {
+export const getWarrantyAnalyticsSummary = createServerFn({ method: 'GET' })
+  .inputValidator(getWarrantyAnalyticsSummarySchema)
+  .handler(async ({ data }): Promise<WarrantyAnalyticsSummary> => {
     const ctx = await withAuth();
-    const { startDate, endDate, warrantyType: _warrantyType, claimType } = data;
+    const { startDate, endDate, claimType } = data;
     const { start, end } = getDateRange(startDate, endDate);
     const { prevStart, prevEnd } = getPreviousPeriod(start, end);
 
@@ -260,8 +262,7 @@ export const getWarrantyAnalyticsSummary = typedGetFn(
         Math.round(Number(previousRevenue[0]?.total ?? 0))
       ),
     };
-  }
-);
+  });
 
 // ============================================================================
 // GET CLAIMS BY PRODUCT
@@ -270,11 +271,11 @@ export const getWarrantyAnalyticsSummary = typedGetFn(
 /**
  * Get claims breakdown by product/battery model.
  */
-export const getClaimsByProduct = typedGetFn(
-  getClaimsByProductSchema,
-  async ({ data }): Promise<ClaimsByProductResult> => {
+export const getClaimsByProduct = createServerFn({ method: 'GET' })
+  .inputValidator(getClaimsByProductSchema)
+  .handler(async ({ data }): Promise<ClaimsByProductResult> => {
     const ctx = await withAuth();
-    const { startDate, endDate, warrantyType: _warrantyType, claimType } = data;
+    const { startDate, endDate, claimType } = data;
     const { start, end } = getDateRange(startDate, endDate);
 
     // Build where conditions
@@ -320,8 +321,7 @@ export const getClaimsByProduct = typedGetFn(
       })),
       totalClaims,
     };
-  }
-);
+  });
 
 // ============================================================================
 // GET CLAIMS TREND
@@ -330,11 +330,11 @@ export const getClaimsByProduct = typedGetFn(
 /**
  * Get monthly claims trend for line chart.
  */
-export const getClaimsTrend = typedGetFn(
-  getClaimsTrendSchema,
-  async ({ data }): Promise<ClaimsTrendResult> => {
+export const getClaimsTrend = createServerFn({ method: 'GET' })
+  .inputValidator(getClaimsTrendSchema)
+  .handler(async ({ data }): Promise<ClaimsTrendResult> => {
     const ctx = await withAuth();
-    const { months, warrantyType: _warrantyType, claimType } = data;
+    const { months, claimType } = data;
 
     // Calculate date range for trend
     const endDate = new Date();
@@ -393,8 +393,7 @@ export const getClaimsTrend = typedGetFn(
         };
       }),
     };
-  }
-);
+  });
 
 // ============================================================================
 // GET CLAIMS BY TYPE
@@ -403,11 +402,11 @@ export const getClaimsTrend = typedGetFn(
 /**
  * Get claims breakdown by claim type for pie/donut chart.
  */
-export const getClaimsByType = typedGetFn(
-  getClaimsByTypeSchema,
-  async ({ data }): Promise<ClaimsByTypeResult> => {
+export const getClaimsByType = createServerFn({ method: 'GET' })
+  .inputValidator(getClaimsByTypeSchema)
+  .handler(async ({ data }): Promise<ClaimsByTypeResult> => {
     const ctx = await withAuth();
-    const { startDate, endDate, warrantyType: _warrantyType } = data;
+    const { startDate, endDate } = data;
     const { start, end } = getDateRange(startDate, endDate);
 
     // Get claims grouped by type
@@ -443,8 +442,7 @@ export const getClaimsByType = typedGetFn(
       })),
       totalClaims,
     };
-  }
-);
+  });
 
 // ============================================================================
 // GET SLA COMPLIANCE METRICS
@@ -453,11 +451,11 @@ export const getClaimsByType = typedGetFn(
 /**
  * Get SLA compliance metrics for claims.
  */
-export const getSlaComplianceMetrics = typedGetFn(
-  getSlaComplianceMetricsSchema,
-  async ({ data }): Promise<SlaComplianceMetrics> => {
+export const getSlaComplianceMetrics = createServerFn({ method: 'GET' })
+  .inputValidator(getSlaComplianceMetricsSchema)
+  .handler(async ({ data }): Promise<SlaComplianceMetrics> => {
     const ctx = await withAuth();
-    const { startDate, endDate, warrantyType: _warrantyType, claimType } = data;
+    const { startDate, endDate, claimType } = data;
     const { start, end } = getDateRange(startDate, endDate);
 
     // Build where conditions
@@ -552,8 +550,7 @@ export const getSlaComplianceMetrics = typedGetFn(
       totalResolvedClaims: resolvedClaims,
       totalPendingClaims: Number(m.pending_claims),
     };
-  }
-);
+  });
 
 // ============================================================================
 // GET CYCLE COUNT AT CLAIM
@@ -562,11 +559,11 @@ export const getSlaComplianceMetrics = typedGetFn(
 /**
  * Get average cycle count when claims are filed.
  */
-export const getCycleCountAtClaim = typedGetFn(
-  getCycleCountAtClaimSchema,
-  async ({ data }): Promise<CycleCountAtClaimResult> => {
+export const getCycleCountAtClaim = createServerFn({ method: 'GET' })
+  .inputValidator(getCycleCountAtClaimSchema)
+  .handler(async ({ data }): Promise<CycleCountAtClaimResult> => {
     const ctx = await withAuth();
-    const { startDate, endDate, warrantyType: _warrantyType, claimType } = data;
+    const { startDate, endDate, claimType } = data;
     const { start, end } = getDateRange(startDate, endDate);
 
     // Build where conditions
@@ -628,8 +625,7 @@ export const getCycleCountAtClaim = typedGetFn(
         claimsWithCycleData: Number(r.count),
       })),
     };
-  }
-);
+  });
 
 // ============================================================================
 // GET EXTENSION VS RESOLUTION
@@ -638,9 +634,9 @@ export const getCycleCountAtClaim = typedGetFn(
 /**
  * Get extension type vs resolution type breakdown.
  */
-export const getExtensionVsResolution = typedGetFn(
-  getExtensionVsResolutionSchema,
-  async ({ data }): Promise<ExtensionVsResolutionResult> => {
+export const getExtensionVsResolution = createServerFn({ method: 'GET' })
+  .inputValidator(getExtensionVsResolutionSchema)
+  .handler(async ({ data }): Promise<ExtensionVsResolutionResult> => {
     const ctx = await withAuth();
     const { startDate, endDate } = data;
     const { start, end } = getDateRange(startDate, endDate);
@@ -727,8 +723,7 @@ export const getExtensionVsResolution = typedGetFn(
         totalCost: Math.round(totalResolutionCost),
       },
     };
-  }
-);
+  });
 
 // ============================================================================
 // EXPORT WARRANTY ANALYTICS
@@ -737,9 +732,9 @@ export const getExtensionVsResolution = typedGetFn(
 /**
  * Export warranty analytics data to CSV.
  */
-export const exportWarrantyAnalytics = typedGetFn(
-  exportWarrantyAnalyticsSchema,
-  async ({ data }): Promise<ExportWarrantyAnalyticsResult> => {
+export const exportWarrantyAnalytics = createServerFn({ method: 'GET' })
+  .inputValidator(exportWarrantyAnalyticsSchema)
+  .handler(async ({ data }): Promise<ExportWarrantyAnalyticsResult> => {
     await withAuth(); // Auth check only, no ctx needed
     const { startDate, endDate, warrantyType, claimType, format } = data;
 
@@ -841,8 +836,7 @@ export const exportWarrantyAnalytics = typedGetFn(
       filename: `warranty-analytics-${new Date().toISOString().split('T')[0]}.csv`,
       mimeType: 'text/csv',
     };
-  }
-);
+  });
 
 // ============================================================================
 // GET FILTER OPTIONS
@@ -851,8 +845,8 @@ export const exportWarrantyAnalytics = typedGetFn(
 /**
  * Get filter options for the analytics UI.
  */
-export const getWarrantyAnalyticsFilterOptions = typedGetNoInput(
-  async (): Promise<WarrantyAnalyticsFilterOptions> => {
+export const getWarrantyAnalyticsFilterOptions = createServerFn({ method: 'GET' })
+  .handler(async (): Promise<WarrantyAnalyticsFilterOptions> => {
     const ctx = await withAuth();
 
     // Get products with warranties
@@ -889,5 +883,4 @@ export const getWarrantyAnalyticsFilterOptions = typedGetNoInput(
         { value: 'all', label: 'All time' },
       ],
     };
-  }
-);
+  });

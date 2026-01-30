@@ -8,7 +8,6 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
   listWarrantyPolicies,
@@ -58,11 +57,9 @@ const DETAIL_STALE_TIME = 60 * 1000; // 60 seconds for details
  * Hook for fetching warranty policies.
  */
 export function useWarrantyPolicies(options?: GetWarrantyPoliciesInput) {
-  const listFn = useServerFn(listWarrantyPolicies);
-
   return useQuery({
     queryKey: queryKeys.warrantyPolicies.list(options),
-    queryFn: () => listFn({ data: options ?? {} }),
+    queryFn: () => listWarrantyPolicies({ data: options ?? {} }),
     staleTime: LIST_STALE_TIME,
   });
 }
@@ -71,11 +68,9 @@ export function useWarrantyPolicies(options?: GetWarrantyPoliciesInput) {
  * Hook for fetching warranty policies with SLA configuration details.
  */
 export function useWarrantyPoliciesWithSla(options?: GetWarrantyPoliciesInput) {
-  const listFn = useServerFn(getWarrantyPoliciesWithSla);
-
   return useQuery({
     queryKey: queryKeys.warrantyPolicies.listWithSla(options),
-    queryFn: () => listFn({ data: options ?? {} }),
+    queryFn: () => getWarrantyPoliciesWithSla({ data: options ?? {} }),
     staleTime: LIST_STALE_TIME,
   });
 }
@@ -88,11 +83,9 @@ export function useWarrantyPoliciesWithSla(options?: GetWarrantyPoliciesInput) {
  * Hook for fetching a single warranty policy.
  */
 export function useWarrantyPolicy(policyId: string | undefined) {
-  const getFn = useServerFn(getWarrantyPolicy);
-
   return useQuery({
     queryKey: queryKeys.warrantyPolicies.detail(policyId ?? ''),
-    queryFn: () => getFn({ data: { policyId: policyId! } }),
+    queryFn: () => getWarrantyPolicy({ data: { policyId: policyId! } }),
     enabled: !!policyId,
     staleTime: DETAIL_STALE_TIME,
   });
@@ -106,11 +99,9 @@ export function useWarrantyPolicy(policyId: string | undefined) {
  * Hook for fetching the default warranty policy for a type.
  */
 export function useDefaultWarrantyPolicy(type: WarrantyPolicyTypeValue | undefined) {
-  const getFn = useServerFn(getDefaultWarrantyPolicy);
-
   return useQuery({
     queryKey: queryKeys.warrantyPolicies.default(type!),
-    queryFn: () => getFn({ data: { type: type! } }),
+    queryFn: () => getDefaultWarrantyPolicy({ data: { type: type! } }),
     enabled: !!type,
     staleTime: DETAIL_STALE_TIME,
   });
@@ -125,11 +116,9 @@ export function useDefaultWarrantyPolicy(type: WarrantyPolicyTypeValue | undefin
  * Resolution hierarchy: product > category > org default
  */
 export function useResolveWarrantyPolicy(params: ResolveWarrantyPolicyInput) {
-  const resolveFn = useServerFn(resolveWarrantyPolicy);
-
   return useQuery({
     queryKey: queryKeys.warrantyPolicies.resolve(params),
-    queryFn: () => resolveFn({ data: params }),
+    queryFn: () => resolveWarrantyPolicy({ data: params }),
     enabled: !!(params.productId || params.categoryId || params.type),
     staleTime: DETAIL_STALE_TIME,
   });
@@ -144,10 +133,9 @@ export function useResolveWarrantyPolicy(params: ResolveWarrantyPolicyInput) {
  */
 export function useCreateWarrantyPolicy() {
   const queryClient = useQueryClient();
-  const createFn = useServerFn(createWarrantyPolicy);
 
   return useMutation({
-    mutationFn: (data: CreateWarrantyPolicyInput) => createFn({ data }),
+    mutationFn: (data: CreateWarrantyPolicyInput) => createWarrantyPolicy({ data }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.warrantyPolicies.lists() });
       toast.success('Warranty policy created successfully');
@@ -167,11 +155,10 @@ export function useCreateWarrantyPolicy() {
  */
 export function useUpdateWarrantyPolicy() {
   const queryClient = useQueryClient();
-  const updateFn = useServerFn(updateWarrantyPolicy);
 
   return useMutation({
     mutationFn: (data: UpdateWarrantyPolicyInput & GetWarrantyPolicyByIdInput) =>
-      updateFn({ data }),
+      updateWarrantyPolicy({ data }),
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.warrantyPolicies.lists() });
       queryClient.invalidateQueries({
@@ -194,10 +181,9 @@ export function useUpdateWarrantyPolicy() {
  */
 export function useDeleteWarrantyPolicy() {
   const queryClient = useQueryClient();
-  const deleteFn = useServerFn(deleteWarrantyPolicy);
 
   return useMutation({
-    mutationFn: (policyId: string) => deleteFn({ data: { policyId } }),
+    mutationFn: (policyId: string) => deleteWarrantyPolicy({ data: { policyId } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.warrantyPolicies.lists() });
       toast.success('Warranty policy deleted successfully');
@@ -217,10 +203,9 @@ export function useDeleteWarrantyPolicy() {
  */
 export function useSetDefaultWarrantyPolicy() {
   const queryClient = useQueryClient();
-  const setDefaultFn = useServerFn(setDefaultWarrantyPolicy);
 
   return useMutation({
-    mutationFn: (policyId: string) => setDefaultFn({ data: { policyId } }),
+    mutationFn: (policyId: string) => setDefaultWarrantyPolicy({ data: { policyId } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.warrantyPolicies.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.warrantyPolicies.defaults() });
@@ -241,11 +226,10 @@ export function useSetDefaultWarrantyPolicy() {
  */
 export function useSeedDefaultWarrantyPolicies() {
   const queryClient = useQueryClient();
-  const seedFn = useServerFn(seedDefaultWarrantyPolicies);
 
   return useMutation({
     mutationFn: (data?: Partial<SeedDefaultPoliciesInput>) =>
-      seedFn({
+      seedDefaultWarrantyPolicies({
         data: {
           batteryDurationMonths: data?.batteryDurationMonths ?? 120,
           batteryCycleLimit: data?.batteryCycleLimit ?? 10000,
@@ -273,10 +257,10 @@ export function useSeedDefaultWarrantyPolicies() {
  */
 export function useAssignWarrantyPolicyToProduct() {
   const queryClient = useQueryClient();
-  const assignFn = useServerFn(assignWarrantyPolicyToProduct);
 
   return useMutation({
-    mutationFn: (data: AssignWarrantyPolicyToProductInput) => assignFn({ data }),
+    mutationFn: (data: AssignWarrantyPolicyToProductInput) =>
+      assignWarrantyPolicyToProduct({ data }),
     onSuccess: () => {
       // Invalidate product queries
       queryClient.invalidateQueries({ queryKey: queryKeys.products.all });
@@ -297,10 +281,10 @@ export function useAssignWarrantyPolicyToProduct() {
  */
 export function useAssignDefaultWarrantyPolicyToCategory() {
   const queryClient = useQueryClient();
-  const assignFn = useServerFn(assignDefaultWarrantyPolicyToCategory);
 
   return useMutation({
-    mutationFn: (data: AssignDefaultWarrantyPolicyToCategoryInput) => assignFn({ data }),
+    mutationFn: (data: AssignDefaultWarrantyPolicyToCategoryInput) =>
+      assignDefaultWarrantyPolicyToCategory({ data }),
     onSuccess: () => {
       // Invalidate category queries
       queryClient.invalidateQueries({ queryKey: queryKeys.categories.all });

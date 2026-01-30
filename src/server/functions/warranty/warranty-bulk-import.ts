@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Warranty Bulk Import Server Functions
  *
@@ -13,7 +15,7 @@ import { db } from '@/lib/db';
 import { warranties, warrantyPolicies, customers, products } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { triggerWarrantyRegistrationNotification } from './warranty-policies';
-import { typedPostFn } from '@/lib/server/typed-server-fn';
+import { createServerFn } from '@tanstack/react-start';
 import { ValidationError } from '@/lib/server/errors';
 
 const MAX_IMPORT_ROWS = 1000;
@@ -291,9 +293,9 @@ function calculateExpiryDate(registrationDate: Date, durationMonths: number): Da
  *
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-005a
  */
-export const previewBulkWarrantyImport = typedPostFn(
-  previewBulkWarrantyImportSchema,
-  async ({ data }): Promise<PreviewResult> => {
+export const previewBulkWarrantyImport = createServerFn({ method: 'POST' })
+  .inputValidator(previewBulkWarrantyImportSchema)
+  .handler(async ({ data }): Promise<PreviewResult> => {
     const ctx = await withAuth();
     const { csvContent, columnMapping } = data;
 
@@ -661,8 +663,7 @@ export const previewBulkWarrantyImport = typedPostFn(
         byPolicyType,
       },
     };
-  }
-);
+  });
 
 /**
  * Bulk register warranties from validated CSV data.
@@ -672,9 +673,9 @@ export const previewBulkWarrantyImport = typedPostFn(
  *
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-005a
  */
-export const bulkRegisterWarrantiesFromCsv = typedPostFn(
-  bulkRegisterWarrantiesSchema,
-  async ({ data }): Promise<BulkRegisterResult> => {
+export const bulkRegisterWarrantiesFromCsv = createServerFn({ method: 'POST' })
+  .inputValidator(bulkRegisterWarrantiesSchema)
+  .handler(async ({ data }): Promise<BulkRegisterResult> => {
     const ctx = await withAuth();
     const { rows, sendNotifications } = data;
 
@@ -805,5 +806,4 @@ export const bulkRegisterWarrantiesFromCsv = typedPostFn(
         byPolicyType,
       },
     };
-  }
-);
+  });

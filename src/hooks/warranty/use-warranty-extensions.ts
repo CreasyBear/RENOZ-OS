@@ -8,7 +8,6 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { queryKeys } from '@/lib/query-keys';
 import {
   extendWarranty,
@@ -44,11 +43,9 @@ import {
  * @param warrantyId - The warranty to fetch extensions for
  */
 export function useWarrantyExtensions(warrantyId: string | undefined) {
-  const listFn = useServerFn(listWarrantyExtensions);
-
   return useQuery({
     queryKey: queryKeys.warrantyExtensions.list(warrantyId ?? ''),
-    queryFn: () => listFn({ data: { warrantyId: warrantyId! } }),
+    queryFn: () => listWarrantyExtensions({ data: { warrantyId: warrantyId! } }),
     enabled: !!warrantyId,
   });
 }
@@ -64,8 +61,6 @@ export function useWarrantyExtensions(warrantyId: string | undefined) {
  * @param options - Filter and pagination options
  */
 export function useExtensionHistory(options?: GetExtensionHistoryInput) {
-  const historyFn = useServerFn(getExtensionHistory);
-
   const params: GetExtensionHistoryInput = {
     page: options?.page ?? 1,
     limit: options?.limit ?? 20,
@@ -77,7 +72,7 @@ export function useExtensionHistory(options?: GetExtensionHistoryInput) {
 
   return useQuery({
     queryKey: queryKeys.warrantyExtensions.historyFiltered(params),
-    queryFn: () => historyFn({ data: params }),
+    queryFn: () => getExtensionHistory({ data: params }),
   });
 }
 
@@ -91,11 +86,9 @@ export function useExtensionHistory(options?: GetExtensionHistoryInput) {
  * @param extensionId - The extension ID to fetch
  */
 export function useExtensionById(extensionId: string | undefined) {
-  const getFn = useServerFn(getExtensionById);
-
   return useQuery({
     queryKey: queryKeys.warrantyExtensions.detail(extensionId ?? ''),
-    queryFn: () => getFn({ data: { extensionId: extensionId! } }),
+    queryFn: () => getExtensionById({ data: { extensionId: extensionId! } }),
     enabled: !!extensionId,
   });
 }
@@ -117,10 +110,9 @@ export function useExtensionById(extensionId: string | undefined) {
  */
 export function useExtendWarranty() {
   const queryClient = useQueryClient();
-  const extendFn = useServerFn(extendWarranty);
 
   return useMutation({
-    mutationFn: (data: ExtendWarrantyInput) => extendFn({ data }),
+    mutationFn: (data: ExtendWarrantyInput) => extendWarranty({ data }),
     onSuccess: (result, variables) => {
       // Invalidate the specific warranty's extensions list
       queryClient.invalidateQueries({

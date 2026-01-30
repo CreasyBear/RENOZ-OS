@@ -10,6 +10,7 @@
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json DOM-WAR-007b
  */
 
+import { createServerFn } from '@tanstack/react-start';
 import { eq, and, desc, asc, gte, lte, sql } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import {
@@ -27,7 +28,6 @@ import {
   getExtensionHistorySchema,
   getExtensionByIdSchema,
 } from '@/lib/schemas/warranty/extensions';
-import { typedGetFn, typedPostFn } from '@/lib/server/typed-server-fn';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
@@ -81,9 +81,9 @@ export interface ExtensionHistoryResult {
  * @param price - Price paid (required for paid_extension)
  * @param notes - Optional notes/reason
  */
-export const extendWarranty = typedPostFn(
-  extendWarrantySchema,
-  async ({ data }) => {
+export const extendWarranty = createServerFn({ method: 'POST' })
+  .inputValidator(extendWarrantySchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     // 1. Fetch and validate the warranty
@@ -171,8 +171,7 @@ export const extendWarranty = typedPostFn(
         status: newStatus,
       },
     };
-  }
-);
+  });
 
 // ============================================================================
 // LIST WARRANTY EXTENSIONS
@@ -182,9 +181,9 @@ export const extendWarranty = typedPostFn(
  * List all extensions for a specific warranty.
  * Returns extensions in reverse chronological order (most recent first).
  */
-export const listWarrantyExtensions = typedGetFn(
-  listWarrantyExtensionsSchema,
-  async ({ data }) => {
+export const listWarrantyExtensions = createServerFn({ method: 'GET' })
+  .inputValidator(listWarrantyExtensionsSchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     // Verify the warranty belongs to this organization
@@ -237,8 +236,7 @@ export const listWarrantyExtensions = typedGetFn(
         createdAt: ext.createdAt.toISOString(),
       })),
     };
-  }
-);
+  });
 
 // ============================================================================
 // GET EXTENSION HISTORY
@@ -248,9 +246,9 @@ export const listWarrantyExtensions = typedGetFn(
  * Get all extensions across the organization with filtering and pagination.
  * Useful for reporting on extension activity.
  */
-export const getExtensionHistory = typedGetFn(
-  getExtensionHistorySchema,
-  async ({ data }): Promise<ExtensionHistoryResult> => {
+export const getExtensionHistory = createServerFn({ method: 'GET' })
+  .inputValidator(getExtensionHistorySchema)
+  .handler(async ({ data }): Promise<ExtensionHistoryResult> => {
     const ctx = await withAuth();
 
     // Build where conditions
@@ -339,8 +337,7 @@ export const getExtensionHistory = typedGetFn(
       limit: data.limit,
       totalPages: Math.ceil(totalCount / data.limit),
     };
-  }
-);
+  });
 
 // ============================================================================
 // GET EXTENSION BY ID
@@ -349,9 +346,9 @@ export const getExtensionHistory = typedGetFn(
 /**
  * Get a single extension by ID with full details.
  */
-export const getExtensionById = typedGetFn(
-  getExtensionByIdSchema,
-  async ({ data }) => {
+export const getExtensionById = createServerFn({ method: 'GET' })
+  .inputValidator(getExtensionByIdSchema)
+  .handler(async ({ data }) => {
     const ctx = await withAuth();
 
     const [result] = await db
@@ -401,8 +398,7 @@ export const getExtensionById = typedGetFn(
       customerName: result.customerName,
       productName: result.productName,
     };
-  }
-);
+  });
 
 // ============================================================================
 // NOTIFICATION HELPER
