@@ -9,6 +9,7 @@
  * - tabular-nums for quantity/cost alignment
  */
 import { memo, useState, useCallback, useRef } from "react";
+import { Link } from "@tanstack/react-router";
 import {
   Info,
   History,
@@ -18,6 +19,7 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowLeftRight,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,7 +27,40 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { StatusCell } from "@/components/shared/data-table";
 import { ItemDetail, type ItemDetailData } from "./item-detail";
+import { useOrgFormat } from "@/hooks/use-org-format";
+import { FORECAST_ACCURACY_CONFIG, getForecastAccuracyLevel } from "./inventory-status-config";
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+
+/**
+ * Generate a link URL for a movement reference
+ */
+function getMovementReferenceLink(
+  referenceType: string | null | undefined,
+  referenceId: string | null | undefined
+): string | null {
+  if (!referenceType || !referenceId) return null;
+
+  const routeMap: Record<string, (id: string) => string> = {
+    order: (id) => `/orders/${id}`,
+    purchase_order: (id) => `/purchase-orders/${id}`,
+  };
+
+  const routeBuilder = routeMap[referenceType];
+  return routeBuilder ? routeBuilder(referenceId) : null;
+}
+
+/**
+ * Format reference type for display
+ */
+function formatReferenceType(type: string | null | undefined): string {
+  if (!type) return '';
+  return type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+}
 
 // ============================================================================
 // TYPES
@@ -128,6 +163,9 @@ export const ItemTabs = memo(function ItemTabs({
 }: ItemTabsProps) {
   const [activeTab, setActiveTab] = useState("overview");
   const tabsListRef = useRef<HTMLDivElement>(null);
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
 
   // Handle keyboard navigation between tabs
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -149,12 +187,6 @@ export const ItemTabs = memo(function ItemTabs({
     setActiveTab(value);
     onTabChange?.(value);
   }, [onTabChange]);
-
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("en-AU", {
-      style: "currency",
-      currency: "AUD",
-    }).format(value);
 
   const formatDate = (date: Date) =>
     new Date(date).toLocaleDateString("en-AU", {
@@ -260,12 +292,28 @@ export const ItemTabs = memo(function ItemTabs({
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-medium">{config.label}</span>
                             {movement.referenceType && (
-                              <Badge variant="outline" className="text-xs">
-                                {movement.referenceType}
-                              </Badge>
+                              (() => {
+                                const referenceLink = getMovementReferenceLink(movement.referenceType, movement.referenceId);
+                                return referenceLink ? (
+                                  <Link
+                                    to={referenceLink as any}
+                                    className="inline-flex items-center gap-1"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Badge variant="outline" className="text-xs hover:bg-accent transition-colors cursor-pointer">
+                                      {formatReferenceType(movement.referenceType)}
+                                      <ExternalLink className="h-2.5 w-2.5 ml-0.5" />
+                                    </Badge>
+                                  </Link>
+                                ) : (
+                                  <Badge variant="outline" className="text-xs">
+                                    {formatReferenceType(movement.referenceType)}
+                                  </Badge>
+                                );
+                              })()
                             )}
                           </div>
                           <div className="text-sm text-muted-foreground">
@@ -367,12 +415,12 @@ export const ItemTabs = memo(function ItemTabs({
                     </div>
 
                     <div className="text-right tabular-nums w-24">
-                      <div className="font-medium">{formatCurrency(layer.unitCost)}</div>
+                      <div className="font-medium">{formatCurrencyDisplay(layer.unitCost)}</div>
                       <div className="text-xs text-muted-foreground">per unit</div>
                     </div>
 
                     <div className="text-right tabular-nums w-28">
-                      <div className="font-semibold">{formatCurrency(layer.totalCost)}</div>
+                      <div className="font-semibold">{formatCurrencyDisplay(layer.totalCost)}</div>
                       <div className="text-xs text-muted-foreground">total</div>
                     </div>
                   </div>
@@ -386,7 +434,7 @@ export const ItemTabs = memo(function ItemTabs({
                   </div>
                   <div className="w-24"></div>
                   <div className="text-right tabular-nums w-28">
-                    {formatCurrency(costLayers.reduce((sum, l) => sum + l.totalCost, 0))}
+                    {formatCurrencyDisplay(costLayers.reduce((sum, l) => sum + l.totalCost, 0))}
                   </div>
                 </div>
               </div>
@@ -456,11 +504,11 @@ export const ItemTabs = memo(function ItemTabs({
                     </div>
 
                     {forecast.accuracy !== undefined && (
-                      <Badge
-                        variant={forecast.accuracy >= 90 ? "default" : forecast.accuracy >= 70 ? "secondary" : "destructive"}
-                      >
-                        {forecast.accuracy}% accurate
-                      </Badge>
+                      <StatusCell
+                        status={getForecastAccuracyLevel(forecast.accuracy)}
+                        statusConfig={FORECAST_ACCURACY_CONFIG}
+                        className="tabular-nums"
+                      />
                     )}
                   </div>
                 ))}

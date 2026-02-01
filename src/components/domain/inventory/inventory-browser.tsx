@@ -46,10 +46,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { DomainFilterBar } from "@/components/shared/filters";
 import {
-  FilterPanel,
-  type InventoryFilters,
-} from "./filter-panel";
+  DEFAULT_INVENTORY_FILTERS,
+  createInventoryFilterConfig,
+  type InventoryFiltersState,
+} from "./inventory-filter-config";
 import {
   ViewModeToggle,
   InventoryListView,
@@ -58,6 +60,9 @@ import {
   type InventoryItem,
   type ViewMode,
 } from "./view-modes";
+
+// Legacy type alias for compatibility during migration
+type InventoryFilters = InventoryFiltersState;
 
 // ============================================================================
 // TYPES
@@ -115,8 +120,8 @@ const EXPORT_COLUMNS = [
 export const InventoryBrowser = memo(function InventoryBrowser({
   items,
   isLoading,
-  products,
-  locations,
+  products = [],
+  locations = [],
   page,
   pageSize,
   totalCount,
@@ -202,6 +207,12 @@ export const InventoryBrowser = memo(function InventoryBrowser({
     );
   }, []);
 
+  // Build dynamic filter config with product/location options
+  const filterConfig = useMemo(
+    () => createInventoryFilterConfig(products, locations),
+    [products, locations]
+  );
+
   // View component selection
   const ViewComponent = useMemo(() => {
     switch (viewMode) {
@@ -217,11 +228,11 @@ export const InventoryBrowser = memo(function InventoryBrowser({
   return (
     <div className={cn("space-y-4", className)}>
       {/* Filter Panel */}
-      <FilterPanel
+      <DomainFilterBar<InventoryFiltersState>
+        config={filterConfig}
         filters={filters}
         onFiltersChange={onFiltersChange}
-        products={products}
-        locations={locations}
+        defaultFilters={DEFAULT_INVENTORY_FILTERS}
       />
 
       {/* Toolbar */}

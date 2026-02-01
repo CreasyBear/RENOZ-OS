@@ -38,7 +38,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/formatters";
+import { useOrgFormat } from "@/hooks/use-org-format";
 import { listAmendments } from "@/server/functions/orders/order-amendments";
 import type { AmendmentStatus, AmendmentType, AmendmentChanges, FinancialImpact } from "@/lib/schemas/orders";
 
@@ -130,6 +130,9 @@ export const AmendmentList = memo(function AmendmentList({
   onCancel,
   className,
 }: AmendmentListProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
   // Fetch amendments
   const { data: amendments, isLoading, error } = useQuery<AmendmentListItem[]>({
     queryKey: queryKeys.orders.amendments(orderId),
@@ -257,13 +260,13 @@ export const AmendmentList = memo(function AmendmentList({
                       )}
                     >
                       {financialImpact.difference >= 0 ? "+" : ""}
-                      {formatCurrency(financialImpact.difference)}
+                      {formatCurrencyDisplay(financialImpact.difference)}
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs text-muted-foreground mt-1">
-                    <span>{formatCurrency(financialImpact.totalBefore)}</span>
+                    <span>{formatCurrencyDisplay(financialImpact.totalBefore)}</span>
                     <span>to</span>
-                    <span>{formatCurrency(financialImpact.totalAfter)}</span>
+                    <span>{formatCurrencyDisplay(financialImpact.totalAfter)}</span>
                   </div>
                 </div>
               )}

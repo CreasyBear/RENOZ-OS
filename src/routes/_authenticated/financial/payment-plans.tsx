@@ -11,19 +11,16 @@
 
 import { useState, useCallback } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { FormSkeleton } from '@/components/skeletons/shared';
 import { PaymentPlansList, type PaymentSchedule } from '@/components/domain/financial/payment-plans-list';
 import {
-  createPaymentPlan,
-  getPaymentSchedule,
-  recordInstallmentPayment,
-} from '@/server/functions/financial/payment-schedules';
+  usePaymentSchedule,
+  useCreatePaymentPlan,
+  useRecordInstallmentPayment,
+} from '@/hooks/financial';
 import type { PaymentPlanType } from '@/lib/schemas';
-import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================================
 // SEARCH PARAMS SCHEMA
@@ -62,13 +59,7 @@ export const Route = createFileRoute('/_authenticated/financial/payment-plans')(
 // ============================================================================
 
 function PaymentPlansPage() {
-  const queryClient = useQueryClient();
   const { orderId, orderTotal } = Route.useSearch();
-
-  // Server function wrappers
-  const getScheduleFn = useServerFn(getPaymentSchedule);
-  const createPlanFn = useServerFn(createPaymentPlan);
-  const recordPaymentFn = useServerFn(recordInstallmentPayment);
 
   // Dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -78,63 +69,40 @@ function PaymentPlansPage() {
     amount: number;
   } | null>(null);
 
-  // Query: Get payment schedule for order
-  // Note: Server returns PaymentPlanSummary which is compatible with PaymentSchedule
+  // Query: Get payment schedule for order using centralized hook
   const {
-    data: schedule,
+    data: scheduleData,
     isLoading,
     error,
-  } = useQuery<PaymentSchedule | null>({
-    queryKey: queryKeys.financial.paymentScheduleDetail(orderId!),
-    queryFn: async () => {
-      const result = await getScheduleFn({ data: { orderId: orderId! } });
-      return result as PaymentSchedule | null;
-    },
-    enabled: !!orderId,
-  });
+  } = usePaymentSchedule(orderId ?? '', !!orderId);
 
-  // Mutation: Create payment plan
-  const createPlanMutation = useMutation({
-    mutationFn: (params: { planType: PaymentPlanType; numberOfPayments?: number }) =>
-      createPlanFn({
-        data: {
-          orderId: orderId!,
-          planType: params.planType,
-          numberOfPayments: params.numberOfPayments,
-        },
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.paymentScheduleDetail(orderId!) });
-      setCreateDialogOpen(false);
-    },
-  });
+  // Cast to the expected type
+  const schedule = scheduleData as PaymentSchedule | null;
 
-  // Mutation: Record installment payment
-  const recordPaymentMutation = useMutation({
-    mutationFn: (params: { installmentId: string; paidAmount: number; paymentReference?: string }) =>
-      recordPaymentFn({
-        data: {
-          installmentId: params.installmentId,
-          paidAmount: params.paidAmount,
-          paymentReference: params.paymentReference,
-        },
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.paymentScheduleDetail(orderId!) });
-      setRecordPaymentOpen(false);
-      setSelectedInstallment(null);
-    },
-  });
+  // Mutation: Create payment plan using centralized hook
+  const createPlanMutation = useCreatePaymentPlan();
+
+  // Mutation: Record installment payment using centralized hook
+  const recordPaymentMutation = useRecordInstallmentPayment();
 
   // Handler: Create payment plan
   const handleCreatePlan = useCallback(
     (planType: PaymentPlanType, monthlyCount?: number) => {
-      createPlanMutation.mutate({
-        planType,
-        numberOfPayments: monthlyCount,
-      });
+      if (!orderId) return;
+      createPlanMutation.mutate(
+        {
+          orderId,
+          planType,
+          numberOfPayments: monthlyCount,
+        },
+        {
+          onSuccess: () => {
+            setCreateDialogOpen(false);
+          },
+        }
+      );
     },
-    [createPlanMutation]
+    [createPlanMutation, orderId]
   );
 
   // Handler: Select installment and open record dialog
@@ -146,11 +114,19 @@ function PaymentPlansPage() {
   // Handler: Record payment
   const handleRecordPayment = useCallback(
     (installmentId: string, amount: number, paymentRef?: string) => {
-      recordPaymentMutation.mutate({
-        installmentId,
-        paidAmount: amount,
-        paymentReference: paymentRef,
-      });
+      recordPaymentMutation.mutate(
+        {
+          installmentId,
+          paidAmount: amount,
+          paymentReference: paymentRef,
+        },
+        {
+          onSuccess: () => {
+            setRecordPaymentOpen(false);
+            setSelectedInstallment(null);
+          },
+        }
+      );
     },
     [recordPaymentMutation]
   );

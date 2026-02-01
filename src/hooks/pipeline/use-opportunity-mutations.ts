@@ -19,12 +19,20 @@ import {
   updateOpportunityStage,
   deleteOpportunity,
   convertToOrder,
+  listOpportunities,
 } from '@/server/functions/pipeline/pipeline';
 import type {
   CreateOpportunity,
   UpdateOpportunity,
   OpportunityStage,
 } from '@/lib/schemas/pipeline';
+
+// ============================================================================
+// TYPES (inferred from server functions)
+// ============================================================================
+
+type OpportunityListResult = Awaited<ReturnType<typeof listOpportunities>>;
+type OpportunityItem = OpportunityListResult['items'][number];
 
 // ============================================================================
 // CREATE MUTATION
@@ -128,13 +136,13 @@ export function useUpdateOpportunityStage() {
       const previousLists = queryClient.getQueriesData({ queryKey: queryKeys.opportunities.lists() });
 
       // Optimistically update all opportunity lists
-      queryClient.setQueriesData(
+      queryClient.setQueriesData<OpportunityListResult>(
         { queryKey: queryKeys.opportunities.lists() },
-        (old: any) => {
+        (old) => {
           if (!old) return old;
           return {
             ...old,
-            items: old.items.map((opp: any) =>
+            items: old.items.map((opp: OpportunityItem) =>
               opp.id === opportunityId ? { ...opp, stage } : opp
             ),
           };

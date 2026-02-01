@@ -1,9 +1,24 @@
 /**
  * ActivityTimeline Component
  *
- * Displays customer activities in a chronological timeline format.
- * Shows activity type, direction, description, and relative timestamps.
+ * @deprecated Use CustomerActivityTimelineContainer from
+ * '@/components/domain/customers' instead for better consistency
+ * with the unified activity system.
+ *
+ * Migration:
+ * ```tsx
+ * // Before
+ * import { ActivityTimeline } from '@/components/domain/customers/activity-timeline';
+ * <ActivityTimeline activities={activities} />
+ *
+ * // After
+ * import { CustomerActivityTimelineContainer } from '@/components/domain/customers';
+ * <CustomerActivityTimelineContainer customerId={customerId} />
+ * ```
+ *
+ * Or use the shared UnifiedActivityTimeline directly for more control.
  */
+import { useEffect } from 'react';
 import {
   Phone,
   Mail,
@@ -177,6 +192,17 @@ function ActivityItem({ activity }: { activity: Activity }) {
 // ============================================================================
 
 export function ActivityTimeline({ activities }: ActivityTimelineProps) {
+  // Deprecation warning
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(
+        '[DEPRECATED] ActivityTimeline from @/components/domain/customers/activity-timeline is deprecated. ' +
+        'Use CustomerActivityTimelineContainer from @/components/domain/customers or ' +
+        'UnifiedActivityTimeline from @/components/shared/activity instead.'
+      );
+    }
+  }, []);
+
   if (activities.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">

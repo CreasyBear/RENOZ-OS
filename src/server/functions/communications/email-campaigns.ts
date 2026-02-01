@@ -30,6 +30,15 @@ import {
   populateCampaignRecipientsSchema,
   deleteCampaignSchema,
 } from '@/lib/schemas/communications'
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context'
+import { computeChanges } from '@/lib/activity-logger'
+
+// Excluded fields for activity logging
+const CAMPAIGN_EXCLUDED_FIELDS: string[] = [
+  'updatedAt',
+  'createdAt',
+  'organizationId',
+]
 
 // ============================================================================
 // SERVER FUNCTIONS
@@ -58,6 +67,26 @@ export const createCampaign = createServerFn({ method: 'POST' })
         createdById: ctx.user.id,
       })
       .returning()
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx)
+    logger.logAsync({
+      entityType: 'email',
+      entityId: campaign.id,
+      action: 'created',
+      description: `Created email campaign: ${campaign.name}`,
+      changes: computeChanges({
+        before: null,
+        after: campaign,
+        excludeFields: CAMPAIGN_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        campaignName: campaign.name,
+        templateType: campaign.templateType,
+        status: campaign.status,
+        scheduledAt: campaign.scheduledAt?.toISOString(),
+      },
+    })
 
     return campaign
   })
@@ -108,6 +137,24 @@ export const updateCampaign = createServerFn({ method: 'POST' })
       .set(updateData)
       .where(eq(emailCampaigns.id, data.id))
       .returning()
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx)
+    logger.logAsync({
+      entityType: 'email',
+      entityId: updated.id,
+      action: 'updated',
+      description: `Updated email campaign: ${updated.name}`,
+      changes: computeChanges({
+        before: existing,
+        after: updated,
+        excludeFields: CAMPAIGN_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        campaignName: updated.name,
+        changedFields: Object.keys(updateData),
+      },
+    })
 
     return updated
   })
@@ -452,6 +499,20 @@ export const populateCampaignRecipients = createServerFn({ method: 'POST' })
       .set({ recipientCount: recipientsToInsert.length })
       .where(eq(emailCampaigns.id, data.campaignId))
 
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx)
+    logger.logAsync({
+      entityType: 'email',
+      entityId: data.campaignId,
+      action: 'updated',
+      description: `Populated campaign recipients: ${campaign.name}`,
+      metadata: {
+        campaignId: data.campaignId,
+        campaignName: campaign.name,
+        recipientCount: recipientsToInsert.length,
+      },
+    })
+
     return {
       recipientCount: recipientsToInsert.length,
     }
@@ -466,11 +527,10 @@ export const cancelCampaign = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update })
 
-    const [updated] = await db
-      .update(emailCampaigns)
-      .set({
-        status: 'cancelled',
-      })
+    // Get existing campaign for logging
+    const [existing] = await db
+      .select()
+      .from(emailCampaigns)
       .where(
         and(
           eq(emailCampaigns.id, data.id),
@@ -478,11 +538,38 @@ export const cancelCampaign = createServerFn({ method: 'POST' })
           inArray(emailCampaigns.status, ['draft', 'scheduled', 'sending', 'paused']),
         ),
       )
-      .returning()
+      .limit(1)
 
-    if (!updated) {
+    if (!existing) {
       throw new Error('Campaign not found or cannot be cancelled')
     }
+
+    const [updated] = await db
+      .update(emailCampaigns)
+      .set({
+        status: 'cancelled',
+      })
+      .where(eq(emailCampaigns.id, data.id))
+      .returning()
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx)
+    logger.logAsync({
+      entityType: 'email',
+      entityId: updated.id,
+      action: 'updated',
+      description: `Cancelled email campaign: ${updated.name}`,
+      changes: computeChanges({
+        before: existing,
+        after: updated,
+        excludeFields: CAMPAIGN_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        campaignName: updated.name,
+        previousStatus: existing.status,
+        newStatus: updated.status,
+      },
+    })
 
     return updated
   })
@@ -509,6 +596,23 @@ export const deleteCampaign = createServerFn({ method: 'POST' })
     if (!deleted) {
       throw new Error('Campaign not found or cannot be deleted')
     }
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx)
+    logger.logAsync({
+      entityType: 'email',
+      entityId: deleted.id,
+      action: 'deleted',
+      description: `Deleted email campaign: ${deleted.name}`,
+      changes: computeChanges({
+        before: deleted,
+        after: null,
+        excludeFields: CAMPAIGN_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        campaignName: deleted.name,
+      },
+    })
 
     return { success: true }
   })

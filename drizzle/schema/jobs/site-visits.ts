@@ -81,8 +81,8 @@ export interface SiteVisitMetadata {
   checkOutMethod?: "manual" | "geofence" | "qr_code" | "nfc";
   /** Customer satisfaction (1-5) */
   customerSatisfaction?: number;
-  /** Additional properties */
-  [key: string]: unknown;
+  /** Additional custom fields - use explicit types, not unknown */
+  customFields?: Record<string, string | number | boolean | null>;
 }
 
 // ============================================================================

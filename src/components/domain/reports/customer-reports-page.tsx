@@ -188,11 +188,11 @@ export function CustomerReportsPage() {
           <AnalyticsDashboard
             dateRange={dateRange}
             onDateRangeChange={(range) => setDateRange(range as DateRange)}
-            kpis={dashboard.kpis?.kpis}
-            healthDistribution={dashboard.health?.distribution}
+            kpis={dashboard.kpis}
+            healthDistribution={dashboard.health}
             customerTrend={dashboard.trends?.customerTrend}
             revenueTrend={dashboard.trends?.revenueTrend}
-            segments={dashboard.segments?.segments}
+            segments={dashboard.segments}
             quickStats={quickStats.data}
             isLoading={dashboard.isLoading}
           />
@@ -210,8 +210,8 @@ export function CustomerReportsPage() {
             </Alert>
           )}
           <LifecycleAnalytics
-            stages={lifecycle.stages?.stages}
-            cohorts={lifecycle.cohorts?.cohorts}
+            stages={lifecycle.stages}
+            cohorts={lifecycle.cohorts}
             churn={lifecycle.churn}
             conversion={lifecycle.conversion}
             acquisition={lifecycle.acquisition}
@@ -233,8 +233,8 @@ export function CustomerReportsPage() {
             </Alert>
           )}
           <ValueAnalysis
-            tiers={value.tiers?.tiers}
-            topCustomers={value.topCustomers?.customers}
+            tiers={value.tiers}
+            topCustomers={value.topCustomers}
             valueKpis={valueKpis.data}
             profitabilitySegments={profitability.data?.segments}
             timeRange={valueRange}
@@ -319,10 +319,10 @@ function buildCsvPayload(
 ): { headers: string[]; rows: (string | number)[][] } | null {
   if (tab === 'dashboard') {
     const kpisData = data.dashboard.kpis
-    if (!kpisData?.kpis) return null
+    if (!kpisData?.length) return null
     return {
       headers: ['Metric', 'Value', 'Change', 'Change Label'],
-      rows: kpisData.kpis.map((kpi) => [
+      rows: kpisData.map((kpi) => [
         kpi.label,
         kpi.value,
         kpi.change.toString(),
@@ -332,7 +332,7 @@ function buildCsvPayload(
   }
 
   if (tab === 'lifecycle') {
-    const cohorts = data.lifecycle.cohorts?.cohorts
+    const cohorts = data.lifecycle.cohorts
     if (!cohorts?.length) return null
     return {
       headers: ['Cohort', 'Customers', 'Retention 30d', 'Retention 60d', 'Retention 90d'],
@@ -347,7 +347,7 @@ function buildCsvPayload(
   }
 
   if (tab === 'value') {
-    const tiers = data.value.tiers?.tiers
+    const tiers = data.value.tiers
     if (!tiers?.length) return null
     return {
       headers: ['Tier', 'Customers', 'Revenue', 'Avg Value'],

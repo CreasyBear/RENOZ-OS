@@ -24,6 +24,17 @@ import {
   deletePaymentPlanSchema,
   type PaymentPlanType,
 } from '@/lib/schemas';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { computeChanges } from '@/lib/activity-logger';
+
+// Excluded fields for activity logging (system-managed fields)
+const PAYMENT_SCHEDULE_EXCLUDED_FIELDS: string[] = [
+  'updatedAt',
+  'updatedBy',
+  'createdAt',
+  'createdBy',
+  'organizationId',
+];
 
 // ============================================================================
 // TYPES
@@ -291,6 +302,22 @@ export const createPaymentPlan = createServerFn({ method: 'POST' })
       return inserted;
     });
 
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'order',
+      entityId: data.orderId,
+      action: 'created',
+      description: `Created ${data.planType} payment plan for order`,
+      metadata: {
+        orderId: data.orderId,
+        orderNumber: order[0].orderNumber ?? undefined,
+        planType: data.planType,
+        total: Number(totalAmount),
+        installmentCount: insertedInstallments.length,
+      },
+    });
+
     // Return summary
     return {
       orderId: data.orderId,
@@ -464,6 +491,29 @@ export const recordInstallmentPayment = createServerFn({ method: 'POST' })
       return updatedInstallment;
     });
 
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'order',
+      entityId: orderId,
+      action: 'updated',
+      description: `Recorded payment of ${formatAmount({ currency: 'AUD', amount: data.paidAmount })} for installment`,
+      changes: computeChanges({
+        before: installment[0],
+        after: updated,
+        excludeFields: PAYMENT_SCHEDULE_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        orderId,
+        installmentId: data.installmentId,
+        installmentNo: installment[0].installmentNo,
+        paidAmount: data.paidAmount,
+        newTotalPaid: newPaidAmount,
+        isPaid,
+        paymentReference: data.paymentReference,
+      },
+    });
+
     return updated;
   });
 
@@ -627,6 +677,26 @@ export const updateInstallment = createServerFn({ method: 'POST' })
       .where(eq(paymentSchedules.id, installmentId))
       .returning();
 
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'order',
+      entityId: existing[0].orderId,
+      action: 'updated',
+      description: `Updated installment ${existing[0].installmentNo}`,
+      changes: computeChanges({
+        before: existing[0],
+        after: updated,
+        excludeFields: PAYMENT_SCHEDULE_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        orderId: updated.orderId,
+        installmentId: updated.id,
+        installmentNo: updated.installmentNo,
+        changedFields: Object.keys(updateData),
+      },
+    });
+
     return updated;
   });
 
@@ -642,8 +712,20 @@ export const deletePaymentPlan = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<{ deleted: number }> => {
     const ctx = await withAuth({ permission: PERMISSIONS.financial.delete });
 
+    // Get plan type before deleting for logging
+    const [existingPlan] = await db
+      .select({ planType: paymentSchedules.planType })
+      .from(paymentSchedules)
+      .where(
+        and(
+          eq(paymentSchedules.orderId, data.orderId),
+          eq(paymentSchedules.organizationId, ctx.organizationId)
+        )
+      )
+      .limit(1);
+
     // Wrap in transaction to prevent race condition between check and delete
-    return await db.transaction(async (tx) => {
+    const result = await db.transaction(async (tx) => {
       // Check for any paid installments
       const paidInstallments = await tx
         .select()
@@ -686,4 +768,20 @@ export const deletePaymentPlan = createServerFn({ method: 'POST' })
 
       return { deleted: deleteCount };
     });
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'order',
+      entityId: data.orderId,
+      action: 'deleted',
+      description: `Deleted payment plan (${result.deleted} installments)`,
+      metadata: {
+        orderId: data.orderId,
+        planType: existingPlan?.planType,
+        deletedCount: result.deleted,
+      },
+    });
+
+    return result;
   });

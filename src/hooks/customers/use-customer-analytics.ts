@@ -209,6 +209,7 @@ export function useTopCustomers(limit: number = 10) {
 
 /**
  * Fetch all dashboard analytics data in parallel
+ * Returns flattened structure to avoid double nesting (e.g., kpis.kpis)
  */
 export function useDashboardAnalytics(range: '7d' | '30d' | '90d' | '365d' | 'all' = '30d') {
   const kpis = useCustomerKpis(range);
@@ -217,10 +218,10 @@ export function useDashboardAnalytics(range: '7d' | '30d' | '90d' | '365d' | 'al
   const segments = useSegmentPerformance();
 
   return {
-    kpis: kpis.data,
-    health: health.data,
-    trends: trends.data,
-    segments: segments.data,
+    kpis: kpis.data?.kpis, // Flatten: extract kpis array from { kpis: { kpis: [...] } }
+    health: health.data?.distribution, // Flatten: extract distribution from { distribution: {...} }
+    trends: trends.data, // Already flat: { customerTrend: [...], revenueTrend: [...] }
+    segments: segments.data?.segments, // Flatten: extract segments array from { segments: [...] }
     isLoading: kpis.isLoading || health.isLoading || trends.isLoading || segments.isLoading,
     isError: kpis.isError || health.isError || trends.isError || segments.isError,
     refetch: () => {
@@ -234,14 +235,15 @@ export function useDashboardAnalytics(range: '7d' | '30d' | '90d' | '365d' | 'al
 
 /**
  * Fetch all value analysis data in parallel
+ * Returns flattened structure to avoid double nesting (e.g., tiers.tiers)
  */
 export function useValueAnalytics() {
   const tiers = useValueTiers();
   const topCustomers = useTopCustomers(10);
 
   return {
-    tiers: tiers.data,
-    topCustomers: topCustomers.data,
+    tiers: tiers.data?.tiers, // Flatten: extract tiers array from { tiers: [...] }
+    topCustomers: topCustomers.data?.customers, // Flatten: extract customers array from { customers: [...] }
     isLoading: tiers.isLoading || topCustomers.isLoading,
     isError: tiers.isError || topCustomers.isError,
     refetch: () => {
@@ -253,6 +255,7 @@ export function useValueAnalytics() {
 
 /**
  * Fetch all lifecycle analytics data
+ * Returns flattened structure to avoid double nesting (e.g., stages.stages, cohorts.cohorts)
  */
 export function useLifecycleAnalytics(range: '3m' | '6m' | '1y' = '6m') {
   const stages = useLifecycleStages();
@@ -262,11 +265,11 @@ export function useLifecycleAnalytics(range: '3m' | '6m' | '1y' = '6m') {
   const acquisition = useAcquisitionMetrics(range);
 
   return {
-    stages: stages.data,
-    cohorts: cohorts.data,
-    churn: churn.data,
-    conversion: conversion.data,
-    acquisition: acquisition.data,
+    stages: stages.data?.stages, // Flatten: extract stages array from { stages: [...] }
+    cohorts: cohorts.data?.cohorts, // Flatten: extract cohorts array from { cohorts: [...] }
+    churn: churn.data, // Already flat
+    conversion: conversion.data, // Already flat
+    acquisition: acquisition.data, // Already flat
     isLoading:
       stages.isLoading ||
       cohorts.isLoading ||

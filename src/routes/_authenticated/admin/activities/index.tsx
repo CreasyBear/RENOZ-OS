@@ -8,7 +8,7 @@
  */
 import { createFileRoute } from "@tanstack/react-router";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
-import { ActivityDashboard } from "@/components/activity";
+import { ActivityDashboard } from "@/components/shared/activity";
 import { requireAdmin } from "@/lib/auth/route-guards";
 import { AdminTableSkeleton } from "@/components/skeletons/admin";
 

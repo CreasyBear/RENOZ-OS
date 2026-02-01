@@ -500,7 +500,7 @@ export function PipelineForecastPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {attributionQuery.data.data.map((item) => (
+                  {attributionQuery.data.items.map((item) => (
                     <div
                       key={item.group}
                       className="flex items-center justify-between border-b pb-4 last:border-0"

@@ -24,29 +24,29 @@ export interface BudgetCheckResult {
   reason?: string;
   /** Actionable suggestion for user */
   suggestion?: string;
-  /** Current org daily usage in cents */
-  orgDailyUsedCents?: number;
-  /** Current user daily usage in cents */
-  userDailyUsedCents?: number;
-  /** Org daily limit in cents */
-  orgDailyLimitCents?: number;
-  /** User daily limit in cents */
-  userDailyLimitCents?: number;
+  /** Current org daily usage in dollars */
+  orgDailyUsed?: number;
+  /** Current user daily usage in dollars */
+  userDailyUsed?: number;
+  /** Org daily limit in dollars */
+  orgDailyLimit?: number;
+  /** User daily limit in dollars */
+  userDailyLimit?: number;
 }
 
 export interface BudgetStatus {
-  /** Organization daily limit in cents */
-  dailyLimitCents: number;
-  /** Organization daily usage in cents */
-  dailyUsedCents: number;
-  /** Monthly limit in cents (org daily * 30) */
-  monthlyLimitCents: number;
-  /** Monthly usage in cents */
-  monthlyUsedCents: number;
-  /** User daily limit in cents */
-  userDailyLimitCents: number;
-  /** User daily usage in cents */
-  userDailyUsedCents: number;
+  /** Organization daily limit in dollars */
+  dailyLimit: number;
+  /** Organization daily usage in dollars */
+  dailyUsed: number;
+  /** Monthly limit in dollars (org daily * 30) */
+  monthlyLimit: number;
+  /** Monthly usage in dollars */
+  monthlyUsed: number;
+  /** User daily limit in dollars */
+  userDailyLimit: number;
+  /** User daily usage in dollars */
+  userDailyUsed: number;
   /** Percentage of daily budget used (0-100) */
   dailyPercentUsed: number;
   /** Percentage of monthly budget used (0-100) */
@@ -59,32 +59,52 @@ export interface BudgetStatus {
 
 /**
  * Get organization daily budget limit from environment.
- * Default: $100.00 (10000 cents)
+ * Default: $100.00
+ * Environment variable can be in cents (AI_COST_LIMIT_DAILY_CENTS) or dollars (AI_COST_LIMIT_DAILY)
  */
-export function getOrgDailyLimitCents(): number {
-  const envValue = process.env.AI_COST_LIMIT_DAILY_CENTS;
-  if (envValue) {
-    const parsed = parseInt(envValue, 10);
+export function getOrgDailyLimit(): number {
+  // Try dollars first (new format)
+  const envDollars = process.env.AI_COST_LIMIT_DAILY;
+  if (envDollars) {
+    const parsed = parseFloat(envDollars);
     if (!isNaN(parsed) && parsed > 0) {
       return parsed;
     }
   }
-  return 10000; // $100.00 default
+  // Fallback to cents (legacy format)
+  const envCents = process.env.AI_COST_LIMIT_DAILY_CENTS;
+  if (envCents) {
+    const parsed = parseInt(envCents, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      return parsed / 100; // Convert cents to dollars
+    }
+  }
+  return 100; // $100.00 default
 }
 
 /**
  * Get user daily budget limit from environment.
- * Default: $20.00 (2000 cents)
+ * Default: $20.00
+ * Environment variable can be in cents (AI_COST_LIMIT_USER_CENTS) or dollars (AI_COST_LIMIT_USER)
  */
-export function getUserDailyLimitCents(): number {
-  const envValue = process.env.AI_COST_LIMIT_USER_CENTS;
-  if (envValue) {
-    const parsed = parseInt(envValue, 10);
+export function getUserDailyLimit(): number {
+  // Try dollars first (new format)
+  const envDollars = process.env.AI_COST_LIMIT_USER;
+  if (envDollars) {
+    const parsed = parseFloat(envDollars);
     if (!isNaN(parsed) && parsed > 0) {
       return parsed;
     }
   }
-  return 2000; // $20.00 default
+  // Fallback to cents (legacy format)
+  const envCents = process.env.AI_COST_LIMIT_USER_CENTS;
+  if (envCents) {
+    const parsed = parseInt(envCents, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      return parsed / 100; // Convert cents to dollars
+    }
+  }
+  return 20; // $20.00 default
 }
 
 // ============================================================================
@@ -94,14 +114,14 @@ export function getUserDailyLimitCents(): number {
 /**
  * Get organization's daily AI cost usage.
  * @param organizationId - The organization ID
- * @returns Total cost in cents for today
+ * @returns Total cost in dollars for today
  */
 async function getOrgDailyUsage(organizationId: string): Promise<number> {
   const today = new Date().toISOString().split('T')[0];
 
   const result = await db
     .select({
-      total: sql<number>`COALESCE(SUM(${aiCostTracking.costCents}), 0)::integer`,
+      total: sql<number>`COALESCE(SUM(${aiCostTracking.cost}), 0)::numeric`,
     })
     .from(aiCostTracking)
     .where(
@@ -111,20 +131,20 @@ async function getOrgDailyUsage(organizationId: string): Promise<number> {
       )
     );
 
-  return result[0]?.total ?? 0;
+  return Number(result[0]?.total ?? 0);
 }
 
 /**
  * Get user's daily AI cost usage.
  * @param userId - The user ID
- * @returns Total cost in cents for today
+ * @returns Total cost in dollars for today
  */
 async function getUserDailyUsage(userId: string): Promise<number> {
   const today = new Date().toISOString().split('T')[0];
 
   const result = await db
     .select({
-      total: sql<number>`COALESCE(SUM(${aiCostTracking.costCents}), 0)::integer`,
+      total: sql<number>`COALESCE(SUM(${aiCostTracking.cost}), 0)::numeric`,
     })
     .from(aiCostTracking)
     .where(
@@ -134,13 +154,13 @@ async function getUserDailyUsage(userId: string): Promise<number> {
       )
     );
 
-  return result[0]?.total ?? 0;
+  return Number(result[0]?.total ?? 0);
 }
 
 /**
  * Get organization's monthly AI cost usage.
  * @param organizationId - The organization ID
- * @returns Total cost in cents for current month
+ * @returns Total cost in dollars for current month
  */
 async function getOrgMonthlyUsage(organizationId: string): Promise<number> {
   const now = new Date();
@@ -150,7 +170,7 @@ async function getOrgMonthlyUsage(organizationId: string): Promise<number> {
 
   const result = await db
     .select({
-      total: sql<number>`COALESCE(SUM(${aiCostTracking.costCents}), 0)::integer`,
+      total: sql<number>`COALESCE(SUM(${aiCostTracking.cost}), 0)::numeric`,
     })
     .from(aiCostTracking)
     .where(
@@ -160,7 +180,7 @@ async function getOrgMonthlyUsage(organizationId: string): Promise<number> {
       )
     );
 
-  return result[0]?.total ?? 0;
+  return Number(result[0]?.total ?? 0);
 }
 
 // ============================================================================
@@ -172,13 +192,13 @@ async function getOrgMonthlyUsage(organizationId: string): Promise<number> {
  *
  * @param organizationId - The organization ID
  * @param userId - The user ID
- * @param estimatedCostCents - Estimated cost of the upcoming request
+ * @param estimatedCost - Estimated cost of the upcoming request in dollars
  * @returns Budget check result indicating if request is allowed
  */
 export async function checkBudget(
   organizationId: string,
   userId: string,
-  estimatedCostCents: number = 0
+  estimatedCost: number = 0
 ): Promise<BudgetCheckResult> {
   try {
     // Get current usage
@@ -188,41 +208,41 @@ export async function checkBudget(
     ]);
 
     // Get limits
-    const orgDailyLimit = getOrgDailyLimitCents();
-    const userDailyLimit = getUserDailyLimitCents();
+    const orgDailyLimit = getOrgDailyLimit();
+    const userDailyLimit = getUserDailyLimit();
 
     // Check org daily limit
-    if (orgDailyUsed + estimatedCostCents > orgDailyLimit) {
+    if (orgDailyUsed + estimatedCost > orgDailyLimit) {
       return {
         allowed: false,
         reason: 'Organization daily budget exceeded',
         suggestion: 'Contact admin to increase limit or wait until tomorrow',
-        orgDailyUsedCents: orgDailyUsed,
-        userDailyUsedCents: userDailyUsed,
-        orgDailyLimitCents: orgDailyLimit,
-        userDailyLimitCents: userDailyLimit,
+        orgDailyUsed,
+        userDailyUsed,
+        orgDailyLimit,
+        userDailyLimit,
       };
     }
 
     // Check user daily limit
-    if (userDailyUsed + estimatedCostCents > userDailyLimit) {
+    if (userDailyUsed + estimatedCost > userDailyLimit) {
       return {
         allowed: false,
         reason: 'Personal daily budget exceeded',
         suggestion: 'Wait until tomorrow or contact admin',
-        orgDailyUsedCents: orgDailyUsed,
-        userDailyUsedCents: userDailyUsed,
-        orgDailyLimitCents: orgDailyLimit,
-        userDailyLimitCents: userDailyLimit,
+        orgDailyUsed,
+        userDailyUsed,
+        orgDailyLimit,
+        userDailyLimit,
       };
     }
 
     return {
       allowed: true,
-      orgDailyUsedCents: orgDailyUsed,
-      userDailyUsedCents: userDailyUsed,
-      orgDailyLimitCents: orgDailyLimit,
-      userDailyLimitCents: userDailyLimit,
+      orgDailyUsed,
+      userDailyUsed,
+      orgDailyLimit,
+      userDailyLimit,
     };
   } catch (error) {
     console.error('[AI Budget] Failed to check budget:', error);
@@ -264,17 +284,17 @@ export async function getBudgetStatus(
     getOrgMonthlyUsage(organizationId),
   ]);
 
-  const dailyLimit = getOrgDailyLimitCents();
-  const userDailyLimit = getUserDailyLimitCents();
+  const dailyLimit = getOrgDailyLimit();
+  const userDailyLimit = getUserDailyLimit();
   const monthlyLimit = dailyLimit * 30; // Approximate monthly limit
 
   return {
-    dailyLimitCents: dailyLimit,
-    dailyUsedCents: orgDailyUsed,
-    monthlyLimitCents: monthlyLimit,
-    monthlyUsedCents: orgMonthlyUsed,
-    userDailyLimitCents: userDailyLimit,
-    userDailyUsedCents: userDailyUsed,
+    dailyLimit,
+    dailyUsed: orgDailyUsed,
+    monthlyLimit,
+    monthlyUsed: orgMonthlyUsed,
+    userDailyLimit,
+    userDailyUsed: userDailyUsed,
     dailyPercentUsed: dailyLimit > 0 ? Math.round((orgDailyUsed / dailyLimit) * 100) : 0,
     monthlyPercentUsed: monthlyLimit > 0 ? Math.round((orgMonthlyUsed / monthlyLimit) * 100) : 0,
   };

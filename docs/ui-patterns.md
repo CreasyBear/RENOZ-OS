@@ -66,7 +66,15 @@ function DomainPage() {
 
 ## Breadcrumbs
 
-Breadcrumbs are automatically rendered by `PageLayout.Header`. They're generated from the route path using `ROUTE_METADATA` for labels.
+Breadcrumbs are rendered by the **Global Header** component (not PageLayout.Header). They're automatically generated from the route path using `ROUTE_METADATA`.
+
+### Layout Hierarchy
+
+```
+Global Header    → Breadcrumbs (navigation concern)
+PageLayout.Header → Title + Actions (page concern)
+EntityHeader     → Name + Status (entity concern, detail views only)
+```
 
 ### Behavior
 
@@ -74,14 +82,18 @@ Breadcrumbs are automatically rendered by `PageLayout.Header`. They're generated
 - **Mobile**: Middle segments collapse to `...` dropdown
 - **Dashboard only**: Hidden (no breadcrumbs needed)
 
-### Disable Breadcrumbs
+### Detail Pages
+
+For detail pages, set `title={null}` on PageLayout.Header and use EntityHeader for entity identity:
 
 ```tsx
 <PageLayout.Header
-  title="Page Title"
-  showBreadcrumbs={false}  // Disable for this page
+  title={null}  // Entity info shown by EntityHeader instead
+  actions={<BackButton to="/customers" />}
 />
 ```
+
+See [DETAIL-VIEW-STANDARDS.md](./docs/design-system/DETAIL-VIEW-STANDARDS.md) for complete patterns.
 
 ---
 

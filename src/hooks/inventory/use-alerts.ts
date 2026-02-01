@@ -33,6 +33,8 @@ export interface AlertFilters {
   locationId?: string;
   page?: number;
   pageSize?: number;
+  sortBy?: 'alertType' | 'isActive' | 'lastTriggeredAt' | 'createdAt';
+  sortOrder?: 'asc' | 'desc';
 }
 
 export interface UseAlertsOptions extends AlertFilters {

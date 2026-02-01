@@ -1,13 +1,22 @@
 /**
  * Shared ActivityTimeline Component
  *
- * Displays activities in a chronological timeline format.
- * Supports both pre-fetched activities (via `activities` prop) and
- * automatic fetching (via `entityType` + `entityId` props).
+ * @deprecated Use UnifiedActivityTimeline from '@/components/shared/activity' instead.
+ * This component is being phased out in favor of the consolidated activity system.
  *
- * Used by:
- * - Customer 360 view (pre-fetched activities)
- * - Pipeline opportunity detail (with filtering and completion)
+ * Migration:
+ * ```tsx
+ * // Before
+ * import { ActivityTimeline } from '@/components/shared';
+ * <ActivityTimeline activities={activities} />
+ *
+ * // After
+ * import { UnifiedActivityTimeline } from '@/components/shared/activity';
+ * <UnifiedActivityTimeline activities={unifiedActivities} />
+ * ```
+ *
+ * Note: You'll need to transform your activities to the UnifiedActivity format.
+ * See transformAuditActivity and transformPlannedActivity in '@/lib/schemas/unified-activity'.
  */
 import * as React from 'react';
 import {
@@ -60,6 +69,7 @@ export interface BaseActivity {
   id: string;
   description: string;
   createdAt: string | Date;
+  entityType?: string;
 }
 
 /**
@@ -96,6 +106,8 @@ export interface ActivityTimelineProps<T extends BaseActivity = Activity> {
   filterTypes?: Array<{ value: string; label: string }>;
   /** Maximum number of items to display */
   maxItems?: number;
+  /** Group items by entity type when available */
+  groupByEntity?: boolean;
   /** Show completion toggle for activities */
   showCompletion?: boolean;
   /** Callback when an activity is marked complete */
@@ -206,6 +218,10 @@ const DEFAULT_FILTERS: Filters = {
   dateFrom: '',
   dateTo: '',
 };
+
+function formatEntityLabel(entityType: string): string {
+  return entityType.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+}
 
 // ============================================================================
 // HELPERS
@@ -536,6 +552,7 @@ export function ActivityTimeline<T extends BaseActivity = Activity>({
   showFilters = false,
   filterTypes,
   maxItems,
+  groupByEntity = true,
   showCompletion = false,
   onComplete,
   isCompleting = false,
@@ -577,6 +594,26 @@ export function ActivityTimeline<T extends BaseActivity = Activity>({
     return result as T[];
   }, [activities, filters, maxItems]);
 
+  const entityGroups = React.useMemo(() => {
+    if (!groupByEntity) return null;
+    const hasEntity = filteredActivities.some(
+      (activity) => typeof activity.entityType === 'string' && activity.entityType.length > 0
+    );
+    if (!hasEntity) return null;
+    const groups: Array<{ key: string; label: string; activities: T[] }> = [];
+    for (const activity of filteredActivities) {
+      const key = activity.entityType;
+      if (!key) continue;
+      let group = groups.find((item) => item.key === key);
+      if (!group) {
+        group = { key, label: formatEntityLabel(key), activities: [] };
+        groups.push(group);
+      }
+      group.activities.push(activity);
+    }
+    return groups;
+  }, [filteredActivities, groupByEntity]);
+
   const hasActiveFilters =
     filters.type !== 'all' ||
     filters.status !== 'all' ||
@@ -593,6 +630,32 @@ export function ActivityTimeline<T extends BaseActivity = Activity>({
         description={emptyDescription}
         hasFilters={hasActiveFilters}
       />
+    ) : entityGroups ? (
+      <div className="space-y-4">
+        {entityGroups.map((group) => (
+          <div key={group.key} className="space-y-0">
+            <div className="text-muted-foreground flex items-center gap-2 px-1 py-2 text-xs font-medium uppercase tracking-wide">
+              <span>{group.label}</span>
+              <span className="text-muted-foreground/70">· {group.activities.length}</span>
+            </div>
+            <div className="space-y-0">
+              {group.activities.map((activity, index) =>
+                renderItem ? (
+                  <React.Fragment key={activity.id}>{renderItem(activity, index)}</React.Fragment>
+                ) : (
+                  <DefaultActivityItem
+                    key={activity.id}
+                    activity={activity as Activity}
+                    showCompletion={showCompletion}
+                    onComplete={onComplete}
+                    isCompleting={isCompleting}
+                  />
+                )
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
     ) : (
       <div className="space-y-0">
         {filteredActivities.map((activity, index) =>

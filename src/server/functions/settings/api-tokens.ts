@@ -21,7 +21,7 @@ import bcrypt from "bcrypt";
 import { createServerFn } from "@tanstack/react-start";
 import { eq, and, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { apiTokens } from "../../../../drizzle/schema";
+import { apiTokens, activities } from "../../../../drizzle/schema";
 import { withAuth } from "@/lib/server/protected";
 import { AuthError, PermissionDeniedError, NotFoundError } from "@/lib/server/errors";
 import {
@@ -82,37 +82,64 @@ async function verifyToken(token: string, hash: string): Promise<boolean> {
  * Returns the plaintext token ONCE - it cannot be retrieved later.
  *
  * Required permission: api_token.create (admin roles only)
+ *
+ * NOTE: Uses transaction to ensure token creation and audit log are atomic.
+ * For security-sensitive operations, we use synchronous logging within the transaction.
  */
 export const createApiToken = createServerFn({ method: "POST" })
   .inputValidator(createApiTokenSchema)
   .handler(async ({ data }): Promise<CreateApiTokenResponse> => {
     const ctx = await withAuth({ permission: "api_token.create" });
 
-    // Generate and hash token
+    // Generate and hash token (outside transaction - crypto operations)
     const plainToken = generateToken();
     const hashedToken = await hashToken(plainToken);
     const tokenPrefix = getTokenPrefix(plainToken);
 
-    // Insert into database
-    const [newToken] = await db
-      .insert(apiTokens)
-      .values({
-        name: data.name,
-        hashedToken,
-        tokenPrefix,
-        userId: ctx.user.id,
+    // Use transaction to ensure atomicity of token creation and audit log
+    const newToken = await db.transaction(async (tx) => {
+      // Insert token
+      const [token] = await tx
+        .insert(apiTokens)
+        .values({
+          name: data.name,
+          hashedToken,
+          tokenPrefix,
+          userId: ctx.user.id,
+          organizationId: ctx.organizationId,
+          scopes: data.scopes,
+          expiresAt: data.expiresAt ?? null,
+        })
+        .returning({
+          id: apiTokens.id,
+          name: apiTokens.name,
+          tokenPrefix: apiTokens.tokenPrefix,
+          scopes: apiTokens.scopes,
+          expiresAt: apiTokens.expiresAt,
+          createdAt: apiTokens.createdAt,
+        });
+
+      // Activity logging within transaction (security-sensitive operation)
+      await tx.insert(activities).values({
         organizationId: ctx.organizationId,
-        scopes: data.scopes,
-        expiresAt: data.expiresAt ?? null,
-      })
-      .returning({
-        id: apiTokens.id,
-        name: apiTokens.name,
-        tokenPrefix: apiTokens.tokenPrefix,
-        scopes: apiTokens.scopes,
-        expiresAt: apiTokens.expiresAt,
-        createdAt: apiTokens.createdAt,
+        userId: ctx.user.id,
+        entityType: 'user',
+        entityId: ctx.user.id,
+        action: 'created',
+        description: `Created API token: ${token.name}`,
+        entityName: ctx.user.name ?? ctx.user.email,
+        metadata: {
+          tokenId: token.id,
+          tokenName: token.name,
+          tokenPrefix: token.tokenPrefix,
+          scopes: token.scopes,
+          expiresAt: token.expiresAt?.toISOString() ?? null,
+        },
+        createdBy: ctx.user.id,
       });
+
+      return token;
+    });
 
     return {
       id: newToken.id,
@@ -180,16 +207,21 @@ export const listApiTokens = createServerFn({ method: "GET" }).handler(
  * Sets revokedAt timestamp (soft delete for audit trail).
  *
  * Users can revoke their own tokens. Admins can revoke any token in org.
+ *
+ * NOTE: Uses transaction to ensure revocation and audit log are atomic.
+ * For security-sensitive operations, we use synchronous logging within the transaction.
  */
 export const revokeApiToken = createServerFn({ method: "POST" })
   .inputValidator(revokeApiTokenSchema)
   .handler(async ({ data }): Promise<{ success: boolean }> => {
     const ctx = await withAuth();
 
-    // Find the token
+    // Find the token with all details needed for logging
     const [token] = await db
       .select({
         id: apiTokens.id,
+        name: apiTokens.name,
+        tokenPrefix: apiTokens.tokenPrefix,
         userId: apiTokens.userId,
         organizationId: apiTokens.organizationId,
         revokedAt: apiTokens.revokedAt,
@@ -218,11 +250,35 @@ export const revokeApiToken = createServerFn({ method: "POST" })
       return { success: true }; // Already revoked
     }
 
-    // Revoke the token
-    await db
-      .update(apiTokens)
-      .set({ revokedAt: new Date() })
-      .where(eq(apiTokens.id, data.tokenId));
+    // Use transaction to ensure atomicity of revocation and audit log
+    await db.transaction(async (tx) => {
+      // Revoke the token
+      await tx
+        .update(apiTokens)
+        .set({ revokedAt: new Date() })
+        .where(eq(apiTokens.id, data.tokenId));
+
+      // Activity logging within transaction (security-sensitive operation)
+      await tx.insert(activities).values({
+        organizationId: ctx.organizationId,
+        userId: ctx.user.id,
+        entityType: 'user',
+        entityId: token.userId,
+        action: 'updated',
+        description: `Revoked API token: ${token.name}`,
+        entityName: ctx.user.name ?? ctx.user.email,
+        metadata: {
+          tokenId: data.tokenId,
+          tokenName: token.name,
+          tokenPrefix: token.tokenPrefix,
+          revokedBy: ctx.user.id,
+          tokenOwnerId: token.userId,
+          previousStatus: 'active',
+          newStatus: 'revoked',
+        },
+        createdBy: ctx.user.id,
+      });
+    });
 
     return { success: true };
   });

@@ -43,6 +43,7 @@ import {
   type DeferredRevenueBalance,
 } from '@/lib/schemas';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 
 // ============================================================================
 // CONSTANTS
@@ -137,6 +138,24 @@ export const recognizeRevenue = createServerFn()
       })
       .returning();
 
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'order',
+      entityId: orderId,
+      action: 'updated',
+      description: `Recognized revenue: ${milestoneName ?? recognitionType}`,
+      metadata: {
+        orderId,
+        orderNumber: order.orderNumber ?? undefined,
+        recognitionId: recognition.id,
+        recognitionType,
+        milestoneName: milestoneName ?? undefined,
+        recognizedAmount: Number(recognizedAmount),
+        recognitionDate: recognition.recognitionDate,
+      },
+    });
+
     return {
       success: true,
       recognitionId: recognition.id,
@@ -190,6 +209,22 @@ export const createDeferredRevenue = createServerFn()
         reason: reason ?? null,
       })
       .returning();
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'order',
+      entityId: orderId,
+      action: 'created',
+      description: `Created deferred revenue record`,
+      metadata: {
+        orderId,
+        deferredRevenueId: deferred.id,
+        total: Number(amount),
+        expectedRecognitionDate: expectedRecognitionDate ?? undefined,
+        reason: reason ?? undefined,
+      },
+    });
 
     return {
       success: true,
@@ -288,6 +323,29 @@ export const releaseDeferredRevenue = createServerFn()
         newRemainingAmount,
         newStatus,
       };
+    });
+
+    // Activity logging - need to get orderId from transaction result
+    const [deferredRecord] = await db
+      .select({ orderId: deferredRevenue.orderId })
+      .from(deferredRevenue)
+      .where(eq(deferredRevenue.id, deferredRevenueId));
+
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'order',
+      entityId: deferredRecord.orderId,
+      action: 'updated',
+      description: `Released deferred revenue: ${milestoneName ?? 'Deferred revenue release'}`,
+      metadata: {
+        orderId: deferredRecord.orderId,
+        deferredRevenueId,
+        recognitionId: result.recognitionId,
+        releasedAmount: Number(result.releaseAmount),
+        remainingAmount: Number(result.newRemainingAmount),
+        newStatus: result.newStatus,
+        milestoneName: milestoneName ?? undefined,
+      },
     });
 
     return {

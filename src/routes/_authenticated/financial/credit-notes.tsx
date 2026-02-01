@@ -16,21 +16,16 @@
  */
 
 import { createFileRoute } from '@tanstack/react-router';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useServerFn } from '@tanstack/react-start';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { FinancialTableSkeleton } from '@/components/skeletons/financial';
 import { CreditNotesList } from '@/components/domain/financial/credit-notes-list';
 import {
-  issueCreditNote,
-  voidCreditNote,
-} from '@/server/functions/financial/credit-notes';
-import {
   useCreditNotes,
   useCreateCreditNote,
   useApplyCreditNote,
+  useIssueCreditNote,
+  useVoidCreditNote,
 } from '@/hooks/financial';
-import { queryKeys } from '@/lib/query-keys';
 
 // ============================================================================
 // ROUTE
@@ -59,12 +54,6 @@ export const Route = createFileRoute('/_authenticated/financial/credit-notes')({
 // ============================================================================
 
 function CreditNotesPage() {
-  const queryClient = useQueryClient();
-
-  // Server functions for mutations not yet in hooks
-  const issueFn = useServerFn(issueCreditNote);
-  const voidFn = useServerFn(voidCreditNote);
-
   // Query for listing credit notes
   const {
     data,
@@ -72,27 +61,17 @@ function CreditNotesPage() {
     error,
   } = useCreditNotes({ page: 1, pageSize: 50 });
 
-  // Create mutation
+  // Create mutation using centralized hook
   const createMutation = useCreateCreditNote();
 
-  // Issue mutation (not yet in centralized hooks)
-  const issueMutation = useMutation({
-    mutationFn: (id: string) => issueFn({ data: { id } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
-    },
-  });
+  // Issue mutation using centralized hook
+  const issueMutation = useIssueCreditNote();
 
   // Apply to invoice mutation
   const applyMutation = useApplyCreditNote();
 
-  // Void mutation (not yet in centralized hooks)
-  const voidMutation = useMutation({
-    mutationFn: (id: string) => voidFn({ data: { id, voidReason: 'Voided by user' } }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
-    },
-  });
+  // Void mutation using centralized hook
+  const voidMutation = useVoidCreditNote();
 
   // Combined pending state
   const isMutating =
@@ -115,7 +94,7 @@ function CreditNotesPage() {
           onCreate={(input) => createMutation.mutate(input)}
           onIssue={(id) => issueMutation.mutate(id)}
           onApply={(creditNoteId, orderId) => applyMutation.mutate({ creditNoteId, orderId })}
-          onVoid={(id) => voidMutation.mutate(id)}
+          onVoid={(id) => voidMutation.mutate({ id })}
           isMutating={isMutating}
         />
       </PageLayout.Content>

@@ -33,6 +33,25 @@ import {
 } from "@/lib/db/pagination";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { createActivityLoggerWithContext } from "@/server/middleware/activity-context";
+import { computeChanges } from "@/lib/activity-logger";
+
+// ============================================================================
+// ACTIVITY LOGGING HELPERS
+// ============================================================================
+
+/**
+ * Fields to exclude from activity change tracking (system-managed)
+ */
+const PROJECT_EXCLUDED_FIELDS: string[] = [
+  "updatedAt",
+  "updatedBy",
+  "createdAt",
+  "createdBy",
+  "deletedAt",
+  "version",
+  "organizationId",
+];
 
 // ============================================================================
 // PROJECT CRUD
@@ -214,6 +233,7 @@ export const createProject = createServerFn({ method: "POST" })
   .inputValidator(createProjectSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.create });
+    const logger = createActivityLoggerWithContext(ctx);
 
     // Generate project number (PRJ-XXXX format)
     const projectNumber = await generateProjectNumber(ctx.organizationId);
@@ -249,6 +269,27 @@ export const createProject = createServerFn({ method: "POST" })
       role: "owner",
     });
 
+    // Log project creation
+    logger.logAsync({
+      entityType: "project",
+      entityId: project.id,
+      action: "created",
+      description: `Created project: ${project.projectNumber} - ${project.title}`,
+      changes: computeChanges({
+        before: null,
+        after: project,
+        excludeFields: PROJECT_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        projectNumber: project.projectNumber,
+        projectTitle: project.title,
+        projectType: project.projectType,
+        priority: project.priority ?? undefined,
+        customerId: data.customerId ?? undefined,
+        status: project.status,
+      },
+    });
+
     return project;
   });
 
@@ -259,6 +300,7 @@ export const updateProject = createServerFn({ method: "POST" })
   .inputValidator(updateProjectSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
+    const logger = createActivityLoggerWithContext(ctx);
 
     const { projectId, ...updates } = data;
 
@@ -274,6 +316,8 @@ export const updateProject = createServerFn({ method: "POST" })
       throw new Error("Project not found");
     }
 
+    const before = existingProject;
+
     const [updatedProject] = await db
       .update(projects)
       .set({
@@ -286,6 +330,33 @@ export const updateProject = createServerFn({ method: "POST" })
       .where(eq(projects.id, projectId))
       .returning();
 
+    // Log project update
+    const changes = computeChanges({
+      before,
+      after: updatedProject,
+      excludeFields: PROJECT_EXCLUDED_FIELDS as never[],
+    });
+
+    if (changes.fields && changes.fields.length > 0) {
+      logger.logAsync({
+        entityType: "project",
+        entityId: updatedProject.id,
+        action: "updated",
+        description: `Updated project: ${updatedProject.projectNumber} - ${updatedProject.title}`,
+        changes,
+        metadata: {
+          projectNumber: updatedProject.projectNumber,
+          projectTitle: updatedProject.title,
+          customerId: updatedProject.customerId ?? undefined,
+          changedFields: changes.fields,
+          ...(before.status !== updatedProject.status && {
+            previousStatus: before.status,
+            newStatus: updatedProject.status,
+          }),
+        },
+      });
+    }
+
     return updatedProject;
   });
 
@@ -296,6 +367,7 @@ export const deleteProject = createServerFn({ method: "POST" })
   .inputValidator(projectIdSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.delete });
+    const logger = createActivityLoggerWithContext(ctx);
 
     // Verify project exists and belongs to organization
     const existingProject = await db.query.projects.findFirst({
@@ -320,6 +392,26 @@ export const deleteProject = createServerFn({ method: "POST" })
       .where(eq(projects.id, data.projectId))
       .returning();
 
+    // Log project deletion (cancellation)
+    logger.logAsync({
+      entityType: "project",
+      entityId: existingProject.id,
+      action: "deleted",
+      description: `Cancelled project: ${existingProject.projectNumber} - ${existingProject.title}`,
+      changes: computeChanges({
+        before: existingProject,
+        after: null,
+        excludeFields: PROJECT_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        projectNumber: existingProject.projectNumber,
+        projectTitle: existingProject.title,
+        customerId: existingProject.customerId ?? undefined,
+        previousStatus: existingProject.status,
+        newStatus: "cancelled",
+      },
+    });
+
     return updatedProject;
   });
 
@@ -334,6 +426,7 @@ export const addProjectMember = createServerFn({ method: "POST" })
   .inputValidator(addProjectMemberSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
+    const logger = createActivityLoggerWithContext(ctx);
 
     // Verify project exists and belongs to organization
     const existingProject = await db.query.projects.findFirst({
@@ -361,6 +454,22 @@ export const addProjectMember = createServerFn({ method: "POST" })
       })
       .returning();
 
+    // Log member assignment
+    logger.logAsync({
+      entityType: "project",
+      entityId: existingProject.id,
+      action: "assigned",
+      description: `Added ${data.role} to project: ${existingProject.projectNumber}`,
+      metadata: {
+        projectNumber: existingProject.projectNumber,
+        projectTitle: existingProject.title,
+        assignedTo: data.userId,
+        customFields: {
+          memberRole: data.role,
+        },
+      },
+    });
+
     return member;
   });
 
@@ -371,6 +480,7 @@ export const removeProjectMember = createServerFn({ method: "POST" })
   .inputValidator(removeProjectMemberSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
+    const logger = createActivityLoggerWithContext(ctx);
 
     // Verify project exists and belongs to organization
     const existingProject = await db.query.projects.findFirst({
@@ -394,6 +504,21 @@ export const removeProjectMember = createServerFn({ method: "POST" })
         )
       );
 
+    // Log member removal
+    logger.logAsync({
+      entityType: "project",
+      entityId: existingProject.id,
+      action: "updated",
+      description: `Removed member from project: ${existingProject.projectNumber}`,
+      metadata: {
+        projectNumber: existingProject.projectNumber,
+        projectTitle: existingProject.title,
+        customFields: {
+          removedUserId: data.userId,
+        },
+      },
+    });
+
     return { success: true };
   });
 
@@ -408,6 +533,7 @@ export const completeProject = createServerFn({ method: "POST" })
   .inputValidator(completeProjectSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
+    const logger = createActivityLoggerWithContext(ctx);
 
     // Verify project exists and belongs to organization
     const existingProject = await db.query.projects.findFirst({
@@ -420,6 +546,8 @@ export const completeProject = createServerFn({ method: "POST" })
     if (!existingProject) {
       throw new Error("Project not found");
     }
+
+    const before = existingProject;
 
     // Build update object
     const updateData: Record<string, unknown> = {
@@ -448,6 +576,33 @@ export const completeProject = createServerFn({ method: "POST" })
       .set(updateData)
       .where(eq(projects.id, data.projectId))
       .returning();
+
+    // Log project completion
+    const changes = computeChanges({
+      before,
+      after: updatedProject,
+      excludeFields: PROJECT_EXCLUDED_FIELDS as never[],
+    });
+
+    logger.logAsync({
+      entityType: "project",
+      entityId: updatedProject.id,
+      action: "updated",
+      description: `Completed project: ${updatedProject.projectNumber} - ${updatedProject.title}`,
+      changes,
+      metadata: {
+        projectNumber: updatedProject.projectNumber,
+        projectTitle: updatedProject.title,
+        customerId: updatedProject.customerId ?? undefined,
+        previousStatus: before.status,
+        newStatus: updatedProject.status,
+        customFields: {
+          customerSatisfactionRating: data.customerSatisfactionRating ?? null,
+          actualTotalCost: data.actualTotalCost ?? null,
+          actualCompletionDate: data.actualCompletionDate ?? null,
+        },
+      },
+    });
 
     return updatedProject;
   });

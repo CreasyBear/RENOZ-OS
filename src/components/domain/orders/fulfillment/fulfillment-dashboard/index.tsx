@@ -17,7 +17,7 @@
 import { memo, useState, useCallback, useMemo } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
 import { cn } from '@/lib/utils';
-import { StatCard } from './components/fulfillment-stats';
+import { MetricCard } from '@/components/shared';
 import { FulfillmentBoard } from './fulfillment-board';
 import { type FulfillmentFiltersState } from './fulfillment-filters';
 import { FulfillmentHeader } from './fulfillment-header';
@@ -26,6 +26,14 @@ import { isOverdue, type FulfillmentStats } from './utils';
 import type { FulfillmentOrder } from './fulfillment-card';
 import { Package, Truck } from 'lucide-react';
 import { logger } from '@/lib/logger';
+
+// Variant styles for fulfillment stat cards
+const STAT_CARD_STYLES = {
+  default: { className: 'border-gray-200', iconClassName: 'text-gray-400' },
+  warning: { className: 'border-orange-200 bg-orange-50', iconClassName: 'text-orange-500' },
+  success: { className: 'border-green-200 bg-green-50', iconClassName: 'text-green-500' },
+  info: { className: 'border-blue-200 bg-blue-50', iconClassName: 'text-blue-500' },
+} as const;
 
 // ============================================================================
 // TYPES
@@ -377,37 +385,41 @@ export const FulfillmentDashboard = memo(function FulfillmentDashboard({
 
       {/* Summary Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard
+        <MetricCard
           title="To Allocate"
           value={stats.toPick}
           subtitle="Awaiting stock allocation"
-          icon={<Package className="h-5 w-5" />}
-          variant="info"
-          loading={isLoading}
+          icon={Package}
+          className={STAT_CARD_STYLES.info.className}
+          iconClassName={STAT_CARD_STYLES.info.iconClassName}
+          isLoading={isLoading}
         />
-        <StatCard
+        <MetricCard
           title="To Pick"
           value={ordersByStage.to_pick?.length || 0}
           subtitle="Ready for picking"
-          icon={<Package className="h-5 w-5" />}
-          variant="warning"
-          loading={isLoading}
+          icon={Package}
+          className={STAT_CARD_STYLES.warning.className}
+          iconClassName={STAT_CARD_STYLES.warning.iconClassName}
+          isLoading={isLoading}
         />
-        <StatCard
+        <MetricCard
           title="Picking"
           value={ordersByStage.picking?.length || 0}
           subtitle="Currently being picked"
-          icon={<Truck className="h-5 w-5" />}
-          variant="default"
-          loading={isLoading}
+          icon={Truck}
+          className={STAT_CARD_STYLES.default.className}
+          iconClassName={STAT_CARD_STYLES.default.iconClassName}
+          isLoading={isLoading}
         />
-        <StatCard
+        <MetricCard
           title="Ready to Ship"
           value={stats.readyToShip}
           subtitle="Packed and waiting"
-          icon={<Truck className="h-5 w-5" />}
-          variant="success"
-          loading={isLoading}
+          icon={Truck}
+          className={STAT_CARD_STYLES.success.className}
+          iconClassName={STAT_CARD_STYLES.success.iconClassName}
+          isLoading={isLoading}
         />
       </div>
 

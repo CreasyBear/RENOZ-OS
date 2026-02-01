@@ -21,7 +21,7 @@
 import { Input } from "~/components/ui/input"
 import { FormField } from "./form-field"
 import { cn } from "~/lib/utils"
-import type { FormFieldApi } from "./types"
+import type { AnyFieldApi } from "./types"
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   AUD: "$",
@@ -32,7 +32,7 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
 
 export interface CurrencyFieldProps {
   /** TanStack Form field instance */
-  field: FormFieldApi
+  field: AnyFieldApi<string>
   /** Field label */
   label: string
   /** Currency code (AUD, USD, EUR, GBP) */
@@ -87,8 +87,9 @@ export function CurrencyField({
   const handleBlur = () => {
     field.handleBlur()
     // Format on blur
-    const formatted = formatValue(field.state.value)
-    if (formatted !== field.state.value) {
+    const currentValue = field.state.value ?? ""
+    const formatted = formatValue(currentValue)
+    if (formatted !== currentValue) {
       field.handleChange(formatted)
     }
   }

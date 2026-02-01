@@ -193,7 +193,9 @@ export function DataTable<TData>({
                             ? "descending"
                             : undefined
                       }
-                      className={cn(canSort && "cursor-pointer select-none")}
+                      className={cn(
+                        canSort && "cursor-pointer select-none transition-colors duration-150 hover:bg-muted/30"
+                      )}
                       onClick={
                         canSort
                           ? header.column.getToggleSortingHandler()
@@ -242,7 +244,9 @@ export function DataTable<TData>({
                   key={row.id}
                   role="row"
                   data-state={row.getIsSelected() && "selected"}
-                  className={cn(onRowClick && "cursor-pointer hover:bg-muted/50")}
+                  className={cn(
+                    onRowClick && "cursor-pointer transition-colors duration-200 hover:bg-muted/50"
+                  )}
                   onClick={() => handleRowClick(row)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && onRowClick) {

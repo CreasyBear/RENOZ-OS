@@ -30,6 +30,7 @@ import type {
   CheckInInput,
   CheckOutInput,
   CustomerSignOffInput,
+  SiteVisitListResult,
 } from '@/lib/schemas/jobs/site-visits';
 
 // ============================================================================
@@ -46,9 +47,9 @@ export interface UseSiteVisitsOptions extends Partial<SiteVisitListQuery> {
 export function useSiteVisits(options: UseSiteVisitsOptions = {}) {
   const { enabled = true, ...filters } = options;
 
-  return useQuery({
+  return useQuery<SiteVisitListResult>({
     queryKey: queryKeys.siteVisits.list(filters),
-    queryFn: () => getSiteVisits({ data: filters as SiteVisitListQuery }),
+    queryFn: () => getSiteVisits({ data: filters as SiteVisitListQuery }) as Promise<SiteVisitListResult>,
     enabled,
     staleTime: 30 * 1000, // 30 seconds
   });
@@ -58,12 +59,12 @@ export function useSiteVisits(options: UseSiteVisitsOptions = {}) {
  * Get site visits by project
  */
 export function useSiteVisitsByProject(projectId: string, enabled = true) {
-  return useQuery({
+  return useQuery<SiteVisitListResult>({
     queryKey: queryKeys.siteVisits.byProject(projectId),
     queryFn: () =>
       getSiteVisits({
         data: { projectId, page: 1, pageSize: 100 } as SiteVisitListQuery,
-      }),
+      }) as Promise<SiteVisitListResult>,
     enabled: enabled && !!projectId,
     staleTime: 60 * 1000,
   });
@@ -73,12 +74,12 @@ export function useSiteVisitsByProject(projectId: string, enabled = true) {
  * Get site visits by installer
  */
 export function useSiteVisitsByInstaller(installerId: string, enabled = true) {
-  return useQuery({
+  return useQuery<SiteVisitListResult>({
     queryKey: queryKeys.siteVisits.byInstaller(installerId),
     queryFn: () =>
       getSiteVisits({
         data: { installerId, page: 1, pageSize: 100 } as SiteVisitListQuery,
-      }),
+      }) as Promise<SiteVisitListResult>,
     enabled: enabled && !!installerId,
     staleTime: 60 * 1000,
   });
@@ -88,12 +89,12 @@ export function useSiteVisitsByInstaller(installerId: string, enabled = true) {
  * Get schedule for a date range
  */
 export function useSchedule(dateFrom: string, dateTo: string, enabled = true) {
-  return useQuery({
+  return useQuery<SiteVisitListResult>({
     queryKey: queryKeys.siteVisits.schedule(dateFrom, dateTo),
     queryFn: () =>
       getSiteVisits({
         data: { dateFrom, dateTo, page: 1, pageSize: 500 } as SiteVisitListQuery,
-      }),
+      }) as Promise<SiteVisitListResult>,
     enabled: enabled && !!dateFrom && !!dateTo,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });

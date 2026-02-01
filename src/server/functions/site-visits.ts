@@ -25,6 +25,25 @@ import {
 } from "@/lib/schemas/jobs/site-visits";
 import { withAuth } from "@/lib/server/protected";
 import { PERMISSIONS } from "@/lib/auth/permissions";
+import { createActivityLoggerWithContext } from "@/server/middleware/activity-context";
+import { computeChanges } from "@/lib/activity-logger";
+
+// ============================================================================
+// ACTIVITY LOGGING HELPERS
+// ============================================================================
+
+/**
+ * Fields to exclude from activity change tracking (system-managed)
+ */
+const SITE_VISIT_EXCLUDED_FIELDS: string[] = [
+  "updatedAt",
+  "updatedBy",
+  "createdAt",
+  "createdBy",
+  "deletedAt",
+  "version",
+  "organizationId",
+];
 
 // ============================================================================
 // SITE VISIT CRUD
@@ -153,6 +172,7 @@ export const createSiteVisit = createServerFn({ method: "POST" })
   .inputValidator(createSiteVisitSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.create });
+    const logger = createActivityLoggerWithContext(ctx);
 
     // Verify project exists and belongs to organization
     const project = await db.query.projects.findFirst({
@@ -187,6 +207,30 @@ export const createSiteVisit = createServerFn({ method: "POST" })
       })
       .returning();
 
+    // Log site visit creation
+    logger.logAsync({
+      entityType: "site_visit",
+      entityId: siteVisit.id,
+      action: "created",
+      description: `Created site visit: ${visitNumber}`,
+      changes: computeChanges({
+        before: null,
+        after: siteVisit,
+        excludeFields: SITE_VISIT_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        customerId: project.customerId ?? undefined,
+        projectId: project.id,
+        projectNumber: project.projectNumber,
+        projectTitle: project.title,
+        visitNumber,
+        visitType: data.visitType,
+        scheduledDate: data.scheduledDate,
+        installerId: data.installerId ?? undefined,
+        status: "scheduled",
+      },
+    });
+
     return siteVisit;
   });
 
@@ -197,6 +241,7 @@ export const updateSiteVisit = createServerFn({ method: "POST" })
   .inputValidator(updateSiteVisitSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
+    const logger = createActivityLoggerWithContext(ctx);
 
     const { siteVisitId, ...updates } = data;
 
@@ -212,6 +257,8 @@ export const updateSiteVisit = createServerFn({ method: "POST" })
       throw new Error("Site visit not found");
     }
 
+    const before = existingVisit;
+
     const [updatedVisit] = await db
       .update(siteVisits)
       .set({
@@ -223,6 +270,40 @@ export const updateSiteVisit = createServerFn({ method: "POST" })
       .where(eq(siteVisits.id, siteVisitId))
       .returning();
 
+    // Log site visit update
+    const changes = computeChanges({
+      before,
+      after: updatedVisit,
+      excludeFields: SITE_VISIT_EXCLUDED_FIELDS as never[],
+    });
+
+    // Need to get project's customerId for activity logging
+    const project = await db.query.projects.findFirst({
+      where: eq(projects.id, updatedVisit.projectId),
+      columns: { customerId: true },
+    });
+
+    if (changes.fields && changes.fields.length > 0) {
+      logger.logAsync({
+        entityType: "site_visit",
+        entityId: updatedVisit.id,
+        action: "updated",
+        description: `Updated site visit: ${updatedVisit.visitNumber}`,
+        changes,
+        metadata: {
+          customerId: project?.customerId ?? undefined,
+          projectId: updatedVisit.projectId,
+          visitNumber: updatedVisit.visitNumber,
+          visitType: updatedVisit.visitType,
+          changedFields: changes.fields,
+          ...(before.status !== updatedVisit.status && {
+            previousStatus: before.status,
+            newStatus: updatedVisit.status,
+          }),
+        },
+      });
+    }
+
     return updatedVisit;
   });
 
@@ -233,6 +314,7 @@ export const deleteSiteVisit = createServerFn({ method: "POST" })
   .inputValidator(siteVisitIdSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.delete });
+    const logger = createActivityLoggerWithContext(ctx);
 
     // Verify site visit exists and belongs to organization
     const existingVisit = await db.query.siteVisits.findFirst({
@@ -255,6 +337,33 @@ export const deleteSiteVisit = createServerFn({ method: "POST" })
       .delete(siteVisits)
       .where(eq(siteVisits.id, data.siteVisitId));
 
+    // Get project's customerId for activity logging
+    const project = await db.query.projects.findFirst({
+      where: eq(projects.id, existingVisit.projectId),
+      columns: { customerId: true },
+    });
+
+    // Log site visit deletion
+    logger.logAsync({
+      entityType: "site_visit",
+      entityId: existingVisit.id,
+      action: "deleted",
+      description: `Deleted site visit: ${existingVisit.visitNumber}`,
+      changes: computeChanges({
+        before: existingVisit,
+        after: null,
+        excludeFields: SITE_VISIT_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        customerId: project?.customerId ?? undefined,
+        projectId: existingVisit.projectId,
+        visitNumber: existingVisit.visitNumber,
+        visitType: existingVisit.visitType,
+        scheduledDate: existingVisit.scheduledDate ?? undefined,
+        status: existingVisit.status,
+      },
+    });
+
     return { success: true };
   });
 
@@ -269,6 +378,7 @@ export const checkIn = createServerFn({ method: "POST" })
   .inputValidator(checkInSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
+    const logger = createActivityLoggerWithContext(ctx);
 
     const existingVisit = await db.query.siteVisits.findFirst({
       where: and(
@@ -297,6 +407,34 @@ export const checkIn = createServerFn({ method: "POST" })
       .where(eq(siteVisits.id, data.siteVisitId))
       .returning();
 
+    // Get project's customerId for activity logging
+    const project = await db.query.projects.findFirst({
+      where: eq(projects.id, updatedVisit.projectId),
+      columns: { customerId: true },
+    });
+
+    // Log check-in
+    logger.logAsync({
+      entityType: "site_visit",
+      entityId: updatedVisit.id,
+      action: "updated",
+      description: `Checked in to site visit: ${updatedVisit.visitNumber}`,
+      changes: {
+        before: { status: "scheduled" },
+        after: { status: "in_progress" },
+        fields: ["status", "actualStartTime", "startLocation"],
+      },
+      metadata: {
+        customerId: project?.customerId ?? undefined,
+        projectId: updatedVisit.projectId,
+        visitNumber: updatedVisit.visitNumber,
+        visitType: updatedVisit.visitType,
+        previousStatus: "scheduled",
+        newStatus: "in_progress",
+        installerId: updatedVisit.installerId ?? undefined,
+      },
+    });
+
     return updatedVisit;
   });
 
@@ -307,6 +445,7 @@ export const checkOut = createServerFn({ method: "POST" })
   .inputValidator(checkOutSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
+    const logger = createActivityLoggerWithContext(ctx);
 
     const existingVisit = await db.query.siteVisits.findFirst({
       where: and(
@@ -335,6 +474,34 @@ export const checkOut = createServerFn({ method: "POST" })
       .where(eq(siteVisits.id, data.siteVisitId))
       .returning();
 
+    // Get project's customerId for activity logging
+    const project = await db.query.projects.findFirst({
+      where: eq(projects.id, updatedVisit.projectId),
+      columns: { customerId: true },
+    });
+
+    // Log check-out
+    logger.logAsync({
+      entityType: "site_visit",
+      entityId: updatedVisit.id,
+      action: "updated",
+      description: `Checked out from site visit: ${updatedVisit.visitNumber}`,
+      changes: {
+        before: { status: "in_progress" },
+        after: { status: "completed" },
+        fields: ["status", "actualEndTime", "completeLocation"],
+      },
+      metadata: {
+        customerId: project?.customerId ?? undefined,
+        projectId: updatedVisit.projectId,
+        visitNumber: updatedVisit.visitNumber,
+        visitType: updatedVisit.visitType,
+        previousStatus: "in_progress",
+        newStatus: "completed",
+        installerId: updatedVisit.installerId ?? undefined,
+      },
+    });
+
     return updatedVisit;
   });
 
@@ -349,6 +516,7 @@ export const recordCustomerSignOff = createServerFn({ method: "POST" })
   .inputValidator(customerSignOffSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.job.update });
+    const logger = createActivityLoggerWithContext(ctx);
 
     const existingVisit = await db.query.siteVisits.findFirst({
       where: and(
@@ -378,6 +546,35 @@ export const recordCustomerSignOff = createServerFn({ method: "POST" })
       })
       .where(eq(siteVisits.id, data.siteVisitId))
       .returning();
+
+    // Get project's customerId for activity logging
+    const project = await db.query.projects.findFirst({
+      where: eq(projects.id, updatedVisit.projectId),
+      columns: { customerId: true },
+    });
+
+    // Log customer sign-off
+    logger.logAsync({
+      entityType: "site_visit",
+      entityId: updatedVisit.id,
+      action: "updated",
+      description: `Customer signed off on site visit: ${updatedVisit.visitNumber}`,
+      changes: {
+        before: { customerSignOffConfirmed: false },
+        after: { customerSignOffConfirmed: true },
+        fields: ["customerSignOffName", "customerSignOffDate", "customerSignOffConfirmed", "customerRating", "customerFeedback"],
+      },
+      metadata: {
+        customerId: project?.customerId ?? undefined,
+        projectId: updatedVisit.projectId,
+        visitNumber: updatedVisit.visitNumber,
+        visitType: updatedVisit.visitType,
+        customFields: {
+          signedByName: data.customerName,
+          customerRating: data.customerRating ?? null,
+        },
+      },
+    });
 
     return updatedVisit;
   });

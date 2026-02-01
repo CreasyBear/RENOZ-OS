@@ -15,13 +15,20 @@ import {
   Building2,
   User,
   Star,
+  ShoppingCart,
+  Activity as ActivityIcon,
+  TrendingUp,
+  Clock,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { UnifiedActivityTimeline } from '@/components/shared/unified-activity-timeline'
-import { useUnifiedActivities } from '@/hooks/use-unified-activities'
+import { UnifiedActivityTimeline } from '@/components/shared/activity'
+import { useUnifiedActivities } from '@/hooks/activities'
 import { MetricsDashboard } from './analytics/metrics-dashboard'
+import { FormatAmount } from '@/components/shared/format'
+import { Link } from '@tanstack/react-router'
+import { formatDistanceToNow } from 'date-fns'
 
 // ============================================================================
 // TYPES
@@ -52,7 +59,7 @@ interface Address {
   country: string
 }
 
-interface Activity {
+interface CustomerActivity {
   id: string
   activityType: string
   direction?: string | null
@@ -76,6 +83,32 @@ interface Priority {
   serviceLevel: string
   contractValue?: string | null
   accountManager?: string | null
+}
+
+interface OrderSummary {
+  recentOrders: Array<{
+    id: string
+    orderNumber: string
+    status: string
+    paymentStatus: string
+    total: number | null
+    orderDate: Date | string | null
+    dueDate: Date | string | null
+  }>
+  ordersByStatus: Array<{
+    status: string
+    count: number
+    totalValue: number
+  }>
+}
+
+interface ActivitySummary {
+  byType: Array<{
+    activityType: string
+    count: number
+    lastActivityDate: Date | string | null
+  }>
+  totalActivities: number
 }
 
 interface Customer360Data {
@@ -102,9 +135,11 @@ interface Customer360Data {
   tags: string[]
   contacts: Contact[]
   addresses: Address[]
-  activities: Activity[]
+  activities: CustomerActivity[]
   tagAssignments: TagAssignment[]
   priority?: Priority | null
+  orderSummary?: OrderSummary
+  activitySummary?: ActivitySummary
 }
 
 interface Customer360ViewProps {
@@ -243,6 +278,204 @@ function AddressCard({ address }: { address: Address }) {
   )
 }
 
+function OrderSummaryCard({ orderSummary, customerId }: { orderSummary?: OrderSummary; customerId: string }) {
+  if (!orderSummary) return null
+
+  const { recentOrders, ordersByStatus } = orderSummary
+  const statusColors: Record<string, string> = {
+    draft: 'bg-gray-100 text-gray-700',
+    quote: 'bg-blue-100 text-blue-700',
+    confirmed: 'bg-green-100 text-green-700',
+    picking: 'bg-yellow-100 text-yellow-700',
+    picked: 'bg-orange-100 text-orange-700',
+    shipped: 'bg-purple-100 text-purple-700',
+    delivered: 'bg-green-100 text-green-700',
+    cancelled: 'bg-red-100 text-red-700',
+  }
+
+  const formatDate = (date: Date | string | null) => {
+    if (!date) return '—'
+    const d = typeof date === 'string' ? new Date(date) : date
+    return formatDistanceToNow(d, { addSuffix: true })
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <ShoppingCart className="h-5 w-5" />
+            Order Summary
+          </CardTitle>
+          <Link
+            to="/orders"
+            search={{ customerId }}
+            className="text-sm text-primary hover:underline"
+          >
+            View All
+          </Link>
+        </div>
+        <CardDescription>
+          Recent orders and status breakdown
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {/* Status Breakdown */}
+        {ordersByStatus.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">Orders by Status</h4>
+            <div className="space-y-1.5">
+              {ordersByStatus.map((status) => (
+                <div key={status.status} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      variant="outline"
+                      className={`text-xs ${statusColors[status.status] || 'bg-gray-100 text-gray-700'}`}
+                    >
+                      {status.status}
+                    </Badge>
+                    <span className="text-muted-foreground">{status.count} orders</span>
+                  </div>
+                  <span className="font-medium">
+                    <FormatAmount amount={status.totalValue} />
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Recent Orders */}
+        {recentOrders.length > 0 && (
+          <div className="space-y-2">
+            <h4 className="text-sm font-medium">Recent Orders</h4>
+            <div className="space-y-2">
+              {recentOrders.map((order) => (
+                <Link
+                  key={order.id}
+                  to="/orders/$orderId"
+                  params={{ orderId: order.id }}
+                  className="flex items-center justify-between p-2 rounded-lg border hover:bg-muted/50 transition-colors cursor-pointer"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-sm">{order.orderNumber}</span>
+                      <Badge
+                        variant="outline"
+                        className={`text-xs ${statusColors[order.status] || 'bg-gray-100 text-gray-700'}`}
+                      >
+                        {order.status}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                      {order.orderDate && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          {formatDate(order.orderDate)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {order.total && (
+                    <div className="ml-4 font-medium text-sm">
+                      <FormatAmount amount={order.total} />
+                    </div>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {recentOrders.length === 0 && ordersByStatus.length === 0 && (
+          <p className="text-sm text-muted-foreground py-4 text-center">
+            No orders yet
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function ActivitySummaryCard({ activitySummary }: { activitySummary?: ActivitySummary }) {
+  if (!activitySummary) return null
+
+  const { byType, totalActivities } = activitySummary
+
+  const activityTypeLabels: Record<string, string> = {
+    call: 'Calls',
+    email: 'Emails',
+    meeting: 'Meetings',
+    note: 'Notes',
+    quote: 'Quotes',
+    order: 'Orders',
+    complaint: 'Complaints',
+    feedback: 'Feedback',
+    website_visit: 'Website Visits',
+    social_interaction: 'Social',
+  }
+
+  const activityIcons: Record<string, React.ReactNode> = {
+    call: <Phone className="h-4 w-4" />,
+    email: <Mail className="h-4 w-4" />,
+    meeting: <User className="h-4 w-4" />,
+    note: <ActivityIcon className="h-4 w-4" />,
+    quote: <TrendingUp className="h-4 w-4" />,
+    order: <ShoppingCart className="h-4 w-4" />,
+  }
+
+  const formatDate = (date: Date | string | null) => {
+    if (!date) return 'Never'
+    const d = typeof date === 'string' ? new Date(date) : date
+    return formatDistanceToNow(d, { addSuffix: true })
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-lg flex items-center gap-2">
+          <ActivityIcon className="h-5 w-5" />
+          Activity Summary
+        </CardTitle>
+        <CardDescription>
+          {totalActivities} total activities
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {byType.length > 0 ? (
+          <div className="space-y-2">
+            {byType.map((activity) => (
+              <div
+                key={activity.activityType}
+                className="flex items-center justify-between p-2 rounded-lg border"
+              >
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  {activityIcons[activity.activityType] || <ActivityIcon className="h-4 w-4" />}
+                  <span className="text-sm font-medium">
+                    {activityTypeLabels[activity.activityType] || activity.activityType}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="text-muted-foreground">{activity.count}</span>
+                  {activity.lastActivityDate && (
+                    <span className="text-xs text-muted-foreground">
+                      {formatDate(activity.lastActivityDate)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground py-4 text-center">
+            No activities recorded
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 // ============================================================================
 // MAIN COMPONENT
 // ============================================================================
@@ -296,6 +529,12 @@ export function Customer360View({ customer }: Customer360ViewProps) {
         creditLimit={customer.creditLimit}
         priority={customer.priority}
       />
+
+      {/* Summary Cards Row */}
+      <div className="grid gap-6 md:grid-cols-2">
+        <OrderSummaryCard orderSummary={customer.orderSummary} customerId={customer.id} />
+        <ActivitySummaryCard activitySummary={customer.activitySummary} />
+      </div>
 
       {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-3">

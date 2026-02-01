@@ -11,8 +11,9 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Plus, Download } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { PipelineKanbanSkeleton } from "@/components/skeletons/pipeline";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { PipelineKanbanContainer } from "@/components/domain/pipeline";
+import { cn } from "@/lib/utils";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -47,12 +48,14 @@ function PageHeaderActions() {
         <Download className="h-4 w-4 mr-2" />
         Export
       </Button>
-      <Button size="sm" asChild>
-        <Link to="/pipeline/new" search={{ stage: undefined }}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Opportunity
-        </Link>
-      </Button>
+      <Link
+        to="/pipeline/new"
+        search={{ stage: undefined }}
+        className={cn(buttonVariants({ size: "sm" }))}
+      >
+        <Plus className="h-4 w-4 mr-2" />
+        New Opportunity
+      </Link>
     </div>
   );
 }

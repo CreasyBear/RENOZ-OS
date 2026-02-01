@@ -42,6 +42,7 @@ import { useJobCostingReport } from '@/hooks';
 import { useCustomers } from '@/hooks';
 import { useCreateScheduledReport, useGenerateReport } from '@/hooks/reports';
 import { ScheduledReportForm } from '@/components/domain/settings/scheduled-report-form';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import type { JobProfitabilityResult } from '@/lib/schemas';
 
 // ============================================================================
@@ -82,15 +83,6 @@ function getDateRange(period: string): { dateFrom: string; dateTo: string } {
   };
 }
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
 function formatPercent(value: number): string {
   return `${value >= 0 ? '+' : ''}${value.toFixed(1)}%`;
 }
@@ -106,6 +98,9 @@ export function JobCostingReportPage() {
   const [jobType, setJobType] = useState<string | undefined>(undefined);
   const [status, setStatus] = useState<string | undefined>('completed');
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
 
   // Derived date range
   const { dateFrom, dateTo } = useMemo(() => getDateRange(period), [period]);
@@ -253,7 +248,9 @@ export function JobCostingReportPage() {
         accessorKey: 'quotedAmount',
         header: 'Quoted',
         cell: ({ row }) => (
-          <span className="font-mono">{formatCurrency(row.original.quotedAmount)}</span>
+          <span className="font-mono">
+            {formatCurrencyDisplay(row.original.quotedAmount)}
+          </span>
         ),
       },
       {
@@ -261,7 +258,7 @@ export function JobCostingReportPage() {
         header: 'Materials',
         cell: ({ row }) => (
           <span className="text-muted-foreground font-mono">
-            {formatCurrency(row.original.materialCost)}
+            {formatCurrencyDisplay(row.original.materialCost)}
           </span>
         ),
       },
@@ -270,7 +267,7 @@ export function JobCostingReportPage() {
         header: 'Labor',
         cell: ({ row }) => (
           <span className="text-muted-foreground font-mono">
-            {formatCurrency(row.original.laborCost)}
+            {formatCurrencyDisplay(row.original.laborCost)}
           </span>
         ),
       },
@@ -278,7 +275,9 @@ export function JobCostingReportPage() {
         accessorKey: 'actualCost',
         header: 'Total Cost',
         cell: ({ row }) => (
-          <span className="font-mono">{formatCurrency(row.original.actualCost)}</span>
+          <span className="font-mono">
+            {formatCurrencyDisplay(row.original.actualCost)}
+          </span>
         ),
       },
       {
@@ -291,7 +290,7 @@ export function JobCostingReportPage() {
               row.original.profit >= 0 ? 'text-green-600' : 'text-red-600'
             )}
           >
-            {formatCurrency(row.original.profit)}
+            {formatCurrencyDisplay(row.original.profit)}
           </span>
         ),
       },
@@ -322,7 +321,7 @@ export function JobCostingReportPage() {
         },
       },
     ],
-    []
+    [formatCurrencyDisplay]
   );
 
   // Loading skeleton
@@ -400,7 +399,9 @@ export function JobCostingReportPage() {
               <DollarSign className="text-muted-foreground h-4 w-4" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{formatCurrency(summary?.totalQuoted ?? 0)}</div>
+              <div className="text-2xl font-bold">
+                {formatCurrencyDisplay(summary?.totalQuoted ?? 0)}
+              </div>
               <p className="text-muted-foreground text-xs">From {summary?.totalJobs ?? 0} jobs</p>
             </CardContent>
           </Card>
@@ -414,12 +415,14 @@ export function JobCostingReportPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {formatCurrency(summary?.totalActualCost ?? 0)}
+                {formatCurrencyDisplay(summary?.totalActualCost ?? 0)}
               </div>
               <div className="text-muted-foreground flex gap-2 text-xs">
-                <span>Materials: {formatCurrency(summary?.totalMaterialCost ?? 0)}</span>
+                <span>
+                  Materials: {formatCurrencyDisplay(summary?.totalMaterialCost ?? 0)}
+                </span>
                 <span>•</span>
-                <span>Labor: {formatCurrency(summary?.totalLaborCost ?? 0)}</span>
+                <span>Labor: {formatCurrencyDisplay(summary?.totalLaborCost ?? 0)}</span>
               </div>
             </CardContent>
           </Card>
@@ -442,7 +445,7 @@ export function JobCostingReportPage() {
                   (summary?.totalProfit ?? 0) >= 0 ? 'text-green-600' : 'text-red-600'
                 )}
               >
-                {formatCurrency(summary?.totalProfit ?? 0)}
+                {formatCurrencyDisplay(summary?.totalProfit ?? 0)}
               </div>
               <p className="text-muted-foreground text-xs">
                 {summary?.profitableCount ?? 0} profitable, {summary?.lossCount ?? 0} at loss

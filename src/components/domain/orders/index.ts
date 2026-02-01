@@ -4,23 +4,73 @@
  * Exports all order-related UI components.
  */
 
-// --- Core Components ---
-export { OrderList, type OrderListProps, type OrderFilters } from './order-list';
+// --- Status Configuration ---
 export {
-  OrderListContent,
-  type OrderListContentProps,
-} from './order-list-content';
+  ORDER_STATUS_CONFIG,
+  ORDER_STATUS_DETAIL_CONFIG,
+  PAYMENT_STATUS_CONFIG,
+  isOrderOverdue,
+  formatDueDateRelative,
+  type DetailStatusConfig,
+} from './order-status-config';
+
+// --- Column Definitions ---
+export {
+  createOrderColumns,
+  type OrderTableItem,
+  type CreateOrderColumnsOptions,
+} from './order-columns';
+
+// --- Presenters ---
+export {
+  OrdersListPresenter,
+  type OrdersListPresenterProps,
+} from './orders-list-presenter';
+export {
+  OrdersTablePresenter,
+  type OrdersTablePresenterProps,
+} from './orders-table-presenter';
+export {
+  OrdersMobileCards,
+  type OrdersMobileCardsProps,
+} from './orders-mobile-cards';
+
+// --- Container ---
 export {
   OrdersListContainer,
   type OrdersListContainerProps,
 } from './orders-list-container';
+
+// --- Filter Config (FILTER-STANDARDS compliant) ---
 export {
-  OrderFilters as OrderFiltersComponent,
-  type OrderFiltersProps,
+  ORDER_FILTER_CONFIG,
+  ORDER_STATUS_OPTIONS,
+  PAYMENT_STATUS_OPTIONS,
+  DEFAULT_ORDER_FILTERS,
   type OrderFiltersState,
-} from './order-filters';
+} from './order-filter-config';
+
+// --- Detail (Legacy - to be deprecated) ---
 export { OrderDetail, type OrderDetailProps } from './order-detail';
-export { OrderBulkOperationsDialog } from './order-bulk-operations-dialog';
+
+// --- Detail View (Container/Presenter Pattern) ---
+export {
+  OrderDetailContainer,
+  type OrderDetailContainerProps,
+  type OrderDetailContainerRenderProps,
+} from './containers/order-detail-container';
+export {
+  OrderDetailView,
+  type OrderDetailViewProps,
+} from './views/order-detail-view';
+
+// --- Bulk Operations ---
+export {
+  OrderBulkOperationsDialog,
+  type OrderBulkOperationsDialogProps,
+  type OrderBulkOperation,
+  type BulkOperationConfig,
+} from './order-bulk-operations-dialog';
 
 // --- Amendments ---
 export * from './amendments';

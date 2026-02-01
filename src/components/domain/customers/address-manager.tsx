@@ -7,9 +7,7 @@
  * - Primary address flag
  * - Full address fields with Australian defaults
  */
-import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useState, useEffect } from 'react'
 import { z } from 'zod'
 import {
   MapPin,
@@ -21,26 +19,9 @@ import {
   Plus,
   Star,
 } from 'lucide-react'
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import {
   Dialog,
   DialogContent,
@@ -58,6 +39,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form'
+import {
+  TextField,
+  SelectField,
+  CheckboxField,
+} from '@/components/shared/forms'
 import { addressTypeValues } from '@/lib/schemas/customers'
 
 // ============================================================================
@@ -249,27 +236,54 @@ function AddressFormDialog({
   defaultValues,
   mode,
 }: AddressFormDialogProps) {
-  const form = useForm<AddressFormValues>({
-    resolver: zodResolver(addressFormSchema),
+  const form = useTanStackForm({
+    schema: addressFormSchema,
     defaultValues: {
-      type: 'billing',
-      isPrimary: false,
-      street1: '',
-      street2: '',
-      city: '',
-      state: '',
-      postcode: '',
-      country: 'AU',
-      notes: '',
-      ...defaultValues,
+      type: defaultValues?.type ?? 'billing',
+      isPrimary: defaultValues?.isPrimary ?? false,
+      street1: defaultValues?.street1 ?? '',
+      street2: defaultValues?.street2 ?? '',
+      city: defaultValues?.city ?? '',
+      state: defaultValues?.state ?? '',
+      postcode: defaultValues?.postcode ?? '',
+      country: defaultValues?.country ?? 'AU',
+      notes: defaultValues?.notes ?? '',
+    },
+    onSubmit: async (data) => {
+      onSubmit(data)
+      form.reset()
+      onOpenChange(false)
     },
   })
 
-  const handleSubmit = (data: AddressFormValues) => {
-    onSubmit(data)
-    form.reset()
-    onOpenChange(false)
-  }
+  // Reset form when dialog opens with new values
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        type: defaultValues?.type ?? 'billing',
+        isPrimary: defaultValues?.isPrimary ?? false,
+        street1: defaultValues?.street1 ?? '',
+        street2: defaultValues?.street2 ?? '',
+        city: defaultValues?.city ?? '',
+        state: defaultValues?.state ?? '',
+        postcode: defaultValues?.postcode ?? '',
+        country: defaultValues?.country ?? 'AU',
+        notes: defaultValues?.notes ?? '',
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- form.reset is stable
+  }, [open, defaultValues])
+
+  // Build type options with icons in labels
+  const typeOptions = addressTypeValues.map((type) => ({
+    value: type,
+    label: typeConfig[type].label,
+  }))
+
+  const stateOptions = [
+    { value: '', label: 'Select state' },
+    ...australianStates,
+  ]
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -281,174 +295,118 @@ function AddressFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="type"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Address Type</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select type" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {addressTypeValues.map((type) => {
-                        const config = typeConfig[type]
-                        const Icon = config.icon
-                        return (
-                          <SelectItem key={type} value={type}>
-                            <div className="flex items-center gap-2">
-                              <Icon className="h-4 w-4" />
-                              {config.label}
-                            </div>
-                          </SelectItem>
-                        )
-                      })}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="street1"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Street Address *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="123 Main Street" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="street2"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Address Line 2</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Suite 100, Building A" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid gap-4 grid-cols-2">
-              <FormField
-                control={form.control}
-                name="city"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>City *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Sydney" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            form.handleSubmit()
+          }}
+          className="space-y-4"
+        >
+          <form.Field name="type">
+            {(field) => (
+              <SelectField
+                field={field}
+                label="Address Type"
+                options={typeOptions}
+                required
               />
-              <FormField
-                control={form.control}
-                name="state"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>State</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select state" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {australianStates.map((state) => (
-                          <SelectItem key={state.value} value={state.value}>
-                            {state.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            )}
+          </form.Field>
 
-            <div className="grid gap-4 grid-cols-2">
-              <FormField
-                control={form.control}
-                name="postcode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Postcode *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="2000" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+          <form.Field name="street1">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Street Address"
+                placeholder="123 Main Street"
+                required
               />
-              <FormField
-                control={form.control}
-                name="country"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Country</FormLabel>
-                    <FormControl>
-                      <Input placeholder="AU" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+            )}
+          </form.Field>
 
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notes</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Delivery instructions, access codes, etc." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+          <form.Field name="street2">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Address Line 2"
+                placeholder="Suite 100, Building A"
+              />
+            )}
+          </form.Field>
+
+          <div className="grid gap-4 grid-cols-2">
+            <form.Field name="city">
+              {(field) => (
+                <TextField
+                  field={field}
+                  label="City"
+                  placeholder="Sydney"
+                  required
+                />
               )}
-            />
-
-            <FormField
-              control={form.control}
-              name="isPrimary"
-              render={({ field }) => (
-                <FormItem className="flex flex-row items-center space-x-3 space-y-0 pt-2">
-                  <FormControl>
-                    <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                  <FormLabel className="font-normal">Set as primary address</FormLabel>
-                </FormItem>
+            </form.Field>
+            <form.Field name="state">
+              {(field) => (
+                <SelectField
+                  field={field}
+                  label="State"
+                  placeholder="Select state"
+                  options={stateOptions}
+                />
               )}
-            />
+            </form.Field>
+          </div>
 
-            <div className="flex justify-end gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit">
-                {mode === 'add' ? 'Add Address' : 'Save Changes'}
-              </Button>
-            </div>
-          </form>
-        </Form>
+          <div className="grid gap-4 grid-cols-2">
+            <form.Field name="postcode">
+              {(field) => (
+                <TextField
+                  field={field}
+                  label="Postcode"
+                  placeholder="2000"
+                  required
+                />
+              )}
+            </form.Field>
+            <form.Field name="country">
+              {(field) => (
+                <TextField
+                  field={field}
+                  label="Country"
+                  placeholder="AU"
+                />
+              )}
+            </form.Field>
+          </div>
+
+          <form.Field name="notes">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Notes"
+                placeholder="Delivery instructions, access codes, etc."
+              />
+            )}
+          </form.Field>
+
+          <form.Field name="isPrimary">
+            {(field) => (
+              <CheckboxField
+                field={field}
+                label="Set as primary address"
+              />
+            )}
+          </form.Field>
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit">
+              {mode === 'add' ? 'Add Address' : 'Save Changes'}
+            </Button>
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   )

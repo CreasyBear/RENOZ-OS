@@ -1,14 +1,17 @@
 /**
- * QuotePdfPreview Component
+ * QuotePdfPreview Presenter
  *
  * PDF-style preview of a quote version for printing/export.
  * Renders quote data in a professional document layout.
  *
+ * Pure presenter - all data passed via props from container.
+ *
+ * @see ./quote-pdf-preview-container.tsx (container)
  * @see _Initiation/_prd/2-domains/pipeline/pipeline.prd.json (PIPE-QUOTE-BUILDER-UI)
  */
 
 import { memo, useRef } from "react";
-import { useMutation } from "@tanstack/react-query";
+import type { UseMutationResult } from "@tanstack/react-query";
 import {
   Download,
   Printer,
@@ -29,15 +32,18 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toastSuccess, toastError } from "@/hooks";
-import { generateQuotePdf } from "@/server/functions/pipeline/quote-versions";
 import { FormatAmount } from "@/components/shared/format";
 import type { QuoteVersion } from "@/lib/schemas/pipeline";
+import type { GenerateQuotePdfInput } from "@/hooks/pipeline";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export interface QuotePdfPreviewProps {
+/**
+ * Container props - used by parent components
+ */
+export interface QuotePdfPreviewContainerProps {
   quoteVersion: QuoteVersion;
   opportunityTitle?: string;
   customerName?: string;
@@ -50,6 +56,28 @@ export interface QuotePdfPreviewProps {
   organizationPhone?: string;
   organizationEmail?: string;
   quoteExpiresAt?: Date | string | null;
+  onSend?: () => void;
+  className?: string;
+}
+
+/**
+ * Presenter props - receives data from container
+ */
+export interface QuotePdfPreviewPresenterProps {
+  quoteVersion: QuoteVersion;
+  opportunityTitle?: string;
+  customerName?: string;
+  customerAddress?: string;
+  contactName?: string;
+  contactEmail?: string;
+  organizationName?: string;
+  organizationAbn?: string;
+  organizationAddress?: string;
+  organizationPhone?: string;
+  organizationEmail?: string;
+  quoteExpiresAt?: Date | string | null;
+  /** @source useGenerateQuotePdf hook */
+  generateMutation: UseMutationResult<{ pdfUrl?: string }, Error, GenerateQuotePdfInput>;
   onSend?: () => void;
   className?: string;
 }
@@ -69,10 +97,10 @@ function formatDate(date: Date | string | null | undefined): string {
 }
 
 // ============================================================================
-// COMPONENT
+// PRESENTER COMPONENT
 // ============================================================================
 
-export const QuotePdfPreview = memo(function QuotePdfPreview({
+export const QuotePdfPreviewPresenter = memo(function QuotePdfPreviewPresenter({
   quoteVersion,
   opportunityTitle,
   customerName = "Customer",
@@ -85,31 +113,31 @@ export const QuotePdfPreview = memo(function QuotePdfPreview({
   organizationPhone,
   organizationEmail,
   quoteExpiresAt,
+  generateMutation,
   onSend,
   className,
-}: QuotePdfPreviewProps) {
+}: QuotePdfPreviewPresenterProps) {
   const previewRef = useRef<HTMLDivElement>(null);
 
-  // Generate PDF mutation (stub for now)
-  const generateMutation = useMutation({
-    mutationFn: async () => {
-      return generateQuotePdf({
-        data: { id: quoteVersion.id },
-      });
-    },
-    onSuccess: (data) => {
-      if (data.status === "not_implemented") {
-        toastError("PDF generation is not yet implemented");
-      } else if (data.pdfUrl) {
-        toastSuccess("PDF generated successfully");
-        // Would open/download the PDF here
-        window.open(data.pdfUrl, "_blank");
+  // Handle PDF generation using mutation from container
+  const handleGeneratePdf = () => {
+    generateMutation.mutate(
+      { quoteVersionId: quoteVersion.id },
+      {
+        onSuccess: (data) => {
+          if (data.pdfUrl) {
+            toastSuccess("PDF generated successfully");
+            window.open(data.pdfUrl, "_blank");
+          } else {
+            toastError("PDF generation failed");
+          }
+        },
+        onError: () => {
+          toastError("Failed to generate PDF");
+        },
       }
-    },
-    onError: () => {
-      toastError("Failed to generate PDF");
-    },
-  });
+    );
+  };
 
   // Print handler
   const handlePrint = () => {
@@ -171,7 +199,7 @@ export const QuotePdfPreview = memo(function QuotePdfPreview({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => generateMutation.mutate()}
+          onClick={handleGeneratePdf}
           disabled={generateMutation.isPending}
         >
           <Download className="h-4 w-4 mr-2" />
@@ -313,7 +341,7 @@ export const QuotePdfPreview = memo(function QuotePdfPreview({
                       </td>
                       <td className="text-right py-3">{item.quantity}</td>
                       <td className="text-right py-3">
-                        <FormatAmount amount={item.unitPriceCents} cents={true} />
+                        <FormatAmount amount={item.unitPrice} />
                       </td>
                       {quoteVersion.items.some((i) => i.discountPercent) && (
                         <td className="text-right py-3">
@@ -321,7 +349,7 @@ export const QuotePdfPreview = memo(function QuotePdfPreview({
                         </td>
                       )}
                       <td className="text-right py-3 font-medium">
-                        <FormatAmount amount={item.totalCents} cents={true} />
+                        <FormatAmount amount={item.total} />
                       </td>
                     </tr>
                   ))}
@@ -334,16 +362,16 @@ export const QuotePdfPreview = memo(function QuotePdfPreview({
               <div className="w-64 space-y-2">
                 <div className="flex justify-between py-1">
                   <span className="text-muted-foreground">Subtotal</span>
-                  <span><FormatAmount amount={quoteVersion.subtotal} cents={true} /></span>
+                  <span><FormatAmount amount={quoteVersion.subtotal} /></span>
                 </div>
                 <div className="flex justify-between py-1">
                   <span className="text-muted-foreground">GST (10%)</span>
-                  <span><FormatAmount amount={quoteVersion.taxAmount} cents={true} /></span>
+                  <span><FormatAmount amount={quoteVersion.taxAmount} /></span>
                 </div>
                 <Separator />
                 <div className="flex justify-between py-2 font-semibold text-lg">
                   <span>Total (AUD)</span>
-                  <span><FormatAmount amount={quoteVersion.total} cents={true} /></span>
+                  <span><FormatAmount amount={quoteVersion.total} /></span>
                 </div>
               </div>
             </div>
@@ -376,4 +404,10 @@ export const QuotePdfPreview = memo(function QuotePdfPreview({
   );
 });
 
-export default QuotePdfPreview;
+/**
+ * @deprecated Use QuotePdfPreviewContainer instead for new code.
+ * This export is kept for backwards compatibility.
+ */
+export const QuotePdfPreview = QuotePdfPreviewPresenter;
+
+export default QuotePdfPreviewPresenter;

@@ -28,6 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import { ApprovalDecisionDialog } from './approval-decision-dialog';
 import { BulkApprovalDialog } from './bulk-approval-dialog';
 
@@ -114,6 +115,7 @@ export const ApprovalDashboard = memo(function ApprovalDashboard({
   const [decisionDialogOpen, setDecisionDialogOpen] = useState(false);
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ApprovalItem | null>(null);
+  const { formatCurrency } = useOrgFormat();
 
   // Filter items based on active tab and filters
   const filteredItems = approvalItems.filter((item) => {
@@ -169,14 +171,6 @@ export const ApprovalDashboard = memo(function ApprovalDashboard({
   const handleBulkApproval = useCallback(() => {
     setBulkDialogOpen(true);
   }, []);
-
-  // Format currency
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: currency,
-    }).format(amount);
-  };
 
   // Format date
   const formatDate = (dateString: string) => {
@@ -451,7 +445,11 @@ export const ApprovalDashboard = memo(function ApprovalDashboard({
                       </TableCell>
                       <TableCell>{item.requester}</TableCell>
                       <TableCell className="font-medium">
-                        {formatCurrency(item.amount, item.currency)}
+                        {formatCurrency(item.amount, {
+                          currency: item.currency,
+                          cents: false,
+                          showCents: true,
+                        })}
                       </TableCell>
                       <TableCell>{renderPriorityBadge(item.priority)}</TableCell>
                       <TableCell>{formatDate(item.submittedAt)}</TableCell>

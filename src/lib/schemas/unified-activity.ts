@@ -5,7 +5,7 @@
  * into a single timeline view.
  */
 
-import type { Activity } from 'drizzle/schema';
+import type { Activity, ActivityChanges, ActivityMetadata } from 'drizzle/schema';
 import type { CustomerActivity } from 'drizzle/schema';
 
 // ============================================================================
@@ -53,13 +53,9 @@ export interface UnifiedActivity {
   duration?: number | null; // in minutes
   outcome?: string | null;
 
-  // For audit activities
-  changes?: {
-    before?: Record<string, unknown>;
-    after?: Record<string, unknown>;
-    fields?: string[];
-  } | null;
-  metadata?: Record<string, unknown> | null;
+  // For audit activities - using Drizzle schema types
+  changes?: ActivityChanges | null;
+  metadata?: ActivityMetadata | null;
 
   // Status (for planned activities)
   isCompleted?: boolean;

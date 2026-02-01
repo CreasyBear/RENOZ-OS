@@ -12,6 +12,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback, useMemo } from "react";
 import { Plus, Download, RefreshCw, Loader2, ShoppingCart, DollarSign, Package, Clock } from "lucide-react";
+import { z } from "zod";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { Button } from "@/components/ui/button";
 import { toastSuccess } from "@/hooks";
@@ -20,11 +21,32 @@ import { queryKeys } from "@/lib/query-keys";
 import { OrdersTableSkeleton } from "@/components/skeletons/orders";
 import {
   OrdersListContainer,
+  DEFAULT_ORDER_FILTERS,
   type OrderFiltersState,
 } from "@/components/domain/orders";
 import { MetricCard } from "@/components/shared/metric-card";
 import { useDashboardMetrics } from "@/hooks/dashboard";
-import { formatCurrency } from "@/lib/formatters";
+import { useOrgFormat } from "@/hooks/use-org-format";
+import {
+  useTransformedFilterUrlState,
+  parseDateFromUrl,
+  serializeDateForUrl,
+} from "@/hooks/filters/use-filter-url-state";
+
+// ============================================================================
+// URL SEARCH SCHEMA
+// ============================================================================
+
+const orderSearchSchema = z.object({
+  page: z.coerce.number().int().positive().optional().default(1),
+  search: z.string().optional().default(""),
+  status: z.string().optional(),
+  paymentStatus: z.string().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  minTotal: z.coerce.number().optional(),
+  maxTotal: z.coerce.number().optional(),
+});
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -32,6 +54,7 @@ import { formatCurrency } from "@/lib/formatters";
 
 export const Route = createFileRoute("/_authenticated/orders/")({
   component: OrdersPage,
+  validateSearch: orderSearchSchema,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/" />
   ),
@@ -49,18 +72,38 @@ export const Route = createFileRoute("/_authenticated/orders/")({
 });
 
 // ============================================================================
-// DEFAULT FILTERS
+// URL FILTER TRANSFORMERS
 // ============================================================================
 
-const DEFAULT_FILTERS: OrderFiltersState = {
-  search: "",
-  status: null,
-  paymentStatus: null,
-  dateFrom: null,
-  dateTo: null,
-  minTotal: null,
-  maxTotal: null,
-};
+/** Transform URL search params to OrderFiltersState */
+const fromUrlParams = (search: z.infer<typeof orderSearchSchema>): OrderFiltersState => ({
+  search: search.search ?? "",
+  status: (search.status as OrderFiltersState["status"]) ?? null,
+  paymentStatus: (search.paymentStatus as OrderFiltersState["paymentStatus"]) ?? null,
+  dateRange: search.dateFrom || search.dateTo
+    ? {
+        from: parseDateFromUrl(search.dateFrom),
+        to: parseDateFromUrl(search.dateTo),
+      }
+    : null,
+  totalRange: search.minTotal !== undefined || search.maxTotal !== undefined
+    ? {
+        min: search.minTotal ?? null,
+        max: search.maxTotal ?? null,
+      }
+    : null,
+});
+
+/** Transform OrderFiltersState to URL search params */
+const toUrlParams = (filters: OrderFiltersState): Record<string, unknown> => ({
+  search: filters.search || undefined,
+  status: filters.status ?? undefined,
+  paymentStatus: filters.paymentStatus ?? undefined,
+  dateFrom: filters.dateRange?.from ? serializeDateForUrl(filters.dateRange.from) : undefined,
+  dateTo: filters.dateRange?.to ? serializeDateForUrl(filters.dateRange.to) : undefined,
+  minTotal: filters.totalRange?.min ?? undefined,
+  maxTotal: filters.totalRange?.max ?? undefined,
+});
 
 // ============================================================================
 // MAIN COMPONENT
@@ -69,13 +112,33 @@ const DEFAULT_FILTERS: OrderFiltersState = {
 function OrdersPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [filters, setFilters] = useState(DEFAULT_FILTERS);
+  const search = Route.useSearch();
   const [isExporting, setIsExporting] = useState(false);
+
+  // URL-synced filter state with transformations
+  const { filters, setFilters } = useTransformedFilterUrlState({
+    currentSearch: search,
+    navigate,
+    defaults: DEFAULT_ORDER_FILTERS,
+    fromUrlParams,
+    toUrlParams,
+    resetPageOnChange: ["search", "status", "paymentStatus", "dateRange", "totalRange"],
+  });
+  const [dateRange] = useState(() => {
+    const dateTo = new Date();
+    const dateFrom = new Date(dateTo);
+    dateFrom.setDate(dateTo.getDate() - 30);
+    return {
+      dateFrom: dateFrom.toISOString().split('T')[0],
+      dateTo: dateTo.toISOString().split('T')[0],
+    };
+  });
+  const { formatCurrency } = useOrgFormat();
 
   // Fetch dashboard metrics for order stats
   const { data: metrics, isLoading: isMetricsLoading } = useDashboardMetrics({
-    dateFrom: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    dateTo: new Date().toISOString().split('T')[0],
+    dateFrom: dateRange.dateFrom,
+    dateTo: dateRange.dateTo,
   });
 
   const summary = metrics?.summary;
@@ -89,27 +152,29 @@ function OrdersPage() {
     },
     {
       title: 'Revenue',
-      value: formatCurrency(summary?.revenue?.current ?? 0),
+      value: formatCurrency(summary?.revenue?.current ?? 0, { cents: false, showCents: true }),
       subtitle: 'Last 30 days',
-      trend: summary?.revenue?.change ? `${summary.revenue.change > 0 ? '+' : ''}${summary.revenue.change}%` : undefined,
-      trendUp: summary?.revenue?.change ? summary.revenue.change > 0 : undefined,
+      delta: summary?.revenue?.change,
       icon: DollarSign,
     },
     {
       title: 'Pending',
-      value: summary?.activeJobs?.current ?? 0,
+      value: summary?.activeInstallations?.current ?? 0,
       subtitle: 'Active jobs',
       icon: Package,
     },
     {
       title: 'Avg Order',
       value: summary?.ordersCount?.current && summary?.revenue?.current
-        ? formatCurrency(summary.revenue.current / summary.ordersCount.current)
-        : formatCurrency(0),
+        ? formatCurrency(summary.revenue.current / summary.ordersCount.current, {
+            cents: false,
+            showCents: true,
+          })
+        : formatCurrency(0, { cents: false, showCents: true }),
       subtitle: 'Per order',
       icon: Clock,
     },
-  ], [summary]);
+  ], [summary, formatCurrency]);
 
   const handleCreateOrder = useCallback(() => {
     navigate({ to: "/orders/create" });
@@ -140,7 +205,7 @@ function OrdersPage() {
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </Button>
-            
+
             {/* Secondary: Export */}
             <Button
               variant="outline"
@@ -155,7 +220,7 @@ function OrdersPage() {
               )}
               Export
             </Button>
-            
+
             {/* Primary: Create */}
             <Button onClick={handleCreateOrder}>
               <Plus className="h-4 w-4 mr-2" />
@@ -174,15 +239,14 @@ function OrdersPage() {
               value={stat.value}
               subtitle={stat.subtitle}
               icon={stat.icon}
-              trend={stat.trend}
-              trendUp={stat.trendUp}
+              delta={stat.delta}
               isLoading={isMetricsLoading}
             />
           ))}
         </div>
 
-        <OrdersListContainer 
-          filters={filters} 
+        <OrdersListContainer
+          filters={filters}
           onFiltersChange={setFilters}
           onCreateOrder={handleCreateOrder}
           onRefresh={handleRefresh}

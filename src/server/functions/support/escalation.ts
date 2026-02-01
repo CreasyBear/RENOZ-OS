@@ -19,6 +19,7 @@ import type {
 } from 'drizzle/schema/support/escalation-rules';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, ValidationError, ServerError } from '@/lib/server/errors';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 
 // ============================================================================
 // SCHEMAS
@@ -92,6 +93,7 @@ export const escalateIssue = createServerFn({ method: 'POST' })
   .inputValidator(escalateIssueSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
+    const logger = createActivityLoggerWithContext(ctx);
 
     // Get the issue
     const [issue] = await db
@@ -131,6 +133,28 @@ export const escalateIssue = createServerFn({ method: 'POST' })
       })
       .returning();
 
+    // Log escalation
+    logger.logAsync({
+      entityType: 'issue',
+      entityId: issue.id,
+      action: 'updated',
+      description: `Escalated issue: ${issue.issueNumber}`,
+      changes: {
+        before: { status: issue.status },
+        after: { status: 'escalated' },
+        fields: ['status', 'escalatedAt'],
+      },
+      metadata: {
+        customerId: issue.customerId ?? undefined,
+        previousStatus: issue.status,
+        newStatus: 'escalated',
+        escalationType: 'manual',
+        escalatedAt: now.toISOString(),
+        assignedTo: data.escalateToUserId ?? undefined,
+        reason: data.reason,
+      },
+    });
+
     return {
       success: true,
       historyId: historyRecord.id,
@@ -149,6 +173,7 @@ export const deEscalateIssue = createServerFn({ method: 'POST' })
   .inputValidator(deEscalateIssueSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
+    const logger = createActivityLoggerWithContext(ctx);
 
     // Get the issue
     const [issue] = await db
@@ -189,6 +214,26 @@ export const deEscalateIssue = createServerFn({ method: 'POST' })
         previousAssigneeId: issue.assignedToUserId,
       })
       .returning();
+
+    // Log de-escalation
+    logger.logAsync({
+      entityType: 'issue',
+      entityId: issue.id,
+      action: 'updated',
+      description: `De-escalated issue: ${issue.issueNumber}`,
+      changes: {
+        before: { status: 'escalated' },
+        after: { status: 'in_progress' },
+        fields: ['status', 'escalatedAt'],
+      },
+      metadata: {
+        customerId: issue.customerId ?? undefined,
+        previousStatus: 'escalated',
+        newStatus: 'in_progress',
+        assignedTo: data.assignToUserId ?? undefined,
+        reason: data.reason,
+      },
+    });
 
     return {
       success: true,
@@ -240,6 +285,7 @@ export const createEscalationRule = createServerFn({ method: 'POST' })
   .inputValidator(createEscalationRuleSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
+    const logger = createActivityLoggerWithContext(ctx);
 
     const [rule] = await db
       .insert(escalationRules)
@@ -254,6 +300,22 @@ export const createEscalationRule = createServerFn({ method: 'POST' })
         isActive: data.isActive,
       })
       .returning();
+
+    // Log rule creation
+    logger.logAsync({
+      entityType: 'issue',
+      entityId: rule.id,
+      action: 'created',
+      description: `Created escalation rule: ${rule.name}`,
+      metadata: {
+        customFields: {
+          ruleName: rule.name,
+          conditionType: data.condition.type,
+          actionType: data.action.type,
+          isActive: data.isActive,
+        },
+      },
+    });
 
     return rule;
   });
@@ -316,6 +378,19 @@ export const deleteEscalationRule = createServerFn({ method: 'POST' })
   .inputValidator(z.object({ ruleId: z.string().uuid() }))
   .handler(async ({ data }) => {
     const ctx = await withAuth();
+    const logger = createActivityLoggerWithContext(ctx);
+
+    // Get rule for logging
+    const [existingRule] = await db
+      .select()
+      .from(escalationRules)
+      .where(
+        and(
+          eq(escalationRules.id, data.ruleId),
+          eq(escalationRules.organizationId, ctx.organizationId)
+        )
+      )
+      .limit(1);
 
     await db
       .delete(escalationRules)
@@ -325,6 +400,21 @@ export const deleteEscalationRule = createServerFn({ method: 'POST' })
           eq(escalationRules.organizationId, ctx.organizationId)
         )
       );
+
+    // Log rule deletion
+    if (existingRule) {
+      logger.logAsync({
+        entityType: 'issue',
+        entityId: data.ruleId,
+        action: 'deleted',
+        description: `Deleted escalation rule: ${existingRule.name}`,
+        metadata: {
+          customFields: {
+            ruleName: existingRule.name,
+          },
+        },
+      });
+    }
 
     return { success: true };
   });

@@ -7,14 +7,14 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql, asc, gte, lte } from 'drizzle-orm';
+import { eq, and, sql, asc, gte, lte, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '@/lib/db';
-import { inventoryForecasts, inventory, products } from 'drizzle/schema';
+import { inventoryForecasts, inventory, products, warehouseLocations } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
-import { createForecastSchema, forecastListQuerySchema } from '@/lib/schemas/inventory';
+import { createForecastSchema, forecastListQuerySchema, DEFAULT_LOW_STOCK_THRESHOLD } from '@/lib/schemas/inventory';
 
 // ============================================================================
 // TYPES
@@ -35,6 +35,14 @@ interface ReorderRecommendation {
   recommendedQuantity: number;
   urgency: 'critical' | 'high' | 'medium' | 'low';
   daysUntilStockout: number | null;
+  locationCount?: number; // Number of locations with this product
+  locations?: Array<{
+    locationId: string;
+    locationName: string;
+    locationCode: string | null;
+    quantityOnHand: number;
+    quantityAvailable: number;
+  }>;
 }
 
 interface ListForecastsResult {
@@ -56,7 +64,7 @@ export const listForecasts = createServerFn({ method: 'GET' })
   .inputValidator(forecastListQuerySchema)
   .handler(async ({ data }): Promise<ListForecastsResult> => {
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
-    const { page = 1, pageSize = 20, sortBy, sortOrder, ...filters } = data;
+    const { page = 1, pageSize = 20, ...filters } = data;
     const limit = pageSize;
 
     const conditions = [eq(inventoryForecasts.organizationId, ctx.organizationId)];
@@ -434,37 +442,35 @@ export const getReorderRecommendations = createServerFn({ method: 'GET' })
     const ctx = await withAuth({ permission: PERMISSIONS.inventory.read });
 
     // Get products with forecasts and current stock
+    // Pattern: Match listProducts exactly (products.ts:125-137)
+    // Start FROM products, LEFT JOIN inventory on productId only (no orgId filter in JOIN)
     const productsWithData = await db
       .select({
         productId: products.id,
         productSku: products.sku,
         productName: products.name,
-        currentStock: sql<number>`COALESCE((
-          SELECT SUM(quantity_on_hand) FROM inventory
-          WHERE product_id = ${products.id}
-          AND organization_id = ${ctx.organizationId}
-        ), 0)::int`,
-        reorderPoint: sql<number>`COALESCE((
+        currentStock: sql<number>`COALESCE(SUM(CASE WHEN ${inventory.organizationId} = ${ctx.organizationId} THEN ${inventory.quantityOnHand} ELSE 0 END), 0)::int`,
+        reorderPoint: sql<number | null>`(
           SELECT reorder_point FROM inventory_forecasts
           WHERE product_id = ${products.id}
           AND organization_id = ${ctx.organizationId}
           ORDER BY forecast_date DESC
           LIMIT 1
-        ), 0)::int`,
-        safetyStock: sql<number>`COALESCE((
+        )::int`,
+        safetyStock: sql<number | null>`(
           SELECT safety_stock_level FROM inventory_forecasts
           WHERE product_id = ${products.id}
           AND organization_id = ${ctx.organizationId}
           ORDER BY forecast_date DESC
           LIMIT 1
-        ), 0)::int`,
-        recommendedQuantity: sql<number>`COALESCE((
+        )::int`,
+        recommendedQuantity: sql<number | null>`(
           SELECT recommended_order_quantity FROM inventory_forecasts
           WHERE product_id = ${products.id}
           AND organization_id = ${ctx.organizationId}
           ORDER BY forecast_date DESC
           LIMIT 1
-        ), 0)::int`,
+        )::int`,
         avgDailyDemand: sql<number>`COALESCE((
           SELECT demand_quantity FROM inventory_forecasts
           WHERE product_id = ${products.id}
@@ -475,45 +481,155 @@ export const getReorderRecommendations = createServerFn({ method: 'GET' })
         ), 0)::numeric`,
       })
       .from(products)
-      .where(and(eq(products.organizationId, ctx.organizationId), eq(products.isActive, true)));
+      .leftJoin(inventory, eq(inventory.productId, products.id))
+      .where(and(eq(products.organizationId, ctx.organizationId), eq(products.isActive, true)))
+      .groupBy(products.id, products.sku, products.name);
+
+    // Get location breakdown for each product (for recommendations that need reordering)
+    // This helps users understand where stock is located
+    const productIds = productsWithData.map((p) => p.productId);
+    const locationBreakdowns = productIds.length > 0
+      ? await db
+          .select({
+            productId: inventory.productId,
+            locationId: inventory.locationId,
+            locationName: warehouseLocations.name,
+            locationCode: warehouseLocations.locationCode,
+            quantityOnHand: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::int`,
+            quantityAvailable: sql<number>`COALESCE(SUM(${inventory.quantityAvailable}), 0)::int`,
+          })
+          .from(inventory)
+          .leftJoin(warehouseLocations, eq(inventory.locationId, warehouseLocations.id))
+          .where(
+            and(
+              eq(inventory.organizationId, ctx.organizationId),
+              inArray(inventory.productId, productIds)
+            )
+          )
+          .groupBy(inventory.productId, inventory.locationId, warehouseLocations.name, warehouseLocations.locationCode)
+      : [];
+
+    // Group location breakdowns by productId
+    const locationMap = new Map<string, Array<{
+      locationId: string;
+      locationName: string;
+      locationCode: string | null;
+      quantityOnHand: number;
+      quantityAvailable: number;
+    }>>();
+
+    locationBreakdowns.forEach((loc) => {
+      const existing = locationMap.get(loc.productId);
+      if (existing) {
+        existing.push({
+          locationId: loc.locationId,
+          locationName: loc.locationName ?? 'Unknown',
+          locationCode: loc.locationCode,
+          quantityOnHand: loc.quantityOnHand,
+          quantityAvailable: loc.quantityAvailable,
+        });
+      } else {
+        locationMap.set(loc.productId, [{
+          locationId: loc.locationId,
+          locationName: loc.locationName ?? 'Unknown',
+          locationCode: loc.locationCode,
+          quantityOnHand: loc.quantityOnHand,
+          quantityAvailable: loc.quantityAvailable,
+        }]);
+      }
+    });
 
     // Calculate recommendations
+    // Include products that:
+    // 1. Have 0 stock (always critical, regardless of forecast config)
+    // 2. Have stock below DEFAULT_LOW_STOCK_THRESHOLD (even without reorderPoint)
+    // 3. Have forecast data with reorderPoint > 0
     const recommendations: ReorderRecommendation[] = productsWithData
+      .filter((p) => {
+        // Always include products with 0 stock (critical situation)
+        if (p.currentStock <= 0) return true;
+        
+        // Include products below default low stock threshold (even without reorderPoint configured)
+        if (p.currentStock > 0 && p.currentStock < DEFAULT_LOW_STOCK_THRESHOLD) return true;
+        
+        // Include products with valid reorder point configuration
+        return p.reorderPoint !== null && p.reorderPoint !== undefined && p.reorderPoint > 0;
+      })
       .map((p) => {
-        const stockAboveReorder = p.currentStock - p.reorderPoint;
-        const daysUntilStockout =
-          Number(p.avgDailyDemand) > 0
-            ? Math.floor(p.currentStock / Number(p.avgDailyDemand))
-            : null;
+        // Handle reorderPoint: use 0 if null/undefined (for products with 0 stock but no forecast)
+        const reorderPoint = p.reorderPoint ?? 0;
+        const safetyStock = p.safetyStock ?? 0;
+        const stockAboveReorder = p.currentStock - reorderPoint;
+        
+        // Calculate days until stockout (only if we have demand data)
+        const avgDailyDemand = Number(p.avgDailyDemand) || 0;
+        const daysUntilStockout = avgDailyDemand > 0 && p.currentStock > 0
+          ? Math.floor(p.currentStock / avgDailyDemand)
+          : null;
 
+        // Calculate urgency based on stock levels
         let urgency: 'critical' | 'high' | 'medium' | 'low';
         if (p.currentStock <= 0) {
+          // Zero stock is always critical
           urgency = 'critical';
-        } else if (p.currentStock <= p.safetyStock) {
+        } else if (safetyStock > 0 && p.currentStock <= safetyStock) {
           urgency = 'critical';
-        } else if (p.currentStock <= p.reorderPoint) {
+        } else if (reorderPoint > 0 && p.currentStock <= reorderPoint) {
           urgency = 'high';
-        } else if (stockAboveReorder <= p.safetyStock) {
+        } else if (p.currentStock < DEFAULT_LOW_STOCK_THRESHOLD) {
+          // Below default low stock threshold (even without reorderPoint)
+          urgency = p.currentStock < DEFAULT_LOW_STOCK_THRESHOLD / 2 ? 'high' : 'medium';
+        } else if (safetyStock > 0 && stockAboveReorder <= safetyStock) {
           urgency = 'medium';
         } else {
           urgency = 'low';
         }
+
+        // Calculate recommended quantity with better fallback logic
+        let recommendedQuantity = 0;
+        if (p.recommendedQuantity && p.recommendedQuantity > 0) {
+          recommendedQuantity = p.recommendedQuantity;
+        } else if (reorderPoint > 0) {
+          // Fallback: recommend 1.5x reorder point, minimum 1
+          recommendedQuantity = Math.max(1, Math.ceil(reorderPoint * 1.5));
+        } else if (p.currentStock <= 0) {
+          // For products with 0 stock but no reorder point, recommend a default amount
+          // Use safety stock if available, otherwise default to 10 units
+          recommendedQuantity = safetyStock > 0 ? safetyStock : 10;
+        } else {
+          // Last resort: recommend 1 unit
+          recommendedQuantity = 1;
+        }
+
+        const locations = locationMap.get(p.productId) ?? [];
 
         return {
           productId: p.productId,
           productSku: p.productSku,
           productName: p.productName,
           currentStock: p.currentStock,
-          reorderPoint: p.reorderPoint,
-          safetyStock: p.safetyStock,
-          recommendedQuantity: p.recommendedQuantity || Math.ceil(p.reorderPoint * 1.5),
+          reorderPoint: reorderPoint,
+          safetyStock: safetyStock,
+          recommendedQuantity: recommendedQuantity,
           urgency,
           daysUntilStockout,
+          locationCount: locations.length,
+          locations: locations.length > 0 ? locations : undefined,
         };
       })
       .filter((r) => {
+        // Additional filtering: only show products that actually need reordering
+        // Critical items (0 stock) always show
+        if (r.currentStock <= 0) return true;
+        
+        // Apply urgency filter
         if (data.urgencyFilter === 'critical') return r.urgency === 'critical';
         if (data.urgencyFilter === 'high') return r.urgency === 'critical' || r.urgency === 'high';
+        
+        // For 'all' filter, exclude low urgency items that are above reorder point
+        if (r.urgency === 'low' && r.currentStock > r.reorderPoint) return false;
+        
+        // Show items at or below reorder point, or with non-low urgency
         return r.currentStock <= r.reorderPoint || r.urgency !== 'low';
       })
       .sort((a, b) => {

@@ -1832,7 +1832,7 @@ export const getRevenueAttribution = createServerFn({ method: 'GET' })
 
     return {
       groupBy,
-      data: result,
+      items: result, // Renamed from 'data' to 'items' for clarity and to avoid nested data.data access
       totals: {
         ...totals,
         conversionRate:

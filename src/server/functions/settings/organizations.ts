@@ -105,6 +105,18 @@ const _getOrganization = cache(async (organizationId: string) => {
       phone: organizations.phone,
       website: organizations.website,
       address: organizations.address,
+      // Tier 1 Settings (first-class columns)
+      timezone: organizations.timezone,
+      locale: organizations.locale,
+      currency: organizations.currency,
+      dateFormat: organizations.dateFormat,
+      timeFormat: organizations.timeFormat,
+      numberFormat: organizations.numberFormat,
+      fiscalYearStart: organizations.fiscalYearStart,
+      weekStartDay: organizations.weekStartDay,
+      defaultTaxRate: organizations.defaultTaxRate,
+      defaultPaymentTerms: organizations.defaultPaymentTerms,
+      // Legacy JSONB (for portal branding and deprecated settings)
       settings: organizations.settings,
       branding: organizations.branding,
       plan: organizations.plan,
@@ -245,6 +257,18 @@ const _getOrganizationSettings = cache(async (organizationId: string) => {
   const [organization] = await db
     .select({
       id: organizations.id,
+      // Tier 1 Settings (first-class columns - preferred source)
+      timezone: organizations.timezone,
+      locale: organizations.locale,
+      currency: organizations.currency,
+      dateFormat: organizations.dateFormat,
+      timeFormat: organizations.timeFormat,
+      numberFormat: organizations.numberFormat,
+      fiscalYearStart: organizations.fiscalYearStart,
+      weekStartDay: organizations.weekStartDay,
+      defaultTaxRate: organizations.defaultTaxRate,
+      defaultPaymentTerms: organizations.defaultPaymentTerms,
+      // Legacy JSONB (for portalBranding only)
       settings: organizations.settings,
     })
     .from(organizations)
@@ -255,7 +279,22 @@ const _getOrganizationSettings = cache(async (organizationId: string) => {
     throw new NotFoundError('Organization not found', 'organization');
   }
 
-  return organization.settings;
+  // Return merged settings: columns preferred, JSONB for portalBranding
+  const legacySettings = organization.settings as Record<string, unknown> | null;
+  return {
+    timezone: organization.timezone,
+    locale: organization.locale,
+    currency: organization.currency,
+    dateFormat: organization.dateFormat,
+    // Cast to match OrganizationSettings schema enum types
+    timeFormat: organization.timeFormat as '12h' | '24h',
+    numberFormat: organization.numberFormat as '1,234.56' | '1.234,56' | '1 234,56',
+    fiscalYearStart: organization.fiscalYearStart,
+    weekStartDay: organization.weekStartDay,
+    defaultTaxRate: organization.defaultTaxRate,
+    defaultPaymentTerms: organization.defaultPaymentTerms,
+    portalBranding: legacySettings?.portalBranding ?? {},
+  };
 });
 
 export const getOrganizationSettings = createServerFn({ method: 'GET' }).handler(async () => {
@@ -280,6 +319,16 @@ export const updateOrganizationSettings = createServerFn({ method: 'POST' })
       .select({
         id: organizations.id,
         settings: organizations.settings,
+        timezone: organizations.timezone,
+        locale: organizations.locale,
+        currency: organizations.currency,
+        dateFormat: organizations.dateFormat,
+        timeFormat: organizations.timeFormat,
+        numberFormat: organizations.numberFormat,
+        fiscalYearStart: organizations.fiscalYearStart,
+        weekStartDay: organizations.weekStartDay,
+        defaultTaxRate: organizations.defaultTaxRate,
+        defaultPaymentTerms: organizations.defaultPaymentTerms,
       })
       .from(organizations)
       .where(eq(organizations.id, ctx.organizationId))
@@ -289,17 +338,40 @@ export const updateOrganizationSettings = createServerFn({ method: 'POST' })
       throw new NotFoundError('Organization not found', 'organization');
     }
 
+    // Build update object with DOUBLE WRITE (columns + JSONB for backward compat)
+    const updatePayload: Record<string, unknown> = {};
+
+    // Write to Tier 1 columns (preferred)
+    if (data.timezone !== undefined) updatePayload.timezone = data.timezone;
+    if (data.locale !== undefined) updatePayload.locale = data.locale;
+    if (data.currency !== undefined) updatePayload.currency = data.currency;
+    if (data.dateFormat !== undefined) updatePayload.dateFormat = data.dateFormat;
+    if (data.fiscalYearStart !== undefined) updatePayload.fiscalYearStart = data.fiscalYearStart;
+    if (data.defaultPaymentTerms !== undefined) updatePayload.defaultPaymentTerms = data.defaultPaymentTerms;
+
+    // Also write to JSONB for backward compatibility (Double Write)
     const newSettings = {
       ...(currentOrg.settings as Record<string, unknown>),
       ...data,
     };
+    updatePayload.settings = newSettings;
 
     const [updated] = await db
       .update(organizations)
-      .set({ settings: newSettings })
+      .set(updatePayload)
       .where(eq(organizations.id, ctx.organizationId))
       .returning({
         id: organizations.id,
+        timezone: organizations.timezone,
+        locale: organizations.locale,
+        currency: organizations.currency,
+        dateFormat: organizations.dateFormat,
+        timeFormat: organizations.timeFormat,
+        numberFormat: organizations.numberFormat,
+        fiscalYearStart: organizations.fiscalYearStart,
+        weekStartDay: organizations.weekStartDay,
+        defaultTaxRate: organizations.defaultTaxRate,
+        defaultPaymentTerms: organizations.defaultPaymentTerms,
         settings: organizations.settings,
       });
 
@@ -314,7 +386,21 @@ export const updateOrganizationSettings = createServerFn({ method: 'POST' })
       newValues: { settings: updated.settings },
     });
 
-    return updated.settings;
+    // Return merged settings (columns preferred)
+    const legacySettings = updated.settings as Record<string, unknown> | null;
+    return {
+      timezone: updated.timezone,
+      locale: updated.locale,
+      currency: updated.currency,
+      dateFormat: updated.dateFormat,
+      timeFormat: updated.timeFormat,
+      numberFormat: updated.numberFormat,
+      fiscalYearStart: updated.fiscalYearStart,
+      weekStartDay: updated.weekStartDay,
+      defaultTaxRate: updated.defaultTaxRate,
+      defaultPaymentTerms: updated.defaultPaymentTerms,
+      portalBranding: legacySettings?.portalBranding ?? {},
+    };
   });
 
 // ============================================================================

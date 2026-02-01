@@ -5,7 +5,6 @@
  */
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { PageLayout, RouteErrorFallback } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,7 +20,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { toastSuccess, toastError } from '@/hooks'
-import { getCustomers } from '@/server/customers'
+import { useCustomers } from '@/hooks/customers'
 import { useCreateOpportunity } from '@/hooks/pipeline'
 import { STAGE_PROBABILITY_DEFAULTS, type OpportunityStage } from '@/lib/schemas/pipeline'
 
@@ -63,10 +62,7 @@ function NewOpportunityPage() {
 
   const createOpportunity = useCreateOpportunity()
 
-  const customersQuery = useQuery({
-    queryKey: ['customers', 'create-opportunity'],
-    queryFn: () => getCustomers({ data: { page: 1, pageSize: 100 } }),
-  })
+  const customersQuery = useCustomers({ page: 1, pageSize: 100 })
 
   const customers = customersQuery.data?.items ?? []
 
@@ -82,7 +78,7 @@ function NewOpportunityPage() {
       return
     }
 
-    const value = Math.round((parseFloat(valueDollars) || 0) * 100)
+    const value = parseFloat(valueDollars) || 0
     const tagList = tags
       .split(',')
       .map((tag) => tag.trim())

@@ -9,9 +9,7 @@
 
 import { memo } from "react";
 import { TrendingUp, DollarSign, Target, Scale } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { FormatAmount } from "@/components/shared/format";
+import { MetricCard, FormatAmount } from "@/components/shared";
 import type { PipelineMetrics as PipelineMetricsType } from "@/lib/schemas/pipeline";
 
 // ============================================================================
@@ -21,47 +19,6 @@ import type { PipelineMetrics as PipelineMetricsType } from "@/lib/schemas/pipel
 export interface PipelineMetricsProps {
   metrics: PipelineMetricsType | null;
   isLoading?: boolean;
-}
-
-// ============================================================================
-// METRIC CARD
-// ============================================================================
-
-interface MetricCardProps {
-  label: string;
-  value: string | number | React.ReactNode;
-  icon: React.ReactNode;
-  subtitle?: string;
-  isLoading?: boolean;
-}
-
-function MetricCard({ label, value, icon, subtitle, isLoading }: MetricCardProps) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10 text-primary">
-            {icon}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide">
-              {label}
-            </p>
-            {isLoading ? (
-              <Skeleton className="h-7 w-24 mt-1" />
-            ) : (
-              <p className="text-xl font-semibold font-display truncate">
-                {value}
-              </p>
-            )}
-            {subtitle && !isLoading && (
-              <p className="text-xs text-muted-foreground">{subtitle}</p>
-            )}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
 }
 
 // ============================================================================
@@ -86,29 +43,29 @@ export const PipelineMetrics = memo(function PipelineMetrics({
       aria-live="polite"
     >
       <MetricCard
-        label="Conversion Rate"
+        title="Conversion Rate"
         value={`${metrics?.conversionRate ?? 0}%`}
-        icon={<TrendingUp className="h-5 w-5" />}
+        icon={TrendingUp}
         subtitle="Won vs closed"
         isLoading={isLoading}
       />
       <MetricCard
-        label="Avg Deal Value"
+        title="Avg Deal Value"
         value={<FormatAmount amount={avgDealValue} />}
-        icon={<Target className="h-5 w-5" />}
+        icon={Target}
         isLoading={isLoading}
       />
       <MetricCard
-        label="Total Value"
+        title="Total Value"
         value={<FormatAmount amount={metrics?.totalValue ?? 0} />}
-        icon={<DollarSign className="h-5 w-5" />}
+        icon={DollarSign}
         subtitle={`${metrics?.opportunityCount ?? 0} opportunities`}
         isLoading={isLoading}
       />
       <MetricCard
-        label="Weighted Value"
+        title="Weighted Value"
         value={<FormatAmount amount={metrics?.weightedValue ?? 0} />}
-        icon={<Scale className="h-5 w-5" />}
+        icon={Scale}
         subtitle="Probability adjusted"
         isLoading={isLoading}
       />

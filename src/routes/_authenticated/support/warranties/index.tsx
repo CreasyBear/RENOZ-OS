@@ -8,20 +8,10 @@
 import { createFileRoute } from '@tanstack/react-router';
 import type { FileRoutesByPath } from '@tanstack/react-router';
 import { z } from 'zod';
-import { useMemo } from 'react';
-import { Search, Shield } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SupportTableSkeleton } from '@/components/skeletons/support';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { useWarranties } from '@/hooks/warranty';
-import { WarrantyListTable, type WarrantyListItem } from '@/components/domain/warranty';
+import { WarrantyListContainer, type WarrantyListItem } from '@/components/domain/warranty';
 
 const searchSchema = z.object({
   search: z.string().optional(),
@@ -56,20 +46,6 @@ export const Route = createFileRoute(
   ),
 });
 
-const STATUS_OPTIONS = [
-  { value: 'active', label: 'Active' },
-  { value: 'expiring_soon', label: 'Expiring Soon' },
-  { value: 'expired', label: 'Expired' },
-  { value: 'voided', label: 'Voided' },
-  { value: 'transferred', label: 'Transferred' },
-];
-
-const POLICY_TYPE_OPTIONS = [
-  { value: 'battery_performance', label: 'Battery Performance' },
-  { value: 'inverter_manufacturer', label: 'Inverter Manufacturer' },
-  { value: 'installation_workmanship', label: 'Installation Workmanship' },
-];
-
 function WarrantyListPage() {
   type SearchParams = z.infer<typeof searchSchema>;
   const search = Route.useSearch() as SearchParams;
@@ -78,23 +54,6 @@ function WarrantyListPage() {
     params?: Record<string, string>;
     search?: ((prev: SearchParams) => SearchParams) | SearchParams;
   }) => void;
-
-  const filters = useMemo(
-    () => ({
-      search: search.search,
-      status: search.status,
-      policyType: search.policyType,
-      sortBy: search.sortBy,
-      sortOrder: search.sortOrder,
-      limit: search.pageSize,
-      offset: (search.page - 1) * search.pageSize,
-    }),
-    [search]
-  );
-
-  const { data, isLoading, error, refetch } = useWarranties(filters);
-  const warranties = data?.warranties ?? [];
-  const total = data?.total ?? 0;
 
   const updateSearch = (updates: Partial<SearchParams>) => {
     navigate({
@@ -120,71 +79,15 @@ function WarrantyListPage() {
 
       <PageLayout.Content>
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative w-full max-w-xs">
-              <Search className="text-muted-foreground absolute left-3 top-2.5 h-4 w-4" />
-              <Input
-                value={search.search ?? ''}
-                placeholder="Search warranty number, customer, product..."
-                className="pl-9"
-                onChange={(event) => updateSearch({ search: event.target.value || undefined })}
-              />
-            </div>
-            <Select
-              value={search.status ?? 'all'}
-              onValueChange={(value) =>
-                updateSearch({ status: value === 'all' ? undefined : (value as SearchParams['status']) })
-              }
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                {STATUS_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select
-              value={search.policyType ?? 'all'}
-              onValueChange={(value) =>
-                updateSearch({
-                  policyType: value === 'all' ? undefined : (value as SearchParams['policyType']),
-                })
-              }
-            >
-              <SelectTrigger className="w-[220px]">
-                <SelectValue placeholder="Policy type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All policy types</SelectItem>
-                {POLICY_TYPE_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <WarrantyListTable
-            warranties={warranties}
-            total={total}
-            page={search.page}
-            pageSize={search.pageSize}
-            isLoading={isLoading}
-            error={error instanceof Error ? error : null}
-            onRetry={refetch}
+          <WarrantyListContainer
+            search={search}
+            onSearchChange={updateSearch}
             onRowClick={(warranty: WarrantyListItem) =>
               navigate({
                 to: '/support/warranties/$warrantyId',
                 params: { warrantyId: warranty.id },
               })
             }
-            onPageChange={(page: number) => updateSearch({ page })}
           />
         </div>
       </PageLayout.Content>

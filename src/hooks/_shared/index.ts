@@ -13,6 +13,7 @@ export * from './use-sidebar';
 
 // --- Persistence ---
 export * from './use-persisted-state';
+export * from './use-form-draft';
 
 // --- Feedback ---
 export * from './use-toast';
@@ -22,6 +23,8 @@ export * from './use-undoable-action';
 
 // --- Forms ---
 export * from './use-zod-form';
+export * from './use-tanstack-form';
+export * from './use-form-submission';
 export * from './useMutation';
 
 // --- Selection ---

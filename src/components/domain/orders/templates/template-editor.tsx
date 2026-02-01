@@ -61,6 +61,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useOrgFormat } from "@/hooks/use-org-format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
@@ -125,6 +126,9 @@ export const TemplateEditor = memo(function TemplateEditor({
   isLoading,
   className,
 }: TemplateEditorProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [productSearchOpen, setProductSearchOpen] = useState<number | null>(null);
   const [productSearch, setProductSearch] = useState("");
@@ -424,10 +428,7 @@ export const TemplateEditor = memo(function TemplateEditor({
                                                 <TruncateTooltip text={product.name} maxLength={30} />
                                               </p>
                                               <p className="text-xs text-muted-foreground">
-                                                {product.sku} • $
-                                                {(product.basePrice / 100).toFixed(
-                                                  2
-                                                )}
+                                                {product.sku} • {formatCurrencyDisplay(product.basePrice ?? 0)}
                                               </p>
                                             </div>
                                           </button>

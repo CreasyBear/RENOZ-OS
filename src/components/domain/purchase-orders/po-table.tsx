@@ -1,20 +1,20 @@
 /**
  * Purchase Order Table Component
  *
- * Data table displaying purchase orders with sorting, status badges and quick actions.
+ * Data table displaying purchase orders using TanStack Table with
+ * selection support, server-side sorting, and shared cell components.
+ *
+ * @see TABLE-STANDARDS for pattern documentation
  */
 
-import { useState, useMemo, useCallback } from 'react';
-import { MoreHorizontal, Truck, ChevronUp, ChevronDown } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { memo, useMemo, useState, useCallback, useRef } from "react";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  useReactTable,
+  getCoreRowModel,
+  flexRender,
+  type SortingState,
+} from "@tanstack/react-table";
+import { Truck } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -22,20 +22,20 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils';
-import { formatCurrency } from '@/lib/formatters';
-import type { PurchaseOrderTableData, PurchaseOrderStatus } from '@/lib/schemas/purchase-orders';
+} from "@/components/ui/table";
+import { DataTableSkeleton, DataTableEmpty } from "@/components/shared/data-table";
+import { cn } from "@/lib/utils";
+import type { PurchaseOrderTableData } from "@/lib/schemas/purchase-orders";
+import { createPOColumns } from "./po-columns";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-type SortField = 'poNumber' | 'supplierName' | 'status' | 'orderDate' | 'requiredDate' | 'totalAmount';
-type SortDirection = 'asc' | 'desc';
+type SortField = "poNumber" | "supplierName" | "status" | "orderDate" | "requiredDate" | "totalAmount";
+type SortDirection = "asc" | "desc";
 
-interface POTableProps {
+export interface POTableProps {
   orders: PurchaseOrderTableData[];
   isLoading?: boolean;
   onView?: (id: string) => void;
@@ -45,132 +45,10 @@ interface POTableProps {
 }
 
 // ============================================================================
-// STATUS BADGE
-// ============================================================================
-
-const statusConfig: Record<
-  PurchaseOrderStatus,
-  { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }
-> = {
-  draft: { label: 'Draft', variant: 'secondary' },
-  pending_approval: { label: 'Pending Approval', variant: 'outline' },
-  approved: { label: 'Approved', variant: 'default' },
-  ordered: { label: 'Ordered', variant: 'default' },
-  partial_received: { label: 'Partial', variant: 'outline' },
-  received: { label: 'Received', variant: 'default' },
-  closed: { label: 'Closed', variant: 'secondary' },
-  cancelled: { label: 'Cancelled', variant: 'destructive' },
-};
-
-function StatusBadge({ status }: { status: PurchaseOrderStatus }) {
-  const config = statusConfig[status] || { label: status, variant: 'secondary' as const };
-  return <Badge variant={config.variant}>{config.label}</Badge>;
-}
-
-// ============================================================================
-// SORT HEADER COMPONENT
-// ============================================================================
-
-function SortHeader({
-  label,
-  field,
-  currentSort,
-  onSort,
-}: {
-  label: string;
-  field: SortField;
-  currentSort: { field: SortField; direction: SortDirection };
-  onSort: (field: SortField) => void;
-}) {
-  const isActive = currentSort.field === field;
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="h-8 px-2 -ml-2 font-medium"
-      onClick={() => onSort(field)}
-    >
-      {label}
-      {isActive &&
-        (currentSort.direction === 'asc' ? (
-          <ChevronUp className="ml-1 h-4 w-4" />
-        ) : (
-          <ChevronDown className="ml-1 h-4 w-4" />
-        ))}
-    </Button>
-  );
-}
-
-// ============================================================================
-// LOADING SKELETON
-// ============================================================================
-
-function TableSkeleton() {
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>PO #</TableHead>
-          <TableHead>Supplier</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Order Date</TableHead>
-          <TableHead>Required</TableHead>
-          <TableHead className="text-right">Value</TableHead>
-          <TableHead />
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {Array.from({ length: 5 }).map((_, i) => (
-          <TableRow key={i}>
-            <TableCell>
-              <Skeleton className="h-4 w-24" />
-            </TableCell>
-            <TableCell>
-              <Skeleton className="h-4 w-32" />
-            </TableCell>
-            <TableCell>
-              <Skeleton className="h-5 w-16" />
-            </TableCell>
-            <TableCell>
-              <Skeleton className="h-4 w-20" />
-            </TableCell>
-            <TableCell>
-              <Skeleton className="h-4 w-20" />
-            </TableCell>
-            <TableCell className="text-right">
-              <Skeleton className="ml-auto h-4 w-20" />
-            </TableCell>
-            <TableCell>
-              <Skeleton className="h-8 w-8" />
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  );
-}
-
-// ============================================================================
-// EMPTY STATE
-// ============================================================================
-
-function EmptyState() {
-  return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <Truck className="text-muted-foreground mb-4 h-12 w-12" />
-      <h3 className="mb-2 text-lg font-semibold">No purchase orders</h3>
-      <p className="text-muted-foreground text-sm">
-        Create your first purchase order to start tracking supplier orders.
-      </p>
-    </div>
-  );
-}
-
-// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
-export function POTable({
+export const POTable = memo(function POTable({
   orders,
   isLoading = false,
   onView,
@@ -178,154 +56,256 @@ export function POTable({
   onDelete,
   onReceive,
 }: POTableProps) {
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const lastSelectedIndexRef = useRef<number | null>(null);
+
+  // Sort state (client-side for backward compatibility)
   const [sort, setSort] = useState<{ field: SortField; direction: SortDirection }>({
-    field: 'orderDate',
-    direction: 'desc',
+    field: "orderDate",
+    direction: "desc",
   });
 
-  const handleSort = useCallback((field: SortField) => {
-    setSort((current) => ({
-      field,
-      direction: current.field === field && current.direction === 'asc' ? 'desc' : 'asc',
-    }));
-  }, []);
+  // Selection handlers
+  const isSelected = useCallback((id: string) => selectedIds.has(id), [selectedIds]);
 
-  // Sort orders
+  const isAllSelected = useMemo(
+    () => orders.length > 0 && selectedIds.size === orders.length,
+    [orders.length, selectedIds.size]
+  );
+
+  const isPartiallySelected = useMemo(
+    () => selectedIds.size > 0 && selectedIds.size < orders.length,
+    [orders.length, selectedIds.size]
+  );
+
+  const handleSelect = useCallback((id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+    // Update last selected index
+    const index = orders.findIndex((o) => o.id === id);
+    if (index !== -1) {
+      lastSelectedIndexRef.current = index;
+    }
+  }, [orders]);
+
+  const handleSelectAll = useCallback((checked: boolean) => {
+    if (checked) {
+      setSelectedIds(new Set(orders.map((o) => o.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  }, [orders]);
+
+  const handleShiftClickRange = useCallback((targetIndex: number) => {
+    const lastIndex = lastSelectedIndexRef.current;
+    if (lastIndex === null) {
+      // No previous selection, just select this one
+      const id = orders[targetIndex]?.id;
+      if (id) {
+        setSelectedIds((prev) => new Set(prev).add(id));
+        lastSelectedIndexRef.current = targetIndex;
+      }
+      return;
+    }
+
+    // Select range between last and target
+    const start = Math.min(lastIndex, targetIndex);
+    const end = Math.max(lastIndex, targetIndex);
+    const rangeIds = orders.slice(start, end + 1).map((o) => o.id);
+
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      rangeIds.forEach((id) => next.add(id));
+      return next;
+    });
+    lastSelectedIndexRef.current = targetIndex;
+  }, [orders]);
+
+  // Sort orders (client-side)
   const sortedOrders = useMemo(() => {
     const sorted = [...orders];
     sorted.sort((a, b) => {
       let comparison = 0;
       switch (sort.field) {
-        case 'poNumber':
+        case "poNumber":
           comparison = a.poNumber.localeCompare(b.poNumber);
           break;
-        case 'supplierName':
-          comparison = (a.supplierName || '').localeCompare(b.supplierName || '');
+        case "supplierName":
+          comparison = (a.supplierName || "").localeCompare(b.supplierName || "");
           break;
-        case 'status':
+        case "status":
           comparison = a.status.localeCompare(b.status);
           break;
-        case 'orderDate':
+        case "orderDate": {
           const dateA = a.orderDate ? new Date(a.orderDate).getTime() : 0;
           const dateB = b.orderDate ? new Date(b.orderDate).getTime() : 0;
           comparison = dateA - dateB;
           break;
-        case 'requiredDate':
+        }
+        case "requiredDate": {
           const reqA = a.requiredDate ? new Date(a.requiredDate).getTime() : 0;
           const reqB = b.requiredDate ? new Date(b.requiredDate).getTime() : 0;
           comparison = reqA - reqB;
           break;
-        case 'totalAmount':
+        }
+        case "totalAmount":
           comparison = a.totalAmount - b.totalAmount;
           break;
         default:
           comparison = 0;
       }
-      return sort.direction === 'asc' ? comparison : -comparison;
+      return sort.direction === "asc" ? comparison : -comparison;
     });
     return sorted;
   }, [orders, sort]);
 
+  // Handle sort changes
+  const handleSort = useCallback((field: string) => {
+    setSort((current) => ({
+      field: field as SortField,
+      direction: current.field === field && current.direction === "asc" ? "desc" : "asc",
+    }));
+  }, []);
+
+  // Create columns with handlers
+  const columns = useMemo(
+    () =>
+      createPOColumns({
+        onSelect: handleSelect,
+        onShiftClickRange: handleShiftClickRange,
+        isAllSelected,
+        isPartiallySelected,
+        onSelectAll: handleSelectAll,
+        isSelected,
+        onViewPO: onView ?? (() => {}),
+        onEditPO: onEdit ?? (() => {}),
+        onDeletePO: onDelete ?? (() => {}),
+        onReceivePO: onReceive ?? (() => {}),
+      }),
+    [
+      handleSelect,
+      handleShiftClickRange,
+      isAllSelected,
+      isPartiallySelected,
+      handleSelectAll,
+      isSelected,
+      onView,
+      onEdit,
+      onDelete,
+      onReceive,
+    ]
+  );
+
+  // Convert sort state to TanStack Table sorting state
+  const sorting: SortingState = useMemo(
+    () => [{ id: sort.field, desc: sort.direction === "desc" }],
+    [sort.field, sort.direction]
+  );
+
+  // Handle sorting changes
+  const handleSortingChange = useCallback(
+    (updater: SortingState | ((prev: SortingState) => SortingState)) => {
+      const newSorting = typeof updater === "function" ? updater(sorting) : updater;
+      if (newSorting.length > 0) {
+        handleSort(newSorting[0].id);
+      }
+    },
+    [sorting, handleSort]
+  );
+
+  const table = useReactTable({
+    data: sortedOrders,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    manualSorting: false, // Client-side sorting for backward compatibility
+    state: { sorting },
+    onSortingChange: handleSortingChange,
+  });
+
   if (isLoading) {
-    return <TableSkeleton />;
+    return (
+      <DataTableSkeleton
+        rows={5}
+        columns={[
+          { skeleton: { type: "checkbox" } },
+          { skeleton: { type: "text", width: "w-24" } },
+          { skeleton: { type: "text", width: "w-32" } },
+          { skeleton: { type: "badge", width: "w-20" } },
+          { skeleton: { type: "text", width: "w-24" } },
+          { skeleton: { type: "text", width: "w-24" } },
+          { skeleton: { type: "text", width: "w-20" } },
+          { skeleton: { type: "actions" } },
+        ]}
+      />
+    );
   }
 
   if (orders.length === 0) {
-    return <EmptyState />;
+    return (
+      <DataTableEmpty
+        icon={Truck}
+        title="No purchase orders"
+        description="Create your first purchase order to start tracking supplier orders."
+      />
+    );
   }
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString('en-AU', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
-  };
-
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>
-            <SortHeader label="PO #" field="poNumber" currentSort={sort} onSort={handleSort} />
-          </TableHead>
-          <TableHead>
-            <SortHeader label="Supplier" field="supplierName" currentSort={sort} onSort={handleSort} />
-          </TableHead>
-          <TableHead>
-            <SortHeader label="Status" field="status" currentSort={sort} onSort={handleSort} />
-          </TableHead>
-          <TableHead>
-            <SortHeader label="Order Date" field="orderDate" currentSort={sort} onSort={handleSort} />
-          </TableHead>
-          <TableHead>
-            <SortHeader label="Required" field="requiredDate" currentSort={sort} onSort={handleSort} />
-          </TableHead>
-          <TableHead className="text-right">
-            <SortHeader label="Value" field="totalAmount" currentSort={sort} onSort={handleSort} />
-          </TableHead>
-          <TableHead className="w-12" />
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {sortedOrders.map((order) => (
-          <TableRow
-            key={order.id}
-            className={cn('hover:bg-muted/50 cursor-pointer')}
-            onClick={() => onView?.(order.id)}
-          >
-            <TableCell className="font-medium">{order.poNumber}</TableCell>
-            <TableCell>{order.supplierName || 'Unknown Supplier'}</TableCell>
-            <TableCell>
-              <StatusBadge status={order.status} />
-            </TableCell>
-            <TableCell>{formatDate(order.orderDate)}</TableCell>
-            <TableCell>{formatDate(order.requiredDate)}</TableCell>
-            <TableCell className="text-right font-medium">
-              {formatCurrency(order.totalAmount, { cents: false })}
-            </TableCell>
-            <TableCell>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => onView?.(order.id)}>
-                    View Details
-                  </DropdownMenuItem>
-                  {(order.status === 'ordered' || order.status === 'partial_received') && (
-                    <DropdownMenuItem onClick={() => onReceive?.(order.id)}>
-                      Receive Goods
-                    </DropdownMenuItem>
+    <div className="border rounded-lg">
+      <Table>
+        <TableHeader className="sticky top-0 z-10 bg-background">
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id}>
+              {headerGroup.headers.map((header) => (
+                <TableHead
+                  key={header.id}
+                  style={{ width: header.getSize() }}
+                  className={cn(
+                    header.column.getCanSort() && "cursor-pointer select-none"
                   )}
-                  <DropdownMenuSeparator />
-                  {order.status === 'draft' && (
-                    <DropdownMenuItem onClick={() => onEdit?.(order.id)}>
-                      Edit Order
-                    </DropdownMenuItem>
-                  )}
-                  {order.status === 'draft' && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => onDelete?.(order.id)}
-                        className="text-destructive"
-                      >
-                        Delete Order
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+                >
+                  {header.isPlaceholder
+                    ? null
+                    : flexRender(
+                        header.column.columnDef.header,
+                        header.getContext()
+                      )}
+                </TableHead>
+              ))}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {table.getRowModel().rows.map((row) => (
+            <TableRow
+              key={row.id}
+              className={cn(
+                "cursor-pointer hover:bg-muted/50",
+                selectedIds.has(row.original.id) && "bg-muted/50"
+              )}
+              onClick={() => onView?.(row.original.id)}
+            >
+              {row.getVisibleCells().map((cell) => (
+                <TableCell key={cell.id}>
+                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
   );
-}
+});
 
-export type { POTableProps, PurchaseOrderTableData };
+POTable.displayName = "POTable";
+
+export type { PurchaseOrderTableData };

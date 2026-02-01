@@ -18,9 +18,9 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
+import { StatusCell } from '@/components/shared/data-table';
+import { PROJECT_STATUS_CONFIG, PROJECT_PRIORITY_CONFIG } from './project-status-config';
 import type { Project } from 'drizzle/schema/jobs/projects';
-import type { ProjectStatus, ProjectPriority } from '@/lib/schemas/jobs/projects';
 
 // ============================================================================
 // TYPES
@@ -33,75 +33,6 @@ export interface ProjectCardProps {
   actions?: React.ReactNode;
 }
 
-// ============================================================================
-// STATUS CONFIG
-// ============================================================================
-
-function getStatusConfig(status: ProjectStatus) {
-  switch (status) {
-    case 'quoting':
-      return {
-        label: 'Quoting',
-        dot: 'bg-gray-500',
-        pill: 'text-gray-700 border-gray-200 bg-gray-50',
-      };
-    case 'approved':
-      return {
-        label: 'Approved',
-        dot: 'bg-blue-500',
-        pill: 'text-blue-700 border-blue-200 bg-blue-50',
-      };
-    case 'in_progress':
-      return {
-        label: 'In Progress',
-        dot: 'bg-teal-500',
-        pill: 'text-teal-700 border-teal-200 bg-teal-50',
-      };
-    case 'completed':
-      return {
-        label: 'Completed',
-        dot: 'bg-green-500',
-        pill: 'text-green-700 border-green-200 bg-green-50',
-      };
-    case 'cancelled':
-      return {
-        label: 'Cancelled',
-        dot: 'bg-red-500',
-        pill: 'text-red-700 border-red-200 bg-red-50',
-      };
-    case 'on_hold':
-      return {
-        label: 'On Hold',
-        dot: 'bg-orange-500',
-        pill: 'text-orange-700 border-orange-200 bg-orange-50',
-      };
-    default:
-      return {
-        label: status,
-        dot: 'bg-gray-400',
-        pill: 'text-gray-700 border-gray-200 bg-gray-50',
-      };
-  }
-}
-
-// ============================================================================
-// PRIORITY CONFIG
-// ============================================================================
-
-function getPriorityConfig(priority: ProjectPriority) {
-  switch (priority) {
-    case 'urgent':
-      return { label: 'Urgent', color: 'text-red-600 bg-red-50' };
-    case 'high':
-      return { label: 'High', color: 'text-orange-600 bg-orange-50' };
-    case 'medium':
-      return { label: 'Medium', color: 'text-yellow-600 bg-yellow-50' };
-    case 'low':
-      return { label: 'Low', color: 'text-green-600 bg-green-50' };
-    default:
-      return { label: priority, color: 'text-gray-600 bg-gray-50' };
-  }
-}
 
 // ============================================================================
 // PROGRESS CIRCLE COMPONENT
@@ -160,8 +91,6 @@ function ProgressCircle({ progress, size = 20 }: ProgressCircleProps) {
 // ============================================================================
 
 export function ProjectCard({ project, variant = 'list', onClick, actions }: ProjectCardProps) {
-  const status = getStatusConfig(project.status);
-  const priority = getPriorityConfig(project.priority);
   const isBoard = variant === 'board';
 
   // Format site address
@@ -217,20 +146,10 @@ export function ProjectCard({ project, variant = 'list', onClick, actions }: Pro
 
         <div className="flex items-center gap-2">
           {!isBoard && (
-            <div
-              className={cn(
-                'flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium',
-                status.pill
-              )}
-            >
-              <span className={cn('inline-block size-1.5 rounded-full', status.dot)} />
-              {status.label}
-            </div>
+            <StatusCell status={project.status} statusConfig={PROJECT_STATUS_CONFIG} showIcon />
           )}
           {isBoard && (
-            <Badge variant="secondary" className={cn('text-xs', priority.color)}>
-              {priority.label}
-            </Badge>
+            <StatusCell status={project.priority} statusConfig={PROJECT_PRIORITY_CONFIG} />
           )}
           {actions && (
             <div onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
@@ -267,9 +186,7 @@ export function ProjectCard({ project, variant = 'list', onClick, actions }: Pro
               </div>
             )}
           </div>
-          <Badge variant="secondary" className={cn('text-xs', priority.color)}>
-            {priority.label}
-          </Badge>
+          <StatusCell status={project.priority} statusConfig={PROJECT_PRIORITY_CONFIG} />
         </div>
       )}
 

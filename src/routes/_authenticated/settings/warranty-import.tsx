@@ -4,7 +4,7 @@
  * Page for bulk CSV warranty import with quick access actions.
  * Provides a card-based interface to launch the import dialog.
  *
- * @see src/components/domain/warranty/bulk-warranty-import-dialog.tsx
+ * @see src/components/domain/warranty/dialogs/bulk-warranty-import-dialog.tsx
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json - DOM-WAR-005b
  */
 

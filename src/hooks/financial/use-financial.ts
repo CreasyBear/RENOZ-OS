@@ -72,6 +72,8 @@ import {
   getCreditNote,
   createCreditNote,
   applyCreditNoteToInvoice,
+  issueCreditNote,
+  voidCreditNote,
 } from '@/server/functions/financial/credit-notes';
 import type { CreateCreditNoteInput, ApplyCreditNoteInput } from '@/lib/schemas';
 
@@ -480,6 +482,31 @@ export function useApplyCreditNote() {
 
   return useMutation({
     mutationFn: (data: ApplyCreditNoteInput) => fn({ data }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
+    },
+  });
+}
+
+export function useIssueCreditNote() {
+  const queryClient = useQueryClient();
+  const fn = useServerFn(issueCreditNote);
+
+  return useMutation({
+    mutationFn: (id: string) => fn({ data: { id } }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
+    },
+  });
+}
+
+export function useVoidCreditNote() {
+  const queryClient = useQueryClient();
+  const fn = useServerFn(voidCreditNote);
+
+  return useMutation({
+    mutationFn: (params: { id: string; voidReason?: string }) =>
+      fn({ data: { id: params.id, voidReason: params.voidReason ?? 'Voided by user' } }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.financial.creditNotes() });
     },

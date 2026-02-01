@@ -211,7 +211,7 @@ function ProcurementDashboard({
 
         <TabsContent value="alerts">
           <ProcurementAlerts
-            alerts={alerts}
+            alerts={alerts ?? []}
             isLoading={isLoading}
             onDismiss={onDismissAlert}
             maxVisible={10}

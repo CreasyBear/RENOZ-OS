@@ -24,6 +24,7 @@
 
 import { TrendingUp, Users, ShoppingCart } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { MetricCard } from '@/components/shared';
 
 // ============================================================================
 // TYPES
@@ -87,55 +88,6 @@ export interface MainDashboardProps {
 }
 
 // ============================================================================
-// METRIC CARD SUB-COMPONENT
-// ============================================================================
-
-interface MetricCardProps {
-  title: string;
-  value: string;
-  subtitle: string;
-  icon: React.ReactNode;
-  trend?: string;
-  trendUp?: boolean;
-  isLoading?: boolean;
-}
-
-function MetricCard({ title, value, subtitle, icon, trend, trendUp, isLoading }: MetricCardProps) {
-  if (isLoading) {
-    return (
-      <div className="rounded-xl border border-gray-200 bg-white p-6">
-        <div className="flex items-center justify-between">
-          <div className="h-4 w-24 animate-pulse rounded bg-gray-200" />
-          <div className="h-5 w-5 animate-pulse rounded bg-gray-200" />
-        </div>
-        <div className="mt-2 flex items-baseline gap-2">
-          <div className="h-8 w-20 animate-pulse rounded bg-gray-200" />
-        </div>
-        <div className="mt-1 h-4 w-32 animate-pulse rounded bg-gray-200" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-xl border border-gray-200 bg-white p-6">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-500">{title}</span>
-        <span className="text-gray-400">{icon}</span>
-      </div>
-      <div className="mt-2 flex items-baseline gap-2">
-        <span className="text-3xl font-semibold text-gray-900">{value}</span>
-        {trend && (
-          <span className={cn('text-sm font-medium', trendUp ? 'text-green-600' : 'text-red-600')}>
-            {trend}
-          </span>
-        )}
-      </div>
-      <p className="mt-1 text-sm text-gray-500">{subtitle}</p>
-    </div>
-  );
-}
-
-// ============================================================================
 // ORDER STATUS BADGE SUB-COMPONENT
 // ============================================================================
 
@@ -181,9 +133,8 @@ export function MainDashboard({
           title="Pipeline Value"
           value={pipelineMetrics?.totalValue || '$0'}
           subtitle={`${pipelineMetrics?.dealCount || 0} active deals`}
-          icon={<TrendingUp className="h-5 w-5" />}
-          trend={pipelineMetrics?.changePercent ? `+${pipelineMetrics.changePercent}%` : undefined}
-          trendUp={(pipelineMetrics?.changePercent || 0) > 0}
+          icon={TrendingUp}
+          delta={pipelineMetrics?.changePercent}
           isLoading={isLoading}
         />
 
@@ -192,9 +143,8 @@ export function MainDashboard({
           title="Total Customers"
           value={customerMetrics?.totalCustomers?.toString() || '0'}
           subtitle="Active customers"
-          icon={<Users className="h-5 w-5" />}
-          trend={customerMetrics?.newThisMonth ? `+${customerMetrics.newThisMonth}` : undefined}
-          trendUp={!!customerMetrics?.newThisMonth}
+          icon={Users}
+          delta={customerMetrics?.newThisMonth}
           isLoading={isLoading}
         />
 
@@ -203,7 +153,7 @@ export function MainDashboard({
           title="Recent Orders"
           value={recentOrders?.length?.toString() || '0'}
           subtitle="Latest orders"
-          icon={<ShoppingCart className="h-5 w-5" />}
+          icon={ShoppingCart}
           isLoading={isLoading}
         />
       </div>

@@ -7,33 +7,15 @@ export type SSRSafeUser = User & {
   factors: (Factor & { factor_type: 'phone' | 'totp' })[];
 };
 
-// DEV MODE: Mock user that bypasses Supabase entirely
-const DEV_MOCK_USER: SSRSafeUser = {
-  id: 'dev-user-id-12345',
-  aud: 'authenticated',
-  role: 'authenticated',
-  email: 'admin@test.com',
-  email_confirmed_at: new Date().toISOString(),
-  phone: '',
-  confirmed_at: new Date().toISOString(),
-  last_sign_in_at: new Date().toISOString(),
-  app_metadata: { provider: 'email', providers: ['email'] },
-  user_metadata: { name: 'Dev Admin' },
-  identities: [],
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-  factors: [],
-};
-
+/**
+ * Fetches the current authenticated user from Supabase Auth.
+ * 
+ * SECURITY NOTE: This always validates against Supabase. There is no mock bypass.
+ * For development, use real Supabase credentials in .env or the test seed script.
+ */
 export const fetchUser: () => Promise<SSRSafeUser | null> = createServerFn({
   method: 'GET',
 }).handler(async () => {
-  // DEV MODE: Skip Supabase entirely, return mock user
-  if (process.env.NODE_ENV === 'development') {
-    return DEV_MOCK_USER;
-  }
-
-  // PRODUCTION: Use real Supabase auth
   const { createServerSupabase } = await import('~/lib/supabase/server');
   const supabase = createServerSupabase();
   const { data, error } = await supabase.auth.getUser();

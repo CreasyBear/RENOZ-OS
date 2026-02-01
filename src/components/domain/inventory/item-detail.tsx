@@ -13,10 +13,6 @@ import {
   Package,
   MapPin,
   DollarSign,
-  Clock,
-  AlertCircle,
-  CheckCircle,
-  XCircle,
   Barcode,
   Info,
 } from "lucide-react";
@@ -30,6 +26,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { StatusCell } from "@/components/shared/data-table";
+import { useOrgFormat } from "@/hooks/use-org-format";
+import { INVENTORY_STATUS_CONFIG, QUALITY_STATUS_CONFIG } from "./inventory-status-config";
 
 // ============================================================================
 // TYPES
@@ -66,61 +65,6 @@ interface ItemDetailProps {
   className?: string;
 }
 
-// ============================================================================
-// STATUS CONFIG
-// ============================================================================
-
-const STATUS_CONFIG: Record<
-  ItemDetailData["status"],
-  { label: string; icon: typeof CheckCircle; color: string; bgColor: string }
-> = {
-  available: {
-    label: "Available",
-    icon: CheckCircle,
-    color: "text-green-600",
-    bgColor: "bg-green-50 dark:bg-green-950/50",
-  },
-  allocated: {
-    label: "Allocated",
-    icon: Clock,
-    color: "text-blue-600",
-    bgColor: "bg-blue-50 dark:bg-blue-950/50",
-  },
-  sold: {
-    label: "Sold",
-    icon: CheckCircle,
-    color: "text-gray-600",
-    bgColor: "bg-gray-50 dark:bg-gray-950/50",
-  },
-  damaged: {
-    label: "Damaged",
-    icon: AlertCircle,
-    color: "text-red-600",
-    bgColor: "bg-red-50 dark:bg-red-950/50",
-  },
-  returned: {
-    label: "Returned",
-    icon: XCircle,
-    color: "text-orange-600",
-    bgColor: "bg-orange-50 dark:bg-orange-950/50",
-  },
-  quarantined: {
-    label: "Quarantined",
-    icon: AlertCircle,
-    color: "text-yellow-600",
-    bgColor: "bg-yellow-50 dark:bg-yellow-950/50",
-  },
-};
-
-const QUALITY_CONFIG: Record<
-  NonNullable<ItemDetailData["qualityStatus"]>,
-  { label: string; color: string }
-> = {
-  good: { label: "Good", color: "text-green-600" },
-  damaged: { label: "Damaged", color: "text-red-600" },
-  expired: { label: "Expired", color: "text-orange-600" },
-  quarantined: { label: "Quarantined", color: "text-yellow-600" },
-};
 
 // ============================================================================
 // COMPONENT
@@ -130,15 +74,9 @@ export const ItemDetail = memo(function ItemDetail({
   item,
   className,
 }: ItemDetailProps) {
-  const statusConfig = STATUS_CONFIG[item.status];
-  const StatusIcon = statusConfig.icon;
-  const qualityConfig = item.qualityStatus ? QUALITY_CONFIG[item.qualityStatus] : null;
-
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("en-AU", {
-      style: "currency",
-      currency: "AUD",
-    }).format(value);
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
 
   const formatDate = (date: Date | undefined) =>
     date ? new Date(date).toLocaleDateString("en-AU", {
@@ -175,24 +113,20 @@ export const ItemDetail = memo(function ItemDetail({
             </CardDescription>
           </div>
 
-          {/* Status Badge - icon + color */}
+          {/* Status Badge */}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "flex items-center gap-1.5 text-sm",
-                    statusConfig.color,
-                    statusConfig.bgColor
-                  )}
-                >
-                  <StatusIcon className="h-4 w-4" aria-hidden="true" />
-                  {statusConfig.label}
-                </Badge>
+                <span>
+                  <StatusCell
+                    status={item.status}
+                    statusConfig={INVENTORY_STATUS_CONFIG}
+                    showIcon
+                  />
+                </span>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Inventory Status: {statusConfig.label}</p>
+                <p>Inventory Status: {INVENTORY_STATUS_CONFIG[item.status]?.label ?? item.status}</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
@@ -239,13 +173,13 @@ export const ItemDetail = memo(function ItemDetail({
             <div>
               <div className="text-sm text-muted-foreground">Unit Cost</div>
               <div className="text-lg font-semibold tabular-nums">
-                {formatCurrency(item.unitCost)}
+                {formatCurrencyDisplay(item.unitCost)}
               </div>
             </div>
             <div>
               <div className="text-sm text-muted-foreground">Total Value</div>
               <div className="text-lg font-semibold tabular-nums">
-                {formatCurrency(item.totalValue)}
+                {formatCurrencyDisplay(item.totalValue)}
               </div>
             </div>
           </div>
@@ -310,12 +244,13 @@ export const ItemDetail = memo(function ItemDetail({
             Details
           </h4>
           <div className="space-y-2">
-            {qualityConfig && (
+            {item.qualityStatus && (
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Quality</span>
-                <Badge variant="outline" className={qualityConfig.color}>
-                  {qualityConfig.label}
-                </Badge>
+                <StatusCell
+                  status={item.qualityStatus}
+                  statusConfig={QUALITY_STATUS_CONFIG}
+                />
               </div>
             )}
             {item.expiryDate && (

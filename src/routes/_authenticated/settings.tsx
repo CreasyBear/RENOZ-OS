@@ -8,7 +8,7 @@
  *
  * @see UI_UX_STANDARDIZATION_PRD.md
  */
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, Outlet, useLocation } from '@tanstack/react-router'
 import { PageLayout } from '@/components/layout'
 import { PermissionGuard } from '@/components/shared/permission-guard'
 
@@ -17,6 +17,15 @@ export const Route = createFileRoute('/_authenticated/settings')({
 })
 
 function Settings() {
+  const location = useLocation()
+  const isIndex = location.pathname === '/settings'
+
+  // If we're on a child route (like /settings/organization), render the Outlet
+  if (!isIndex) {
+    return <Outlet />
+  }
+
+  // Otherwise, render the settings index (menu)
   return (
     <PageLayout variant="full-width">
       <PageLayout.Header title="Settings" />

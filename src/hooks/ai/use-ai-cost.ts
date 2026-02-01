@@ -17,22 +17,22 @@ import { queryKeys, type AICostFilters } from '@/lib/query-keys';
 // ============================================================================
 
 export interface AIBudgetStatus {
-  // Daily limits
-  dailyLimitCents: number;
-  dailyUsedCents: number;
-  dailyRemainingCents: number;
+  // Daily limits (in dollars)
+  dailyLimit: number;
+  dailyUsed: number;
+  dailyRemaining: number;
   dailyPercentUsed: number;
 
-  // Monthly limits (org)
-  monthlyLimitCents: number;
-  monthlyUsedCents: number;
-  monthlyRemainingCents: number;
+  // Monthly limits (org) (in dollars)
+  monthlyLimit: number;
+  monthlyUsed: number;
+  monthlyRemaining: number;
   monthlyPercentUsed: number;
 
-  // User limits
-  userDailyLimitCents: number;
-  userDailyUsedCents: number;
-  userDailyRemainingCents: number;
+  // User limits (in dollars)
+  userDailyLimit: number;
+  userDailyUsed: number;
+  userDailyRemaining: number;
   userDailyPercentUsed: number;
 
   // Formatted values for display
@@ -60,12 +60,12 @@ export interface AIUsageEntry {
   feature?: string | null;
   inputTokens: number;
   outputTokens: number;
-  costCents: number;
+  cost: number; // Cost in dollars
 }
 
 export interface AIUsageResponse {
   usage: AIUsageEntry[];
-  totalCents: number;
+  totalCost: number; // Total cost in dollars
   totalInputTokens: number;
   totalOutputTokens: number;
   budgetRemaining: number;
@@ -168,10 +168,10 @@ export function useAIUsage(options: UseAIUsageOptions = {}) {
 // ============================================================================
 
 /**
- * Format cents as currency string.
+ * Format cost in dollars as currency string.
  */
-export function formatCostCents(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
+export function formatCostDollars(cost: number): string {
+  return `$${cost.toFixed(2)}`;
 }
 
 /**

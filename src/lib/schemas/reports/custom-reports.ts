@@ -127,7 +127,7 @@ export type CustomReport = z.infer<typeof customReportSchema>;
 
 export const reportResultSchema = z.object({
   columns: z.array(z.string()),
-  rows: z.array(z.record(z.string(), z.unknown())),
+  rows: z.array(z.record(z.string(), z.any())),
   totalCount: z.number().int(),
   generatedAt: z.coerce.date(),
 });

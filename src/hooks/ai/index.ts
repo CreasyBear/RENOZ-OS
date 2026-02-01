@@ -24,7 +24,7 @@ export {
 export {
   useAIBudget,
   useAIUsage,
-  formatCostCents,
+  formatCostDollars,
   getUsageLevel,
   type AIBudgetStatus,
   type AIUsageEntry,

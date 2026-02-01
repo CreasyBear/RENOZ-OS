@@ -39,8 +39,8 @@ import { FormatAmount } from '@/components/shared/format';
 import {
   useExpiringWarrantiesReport,
   useExpiringWarrantiesFilterOptions,
-  type ExpiringWarrantyItem,
 } from '@/hooks';
+import type { ExpiringWarrantyItem } from '@/hooks/warranty/core/use-expiring-warranties';
 import { useCreateScheduledReport, useGenerateReport } from '@/hooks/reports';
 import { ScheduledReportForm } from '@/components/domain/settings/scheduled-report-form';
 import {

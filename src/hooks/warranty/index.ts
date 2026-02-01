@@ -5,12 +5,12 @@
  */
 
 // --- Core warranty hooks ---
-export { useWarranties, useWarranty, useUpdateWarrantyOptOut } from './use-warranties';
+export { useWarranties, useWarranty, useUpdateWarrantyOptOut } from './core/use-warranties';
 export {
   useExpiringWarranties,
   useExpiringWarrantiesReport,
   useExpiringWarrantiesFilterOptions,
-} from './use-expiring-warranties';
+} from './core/use-expiring-warranties';
 
 // --- Claims hooks ---
 export {
@@ -31,14 +31,14 @@ export {
   formatClaimDate,
   formatClaimDateTime,
   formatClaimCost,
-} from './use-warranty-claims';
+} from './claims/use-warranty-claims';
 
 // --- Certificate hooks ---
 export {
   useWarrantyCertificate,
   useGenerateWarrantyCertificate,
   useRegenerateWarrantyCertificate,
-} from './use-warranty-certificates';
+} from './certificates/use-warranty-certificates';
 
 // --- Extensions hooks ---
 export {
@@ -46,7 +46,7 @@ export {
   useExtensionHistory,
   useExtensionById,
   useExtendWarranty,
-} from './use-warranty-extensions';
+} from './extensions/use-warranty-extensions';
 
 // --- Policies hooks ---
 export {
@@ -62,7 +62,7 @@ export {
   useSeedDefaultWarrantyPolicies,
   useAssignWarrantyPolicyToProduct,
   useAssignDefaultWarrantyPolicyToCategory,
-} from './use-warranty-policies';
+} from './policies/use-warranty-policies';
 
 // --- Analytics hooks ---
 export {
@@ -76,10 +76,13 @@ export {
   useWarrantyAnalyticsFilterOptions,
   useExportWarrantyAnalytics,
   useWarrantyAnalyticsDashboard,
-} from './use-warranty-analytics';
+} from './analytics/use-warranty-analytics';
 
 // --- Bulk import hooks ---
-export { usePreviewWarrantyImport, useBulkRegisterWarranties } from './use-warranty-bulk-import';
+export {
+  usePreviewWarrantyImport,
+  useBulkRegisterWarranties,
+} from './bulk-import/use-warranty-bulk-import';
 
 // --- Re-export key types ---
 export type { WarrantyFilters, WarrantyStatus } from '@/lib/schemas/warranty/warranties';

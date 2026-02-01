@@ -22,7 +22,7 @@ import { ArrowRight, CheckCircle2, AlertTriangle, RefreshCw } from 'lucide-react
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import type { ExpiringWarrantyItem } from '@/server/functions/warranty/warranties';
+import type { ExpiringWarrantyItem } from '@/server/functions/warranty/core/warranties';
 
 // ============================================================================
 // TYPES

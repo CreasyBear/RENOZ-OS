@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { formatCurrency } from '@/lib/formatters';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import type {
   SpendAnalysisData,
   SpendBySupplier,
@@ -95,6 +95,9 @@ interface SummaryCardsProps {
 }
 
 function SummaryCards({ totalSpend, budgetTotal, budgetUsed }: SummaryCardsProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
   const budgetPercent = (budgetUsed / budgetTotal) * 100;
   const remaining = budgetTotal - budgetUsed;
   const isOverBudget = budgetUsed > budgetTotal;
@@ -107,7 +110,7 @@ function SummaryCards({ totalSpend, budgetTotal, budgetUsed }: SummaryCardsProps
           <DollarSign className="text-muted-foreground h-4 w-4" />
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{formatCurrency(totalSpend, { cents: false })}</div>
+          <div className="text-2xl font-bold">{formatCurrencyDisplay(totalSpend)}</div>
           <p className="text-muted-foreground text-xs">Across all suppliers and categories</p>
         </CardContent>
       </Card>
@@ -128,8 +131,7 @@ function SummaryCards({ totalSpend, budgetTotal, budgetUsed }: SummaryCardsProps
             className={`mt-2 h-2 ${isOverBudget ? '[&>div]:bg-red-500' : ''}`}
           />
           <p className="text-muted-foreground mt-1 text-xs">
-            {formatCurrency(budgetUsed, { cents: false })} of{' '}
-            {formatCurrency(budgetTotal, { cents: false })}
+            {formatCurrencyDisplay(budgetUsed)} of {formatCurrencyDisplay(budgetTotal)}
           </p>
         </CardContent>
       </Card>
@@ -144,7 +146,7 @@ function SummaryCards({ totalSpend, budgetTotal, budgetUsed }: SummaryCardsProps
         <CardContent>
           <div className={`text-2xl font-bold ${isOverBudget ? 'text-red-500' : 'text-green-500'}`}>
             {isOverBudget ? '-' : ''}
-            {formatCurrency(Math.abs(remaining), { cents: false })}
+            {formatCurrencyDisplay(Math.abs(remaining))}
           </div>
           <p className="text-muted-foreground text-xs">
             {isOverBudget ? 'Exceeds annual budget' : 'Available for spending'}
@@ -164,6 +166,9 @@ interface SpendBySupplierTableProps {
 }
 
 function SpendBySupplierTable({ data }: SpendBySupplierTableProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
   return (
     <Card>
       <CardHeader className="flex flex-row items-center gap-2">
@@ -190,7 +195,7 @@ function SpendBySupplierTable({ data }: SpendBySupplierTableProps) {
                   </div>
                 </TableCell>
                 <TableCell className="text-right font-medium">
-                  {formatCurrency(supplier.totalSpend, { cents: false })}
+                  {formatCurrencyDisplay(supplier.totalSpend)}
                 </TableCell>
                 <TableCell className="text-right">{supplier.orderCount}</TableCell>
                 <TableCell className="text-right">
@@ -217,6 +222,9 @@ interface SpendByCategoryTableProps {
 }
 
 function SpendByCategoryTable({ data }: SpendByCategoryTableProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
   return (
     <Card>
       <CardHeader className="flex flex-row items-center gap-2">
@@ -238,7 +246,7 @@ function SpendByCategoryTable({ data }: SpendByCategoryTableProps) {
               <TableRow key={category.category}>
                 <TableCell className="font-medium">{category.category}</TableCell>
                 <TableCell className="text-right font-medium">
-                  {formatCurrency(category.totalSpend, { cents: false })}
+                  {formatCurrencyDisplay(category.totalSpend)}
                 </TableCell>
                 <TableCell className="text-right">{category.orderCount}</TableCell>
                 <TableCell className="text-right">
@@ -265,6 +273,9 @@ interface SpendTrendsProps {
 }
 
 function SpendTrends({ data }: SpendTrendsProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
   return (
     <Card>
       <CardHeader>
@@ -287,15 +298,15 @@ function SpendTrends({ data }: SpendTrendsProps) {
                 <TableRow key={trend.period}>
                   <TableCell className="font-medium">{trend.period}</TableCell>
                   <TableCell className="text-right">
-                    {formatCurrency(trend.spend, { cents: false })}
+                    {formatCurrencyDisplay(trend.spend)}
                   </TableCell>
                   <TableCell className="text-muted-foreground text-right">
-                    {formatCurrency(trend.budget, { cents: false })}
+                    {formatCurrencyDisplay(trend.budget)}
                   </TableCell>
                   <TableCell className="text-right">
                     <Badge variant={isUnderBudget ? 'secondary' : 'destructive'}>
                       {isUnderBudget ? '+' : ''}
-                      {formatCurrency(trend.variance, { cents: false })}
+                      {formatCurrencyDisplay(trend.variance)}
                     </Badge>
                   </TableCell>
                 </TableRow>
@@ -316,7 +327,7 @@ function SpendTrends({ data }: SpendTrendsProps) {
  * Spend Analysis Presenter
  * Displays spend breakdown by supplier, category, and trends.
  * Receives all data via props - no sample data defaults.
- * 
+ *
  * @source data from useSpendMetrics or useProcurementDashboard hook
  */
 function SpendAnalysis({ data, isLoading = false }: SpendAnalysisProps) {

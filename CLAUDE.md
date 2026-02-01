@@ -211,3 +211,13 @@ See [STANDARDS.md](./STANDARDS.md) for authoritative patterns on:
 - File/folder structure (domain organization)
 
 The STANDARDS.md document includes a compliance checklist and audit commands for verifying domain adherence.
+
+## Workflow
+
+See [.claude/WORKFLOW.md](./.claude/WORKFLOW.md) for the development workflow using everything-claude-code.
+
+Key commands:
+- `/plan` - Before starting non-trivial features
+- `/tdd` - Test-driven implementation
+- `/verify` - Before claiming work complete
+- `/code-review` - After implementation

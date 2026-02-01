@@ -5,15 +5,44 @@
  */
 
 // ============================================================================
-// DIRECTORY & LIST
+// DIRECTORY & LIST (DataTable Pattern)
 // ============================================================================
 export { SupplierDirectory } from './supplier-directory';
+
+// --- Filter Config (FILTER-STANDARDS compliant) ---
+export {
+  SUPPLIER_FILTER_CONFIG,
+  SUPPLIER_STATUS_OPTIONS,
+  SUPPLIER_TYPE_OPTIONS,
+  DEFAULT_SUPPLIER_FILTERS,
+  type SupplierFiltersState,
+} from './supplier-filter-config';
+
+// New DataTable-based components
+export { SuppliersListContainer, type SuppliersListContainerProps } from './suppliers-list-container';
+export { SuppliersListPresenter, type SuppliersListPresenterProps } from './suppliers-list-presenter';
+export { SuppliersTablePresenter, type SuppliersTablePresenterProps } from './suppliers-table-presenter';
+export { SuppliersMobileCards, type SuppliersMobileCardsProps } from './suppliers-mobile-cards';
+export { createSupplierColumns, type SupplierTableItem, type CreateSupplierColumnsOptions } from './supplier-columns';
+export {
+  SUPPLIER_STATUS_CONFIG,
+  SUPPLIER_TYPE_CONFIG,
+  formatLeadTime,
+  formatRating,
+} from './supplier-status-config';
+
+// Legacy table (deprecated - use SuppliersListContainer instead)
+/** @deprecated Use SuppliersListContainer instead */
 export { SupplierTable, type SupplierTableData } from './supplier-table';
-export { SupplierFilters } from './supplier-filters';
 
 // ============================================================================
-// DETAIL
+// DETAIL (Container/Presenter Pattern)
 // ============================================================================
+export { SupplierDetailContainer, type SupplierDetailContainerProps, type SupplierDetailContainerRenderProps } from './containers/supplier-detail-container';
+export { SupplierDetailView, type SupplierDetailViewProps, type SupplierData } from './views/supplier-detail-view';
+
+// Legacy detail component (deprecated - use SupplierDetailContainer instead)
+/** @deprecated Use SupplierDetailContainer instead */
 export { SupplierDetail, type SupplierDetailProps, type Supplier } from './supplier-detail';
 
 // ============================================================================

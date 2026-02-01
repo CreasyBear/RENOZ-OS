@@ -45,8 +45,8 @@ export interface TrackCostInput {
 }
 
 export interface CostEstimate {
-  /** Estimated cost in cents */
-  costCents: number;
+  /** Estimated cost in dollars */
+  cost: number;
   /** Estimated input tokens */
   inputTokens: number;
   /** Estimated output tokens */
@@ -58,7 +58,7 @@ export interface CostEstimate {
 // ============================================================================
 
 /**
- * Cost per 1000 tokens in cents for each model.
+ * Cost per 1000 tokens in dollars for each model.
  * Based on Anthropic pricing as of January 2025.
  *
  * Note: Prompt caching provides 90% discount on cached tokens read,
@@ -104,13 +104,13 @@ const CACHE_MODIFIERS = {
 // ============================================================================
 
 /**
- * Calculate cost in cents for token usage.
+ * Calculate cost in dollars for token usage.
  *
  * @param usage - Token usage counts
  * @param model - Model identifier
- * @returns Cost in cents (rounded to nearest cent)
+ * @returns Cost in dollars (rounded to 2 decimal places)
  */
-export function calculateCostCents(usage: TokenUsage, model: string): number {
+export function calculateCost(usage: TokenUsage, model: string): number {
   const pricing = COST_PER_1K_TOKENS[model] ?? DEFAULT_PRICING;
 
   // Base input/output cost
@@ -134,8 +134,8 @@ export function calculateCostCents(usage: TokenUsage, model: string): number {
 
   const totalCost = inputCost + outputCost;
 
-  // Round to nearest cent
-  return Math.round(totalCost);
+  // Round to 2 decimal places (cents precision)
+  return Math.round(totalCost * 100) / 100;
 }
 
 /**
@@ -144,7 +144,7 @@ export function calculateCostCents(usage: TokenUsage, model: string): number {
  * @param model - Model to use
  * @param estimatedInputTokens - Estimated input tokens
  * @param estimatedOutputTokens - Estimated output tokens (default 500)
- * @returns Estimated cost in cents
+ * @returns Estimated cost in dollars
  */
 export function estimateCost(
   model: string,
@@ -157,7 +157,7 @@ export function estimateCost(
   };
 
   return {
-    costCents: calculateCostCents(usage, model),
+    cost: calculateCost(usage, model),
     inputTokens: estimatedInputTokens,
     outputTokens: estimatedOutputTokens,
   };
@@ -177,7 +177,7 @@ export function estimateCost(
 export async function trackCost(input: TrackCostInput): Promise<string> {
   const { usage, model, organizationId, userId, conversationId, taskId, feature } = input;
 
-  const costCents = calculateCostCents(usage, model);
+  const cost = calculateCost(usage, model);
   const today = new Date().toISOString().split('T')[0];
 
   const [record] = await db
@@ -193,7 +193,7 @@ export async function trackCost(input: TrackCostInput): Promise<string> {
       outputTokens: usage.outputTokens,
       cacheReadTokens: usage.cacheReadTokens ?? 0,
       cacheWriteTokens: usage.cacheWriteTokens ?? 0,
-      costCents,
+      cost,
       date: today,
     })
     .returning({ id: aiCostTracking.id });
@@ -248,18 +248,18 @@ export async function trackCostFromSDK(
 // ============================================================================
 
 /**
- * Format cost in cents as currency string.
- * @param costCents - Cost in cents
+ * Format cost in dollars as currency string.
+ * @param cost - Cost in dollars
  * @param currency - Currency code (default: USD)
  * @returns Formatted currency string
  */
-export function formatCost(costCents: number, currency: string = 'USD'): string {
+export function formatCost(cost: number, currency: string = 'USD'): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(costCents / 100);
+  }).format(cost);
 }
 
 /**

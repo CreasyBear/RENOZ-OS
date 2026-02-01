@@ -52,14 +52,45 @@ export {
 export { FileUploadDialog, type FileUploadDialogProps } from './file-dialogs';
 
 // --- List Components ---
-export {
-  ProjectListGrid,
-  ProjectListTable,
-  type ProjectListGridProps,
-  type ProjectListTableProps,
-} from './project-list';
+export { ProjectListGrid, type ProjectListGridProps } from './project-list';
 
-// --- Detail Components ---
+// --- Table View Components (migrated to shared DataTable pattern) ---
+export {
+  PROJECT_STATUS_CONFIG,
+  PROJECT_PRIORITY_CONFIG,
+  isProjectOverdue,
+  formatTargetDateRelative,
+  formatProjectType,
+} from './project-status-config';
+export {
+  createProjectColumns,
+  type ProjectTableItem,
+  type CreateProjectColumnsOptions,
+} from './project-columns';
+export { ProjectsMobileCards, type ProjectsMobileCardsProps } from './projects-mobile-cards';
+export { ProjectsTablePresenter, type ProjectsTablePresenterProps } from './projects-table-presenter';
+export { ProjectsListPresenter, type ProjectsListPresenterProps } from './projects-list-presenter';
+export {
+  ProjectsListContainer,
+  type ProjectsListContainerProps,
+  type ProjectsListFilters,
+} from './projects-list-container';
+
+// --- Detail Components (Container/Presenter pattern) ---
+export {
+  ProjectDetailContainer,
+  type ProjectDetailContainerProps,
+  type ProjectDetailContainerRenderProps,
+} from './containers/project-detail-container';
+
+export {
+  ProjectDetailView,
+  type ProjectDetailViewProps,
+  type ProjectDetailData,
+  type ProjectMember,
+} from './views/project-detail-view';
+
+// --- Tab Components (for use with ProjectDetailView) ---
 export {
   ProjectOverviewTab,
   ProjectWorkstreamsTab,

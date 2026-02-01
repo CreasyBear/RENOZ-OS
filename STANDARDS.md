@@ -6,6 +6,7 @@ This document establishes authoritative patterns for the Renoz v3 codebase. It i
 
 **Related:**
 - [CLAUDE.md](./CLAUDE.md) - Project overview and commands
+- [SCHEMA-TRACE.md](./SCHEMA-TRACE.md) - Schema & query trace-through framework
 - [.claude/rules/hook-architecture.md](./.claude/rules/hook-architecture.md) - Detailed hook rules
 
 ---

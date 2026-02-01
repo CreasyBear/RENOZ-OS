@@ -6,44 +6,59 @@
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json
  */
 
+// --- Table infrastructure ---
+export {
+  WARRANTY_STATUS_CONFIG,
+  isWarrantyExpiringSoon,
+  isWarrantyExpired,
+  formatExpiryDateRelative,
+} from './tables/warranty-status-config';
+export {
+  createWarrantyColumns,
+  type WarrantyTableItem,
+  type CreateWarrantyColumnsOptions,
+} from './tables/warranty-columns';
+
 // --- List components ---
-export { WarrantyListTable, type WarrantyListItem } from './warranty-list-table';
-export { WarrantyListContainer, type WarrantyListContainerProps } from './warranty-list-container';
-export { WarrantyListFilters, type WarrantyListFiltersProps } from './warranty-list-filters';
-export { WarrantyDetailContainer, type WarrantyDetailContainerProps } from './warranty-detail-container';
-export { WarrantyDetailView, type WarrantyDetailViewProps } from './warranty-detail-view';
+export { WarrantyListTable, type WarrantyListItem } from './tables/warranty-list-table';
+export { WarrantyListContainer, type WarrantyListContainerProps } from './containers/warranty-list-container';
+export { WarrantyDetailContainer, type WarrantyDetailContainerProps } from './containers/warranty-detail-container';
+export { WarrantyDetailView, type WarrantyDetailViewProps } from './views/warranty-detail-view';
 export {
   WarrantyClaimsListContainer,
   type WarrantyClaimsListContainerProps,
-} from './warranty-claims-list-container';
+} from './containers/warranty-claims-list-container';
 export {
   WarrantyClaimsListView,
   type WarrantyClaimsListViewProps,
-} from './warranty-claims-list-view';
+} from './views/warranty-claims-list-view';
 export {
   WarrantyClaimDetailContainer,
   type WarrantyClaimDetailContainerProps,
-} from './warranty-claim-detail-container';
+} from './containers/warranty-claim-detail-container';
 export {
   WarrantyClaimDetailView,
   type WarrantyClaimDetailViewProps,
-} from './warranty-claim-detail-view';
+} from './views/warranty-claim-detail-view';
 
 // --- Policies ---
-export { WarrantyPolicyList } from './warranty-policy-list';
-export { WarrantyPolicyFormDialog } from './warranty-policy-form-dialog';
+export { WarrantyPolicyList } from './views/warranty-policy-list';
+export { WarrantyPolicyFormDialog } from './dialogs/warranty-policy-form-dialog';
 export {
   WarrantyPolicySettingsContainer,
-} from './warranty-policy-settings-container';
+} from './containers/warranty-policy-settings-container';
 export {
   WarrantyPolicySettingsView,
   type WarrantyPolicySettingsViewProps,
   type WarrantyPolicyFormPayload,
-} from './warranty-policy-settings-view';
+} from './views/warranty-policy-settings-view';
 
 // --- Claims ---
-export { WarrantyClaimFormDialog, type WarrantyClaimFormDialogProps } from './warranty-claim-form-dialog';
-export { ClaimApprovalDialog, type ClaimApprovalDialogProps } from './claim-approval-dialog';
+export {
+  WarrantyClaimFormDialog,
+  type WarrantyClaimFormDialogProps,
+} from './dialogs/warranty-claim-form-dialog';
+export { ClaimApprovalDialog, type ClaimApprovalDialogProps } from './dialogs/claim-approval-dialog';
 
 // --- Certificates ---
 export {
@@ -51,14 +66,14 @@ export {
   WarrantyCertificateLink,
   type WarrantyCertificateButtonProps,
   type WarrantyCertificateLinkProps,
-} from './warranty-certificate-button';
+} from './widgets/warranty-certificate-button';
 export {
   WarrantyCertificateTemplate,
   type WarrantyPolicyType,
   type WarrantyCoverageDetails,
   type CustomerAddress,
   type WarrantyCertificateProps,
-} from './warranty-certificate-template';
+} from './templates/warranty-certificate-template';
 
 // --- Extensions ---
 export {
@@ -67,18 +82,30 @@ export {
   type WarrantyExtensionHistoryProps,
   type WarrantyExtensionHistoryCompactProps,
   type WarrantyExtensionItem,
-} from './warranty-extension-history';
-export { ExtendWarrantyDialog, type ExtendWarrantyDialogProps } from './extend-warranty-dialog';
+} from './views/warranty-extension-history';
+export { ExtendWarrantyDialog, type ExtendWarrantyDialogProps } from './dialogs/extend-warranty-dialog';
 
 // --- Bulk import ---
-export { BulkWarrantyImportDialog } from './bulk-warranty-import-dialog';
+export { BulkWarrantyImportDialog } from './dialogs/bulk-warranty-import-dialog';
 export {
   WarrantyImportSettingsContainer,
-} from './warranty-import-settings-container';
+} from './containers/warranty-import-settings-container';
 export {
   WarrantyImportSettingsView,
   type WarrantyImportSettingsViewProps,
-} from './warranty-import-settings-view';
+} from './views/warranty-import-settings-view';
 
 // --- SLA ---
-export { SlaCountdownBadge, type SlaCountdownBadgeProps } from './sla-countdown-badge';
+export { SlaCountdownBadge, type SlaCountdownBadgeProps } from './widgets/sla-countdown-badge';
+
+// --- Filter Config (FILTER-STANDARDS compliant) ---
+export {
+  WARRANTY_FILTER_CONFIG,
+  WARRANTY_STATUS_OPTIONS,
+  WARRANTY_POLICY_TYPE_OPTIONS,
+  DEFAULT_WARRANTY_FILTERS,
+  createWarrantyFilterConfig,
+  type WarrantyFiltersState,
+  type WarrantyStatus,
+  type WarrantyPolicyType as WarrantyPolicyTypeFilter,
+} from './warranty-filter-config';

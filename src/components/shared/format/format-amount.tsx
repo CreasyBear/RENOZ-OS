@@ -2,13 +2,14 @@
  * FormatAmount Component
  *
  * Displays currency amounts with consistent formatting, color coding, and size variants.
+ * Uses organization settings (currency, locale) from OrganizationSettingsContext.
  * Centralizes all currency display logic across the application.
  *
  * @example
  * ```tsx
- * // Basic usage
- * <FormatAmount amount={12500} />
- * // Output: $125.00
+ * // Basic usage - uses org settings (amounts are in dollars)
+ * <FormatAmount amount={125.00} />
+ * // Output: $125.00 (assuming AUD/en-AU)
  *
  * // Color-coded with sign
  * <FormatAmount amount={-5000} colorCode showSign />
@@ -21,22 +22,37 @@
  * // Different size
  * <FormatAmount amount={100000} size="2xl" colorCode />
  * // Output: $1,000.00 (large, green)
+ *
+ * // Override currency/locale
+ * <FormatAmount amount={100000} currency="USD" />
+ * // Output: $1,000.00 USD
  * ```
  */
 
 import { memo } from "react";
 import { cn } from "@/lib/utils";
+import { useOrganizationSettings } from "~/contexts/organization-settings-context";
+import { formatAmount } from "@/lib/currency";
 
 export interface FormatAmountProps {
   /** The amount to display */
   amount: number | null | undefined;
 
-  /** Currency code (default: "AUD") */
-  currency?: "AUD" | "USD" | "EUR" | "GBP";
+  /**
+   * Currency code (defaults to organization's currency)
+   * Use this to override for specific currencies
+   */
+  currency?: string;
 
   /**
-   * Whether amount is in cents (default: true)
-   * Most renoz data is stored in cents
+   * Locale for formatting (defaults to organization's locale)
+   * Use this to override for specific locales
+   */
+  locale?: string;
+
+  /**
+   * Whether amount is in cents (default: false - amounts are in dollars)
+   * Only set to true for legacy cents-based data
    */
   cents?: boolean;
 
@@ -81,32 +97,43 @@ export interface FormatAmountProps {
 
 export const FormatAmount = memo(function FormatAmount({
   amount,
-  currency = "AUD",
-  cents = true,
+  currency: currencyProp,
+  locale: localeProp,
+  cents = false, // Default to dollars
   showSign = false,
   colorCode = false,
   size = "base",
   compact = false,
-  showCents = true,
+  showCents = true, // Always show cents by default
   className,
 }: FormatAmountProps) {
+  // Get organization settings from context
+  const settings = useOrganizationSettings();
+
+  // Use props if provided, otherwise fall back to org settings
+  const currency = currencyProp ?? settings.currency;
+  const locale = localeProp ?? settings.locale;
+  const numberFormat = settings.numberFormat;
+
   // Handle null/undefined
   if (amount === null || amount === undefined) {
     return <span className={cn("text-muted-foreground", className)}>—</span>;
   }
 
-  // Convert cents to dollars if needed
+  // Convert cents to dollars if needed (for legacy data)
   const value = cents ? amount / 100 : amount;
 
-  // Format the value
-  const formatted = new Intl.NumberFormat("en-AU", {
-    style: "currency",
+  // Format the value using organization locale and currency
+  const formatted = formatAmount({
     currency,
-    notation: compact ? "compact" : "standard",
-    signDisplay: showSign ? "exceptZero" : "auto",
+    amount: value,
+    locale,
+    numberFormat,
     minimumFractionDigits: compact ? 0 : showCents ? 2 : 0,
     maximumFractionDigits: compact ? 1 : showCents ? 2 : 0,
-  }).format(value);
+    notation: compact ? "compact" : "standard",
+    signDisplay: showSign ? "exceptZero" : "auto",
+  });
 
   return (
     <span

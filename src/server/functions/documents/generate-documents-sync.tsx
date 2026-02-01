@@ -1,7 +1,5 @@
 'use server';
 
-import React from 'react';
-
 /**
  * Synchronous Document Generation Server Functions
  *
@@ -89,6 +87,8 @@ async function fetchOrderData(orderId: string, organizationId: string) {
       customerNotes: orders.customerNotes,
       internalNotes: orders.internalNotes,
       status: orders.status,
+      paymentStatus: orders.paymentStatus,
+      shippingAddress: orders.shippingAddress,
       quotePdfUrl: orders.quotePdfUrl,
       invoicePdfUrl: orders.invoicePdfUrl,
     })
@@ -348,7 +348,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
     // Check if document already exists and shouldn't be regenerated
     if (!regenerate) {
       const filename = generateFilename(documentType, orderData.orderNumber);
-      
+
       if (documentType === 'quote' && orderData.quotePdfUrl) {
         return {
           orderId,
@@ -488,7 +488,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
           notes: item.notes,
           location: null,
           isFragile: false,
-          weight: item.weight,
+          weight: undefined, // Weight not stored in line items schema
         }));
 
         const packingSlipData: PackingSlipDocumentData = {
@@ -497,15 +497,15 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
           issueDate: orderDate,
           shipDate: data.shipDate ? new Date(data.shipDate) : new Date(),
           customer: {
-            id: orderData.customer.id,
-            name: orderData.customer.name,
-            email: orderData.customer.email,
-            phone: orderData.customer.phone,
+            id: customerData.id,
+            name: customerData.name,
+            email: customerData.email,
+            phone: customerData.phone,
           },
           shippingAddress: orderData.shippingAddress ? {
-            name: orderData.shippingAddress.name,
-            addressLine1: orderData.shippingAddress.addressLine1,
-            addressLine2: orderData.shippingAddress.addressLine2,
+            name: orderData.shippingAddress.contactName || customerData.name,
+            addressLine1: orderData.shippingAddress.street1,
+            addressLine2: orderData.shippingAddress.street2,
             city: orderData.shippingAddress.city,
             state: orderData.shippingAddress.state,
             postalCode: orderData.shippingAddress.postalCode,
@@ -519,11 +519,11 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
           packageCount: data.packageCount,
           totalWeight: data.totalWeight,
           specialInstructions: data.specialInstructions,
-          notes: data.notes,
+          notes: orderData.customerNotes || orderData.internalNotes || undefined,
         };
 
         const result = await renderPdfToBuffer(
-          <PackingSlipPdfDocument organization={orgData} data={packingSlipData} />
+          <PackingSlipPdfDocument organization={orgData} data={packingSlipData} qrCodeDataUrl={qrCodeDataUrl} />
         );
         buffer = result.buffer;
         filename = generateFilename('packing-slip', orderData.orderNumber);
@@ -540,7 +540,7 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
           quantity: item.quantity,
           notes: item.notes,
           isFragile: false,
-          weight: item.weight,
+          weight: undefined, // Weight not stored in line items schema
           dimensions: null,
         }));
 
@@ -550,15 +550,15 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
           issueDate: orderDate,
           deliveryDate: data.shipDate ? new Date(data.shipDate) : new Date(),
           customer: {
-            id: orderData.customer.id,
-            name: orderData.customer.name,
-            email: orderData.customer.email,
-            phone: orderData.customer.phone,
+            id: customerData.id,
+            name: customerData.name,
+            email: customerData.email,
+            phone: customerData.phone,
           },
           shippingAddress: orderData.shippingAddress ? {
-            name: orderData.shippingAddress.name,
-            addressLine1: orderData.shippingAddress.addressLine1,
-            addressLine2: orderData.shippingAddress.addressLine2,
+            name: orderData.shippingAddress.contactName || customerData.name,
+            addressLine1: orderData.shippingAddress.street1,
+            addressLine2: orderData.shippingAddress.street2,
             city: orderData.shippingAddress.city,
             state: orderData.shippingAddress.state,
             postalCode: orderData.shippingAddress.postalCode,
@@ -568,13 +568,13 @@ export const generateOrderDocument = createServerFn({ method: 'POST' })
           } : null,
           lineItems: deliveryNoteLineItems,
           carrier: data.carrier,
-          trackingNumber: data.trackingNumber,
+          trackingNumber: undefined, // trackingNumber not in input schema
           specialInstructions: data.specialInstructions,
-          notes: data.notes,
+          notes: orderData.customerNotes || orderData.internalNotes || undefined,
         };
 
         const result = await renderPdfToBuffer(
-          <DeliveryNotePdfDocument organization={orgData} data={deliveryNoteData} />
+          <DeliveryNotePdfDocument organization={orgData} data={deliveryNoteData} qrCodeDataUrl={qrCodeDataUrl} />
         );
         buffer = result.buffer;
         filename = generateFilename('delivery-note', orderData.orderNumber);

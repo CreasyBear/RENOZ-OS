@@ -1,107 +1,325 @@
 /**
- * Invoice PDF Template - Apple/Linear Style
+ * Invoice PDF Template - Accounting Style
  *
- * Clean, minimal invoice with pill-style badges and card-based layout.
+ * Practical, dense layout that fits on one page.
+ * Inspired by Xero, QuickBooks, FreshBooks - not "designed", just clear.
  */
 
 import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
-  DocumentHeader,
-  AddressColumns,
-  LineItems,
-  Summary,
-  DocumentFooter,
   PageNumber,
-  QRCode,
   PaidWatermark,
-  pageMargins,
+  QRCode,
   colors,
   spacing,
-  borderRadius,
   fontSize,
   FONT_FAMILY,
   FONT_WEIGHTS,
+  formatCurrencyForPdf,
+  formatDateForPdf,
 } from "../../components";
 import { OrgDocumentProvider, useOrgDocument } from "../../context";
 import type { InvoiceDocumentData, DocumentOrganization } from "../../types";
 
 // ============================================================================
-// STYLES - Clean, Minimal
+// STYLES - Dense, Practical
 // ============================================================================
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: pageMargins.top,
-    paddingBottom: pageMargins.bottom,
-    paddingLeft: pageMargins.left,
-    paddingRight: pageMargins.right,
+    paddingTop: 32,
+    paddingBottom: 32,
+    paddingLeft: 40,
+    paddingRight: 40,
     backgroundColor: colors.background.white,
   },
   content: {
     flex: 1,
   },
 
-  // Addresses - Clean layout
-  addressesSection: {
-    marginTop: spacing.xl,
-    marginBottom: spacing.xl,
-  },
-
-  // Payment info card
-  paymentInfoCard: {
-    backgroundColor: colors.background.subtle,
-    borderRadius: borderRadius.md,
-    padding: spacing.lg,
-    marginTop: spacing.xl,
-  },
-  paymentInfoTitle: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: colors.text.primary,
-    marginBottom: spacing.md,
-  },
-  paymentInfoGrid: {
+  // Header row - Tight
+  headerRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.md,
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: spacing.lg,
   },
-  paymentInfoItem: {
-    minWidth: 120,
+  
+  // Company info left
+  companySection: {
+    flex: 1,
   },
-  paymentInfoLabel: {
-    fontSize: fontSize.xs,
+  companyName: {
+    fontSize: fontSize.lg,
     fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.muted,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: colors.text.primary,
     marginBottom: spacing.xs,
   },
-  paymentInfoValue: {
+  companyDetail: {
     fontSize: fontSize.sm,
     fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.primary,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.secondary,
+    lineHeight: 1.4,
   },
 
-  // QR Code
-  qrSection: {
-    marginTop: spacing.xl,
-    flexDirection: "row",
-    justifyContent: "flex-end",
+  // Invoice info right
+  invoiceInfo: {
+    alignItems: "flex-end",
   },
-  qrBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.background.subtle,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    gap: spacing.md,
+  invoiceTitle: {
+    fontSize: fontSize["2xl"],
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: colors.text.primary,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: spacing.sm,
   },
-  qrText: {
+  infoRow: {
+    flexDirection: "row",
+    marginBottom: spacing.xs,
+  },
+  infoLabel: {
     fontSize: fontSize.sm,
     fontFamily: FONT_FAMILY,
     fontWeight: FONT_WEIGHTS.medium,
     color: colors.text.secondary,
+    width: 80,
+    textAlign: "right",
+    marginRight: spacing.sm,
+  },
+  infoValue: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.semibold,
+    color: colors.text.primary,
+    width: 100,
+  },
+  statusBadge: {
+    marginTop: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  statusPaid: {
+    backgroundColor: "#E8F5E9",
+  },
+  statusOverdue: {
+    backgroundColor: "#FFEBEE",
+  },
+  statusPending: {
+    backgroundColor: "#FFF3E0",
+  },
+  statusText: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.bold,
+    textTransform: "uppercase",
+  },
+  statusTextPaid: { color: "#2E7D32" },
+  statusTextOverdue: { color: "#C62828" },
+  statusTextPending: { color: "#E65100" },
+
+  // Bill to section
+  billToSection: {
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
+  },
+  billToLabel: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: colors.text.muted,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: spacing.xs,
+  },
+  billToName: {
+    fontSize: fontSize.md,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  billToDetail: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.secondary,
+    lineHeight: 1.4,
+  },
+
+  // Table - Dense
+  table: {
+    marginTop: spacing.md,
+  },
+  tableHeader: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.medium,
+    paddingBottom: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  tableHeaderCell: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: colors.text.secondary,
+    textTransform: "uppercase",
+  },
+  tableRow: {
+    flexDirection: "row",
+    paddingVertical: spacing.xs,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.border.light,
+  },
+  tableCell: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.primary,
+  },
+  tableCellMuted: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.muted,
+  },
+  colDescription: { flex: 4 },
+  colQty: { flex: 0.8, textAlign: "center" },
+  colPrice: { flex: 1.2, textAlign: "right" },
+  colTotal: { flex: 1.2, textAlign: "right" },
+
+  // Summary section
+  summarySection: {
+    marginTop: spacing.lg,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+  },
+  summaryBox: {
+    width: 240,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: spacing.xs,
+  },
+  summaryLabel: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.secondary,
+  },
+  summaryValue: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.primary,
+    textAlign: "right",
+  },
+  summaryTotal: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    borderTopWidth: 1,
+    borderTopColor: colors.border.medium,
+    paddingTop: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  summaryTotalLabel: {
+    fontSize: fontSize.md,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: colors.text.primary,
+  },
+  summaryTotalValue: {
+    fontSize: fontSize.md,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: colors.text.primary,
+    textAlign: "right",
+  },
+  balanceDue: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    backgroundColor: colors.text.primary,
+    padding: spacing.sm,
+    marginTop: spacing.sm,
+    borderRadius: 4,
+  },
+  balanceDueLabel: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: colors.background.white,
+  },
+  balanceDueValue: {
+    fontSize: fontSize.lg,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: colors.background.white,
+    textAlign: "right",
+  },
+
+  // Payment section
+  paymentSection: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  paymentTitle: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  paymentGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.lg,
+  },
+  paymentItem: {
+    minWidth: 120,
+  },
+  paymentLabel: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.muted,
+    marginBottom: 2,
+  },
+  paymentValue: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.primary,
+  },
+
+  // Footer notes
+  notesSection: {
+    marginTop: spacing.md,
+  },
+  qrSection: {
+    marginTop: spacing.lg,
+    alignItems: "flex-end",
+  },
+  notesLabel: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: colors.text.muted,
+    textTransform: "uppercase",
+    marginBottom: spacing.xs,
+  },
+  notesText: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.secondary,
+    lineHeight: 1.4,
   },
 });
 
@@ -119,169 +337,232 @@ export interface InvoicePdfDocumentProps extends InvoicePdfTemplateProps {
 }
 
 // ============================================================================
-// INTERNAL COMPONENT
+// COMPONENT
 // ============================================================================
 
 function InvoiceContent({ data, qrCodeDataUrl }: InvoicePdfTemplateProps) {
   const { organization, locale } = useOrgDocument();
   const { order } = data;
 
-  // Build addresses
-  const fromAddress = {
-    name: organization.name,
-    addressLine1: organization.address?.addressLine1,
-    addressLine2: organization.address?.addressLine2,
-    city: organization.address?.city,
-    state: organization.address?.state,
-    postalCode: organization.address?.postalCode,
-    country: organization.address?.country,
-    phone: organization.phone,
-    email: organization.email,
-    website: organization.website,
-    taxId: organization.taxId,
-  };
-
-  const customerAddress = order.billingAddress ?? order.customer.address;
-  const toAddress = {
-    name: order.customer.name,
-    addressLine1: customerAddress?.addressLine1,
-    addressLine2: customerAddress?.addressLine2,
-    city: customerAddress?.city,
-    state: customerAddress?.state,
-    postalCode: customerAddress?.postalCode,
-    country: customerAddress?.country,
-    email: order.customer.email,
-    phone: order.customer.phone,
-    taxId: order.customer.taxId,
-    contactName: customerAddress?.contactName,
-    contactPhone: customerAddress?.contactPhone,
-  };
-
-  const resolvedNotes = data.notes ?? order.customerNotes;
-
-  // Determine status
   const isPaid = data.isPaid;
   const isOverdue = !isPaid && data.dueDate && new Date(data.dueDate).getTime() < Date.now();
-  
-  const status = isPaid ? "paid" : isOverdue ? "overdue" : "pending";
-  const statusDate = isPaid ? data.paidAt : data.dueDate;
-
-  const paymentDetails = data.paymentDetails
-    ? {
-        bankName: data.paymentDetails.bankName,
-        accountName: data.paymentDetails.accountName,
-        accountNumber: data.paymentDetails.accountNumber,
-        bsb: data.paymentDetails.bsb,
-        swift: data.paymentDetails.swift,
-        paymentInstructions: data.paymentDetails.paymentInstructions,
-      }
-    : null;
 
   return (
     <Page size="A4" style={styles.page}>
       <View style={styles.content}>
-        {/* Header with pill status */}
-        <DocumentHeader
-          title="Invoice"
-          documentNumber={data.documentNumber}
-          date={data.issueDate}
-          dueDate={data.dueDate}
-          reference={data.reference}
-          status={status}
-          statusDate={statusDate}
-        />
+        {/* Header - Company left, Invoice info right */}
+        <View style={styles.headerRow}>
+          <View style={styles.companySection}>
+            <Text style={styles.companyName}>{organization.name}</Text>
+            {organization.address && (
+              <>
+                <Text style={styles.companyDetail}>
+                  {organization.address.addressLine1}
+                  {organization.address.addressLine2 ? `, ${organization.address.addressLine2}` : ""}
+                </Text>
+                <Text style={styles.companyDetail}>
+                  {organization.address.city}, {organization.address.state} {organization.address.postalCode}
+                </Text>
+                {organization.phone && (
+                  <Text style={styles.companyDetail}>{organization.phone}</Text>
+                )}
+              </>
+            )}
+          </View>
 
-        {/* Addresses */}
-        <View style={styles.addressesSection}>
-          <AddressColumns
-            from={fromAddress}
-            to={toAddress}
-            labels={{ from: "From", to: "Bill To" }}
-          />
+          <View style={styles.invoiceInfo}>
+            <Text style={styles.invoiceTitle}>Invoice</Text>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Number</Text>
+              <Text style={styles.infoValue}>{data.documentNumber}</Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Date</Text>
+              <Text style={styles.infoValue}>
+                {formatDateForPdf(data.issueDate, locale, "short")}
+              </Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Due Date</Text>
+              <Text style={styles.infoValue}>
+                {data.dueDate
+                  ? formatDateForPdf(data.dueDate, locale, "short")
+                  : "On receipt"}
+              </Text>
+            </View>
+
+            {isPaid && (
+              <View style={[styles.statusBadge, styles.statusPaid]}>
+                <Text style={[styles.statusText, styles.statusTextPaid]}>Paid</Text>
+              </View>
+            )}
+            {isOverdue && (
+              <View style={[styles.statusBadge, styles.statusOverdue]}>
+                <Text style={[styles.statusText, styles.statusTextOverdue]}>Overdue</Text>
+              </View>
+            )}
+          </View>
         </View>
 
-        {/* Line Items */}
-        <LineItems
-          lineItems={order.lineItems}
-          showSku={order.lineItems.some((item) => item.sku)}
-          showNotes={order.lineItems.some((item) => item.notes)}
-        />
+        {/* Bill To */}
+        <View style={styles.billToSection}>
+          <Text style={styles.billToLabel}>Bill To</Text>
+          <Text style={styles.billToName}>{order.customer.name}</Text>
+          {order.billingAddress && (
+            <>
+              <Text style={styles.billToDetail}>
+                {order.billingAddress.addressLine1}
+                {order.billingAddress.addressLine2 ? `, ${order.billingAddress.addressLine2}` : ""}
+              </Text>
+              <Text style={styles.billToDetail}>
+                {order.billingAddress.city}, {order.billingAddress.state} {order.billingAddress.postalCode}
+              </Text>
+            </>
+          )}
+        </View>
+
+        {/* Line Items Table */}
+        <View style={styles.table}>
+          {/* Header */}
+          <View style={styles.tableHeader}>
+            <Text style={[styles.tableHeaderCell, styles.colDescription]}>Description</Text>
+            <Text style={[styles.tableHeaderCell, styles.colQty]}>Qty</Text>
+            <Text style={[styles.tableHeaderCell, styles.colPrice]}>Price</Text>
+            <Text style={[styles.tableHeaderCell, styles.colTotal]}>Amount</Text>
+          </View>
+
+          {/* Rows */}
+          {order.lineItems.map((item) => (
+            <View key={item.id} style={styles.tableRow} wrap={true}>
+              <View style={styles.colDescription}>
+                <Text style={styles.tableCell}>{item.description}</Text>
+                {item.sku && <Text style={styles.tableCellMuted}>{item.sku}</Text>}
+              </View>
+              <Text style={[styles.tableCell, styles.colQty]}>{item.quantity}</Text>
+              <Text style={[styles.tableCell, styles.colPrice]}>
+                {formatCurrencyForPdf(item.unitPrice, organization.currency, locale)}
+              </Text>
+              <Text style={[styles.tableCell, styles.colTotal]}>
+                {formatCurrencyForPdf(item.total, organization.currency, locale)}
+              </Text>
+            </View>
+          ))}
+        </View>
 
         {/* Summary */}
-        <Summary
-          subtotal={order.subtotal}
-          discountAmount={order.discount}
-          discountPercent={order.discountPercent}
-          taxRate={order.taxRate}
-          taxAmount={order.taxAmount}
-          taxRegistrationNumber={organization.taxId}
-          shippingAmount={order.shippingAmount}
-          total={order.total}
-          paidAmount={order.paidAmount}
-          balanceDue={order.balanceDue}
-          showBalance={!isPaid}
-        />
-
-        {/* Payment Info Card (for unpaid) */}
-        {!isPaid && (
-          <View style={styles.paymentInfoCard}>
-            <Text style={styles.paymentInfoTitle}>Payment Details</Text>
-            <View style={styles.paymentInfoGrid}>
-              <View style={styles.paymentInfoItem}>
-                <Text style={styles.paymentInfoLabel}>Invoice Number</Text>
-                <Text style={styles.paymentInfoValue}>{data.documentNumber}</Text>
-              </View>
-              <View style={styles.paymentInfoItem}>
-                <Text style={styles.paymentInfoLabel}>Amount Due</Text>
-                <Text style={styles.paymentInfoValue}>
-                  {new Intl.NumberFormat(locale, {
-                    style: "currency",
-                    currency: organization.currency,
-                  }).format(order.balanceDue || order.total)}
+        <View style={styles.summarySection}>
+          <View style={styles.summaryBox}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Subtotal</Text>
+              <Text style={styles.summaryValue}>
+                {formatCurrencyForPdf(order.subtotal, organization.currency, locale)}
+              </Text>
+            </View>
+            
+            {order.discount && order.discount > 0 && (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Discount</Text>
+                <Text style={styles.summaryValue}>
+                  -{formatCurrencyForPdf(order.discount, organization.currency, locale)}
                 </Text>
               </View>
-              {data.dueDate && (
-                <View style={styles.paymentInfoItem}>
-                  <Text style={styles.paymentInfoLabel}>Due Date</Text>
-                  <Text style={styles.paymentInfoValue}>
-                    {formatDateForPdf(data.dueDate, locale, "medium")}
-                  </Text>
+            )}
+            
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Tax ({order.taxRate || 0}%)</Text>
+              <Text style={styles.summaryValue}>
+                {formatCurrencyForPdf(order.taxAmount, organization.currency, locale)}
+              </Text>
+            </View>
+
+            <View style={styles.summaryTotal}>
+              <Text style={styles.summaryTotalLabel}>Total</Text>
+              <Text style={styles.summaryTotalValue}>
+                {formatCurrencyForPdf(order.total, organization.currency, locale)}
+              </Text>
+            </View>
+
+            {!isPaid && order.balanceDue && order.balanceDue > 0 && (
+              <View style={styles.balanceDue}>
+                <Text style={styles.balanceDueLabel}>Balance Due</Text>
+                <Text style={styles.balanceDueValue}>
+                  {formatCurrencyForPdf(order.balanceDue, organization.currency, locale)}
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Payment Details */}
+        {data.paymentDetails && (
+          <View style={styles.paymentSection}>
+            <Text style={styles.paymentTitle}>Payment Details</Text>
+            <View style={styles.paymentGrid}>
+              {data.paymentDetails.bankName && (
+                <View style={styles.paymentItem}>
+                  <Text style={styles.paymentLabel}>Bank</Text>
+                  <Text style={styles.paymentValue}>{data.paymentDetails.bankName}</Text>
+                </View>
+              )}
+              {data.paymentDetails.accountName && (
+                <View style={styles.paymentItem}>
+                  <Text style={styles.paymentLabel}>Account Name</Text>
+                  <Text style={styles.paymentValue}>{data.paymentDetails.accountName}</Text>
+                </View>
+              )}
+              {data.paymentDetails.bsb && (
+                <View style={styles.paymentItem}>
+                  <Text style={styles.paymentLabel}>BSB</Text>
+                  <Text style={styles.paymentValue}>{data.paymentDetails.bsb}</Text>
+                </View>
+              )}
+              {data.paymentDetails.accountNumber && (
+                <View style={styles.paymentItem}>
+                  <Text style={styles.paymentLabel}>Account Number</Text>
+                  <Text style={styles.paymentValue}>{data.paymentDetails.accountNumber}</Text>
                 </View>
               )}
             </View>
           </View>
         )}
 
+        {/* Terms/Notes */}
+        {data.terms && (
+          <View style={styles.notesSection}>
+            <Text style={styles.notesLabel}>Terms</Text>
+            <Text style={styles.notesText}>{data.terms}</Text>
+          </View>
+        )}
+
+        {data.notes && (
+          <View style={styles.notesSection}>
+            <Text style={styles.notesLabel}>Notes</Text>
+            <Text style={styles.notesText}>{data.notes}</Text>
+          </View>
+        )}
+
         {/* QR Code */}
-        {qrCodeDataUrl && !isPaid && (
+        {qrCodeDataUrl && (
           <View style={styles.qrSection}>
-            <View style={styles.qrBox}>
-              <QRCode dataUrl={qrCodeDataUrl} size={80} />
-              <Text style={styles.qrText}>Scan to pay</Text>
-            </View>
+            <QRCode dataUrl={qrCodeDataUrl} size={80} />
           </View>
         )}
       </View>
 
-      {/* Watermark (rendered after content) */}
-      <PaidWatermark show={isPaid} paidAt={data.paidAt} />
+      {/* Paid Badge */}
+      {isPaid && <PaidWatermark show={true} paidAt={data.paidAt} />}
 
-      {/* Footer */}
-      <DocumentFooter
-        paymentDetails={paymentDetails}
-        notes={resolvedNotes}
-        terms={data.terms}
-        showThankYou={isPaid}
-        thankYouMessage="Thank you for your business"
-      />
-
+      {/* Page Number */}
       <PageNumber documentNumber={data.documentNumber} />
     </Page>
   );
 }
 
 // ============================================================================
-// EXPORTED COMPONENTS
+// EXPORTED
 // ============================================================================
 
 export function InvoicePdfDocument({
@@ -308,14 +589,4 @@ export function InvoicePdfTemplate({
   qrCodeDataUrl,
 }: InvoicePdfTemplateProps) {
   return <InvoiceContent data={data} qrCodeDataUrl={qrCodeDataUrl} />;
-}
-
-// Helper
-function formatDateForPdf(date: Date, locale: string, format: "short" | "medium" | "long"): string {
-  const options: Record<string, Intl.DateTimeFormatOptions> = {
-    short: { year: "numeric", month: "short", day: "numeric" },
-    medium: { year: "numeric", month: "long", day: "numeric" },
-    long: { year: "numeric", month: "long", day: "numeric" },
-  };
-  return new Intl.DateTimeFormat(locale, options[format]).format(date);
 }

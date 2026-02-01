@@ -103,17 +103,79 @@ function LocationsPage() {
     isActive: loc.isActive ?? true,
   }));
 
-  const locationContents: LocationContents[] = (locationDetailData?.contents ?? []).map((item: any) => ({
+  // Aggregate location contents by SKU for better readability
+  // Multiple inventory items of the same SKU at the same location should be grouped
+  const rawContents = (locationDetailData?.contents ?? []).map((item: any) => ({
     id: item.id,
     productId: item.productId,
     productName: item.product?.name ?? "Unknown",
     productSku: item.product?.sku ?? "N/A",
-    quantityOnHand: item.quantityOnHand ?? 0,
-    quantityAllocated: item.quantityAllocated ?? 0,
-    quantityAvailable: item.quantityAvailable ?? 0,
-    unitCost: Number(item.unitCost) ?? 0,
-    totalValue: Number(item.totalValue) ?? 0,
+    quantityOnHand: Number(item.quantityOnHand ?? 0),
+    quantityAllocated: Number(item.quantityAllocated ?? 0),
+    quantityAvailable: Number(item.quantityAvailable ?? 0),
+    unitCost: Number(item.unitCost ?? 0),
+    totalValue: Number(item.totalValue ?? 0),
   }));
+
+  // Group by SKU (or productId if SKU is missing)
+  const aggregatedContentsMap = new Map<string, {
+    productId: string;
+    productName: string;
+    productSku: string;
+    quantityOnHand: number;
+    quantityAllocated: number;
+    quantityAvailable: number;
+    unitCost: number;
+    totalValue: number;
+    itemCount: number;
+  }>();
+
+  rawContents.forEach((item) => {
+    const key = item.productSku !== "N/A" && item.productSku 
+      ? item.productSku 
+      : item.productId;
+    const existing = aggregatedContentsMap.get(key);
+    
+    if (existing) {
+      // Aggregate quantities and values
+      existing.quantityOnHand += item.quantityOnHand;
+      existing.quantityAllocated += item.quantityAllocated;
+      existing.quantityAvailable += item.quantityAvailable;
+      existing.totalValue += item.totalValue;
+      existing.itemCount += 1;
+      // Use weighted average for unit cost
+      const totalQuantity = existing.quantityOnHand;
+      if (totalQuantity > 0) {
+        existing.unitCost = existing.totalValue / totalQuantity;
+      }
+    } else {
+      aggregatedContentsMap.set(key, {
+        productId: item.productId,
+        productName: item.productName,
+        productSku: item.productSku,
+        quantityOnHand: item.quantityOnHand,
+        quantityAllocated: item.quantityAllocated,
+        quantityAvailable: item.quantityAvailable,
+        unitCost: item.unitCost,
+        totalValue: item.totalValue,
+        itemCount: 1,
+      });
+    }
+  });
+
+  const locationContents: LocationContents[] = Array.from(aggregatedContentsMap.entries())
+    .map(([_key, agg]) => ({
+      id: agg.productId, // Use productId as ID for aggregated items
+      productId: agg.productId,
+      productName: agg.productName,
+      productSku: agg.productSku,
+      quantityOnHand: agg.quantityOnHand,
+      quantityAllocated: agg.quantityAllocated,
+      quantityAvailable: agg.quantityAvailable,
+      unitCost: agg.unitCost,
+      totalValue: agg.totalValue,
+    }))
+    .sort((a, b) => b.totalValue - a.totalValue); // Sort by total value descending
 
   const locationMetrics = locationDetailData?.metrics ?? null;
 

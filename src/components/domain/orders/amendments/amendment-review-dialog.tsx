@@ -51,7 +51,7 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/formatters";
+import { useOrgFormat } from "@/hooks/use-org-format";
 import { toastSuccess, toastError } from "@/hooks";
 import {
   getAmendment,
@@ -106,6 +106,9 @@ export const AmendmentReviewDialog = memo(function AmendmentReviewDialog({
   onSuccess,
 }: AmendmentReviewDialogProps) {
   const queryClient = useQueryClient();
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
 
   // Form state
   const [approvalNotes, setApprovalNotes] = useState("");
@@ -308,10 +311,12 @@ export const AmendmentReviewDialog = memo(function AmendmentReviewDialog({
                             {change.before && (
                               <div className="text-sm">
                                 <p>
-                                  {change.before.quantity} x {formatCurrency(change.before.unitPrice || 0)}
+                                  {change.before.quantity} x {formatCurrencyDisplay(change.before.unitPrice || 0)}
                                 </p>
                                 <p className="text-muted-foreground">
-                                  = {formatCurrency((change.before.quantity || 0) * (change.before.unitPrice || 0))}
+                                  = {formatCurrencyDisplay(
+                                    (change.before.quantity || 0) * (change.before.unitPrice || 0)
+                                  )}
                                 </p>
                               </div>
                             )}
@@ -324,10 +329,12 @@ export const AmendmentReviewDialog = memo(function AmendmentReviewDialog({
                             {change.after && (
                               <div className="text-sm">
                                 <p>
-                                  {change.after.quantity} x {formatCurrency(change.after.unitPrice || 0)}
+                                  {change.after.quantity} x {formatCurrencyDisplay(change.after.unitPrice || 0)}
                                 </p>
                                 <p className="text-muted-foreground">
-                                  = {formatCurrency((change.after.quantity || 0) * (change.after.unitPrice || 0))}
+                                  = {formatCurrencyDisplay(
+                                    (change.after.quantity || 0) * (change.after.unitPrice || 0)
+                                  )}
                                 </p>
                               </div>
                             )}
@@ -351,13 +358,13 @@ export const AmendmentReviewDialog = memo(function AmendmentReviewDialog({
                   <div>
                     <p className="text-sm text-muted-foreground">Before</p>
                     <p className="text-lg font-semibold">
-                      {formatCurrency(financialImpact.totalBefore)}
+                      {formatCurrencyDisplay(financialImpact.totalBefore)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Subtotal: {formatCurrency(financialImpact.subtotalBefore)}
+                      Subtotal: {formatCurrencyDisplay(financialImpact.subtotalBefore)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      GST: {formatCurrency(financialImpact.taxBefore)}
+                      GST: {formatCurrencyDisplay(financialImpact.taxBefore)}
                     </p>
                   </div>
                   <div className="flex items-center justify-center">
@@ -366,13 +373,13 @@ export const AmendmentReviewDialog = memo(function AmendmentReviewDialog({
                   <div>
                     <p className="text-sm text-muted-foreground">After</p>
                     <p className="text-lg font-semibold">
-                      {formatCurrency(financialImpact.totalAfter)}
+                      {formatCurrencyDisplay(financialImpact.totalAfter)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Subtotal: {formatCurrency(financialImpact.subtotalAfter)}
+                      Subtotal: {formatCurrencyDisplay(financialImpact.subtotalAfter)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      GST: {formatCurrency(financialImpact.taxAfter)}
+                      GST: {formatCurrencyDisplay(financialImpact.taxAfter)}
                     </p>
                   </div>
                 </div>
@@ -384,7 +391,7 @@ export const AmendmentReviewDialog = memo(function AmendmentReviewDialog({
                   )}
                 >
                   Net Difference: {financialImpact.difference >= 0 ? "+" : ""}
-                  {formatCurrency(financialImpact.difference)}
+                  {formatCurrencyDisplay(financialImpact.difference)}
                 </div>
               </div>
             )}

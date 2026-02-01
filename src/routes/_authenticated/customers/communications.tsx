@@ -18,7 +18,8 @@ import { createFileRoute, Link, useSearch } from '@tanstack/react-router'
 import { ArrowLeft, MessageSquare } from 'lucide-react'
 import { PageLayout, RouteErrorFallback } from '@/components/layout'
 import { InventoryTabsSkeleton } from '@/components/skeletons/inventory'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CommunicationTimeline } from '@/components/domain/customers'
 import { CommunicationTemplates } from '@/components/domain/customers'
@@ -90,7 +91,7 @@ function CommunicationsPage() {
   // Map API templates to component format
   type TemplateCategory = 'welcome' | 'follow_up' | 'complaint_resolution' | 'upsell' | 'reactivation' | 'general'
   type TemplateType = 'email' | 'sms' | 'note'
-  
+
   interface ComponentTemplate {
     id: string
     name: string
@@ -104,7 +105,7 @@ function CommunicationsPage() {
     updatedAt: string
     isActive: boolean
   }
-  
+
   const templates: ComponentTemplate[] = (templatesData || []).map(t => ({
     id: t.id,
     name: t.name,
@@ -140,7 +141,7 @@ function CommunicationsPage() {
   })
 
   // Map API segments to component format
-  const segments = (segmentsData || []).map(s => ({
+  const segments = (segmentsData?.segments || []).map(s => ({
     id: s.id,
     name: s.name,
     customerCount: s.customerCount,
@@ -150,7 +151,7 @@ function CommunicationsPage() {
   type AudienceType = 'segment' | 'filter' | 'all'
   type ScheduleType = 'now' | 'scheduled'
   type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed'
-  
+
   interface ComponentCampaign {
     id: string
     name: string
@@ -166,7 +167,7 @@ function CommunicationsPage() {
     clicked: number
     createdAt: string
   }
-  
+
   const campaigns: ComponentCampaign[] = (campaignsData?.items || []).map(c => ({
     id: c.id,
     name: c.name,
@@ -217,7 +218,7 @@ function CommunicationsPage() {
       try {
         // Map component category to API category
         const apiCategory = mapComponentCategoryToApi(String(template.category))
-        
+
         // Map variables to API format
         const apiVariables = ((template.variables as string[]) || []).map((name: string) => ({
           name,
@@ -312,12 +313,13 @@ function CommunicationsPage() {
         title="Communications"
         description="Manage customer communications, templates, and campaigns"
         actions={
-          <Button variant="outline" asChild>
-            <Link to="/customers">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Link>
-          </Button>
+          <Link
+            to="/customers"
+            className={cn(buttonVariants({ variant: 'outline' }))}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Link>
         }
       />
       <PageLayout.Content>
@@ -344,9 +346,12 @@ function CommunicationsPage() {
               <p className="text-muted-foreground mb-4">
                 View the communication timeline for a specific customer
               </p>
-              <Button asChild>
-                <Link to="/customers">Browse Customers</Link>
-              </Button>
+              <Link
+                to="/customers"
+                className={cn(buttonVariants())}
+              >
+                Browse Customers
+              </Link>
             </div>
           )}
         </TabsContent>

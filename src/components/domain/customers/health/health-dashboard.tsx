@@ -1,15 +1,16 @@
 /**
- * HealthDashboard Component
+ * HealthDashboard Presenter
  *
- * Comprehensive customer health monitoring dashboard with:
- * - Health score gauge with trend
- * - RFM factor breakdown
- * - Risk alerts
- * - Recommendations
- * - Health history chart
+ * Pure UI component for customer health monitoring dashboard.
+ * Shows health score, trends, alerts, and recommendations.
+ *
+ * Container/Presenter Pattern:
+ * - Use HealthDashboardContainer in routes (handles data fetching)
+ * - Use HealthDashboardPresenter for storybook/testing
+ *
+ * @see ./health-dashboard-container.tsx (container)
+ * @see src/hooks/customers/use-customer-health.ts (hooks)
  */
-import { useQuery } from '@tanstack/react-query'
-import { queryKeys } from '@/lib/query-keys'
 import {
   Activity,
   Calendar,
@@ -21,7 +22,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { HealthScoreGauge } from './health-score-gauge'
 import { HealthRecommendations } from './health-recommendations'
 import { RiskAlerts } from './risk-alerts'
-import { getCustomerHealthMetrics } from '@/server/customers'
 import { cn } from '@/lib/utils'
 
 // ============================================================================
@@ -39,12 +39,34 @@ interface CustomerHealthData {
   declinedPayments?: number
 }
 
-interface HealthDashboardProps {
+interface HealthMetricPoint {
+  metricDate: string
+  overallScore: number | null
+  recencyScore?: number
+  frequencyScore?: number
+  monetaryScore?: number
+  engagementScore?: number
+}
+
+/**
+ * Container props - what parent components pass
+ */
+export interface HealthDashboardContainerProps {
   customer: CustomerHealthData
   onScheduleCall?: () => void
   onSendEmail?: () => void
   onRefresh?: () => void
   className?: string
+}
+
+/**
+ * Presenter props - what the container passes to the presenter
+ */
+export interface HealthDashboardPresenterProps extends HealthDashboardContainerProps {
+  /** @source useCustomerHealthHistory hook */
+  healthMetrics: HealthMetricPoint[]
+  /** Loading state for health metrics */
+  isLoadingMetrics: boolean
 }
 
 // ============================================================================
@@ -145,26 +167,18 @@ function HealthHistory({ metrics }: HealthHistoryProps) {
 }
 
 // ============================================================================
-// MAIN COMPONENT
+// MAIN COMPONENT (PRESENTER)
 // ============================================================================
 
-export function HealthDashboard({
+export function HealthDashboardPresenter({
   customer,
+  healthMetrics,
+  isLoadingMetrics,
   onScheduleCall,
   onSendEmail,
   onRefresh,
   className,
-}: HealthDashboardProps) {
-  // Fetch health metrics history
-  const { data: healthMetrics, isLoading: isLoadingMetrics } = useQuery({
-    queryKey: queryKeys.customers.healthMetrics(customer.id),
-    queryFn: () => getCustomerHealthMetrics({
-      data: {
-        customerId: customer.id,
-      },
-    }),
-  })
-
+}: HealthDashboardPresenterProps) {
   const lastOrderDays = calculateDaysSince(customer.lastOrderDate)
 
   // Build metrics object for recommendations
@@ -240,7 +254,7 @@ export function HealthDashboard({
             {isLoadingMetrics ? (
               <Skeleton className="h-24 w-full" />
             ) : (
-              <HealthHistory metrics={healthMetrics ?? []} />
+              <HealthHistory metrics={healthMetrics} />
             )}
           </CardContent>
         </Card>
@@ -294,3 +308,13 @@ export function HealthDashboard({
     </div>
   )
 }
+
+// ============================================================================
+// BACKWARDS COMPATIBILITY
+// ============================================================================
+
+/** @deprecated Use HealthDashboardContainer instead */
+export const HealthDashboard = HealthDashboardPresenter
+
+/** @deprecated Use HealthDashboardContainerProps instead */
+export type HealthDashboardProps = HealthDashboardContainerProps

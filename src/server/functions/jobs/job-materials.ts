@@ -27,6 +27,24 @@ import {
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { computeChanges } from '@/lib/activity-logger';
+
+// ============================================================================
+// ACTIVITY LOGGING HELPERS
+// ============================================================================
+
+/**
+ * Fields to exclude from activity change tracking (system-managed)
+ */
+const JOB_MATERIAL_EXCLUDED_FIELDS: string[] = [
+  'updatedAt',
+  'updatedBy',
+  'createdAt',
+  'createdBy',
+  'deletedAt',
+  'organizationId',
+];
 
 // ============================================================================
 // HELPERS
@@ -34,11 +52,11 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 
 /**
  * Verify job belongs to the user's organization.
- * Returns the job if found, throws NotFoundError otherwise.
+ * Returns the job with customerId if found, throws NotFoundError otherwise.
  */
 async function verifyJobAccess(jobId: string, organizationId: string) {
   const [job] = await db
-    .select({ id: jobAssignments.id })
+    .select({ id: jobAssignments.id, customerId: jobAssignments.customerId })
     .from(jobAssignments)
     .where(and(eq(jobAssignments.id, jobId), eq(jobAssignments.organizationId, organizationId)))
     .limit(1);
@@ -170,9 +188,10 @@ export const addJobMaterial = createServerFn({ method: 'POST' })
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.update ?? 'customer.update',
     });
+    const logger = createActivityLoggerWithContext(ctx);
 
-    // Verify job access
-    await verifyJobAccess(data.jobId, ctx.organizationId);
+    // Verify job access and get customerId for activity logging
+    const job = await verifyJobAccess(data.jobId, ctx.organizationId);
 
     // Verify product access and get details
     const product = await verifyProductAccess(data.productId, ctx.organizationId);
@@ -192,6 +211,31 @@ export const addJobMaterial = createServerFn({ method: 'POST' })
         updatedBy: ctx.user.id,
       })
       .returning();
+
+    // Log material addition
+    logger.logAsync({
+      entityType: 'job_material',
+      entityId: material.id,
+      action: 'created',
+      description: `Added material to job: ${product.name ?? product.sku} (qty: ${data.quantityRequired})`,
+      changes: computeChanges({
+        before: null,
+        after: material,
+        excludeFields: JOB_MATERIAL_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        customerId: job.customerId ?? undefined,
+        materialId: material.id,
+        jobAssignmentId: data.jobId,
+        productId: product.id,
+        productName: product.name ?? undefined,
+        quantity: Number(data.quantityRequired),
+        customFields: {
+          sku: product.sku ?? null,
+          unitCost: Number(data.unitCost),
+        },
+      },
+    });
 
     const response: MaterialResponse = {
       id: material.id,
@@ -229,9 +273,23 @@ export const updateJobMaterial = createServerFn({ method: 'POST' })
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.update ?? 'customer.update',
     });
+    const logger = createActivityLoggerWithContext(ctx);
 
-    // Verify material access
-    await verifyMaterialAccess(data.materialId, ctx.organizationId);
+    // Get existing material for change tracking
+    const [existingMaterial] = await db
+      .select()
+      .from(jobMaterials)
+      .where(eq(jobMaterials.id, data.materialId))
+      .limit(1);
+
+    if (!existingMaterial) {
+      throw new NotFoundError('Material not found');
+    }
+
+    const before = existingMaterial;
+
+    // Get customerId from job for activity logging
+    const job = await verifyJobAccess(existingMaterial.jobId, ctx.organizationId);
 
     // Build update object
     const updates: Record<string, unknown> = {
@@ -271,6 +329,32 @@ export const updateJobMaterial = createServerFn({ method: 'POST' })
       .where(eq(products.id, material.productId))
       .limit(1);
 
+    // Log material update
+    const changes = computeChanges({
+      before,
+      after: material,
+      excludeFields: JOB_MATERIAL_EXCLUDED_FIELDS as never[],
+    });
+
+    if (changes.fields && changes.fields.length > 0) {
+      logger.logAsync({
+        entityType: 'job_material',
+        entityId: material.id,
+        action: 'updated',
+        description: `Updated material: ${product?.name ?? product?.sku ?? 'Unknown'}`,
+        changes,
+        metadata: {
+          customerId: job.customerId ?? undefined,
+          materialId: material.id,
+          jobAssignmentId: material.jobId,
+          productId: material.productId,
+          productName: product?.name ?? undefined,
+          quantity: Number(material.quantityRequired),
+          changedFields: changes.fields,
+        },
+      });
+    }
+
     const response: MaterialResponse = {
       id: material.id,
       jobId: material.jobId,
@@ -307,14 +391,54 @@ export const removeJobMaterial = createServerFn({ method: 'POST' })
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.update ?? 'customer.update',
     });
+    const logger = createActivityLoggerWithContext(ctx);
 
-    // Verify material access
-    const material = await verifyMaterialAccess(data.materialId, ctx.organizationId);
+    // Get existing material for activity logging
+    const [existingMaterial] = await db
+      .select()
+      .from(jobMaterials)
+      .where(eq(jobMaterials.id, data.materialId))
+      .limit(1);
+
+    if (!existingMaterial) {
+      throw new NotFoundError('Material not found');
+    }
+
+    // Get product details for logging
+    const [product] = await db
+      .select({ name: products.name, sku: products.sku })
+      .from(products)
+      .where(eq(products.id, existingMaterial.productId))
+      .limit(1);
+
+    // Get customerId from job for activity logging
+    const job = await verifyJobAccess(existingMaterial.jobId, ctx.organizationId);
 
     // Delete the material
     await db.delete(jobMaterials).where(eq(jobMaterials.id, data.materialId));
 
-    return { success: true, jobId: material.jobId };
+    // Log material removal
+    logger.logAsync({
+      entityType: 'job_material',
+      entityId: existingMaterial.id,
+      action: 'deleted',
+      description: `Removed material from job: ${product?.name ?? product?.sku ?? 'Unknown'}`,
+      changes: computeChanges({
+        before: existingMaterial,
+        after: null,
+        excludeFields: JOB_MATERIAL_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        customerId: job.customerId ?? undefined,
+        materialId: existingMaterial.id,
+        jobAssignmentId: existingMaterial.jobId,
+        productId: existingMaterial.productId,
+        productName: product?.name ?? undefined,
+        quantity: Number(existingMaterial.quantityRequired),
+      },
+    });
+
+    return { success: true, jobId: existingMaterial.jobId };
   });
 
 // ============================================================================
@@ -525,9 +649,30 @@ export const recordMaterialInstallation = createServerFn({ method: 'POST' })
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.update ?? 'customer.update',
     });
+    const logger = createActivityLoggerWithContext(ctx);
 
-    // Verify material access
-    await verifyMaterialAccess(data.materialId, ctx.organizationId);
+    // Get existing material for change tracking
+    const [existingMaterial] = await db
+      .select()
+      .from(jobMaterials)
+      .where(eq(jobMaterials.id, data.materialId))
+      .limit(1);
+
+    if (!existingMaterial) {
+      throw new NotFoundError('Material not found');
+    }
+
+    const before = existingMaterial;
+
+    // Get product details for logging
+    const [product] = await db
+      .select({ name: products.name, sku: products.sku })
+      .from(products)
+      .where(eq(products.id, existingMaterial.productId))
+      .limit(1);
+
+    // Get customerId from job for activity logging
+    const job = await verifyJobAccess(existingMaterial.jobId, ctx.organizationId);
 
     // Update the material with installation details
     const [material] = await db
@@ -544,6 +689,33 @@ export const recordMaterialInstallation = createServerFn({ method: 'POST' })
       })
       .where(eq(jobMaterials.id, data.materialId))
       .returning();
+
+    // Log material installation
+    const changes = computeChanges({
+      before,
+      after: material,
+      excludeFields: JOB_MATERIAL_EXCLUDED_FIELDS as never[],
+    });
+
+    logger.logAsync({
+      entityType: 'job_material',
+      entityId: material.id,
+      action: 'updated',
+      description: `Recorded installation: ${product?.name ?? product?.sku ?? 'Unknown'} (qty: ${data.quantityUsed})`,
+      changes,
+      metadata: {
+        customerId: job.customerId ?? undefined,
+        materialId: material.id,
+        jobAssignmentId: material.jobId,
+        productId: material.productId,
+        productName: product?.name ?? undefined,
+        quantity: Number(data.quantityUsed),
+        customFields: {
+          installedLocation: data.installedLocation ?? null,
+          serialNumbers: data.serialNumbers ?? null,
+        },
+      },
+    });
 
     // TODO: Save serial numbers to a dedicated table if schema exists
     // TODO: Save photos to a dedicated table if schema exists
@@ -562,8 +734,8 @@ export const recordMaterialInstallation = createServerFn({ method: 'POST' })
       updatedBy: material.updatedBy,
       product: {
         id: material.productId,
-        sku: '', // Would need to fetch product details
-        name: '',
+        sku: product?.sku ?? '', // Now we have product details
+        name: product?.name ?? '',
         description: null,
       },
     };

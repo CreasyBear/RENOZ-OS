@@ -182,8 +182,8 @@ export interface ExecuteAgentTaskResult {
     completionTokens?: number;
     totalTokens?: number;
   };
-  /** Cost in cents */
-  costCents?: number;
+  /** Cost in dollars */
+  cost?: number;
 }
 
 /**

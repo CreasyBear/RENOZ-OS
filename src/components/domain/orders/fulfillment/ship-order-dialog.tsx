@@ -201,7 +201,7 @@ export const ShipOrderDialog = memo(function ShipOrderDialog({
       toastSuccess("Shipment created successfully");
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.withCustomer(orderId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments(orderId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.orders.shipments({ orderId }) });
       onOpenChange(false);
       onSuccess?.();
       // Reset form

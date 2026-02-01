@@ -12,6 +12,10 @@ interface DatePickerProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  /** Minimum selectable date */
+  fromDate?: Date;
+  /** Maximum selectable date */
+  toDate?: Date;
 }
 
 export function DatePicker({
@@ -20,6 +24,8 @@ export function DatePicker({
   placeholder = 'Pick a date',
   className,
   disabled,
+  fromDate,
+  toDate,
 }: DatePickerProps) {
   return (
     <Popover>
@@ -38,7 +44,14 @@ export function DatePicker({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
-        <Calendar mode="single" selected={date} onSelect={onDateChange} initialFocus />
+        <Calendar
+          mode="single"
+          selected={date}
+          onSelect={onDateChange}
+          initialFocus
+          fromDate={fromDate}
+          toDate={toDate}
+        />
       </PopoverContent>
     </Popover>
   );

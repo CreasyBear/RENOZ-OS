@@ -8,9 +8,38 @@
  * not hooks. See src/routes/_authenticated/products/ for data loading.
  */
 
+// --- Status & Type Configuration ---
+export {
+  PRODUCT_STATUS_CONFIG,
+  PRODUCT_TYPE_CONFIG,
+  STOCK_STATUS_CONFIG,
+  calculateMargin,
+  formatMargin,
+  getStockStatusConfig,
+  type ProductStatus,
+  type ProductType,
+  type StockStatus,
+} from './product-status-config';
+
+// --- Column Definitions ---
+export {
+  createProductColumns,
+  type ProductTableItem,
+  type CreateProductColumnsOptions,
+} from './product-columns';
+
 // --- Core Product Components ---
 export { ProductTable } from './product-table';
-export { ProductFilters } from './product-filters';
+
+// --- Filter Config (FILTER-STANDARDS compliant) ---
+export {
+  PRODUCT_FILTER_CONFIG,
+  PRODUCT_STATUS_OPTIONS as NEW_PRODUCT_STATUS_OPTIONS,
+  PRODUCT_TYPE_OPTIONS as NEW_PRODUCT_TYPE_OPTIONS,
+  DEFAULT_PRODUCT_FILTERS,
+  createProductFilterConfig,
+  type ProductFiltersState,
+} from './product-filter-config';
 export { ProductSearchInterface as SearchInterface } from './search-interface';
 
 // --- Product Form ---
@@ -46,3 +75,15 @@ export { ProductInventoryTab as InventoryTab } from './tabs/inventory-tab';
 export { ProductImagesTab as ImagesTab } from './tabs/images-tab';
 export { ProductAttributesTab as AttributesTab } from './tabs/attributes-tab';
 export { ProductRelationsTab as RelationsTab } from './tabs/relations-tab';
+
+// --- Container/Presenter Pattern (Gold Standard) ---
+export { ProductDetailContainer } from './containers/product-detail-container';
+export type { ProductDetailContainerProps, ProductDetailContainerRenderProps } from './containers/product-detail-container';
+export { ProductDetailView } from './views/product-detail-view';
+export type {
+  ProductDetailViewProps,
+  ProductWithRelations,
+  Category as ProductCategory,
+  PriceTier as ProductPriceTier,
+  ProductImage,
+} from './views/product-detail-view';

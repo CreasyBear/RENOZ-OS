@@ -39,6 +39,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import { calculateLineItemTotal } from '@/lib/order-calculations';
 import { useOrderForm, useOrderFormLineItems } from './order-form-context';
 
@@ -100,6 +101,7 @@ const LineItemRow = React.memo(function LineItemRow({
     formState: { errors },
   } = useFormContext();
   const { template } = useOrderForm();
+  const { formatCurrency } = useOrgFormat();
 
   // Watch fields for real-time calculation
   const quantity = watch(`lineItems.${index}.quantity`);
@@ -118,12 +120,8 @@ const LineItemRow = React.memo(function LineItemRow({
   }, [quantity, unitPrice, discountPercent, discountAmount]);
 
   // Format currency
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD',
-    }).format(amount / 100); // Convert cents to dollars for display
-  };
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
 
   const lineItemErrors = errors.lineItems && Array.isArray(errors.lineItems) ? errors.lineItems[index] : undefined;
 
@@ -194,7 +192,7 @@ const LineItemRow = React.memo(function LineItemRow({
             inputMode="decimal"
           />
         ) : (
-          <span className="font-mono">{formatCurrency((unitPrice || 0) * 100)}</span>
+          <span className="font-mono">{formatCurrencyDisplay(unitPrice || 0)}</span>
         )}
       </TableCell>
 
@@ -233,7 +231,7 @@ const LineItemRow = React.memo(function LineItemRow({
             />
           ) : (
             <span className="text-muted-foreground font-mono">
-              {formatCurrency((discountAmount || 0) * 100)}
+              {formatCurrencyDisplay(discountAmount || 0)}
             </span>
           )}
         </TableCell>
@@ -269,7 +267,7 @@ const LineItemRow = React.memo(function LineItemRow({
 
       {/* Line Total */}
       <TableCell className="w-32 text-right font-mono font-medium">
-        {formatCurrency(calculation.total * 100)}
+        {formatCurrencyDisplay(calculation.total)}
       </TableCell>
 
       {/* Actions */}
@@ -313,6 +311,9 @@ export const OrderLineItems = React.memo(function OrderLineItems({
 }: OrderLineItemsProps) {
   const { control, watch } = useFormContext();
   const { template } = useOrderForm();
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
   const { addLineItem, removeLineItem } = useOrderFormLineItems();
 
   // Use field array for dynamic line items
@@ -389,13 +390,6 @@ export const OrderLineItems = React.memo(function OrderLineItems({
     },
     [editingIndex]
   );
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD',
-    }).format(amount / 100);
-  };
 
   return (
     <div className={cn('space-y-4', className)}>
@@ -487,18 +481,18 @@ export const OrderLineItems = React.memo(function OrderLineItems({
           <div className="w-64 space-y-2">
             <div className="flex justify-between text-sm">
               <span>Subtotal:</span>
-              <span className="font-mono">{formatCurrency(totals.subtotal * 100)}</span>
+              <span className="font-mono">{formatCurrencyDisplay(totals.subtotal)}</span>
             </div>
             {template.includeDiscounts && totals.discountAmount > 0 && (
               <div className="text-muted-foreground flex justify-between text-sm">
                 <span>Discount:</span>
-                <span className="font-mono">-{formatCurrency(totals.discountAmount * 100)}</span>
+                <span className="font-mono">-{formatCurrencyDisplay(totals.discountAmount)}</span>
               </div>
             )}
             <div className="flex justify-between border-t pt-2 text-sm font-medium">
               <span>Total (excl. GST):</span>
               <span className="font-mono">
-                {formatCurrency((totals.subtotal - totals.discountAmount) * 100)}
+                {formatCurrencyDisplay(totals.subtotal - totals.discountAmount)}
               </span>
             </div>
           </div>

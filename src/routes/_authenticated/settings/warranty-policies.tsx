@@ -4,8 +4,8 @@
  * Management page for warranty policies. Allows creating, editing,
  * and configuring default policies for batteries, inverters, and installations.
  *
- * @see src/components/domain/warranty/warranty-policy-list.tsx
- * @see src/components/domain/warranty/warranty-policy-form-dialog.tsx
+ * @see src/components/domain/warranty/views/warranty-policy-list.tsx
+ * @see src/components/domain/warranty/dialogs/warranty-policy-form-dialog.tsx
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json - DOM-WAR-001c
  */
 

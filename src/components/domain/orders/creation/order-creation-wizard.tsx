@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { GST_RATE } from "@/lib/order-calculations";
+import { useOrgFormat } from "@/hooks/use-org-format";
 import { CustomerSelectorContainer } from "./customer-selector-container";
 import type { SelectedCustomer } from "./customer-selector";
 import { ProductSelector, type OrderLineItemDraft } from "./product-selector";
@@ -150,16 +151,6 @@ const STEPS: Step[] = [
   { id: 5, name: "Review", description: "Review and confirm", icon: FileCheck },
 ];
 
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-const formatPrice = (cents: number) =>
-  new Intl.NumberFormat("en-AU", {
-    style: "currency",
-    currency: "AUD",
-  }).format(cents / 100);
-
 const initialState: WizardState = {
   customer: null,
   lineItems: [],
@@ -223,6 +214,9 @@ const StepProducts = memo(function StepProducts({ state, setState }: StepProps) 
 });
 
 const StepPricing = memo(function StepPricing({ state, setState }: StepProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatPrice = (amount: number) => formatCurrency(amount, { cents: false, showCents: true });
+
   // Calculate subtotal before discounts
   const subtotal = state.lineItems.reduce(
     (sum, item) => sum + item.quantity * item.unitPrice,
@@ -332,11 +326,11 @@ const StepPricing = memo(function StepPricing({ state, setState }: StepProps) {
                   type="number"
                   min={0}
                   step={1}
-                  value={state.discountAmount ? state.discountAmount / 100 : ""}
+                  value={state.discountAmount || ""}
                   onChange={(e) =>
                     setState((s) => ({
                       ...s,
-                      discountAmount: Math.round(Number(e.target.value) * 100) || 0,
+                      discountAmount: Number(e.target.value) || 0,
                     }))
                   }
                   className="pl-8"
@@ -399,11 +393,11 @@ const StepShipping = memo(function StepShipping({ state, setState }: StepProps) 
                 type="number"
                 min={0}
                 step={1}
-                value={state.shippingAmount ? state.shippingAmount / 100 : ""}
+                value={state.shippingAmount || ""}
                 onChange={(e) =>
                   setState((s) => ({
                     ...s,
-                    shippingAmount: Math.round(Number(e.target.value) * 100) || 0,
+                    shippingAmount: Number(e.target.value) || 0,
                   }))
                 }
                 className="pl-8"
@@ -600,6 +594,9 @@ const StepShipping = memo(function StepShipping({ state, setState }: StepProps) 
 });
 
 const StepReview = memo(function StepReview({ state }: { state: WizardState }) {
+  const { formatCurrency } = useOrgFormat();
+  const formatPrice = (amount: number) => formatCurrency(amount, { cents: false, showCents: true });
+
   // Calculate totals
   const subtotal = state.lineItems.reduce(
     (sum, item) => sum + item.quantity * item.unitPrice,

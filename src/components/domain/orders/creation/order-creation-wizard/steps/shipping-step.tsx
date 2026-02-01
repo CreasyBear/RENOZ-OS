@@ -45,11 +45,11 @@ export const ShippingStep = memo(function ShippingStep({ state, setState }: Step
                 type="number"
                 min={0}
                 step={1}
-                value={state.shippingAmount ? state.shippingAmount / 100 : ''}
+                value={state.shippingAmount || ''}
                 onChange={(e) =>
                   setState((s) => ({
                     ...s,
-                    shippingAmount: Math.round(Number(e.target.value) * 100) || 0,
+                    shippingAmount: Number(e.target.value) || 0,
                   }))
                 }
                 className="pl-8"

@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
   },
   // Product section
   productSection: {
-    backgroundColor: colors.background.light,
+    backgroundColor: colors.background.subtle,
     padding: spacing.lg,
     marginVertical: spacing.lg,
     borderRadius: 4,

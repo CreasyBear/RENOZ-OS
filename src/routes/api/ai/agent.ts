@@ -102,7 +102,7 @@ export async function POST({ request }: { request: Request }) {
     const budgetResult = await checkBudget(
       ctx.organizationId,
       ctx.user.id,
-      costEstimate.costCents * 3 // Multiply by 3 for safety margin on agent tasks
+      costEstimate.cost * 3 // Multiply by 3 for safety margin on agent tasks
     );
     if (!budgetResult.allowed) {
       return createBudgetExceededResponse(

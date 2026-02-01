@@ -22,10 +22,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { formatCurrency } from "@/lib/formatters";
 import { FormatAmount } from "@/components/shared/format";
 import { TruncateTooltip } from "@/components/shared/truncate-tooltip";
 import type { Opportunity } from "@/lib/schemas/pipeline";
+import { useOrgFormat } from "@/hooks/use-org-format";
 
 // ============================================================================
 // TYPES
@@ -74,6 +74,7 @@ export const OpportunityCard = memo(function OpportunityCard({
   onEdit,
   onScheduleFollowup,
 }: OpportunityCardProps) {
+  const { formatCurrency } = useOrgFormat();
   const {
     attributes,
     listeners,
@@ -106,7 +107,7 @@ export const OpportunityCard = memo(function OpportunityCard({
   // Weighted value (value * probability / 100)
   const weightedValue = useMemo(() => {
     if (opportunity.probability === null) return 0;
-    return Math.round((opportunity.value * opportunity.probability) / 100);
+    return (opportunity.value * opportunity.probability) / 100;
   }, [opportunity.value, opportunity.probability]);
 
   return (
@@ -121,7 +122,7 @@ export const OpportunityCard = memo(function OpportunityCard({
         isOverdue && "border-destructive",
         isStale && "border-dashed border-muted-foreground/50 opacity-75"
       )}
-      aria-label={`${opportunity.title}, ${formatCurrency(opportunity.value)}, ${opportunity.probability}% probability`}
+      aria-label={`${opportunity.title}, ${formatCurrency(opportunity.value, { cents: false, showCents: true })}, ${opportunity.probability}% probability`}
       tabIndex={0}
     >
       {/* Header with drag handle and probability */}

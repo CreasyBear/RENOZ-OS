@@ -2,20 +2,18 @@
  * Order Detail Route
  *
  * Individual order view with tabs for overview, items, fulfillment, and activity.
+ * Uses Container/Presenter pattern via OrderDetailContainer.
  *
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json (ORD-DETAIL-UI)
+ * @see STANDARDS.md - Container/Presenter pattern
  */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { OrderDetailSkeleton } from "@/components/skeletons/orders";
 import { Button } from "@/components/ui/button";
-import { toastSuccess, toastError } from "@/hooks";
-import { OrderDetail } from "@/components/domain/orders";
-import { useDuplicateOrder } from "@/hooks/orders";
-import { queryKeys } from "@/lib/query-keys";
+import { OrderDetailContainer } from "@/components/domain/orders";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -43,18 +41,13 @@ export const Route = createFileRoute("/_authenticated/orders/$orderId")({
 function OrderDetailPage() {
   const navigate = useNavigate();
   const { orderId } = Route.useParams();
-  const queryClient = useQueryClient();
 
-  // Duplicate order mutation
-  const duplicateMutation = useDuplicateOrder();
-
-  // Handlers
+  // Navigation handlers
   const handleBack = useCallback(() => {
     navigate({ to: "/orders" });
   }, [navigate]);
 
   const handleEdit = useCallback(() => {
-    // Navigate to edit mode (could be same page with edit=true param or separate route)
     navigate({
       to: "/orders/$orderId",
       params: { orderId },
@@ -62,50 +55,40 @@ function OrderDetailPage() {
     });
   }, [navigate, orderId]);
 
-  const handleDuplicate = useCallback(() => {
-    duplicateMutation.mutate(orderId, {
-      onSuccess: (result) => {
-        toastSuccess(`Order duplicated as ${result.orderNumber}`);
-        queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
-        navigate({
-          to: "/orders/$orderId",
-          params: { orderId: result.id },
-        });
-      },
-      onError: () => {
-        toastError("Failed to duplicate order");
-      },
-    });
-  }, [duplicateMutation, orderId, navigate, queryClient]);
-
-  // Note: handlePrint is currently unused but kept for future print functionality
-  // const handlePrint = useCallback(() => {
-  //   window.print();
-  // }, []);
+  const handleDuplicate = useCallback(
+    (newOrderId: string) => {
+      navigate({
+        to: "/orders/$orderId",
+        params: { orderId: newOrderId },
+      });
+    },
+    [navigate]
+  );
 
   return (
-    <PageLayout variant="full-width">
-      <PageLayout.Header
-        title="Order Details"
-        description="View and manage order information"
-        actions={
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleBack}>
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Orders
-          </Button>
-        </div>
-        }
-      />
-
-      <PageLayout.Content>
-        <OrderDetail
-          orderId={orderId}
-          onEdit={handleEdit}
-          onDuplicate={handleDuplicate}
-        />
-      </PageLayout.Content>
-    </PageLayout>
+    <OrderDetailContainer
+      orderId={orderId}
+      onBack={handleBack}
+      onEdit={handleEdit}
+      onDuplicate={handleDuplicate}
+    >
+      {({ headerTitle, headerActions, content }) => (
+        <PageLayout variant="full-width">
+          <PageLayout.Header
+            title={
+              <div className="flex items-center gap-4">
+                <Button variant="ghost" size="sm" onClick={handleBack}>
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                {headerTitle}
+              </div>
+            }
+            actions={headerActions}
+          />
+          <PageLayout.Content>{content}</PageLayout.Content>
+        </PageLayout>
+      )}
+    </OrderDetailContainer>
   );
 }
 

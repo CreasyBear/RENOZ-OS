@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useOrderForm } from './order-form-context';
 import { validateOrderBusinessRules } from '@/lib/order-calculations';
+import { useOrgFormat } from '@/hooks/use-org-format';
 
 export interface OrderSummaryProps {
   className?: string;
@@ -31,20 +32,15 @@ export interface OrderSummaryProps {
 
 export function OrderSummary({ className, showValidation = true }: OrderSummaryProps) {
   const { calculations, formData, template } = useOrderForm();
+  const { formatCurrency } = useOrgFormat();
 
   // Business rule validation
   const businessValidation = useMemo(() => {
     return validateOrderBusinessRules(calculations);
   }, [calculations]);
 
-  // Format currency consistently
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD',
-      minimumFractionDigits: 2,
-    }).format(amount);
-  };
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
 
   // Calculate GST amount
   const gstRate = template.includeGst ? 0.1 : 0;
@@ -123,7 +119,7 @@ export function OrderSummary({ className, showValidation = true }: OrderSummaryP
           {/* Subtotal */}
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">Subtotal</span>
-            <span className="font-mono text-sm">{formatCurrency(calculations.subtotal)}</span>
+            <span className="font-mono text-sm">{formatCurrencyDisplay(calculations.subtotal)}</span>
           </div>
 
           {/* Order-level Discount */}
@@ -135,7 +131,7 @@ export function OrderSummary({ className, showValidation = true }: OrderSummaryP
                   {(formData.discountPercent ?? 0) > 0 && ` (${formData.discountPercent}%)`}
                 </span>
                 <span className="font-mono text-sm">
-                  -{formatCurrency(calculations.discountAmount)}
+                  -{formatCurrencyDisplay(calculations.discountAmount)}
                 </span>
               </div>
             )}
@@ -146,7 +142,7 @@ export function OrderSummary({ className, showValidation = true }: OrderSummaryP
               <div className="flex items-center justify-between border-t pt-2">
                 <span className="text-sm font-medium">Subtotal (after discount)</span>
                 <span className="font-mono text-sm font-medium">
-                  {formatCurrency(calculations.subtotal - calculations.discountAmount)}
+                  {formatCurrencyDisplay(calculations.subtotal - calculations.discountAmount)}
                 </span>
               </div>
             </>
@@ -157,7 +153,7 @@ export function OrderSummary({ className, showValidation = true }: OrderSummaryP
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Shipping</span>
               <span className="font-mono text-sm">
-                {formatCurrency(calculations.shippingAmount)}
+                {formatCurrencyDisplay(calculations.shippingAmount)}
               </span>
             </div>
           )}
@@ -169,7 +165,7 @@ export function OrderSummary({ className, showValidation = true }: OrderSummaryP
             <div className="flex items-center justify-between">
               <span className="text-sm">Amount subject to GST</span>
               <span className="font-mono text-sm">
-                {formatCurrency(
+                {formatCurrencyDisplay(
                   calculations.subtotal - calculations.discountAmount + calculations.shippingAmount
                 )}
               </span>
@@ -185,7 +181,7 @@ export function OrderSummary({ className, showValidation = true }: OrderSummaryP
                   Included
                 </Badge>
               </span>
-              <span className="font-mono text-sm font-medium">{formatCurrency(gstAmount)}</span>
+              <span className="font-mono text-sm font-medium">{formatCurrencyDisplay(gstAmount)}</span>
             </div>
           )}
 
@@ -203,7 +199,7 @@ export function OrderSummary({ className, showValidation = true }: OrderSummaryP
           <div className="flex items-center justify-between pt-2">
             <span className="text-lg font-semibold">Total</span>
             <span className="text-primary font-mono text-lg font-bold">
-              {formatCurrency(finalTotal)}
+              {formatCurrencyDisplay(finalTotal)}
             </span>
           </div>
         </div>

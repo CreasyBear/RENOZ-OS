@@ -1,3 +1,5 @@
+'use server'
+
 /**
  * Scheduled Reports Server Functions
  *
@@ -22,12 +24,8 @@ import { scheduledReports } from 'drizzle/schema/reports';
 import { client, reportEvents } from '@/trigger/client';
 import { uploadFile, createSignedUrl } from '@/lib/storage';
 import { renderPdfToBuffer, ReportSummaryPdfDocument, type DocumentOrganization } from '@/lib/documents';
-import { orders } from 'drizzle/schema/orders/orders';
-import { customers } from 'drizzle/schema/customers/customers';
-import { opportunities } from 'drizzle/schema/pipeline';
-import { warranties } from 'drizzle/schema/warranty/warranties';
-import { warrantyClaims } from 'drizzle/schema/warranty/warranty-claims';
-import { slaTracking } from 'drizzle/schema/support/sla-tracking';
+import { calculateMetrics as calculateMetricsAggregator } from '@/server/functions/metrics/aggregator';
+import { getMetric } from '@/lib/metrics/registry';
 import { organizations } from 'drizzle/schema/settings/organizations';
 import { TextEncoder } from 'util';
 import { randomUUID } from 'crypto';
@@ -423,12 +421,26 @@ export const generateReport = createServerFn({ method: 'POST' })
       throw new ValidationError('Date range cannot exceed 1 year');
     }
 
-    const metrics = await calculateMetrics(
-      ctx.organizationId,
-      startDate,
-      endDate,
-      data.metrics
-    );
+    // Validate metric IDs (deduplicate first to avoid redundant validation)
+    const uniqueMetricIds = Array.from(new Set(data.metrics));
+    for (const metricId of uniqueMetricIds) {
+      try {
+        getMetric(metricId); // Validate metric exists
+      } catch (error) {
+        throw new ValidationError(`Invalid metric ID: ${metricId}. ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+    
+    // Use deduplicated list for calculation
+    const metricsToCalculate = uniqueMetricIds;
+
+    // Calculate metrics using centralized aggregator (with deduplicated list)
+    const metrics = await calculateMetricsAggregator({
+      organizationId: ctx.organizationId,
+      metricIds: metricsToCalculate,
+      dateFrom: startDate,
+      dateTo: endDate,
+    });
 
     const [org] = await db
       .select({
@@ -460,7 +472,7 @@ export const generateReport = createServerFn({ method: 'POST' })
     switch (data.format) {
       case 'csv':
       case 'xlsx':
-        content = generateCsvReport(metrics, data.metrics);
+        content = generateCsvReport(metrics, metricsToCalculate);
         filename = `report-${startDate.toISOString().split('T')[0]}-${endDate.toISOString().split('T')[0]}.${data.format === 'xlsx' ? 'xlsx' : 'csv'}`;
         contentType = 'text/csv';
         contentBody = content;
@@ -473,7 +485,7 @@ export const generateReport = createServerFn({ method: 'POST' })
             reportName: 'On-demand Report',
             dateFrom: startDate,
             dateTo: endDate,
-            metrics: data.metrics.map((id) => ({
+            metrics: metricsToCalculate.map((id) => ({
               label: getMetricLabel(id),
               value: formatMetricValue(id, metrics[id] ?? 0),
             })),
@@ -494,7 +506,7 @@ export const generateReport = createServerFn({ method: 'POST' })
           startDate,
           endDate,
           metrics,
-          data.metrics,
+          metricsToCalculate,
           { includeCharts: data.includeCharts, includeTrends: data.includeTrends }
         );
         filename = `report-${startDate.toISOString().split('T')[0]}-${endDate.toISOString().split('T')[0]}.html`;
@@ -531,277 +543,8 @@ export const generateReport = createServerFn({ method: 'POST' })
   });
 
 // ============================================================================
-// METRICS + RENDERING HELPERS
+// RENDERING HELPERS
 // ============================================================================
-
-async function calculateMetrics(
-  organizationId: string,
-  dateFrom: Date,
-  dateTo: Date,
-  metricIds: string[]
-) {
-  const results: Record<string, number> = {};
-  const dateFromIso = dateFrom.toISOString();
-  const dateToIso = dateTo.toISOString();
-  const dateFromDate = dateFromIso.split('T')[0];
-  const dateToDate = dateToIso.split('T')[0];
-
-  for (const metricId of metricIds) {
-    switch (metricId) {
-      case 'revenue': {
-        const [result] = await db
-          .select({
-            total: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
-          })
-          .from(orders)
-          .where(
-            and(
-              eq(orders.organizationId, organizationId),
-              sql`${orders.status} IN ('delivered')`,
-              sql`${orders.deliveredDate} >= ${dateFromIso}`,
-              sql`${orders.deliveredDate} <= ${dateToIso}`,
-              sql`${orders.deletedAt} IS NULL`
-            )
-          );
-        results[metricId] = Number(result?.total ?? 0);
-        break;
-      }
-      case 'orders_count': {
-        const [result] = await db
-          .select({
-            count: sql<number>`COUNT(*)`,
-          })
-          .from(orders)
-          .where(
-            and(
-              eq(orders.organizationId, organizationId),
-              sql`${orders.createdAt} >= ${dateFromIso}`,
-              sql`${orders.createdAt} <= ${dateToIso}`,
-              sql`${orders.deletedAt} IS NULL`
-            )
-          );
-        results[metricId] = Number(result?.count ?? 0);
-        break;
-      }
-      case 'customer_count': {
-        const [result] = await db
-          .select({
-            count: sql<number>`COUNT(*)`,
-          })
-          .from(customers)
-          .where(
-            and(
-              eq(customers.organizationId, organizationId),
-              sql`${customers.createdAt} >= ${dateFromIso}`,
-              sql`${customers.createdAt} <= ${dateToIso}`,
-              sql`${customers.deletedAt} IS NULL`
-            )
-          );
-        results[metricId] = Number(result?.count ?? 0);
-        break;
-      }
-      case 'pipeline_value': {
-        const [result] = await db
-          .select({
-            total: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
-          })
-          .from(opportunities)
-          .where(
-            and(
-              eq(opportunities.organizationId, organizationId),
-              sql`${opportunities.stage} IN ('new', 'qualified', 'proposal', 'negotiation')`,
-              sql`${opportunities.deletedAt} IS NULL`
-            )
-          );
-        results[metricId] = Number(result?.total ?? 0);
-        break;
-      }
-      case 'forecasted_revenue': {
-        const [result] = await db
-          .select({
-            total: sql<number>`COALESCE(SUM(${opportunities.weightedValue}), 0)`,
-          })
-          .from(opportunities)
-          .where(
-            and(
-              eq(opportunities.organizationId, organizationId),
-              sql`${opportunities.stage} IN ('new', 'qualified', 'proposal', 'negotiation')`,
-              sql`${opportunities.expectedCloseDate} >= ${dateFromDate}`,
-              sql`${opportunities.expectedCloseDate} <= ${dateToDate}`,
-              sql`${opportunities.deletedAt} IS NULL`
-            )
-          );
-        results[metricId] = Number(result?.total ?? 0);
-        break;
-      }
-      case 'average_order_value': {
-        const [result] = await db
-          .select({
-            avg: sql<number>`COALESCE(AVG(${orders.total}), 0)`,
-          })
-          .from(orders)
-          .where(
-            and(
-              eq(orders.organizationId, organizationId),
-              sql`${orders.createdAt} >= ${dateFromIso}`,
-              sql`${orders.createdAt} <= ${dateToIso}`,
-              sql`${orders.deletedAt} IS NULL`
-            )
-          );
-        results[metricId] = Number(result?.avg ?? 0);
-        break;
-      }
-      case 'win_rate': {
-        const [result] = await db
-          .select({
-            won: sql<number>`SUM(CASE WHEN ${opportunities.stage} = 'won' THEN 1 ELSE 0 END)`,
-            lost: sql<number>`SUM(CASE WHEN ${opportunities.stage} = 'lost' THEN 1 ELSE 0 END)`,
-          })
-          .from(opportunities)
-          .where(
-            and(
-              eq(opportunities.organizationId, organizationId),
-              sql`${opportunities.actualCloseDate} >= ${dateFromDate}`,
-              sql`${opportunities.actualCloseDate} <= ${dateToDate}`,
-              sql`${opportunities.deletedAt} IS NULL`
-            )
-          );
-        const won = Number(result?.won ?? 0);
-        const lost = Number(result?.lost ?? 0);
-        const total = won + lost;
-        results[metricId] = total > 0 ? (won / total) * 100 : 0;
-        break;
-      }
-      case 'won_revenue': {
-        const [result] = await db
-          .select({
-            total: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
-          })
-          .from(opportunities)
-          .where(
-            and(
-              eq(opportunities.organizationId, organizationId),
-              sql`${opportunities.stage} = 'won'`,
-              sql`${opportunities.actualCloseDate} >= ${dateFromDate}`,
-              sql`${opportunities.actualCloseDate} <= ${dateToDate}`,
-              sql`${opportunities.deletedAt} IS NULL`
-            )
-          );
-        results[metricId] = Number(result?.total ?? 0);
-        break;
-      }
-      case 'lost_revenue': {
-        const [result] = await db
-          .select({
-            total: sql<number>`COALESCE(SUM(${opportunities.value}), 0)`,
-          })
-          .from(opportunities)
-          .where(
-            and(
-              eq(opportunities.organizationId, organizationId),
-              sql`${opportunities.stage} = 'lost'`,
-              sql`${opportunities.actualCloseDate} >= ${dateFromDate}`,
-              sql`${opportunities.actualCloseDate} <= ${dateToDate}`,
-              sql`${opportunities.deletedAt} IS NULL`
-            )
-          );
-        results[metricId] = Number(result?.total ?? 0);
-        break;
-      }
-      case 'warranty_count': {
-        const [result] = await db
-          .select({
-            count: sql<number>`COUNT(*)`,
-          })
-          .from(warranties)
-          .where(
-            and(
-              eq(warranties.organizationId, organizationId),
-              sql`${warranties.registrationDate} >= ${dateFromIso}`,
-              sql`${warranties.registrationDate} <= ${dateToIso}`
-            )
-          );
-        results[metricId] = Number(result?.count ?? 0);
-        break;
-      }
-      case 'claim_count': {
-        const [result] = await db
-          .select({
-            count: sql<number>`COUNT(*)`,
-          })
-          .from(warrantyClaims)
-          .where(
-            and(
-              eq(warrantyClaims.organizationId, organizationId),
-              sql`${warrantyClaims.submittedAt} >= ${dateFromIso}`,
-              sql`${warrantyClaims.submittedAt} <= ${dateToIso}`
-            )
-          );
-        results[metricId] = Number(result?.count ?? 0);
-        break;
-      }
-      case 'sla_compliance': {
-        const [result] = await db
-          .select({
-            total: sql<number>`COUNT(*)`,
-            breached: sql<number>`SUM(CASE WHEN ${slaTracking.responseBreached} OR ${slaTracking.resolutionBreached} THEN 1 ELSE 0 END)`,
-          })
-          .from(slaTracking)
-          .where(
-            and(
-              eq(slaTracking.organizationId, organizationId),
-              eq(slaTracking.domain, 'warranty'),
-              sql`${slaTracking.startedAt} >= ${dateFromIso}`,
-              sql`${slaTracking.startedAt} <= ${dateToIso}`
-            )
-          );
-        const total = Number(result?.total ?? 0);
-        const breached = Number(result?.breached ?? 0);
-        results[metricId] = total > 0 ? ((total - breached) / total) * 100 : 0;
-        break;
-      }
-      case 'expiring_warranties': {
-        const [result] = await db
-          .select({
-            count: sql<number>`COUNT(*)`,
-          })
-          .from(warranties)
-          .where(
-            and(
-              eq(warranties.organizationId, organizationId),
-              sql`${warranties.expiryDate} >= ${dateFromIso}`,
-              sql`${warranties.expiryDate} <= ${dateToIso}`,
-              sql`${warranties.status} IN ('active', 'expiring_soon')`
-            )
-          );
-        results[metricId] = Number(result?.count ?? 0);
-        break;
-      }
-      case 'warranty_value': {
-        const [result] = await db
-          .select({
-            total: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
-          })
-          .from(warranties)
-          .leftJoin(orders, eq(warranties.orderId, orders.id))
-          .where(
-            and(
-              eq(warranties.organizationId, organizationId),
-              sql`${warranties.expiryDate} >= ${dateFromIso}`,
-              sql`${warranties.expiryDate} <= ${dateToIso}`,
-              sql`${orders.deletedAt} IS NULL`
-            )
-          );
-        results[metricId] = Number(result?.total ?? 0);
-        break;
-      }
-      default:
-        results[metricId] = 0;
-    }
-  }
-
-  return results;
-}
 
 function generateCsvReport(metrics: Record<string, number>, metricIds: string[]): string {
   const header = 'Metric,Value\n';
@@ -877,49 +620,44 @@ function generateHtmlReport(
 }
 
 function formatMetricValue(metricId: string, value: number): string {
-  switch (metricId) {
-    case 'revenue':
-    case 'pipeline_value':
-    case 'average_order_value':
-    case 'forecasted_revenue':
-    case 'won_revenue':
-    case 'lost_revenue':
-    case 'warranty_value':
-      return new Intl.NumberFormat('en-AU', {
-        style: 'currency',
-        currency: 'AUD',
-        maximumFractionDigits: 0,
-      }).format(value);
-    case 'quote_win_rate':
-    case 'win_rate':
-    case 'sla_compliance':
+  // Use registry for unit-based formatting
+  try {
+    const metric = getMetric(metricId);
+    switch (metric.unit) {
+      case 'currency':
+        return new Intl.NumberFormat('en-AU', {
+          style: 'currency',
+          currency: 'AUD',
+          maximumFractionDigits: 0,
+        }).format(value);
+      case 'percentage':
+        return `${value.toFixed(1)}%`;
+      case 'count':
+      default:
+        return value.toLocaleString();
+    }
+  } catch {
+    // Fallback for unknown metrics (legacy support)
+    if (metricId === 'quote_win_rate') {
       return `${value.toFixed(1)}%`;
-    default:
-      return value.toLocaleString();
+    }
+    return value.toLocaleString();
   }
 }
 
 function getMetricLabel(metricId: string): string {
-  const labels: Record<string, string> = {
-    revenue: 'Revenue',
-    orders_count: 'Orders',
-    customer_count: 'New Customers',
-    pipeline_value: 'Pipeline Value',
-    forecasted_revenue: 'Forecasted Revenue',
-    average_order_value: 'Average Order Value',
-    quote_win_rate: 'Quote Win Rate',
-    win_rate: 'Win Rate',
-    won_revenue: 'Won Revenue',
-    lost_revenue: 'Lost Revenue',
-    warranty_count: 'Warranties',
-    claim_count: 'Claims',
-    sla_compliance: 'SLA Compliance',
-    expiring_warranties: 'Expiring Warranties',
-    warranty_value: 'Warranty Value',
-    kwh_deployed: 'kWh Deployed',
-    active_installations: 'Active Installations',
-  };
-  return labels[metricId] ?? metricId;
+  // Use registry for metric labels - single source of truth
+  try {
+    return getMetric(metricId).name;
+  } catch {
+    // Fallback for unknown metrics (legacy support)
+    const labels: Record<string, string> = {
+      quote_win_rate: 'Quote Win Rate',
+      kwh_deployed: 'kWh Deployed',
+      active_installations: 'Active Installations',
+    };
+    return labels[metricId] ?? metricId;
+  }
 }
 
 function bufferToArrayBuffer(buffer: Buffer): ArrayBuffer {

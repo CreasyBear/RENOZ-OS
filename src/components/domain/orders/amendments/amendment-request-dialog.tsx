@@ -51,7 +51,7 @@ import {
 } from "@/components/ui/table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/formatters";
+import { useOrgFormat } from "@/hooks/use-org-format";
 import { toastSuccess, toastError } from "@/hooks";
 import { getOrderWithCustomer } from "@/server/functions/orders/orders";
 import { requestAmendment } from "@/server/functions/orders/order-amendments";
@@ -99,6 +99,9 @@ export const AmendmentRequestDialog = memo(function AmendmentRequestDialog({
   onSuccess,
 }: AmendmentRequestDialogProps) {
   const queryClient = useQueryClient();
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
 
   // Form state
   const [amendmentType, setAmendmentType] = useState<AmendmentType>("quantity_change");
@@ -406,7 +409,7 @@ export const AmendmentRequestDialog = memo(function AmendmentRequestDialog({
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="text-sm">
-                            <p>{item.originalQty} x {formatCurrency(item.originalPrice)}</p>
+                            <p>{item.originalQty} x {formatCurrencyDisplay(item.originalPrice)}</p>
                           </div>
                         </TableCell>
                         <TableCell>
@@ -451,7 +454,7 @@ export const AmendmentRequestDialog = memo(function AmendmentRequestDialog({
                         </TableCell>
                         <TableCell className="text-right font-medium">
                           {item.action !== "remove"
-                            ? formatCurrency(item.newQty * item.newPrice)
+                            ? formatCurrencyDisplay(item.newQty * item.newPrice)
                             : "-"}
                         </TableCell>
                         <TableCell>
@@ -492,13 +495,13 @@ export const AmendmentRequestDialog = memo(function AmendmentRequestDialog({
                   <div>
                     <p className="text-sm text-muted-foreground">Before</p>
                     <p className="text-lg font-semibold">
-                      {formatCurrency(financialImpact.totalBefore)}
+                      {formatCurrencyDisplay(financialImpact.totalBefore)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Subtotal: {formatCurrency(financialImpact.subtotalBefore)}
+                      Subtotal: {formatCurrencyDisplay(financialImpact.subtotalBefore)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      GST: {formatCurrency(financialImpact.taxBefore)}
+                      GST: {formatCurrencyDisplay(financialImpact.taxBefore)}
                     </p>
                   </div>
                   <div className="flex items-center justify-center">
@@ -507,13 +510,13 @@ export const AmendmentRequestDialog = memo(function AmendmentRequestDialog({
                   <div>
                     <p className="text-sm text-muted-foreground">After</p>
                     <p className="text-lg font-semibold">
-                      {formatCurrency(financialImpact.totalAfter)}
+                      {formatCurrencyDisplay(financialImpact.totalAfter)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Subtotal: {formatCurrency(financialImpact.subtotalAfter)}
+                      Subtotal: {formatCurrencyDisplay(financialImpact.subtotalAfter)}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      GST: {formatCurrency(financialImpact.taxAfter)}
+                      GST: {formatCurrencyDisplay(financialImpact.taxAfter)}
                     </p>
                   </div>
                 </div>
@@ -525,7 +528,7 @@ export const AmendmentRequestDialog = memo(function AmendmentRequestDialog({
                   )}
                 >
                   Difference: {financialImpact.difference >= 0 ? "+" : ""}
-                  {formatCurrency(financialImpact.difference)}
+                  {formatCurrencyDisplay(financialImpact.difference)}
                 </div>
               </div>
             )}

@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
   },
   // Job details section
   jobSection: {
-    backgroundColor: colors.background.light,
+    backgroundColor: colors.background.subtle,
     padding: spacing.lg,
     marginVertical: spacing.lg,
     borderRadius: 4,

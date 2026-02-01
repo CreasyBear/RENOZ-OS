@@ -14,6 +14,7 @@ import {
   inventory,
   inventoryCostLayers,
   products,
+  categories,
   warehouseLocations as locations,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
@@ -27,6 +28,9 @@ import {
   cogsCalculationSchema,
   inventoryAgingQuerySchema,
   inventoryTurnoverQuerySchema,
+  type InventoryValuationResult,
+  type InventoryTurnoverResult,
+  type AggregatedAgingItem,
 } from '@/lib/schemas/inventory';
 
 // ============================================================================
@@ -34,34 +38,6 @@ import {
 // ============================================================================
 
 type CostLayerRecord = typeof inventoryCostLayers.$inferSelect;
-
-interface LocationValuation {
-  locationId: string;
-  locationCode: string;
-  locationName: string;
-  itemCount: number;
-  totalQuantity: number;
-  totalValue: number;
-}
-
-interface ProductValuation {
-  productId: string;
-  productSku: string;
-  productName: string;
-  totalQuantity: number;
-  weightedAverageCost: number;
-  totalValue: number;
-  costLayers: number;
-}
-
-interface InventoryValuationResult {
-  totalValue: number;
-  totalSkus: number;
-  byLocation: LocationValuation[];
-  byProduct: ProductValuation[];
-  valuationMethod: string;
-  asOf: string;
-}
 
 interface COGSResult {
   cogs: number;
@@ -233,14 +209,31 @@ export const getInventoryValuation = createServerFn({ method: 'GET' })
       invConditions.push(eq(inventory.productId, data.productId));
     }
 
-    // Get total value
+    // Get total value and units
     const [totals] = await db
       .select({
         totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
         totalSkus: sql<number>`COUNT(DISTINCT ${inventory.productId})::int`,
+        totalUnits: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::numeric`,
       })
       .from(inventory)
       .where(and(...invConditions));
+
+    // Get by category
+    const byCategory = await db
+      .select({
+        categoryId: categories.id,
+        categoryName: categories.name,
+        totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
+        totalUnits: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::numeric`,
+        skuCount: sql<number>`COUNT(DISTINCT ${inventory.productId})::int`,
+      })
+      .from(inventory)
+      .innerJoin(products, eq(inventory.productId, products.id))
+      .leftJoin(categories, eq(products.categoryId, categories.id))
+      .where(and(...invConditions))
+      .groupBy(categories.id, categories.name)
+      .orderBy(desc(sql`SUM(${inventory.totalValue})`));
 
     // Get by location
     const byLocation = await db
@@ -251,11 +244,12 @@ export const getInventoryValuation = createServerFn({ method: 'GET' })
         itemCount: sql<number>`COUNT(DISTINCT ${inventory.id})::int`,
         totalQuantity: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::int`,
         totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
+        capacity: locations.capacity,
       })
       .from(inventory)
       .innerJoin(locations, eq(inventory.locationId, locations.id))
       .where(and(...invConditions))
-      .groupBy(locations.id, locations.locationCode, locations.name)
+      .groupBy(locations.id, locations.locationCode, locations.name, locations.capacity)
       .orderBy(desc(sql`SUM(${inventory.totalValue})`));
 
     // Get by product
@@ -289,13 +283,42 @@ export const getInventoryValuation = createServerFn({ method: 'GET' })
       .orderBy(desc(sql`SUM(${inventory.totalValue})`))
       .limit(50);
 
+    const totalValueNum = Number(totals?.totalValue ?? 0);
+    const totalUnitsNum = Number(totals?.totalUnits ?? 0);
+    const averageUnitCost = totalUnitsNum > 0 ? totalValueNum / totalUnitsNum : 0;
+
     return {
-      totalValue: Number(totals?.totalValue ?? 0),
+      totalValue: totalValueNum,
       totalSkus: totals?.totalSkus ?? 0,
-      byLocation: byLocation.map((l) => ({
-        ...l,
-        totalValue: Number(l.totalValue),
-      })),
+      totalUnits: totalUnitsNum,
+      averageUnitCost,
+      byCategory: byCategory.map((c) => {
+        const catValue = Number(c.totalValue);
+        const catUnits = Number(c.totalUnits);
+        return {
+          categoryId: c.categoryId ?? '',
+          categoryName: c.categoryName ?? 'Uncategorized',
+          totalValue: catValue,
+          totalUnits: catUnits,
+          percentOfTotal: totalValueNum > 0 ? (catValue / totalValueNum) * 100 : 0,
+          skuCount: c.skuCount ?? 0,
+        };
+      }),
+      byLocation: byLocation.map((l) => {
+        const locValue = Number(l.totalValue);
+        const locQuantity = Number(l.totalQuantity);
+        const capacity = l.capacity ? Number(l.capacity) : null;
+        return {
+          locationId: l.locationId,
+          locationCode: l.locationCode,
+          locationName: l.locationName,
+          itemCount: l.itemCount,
+          totalQuantity: locQuantity,
+          totalValue: locValue,
+          percentOfTotal: totalValueNum > 0 ? (locValue / totalValueNum) * 100 : 0,
+          utilization: capacity && capacity > 0 ? (locQuantity / capacity) * 100 : 0,
+        };
+      }),
       byProduct: byProduct.map((p) => ({
         ...p,
         weightedAverageCost: Number(p.weightedAverageCost),
@@ -421,13 +444,15 @@ export const getInventoryAging = createServerFn({ method: 'GET' })
       `>${buckets[buckets.length - 1]} days`,
     ];
 
-    // Get aging data with cost layers
+    // Get aging data with cost layers and location
     const aging = await db
       .select({
         inventoryId: inventoryCostLayers.inventoryId,
         productId: inventory.productId,
         productSku: products.sku,
         productName: products.name,
+        locationId: inventory.locationId,
+        locationName: locations.name,
         layerId: inventoryCostLayers.id,
         receivedAt: inventoryCostLayers.receivedAt,
         quantityRemaining: inventoryCostLayers.quantityRemaining,
@@ -437,6 +462,7 @@ export const getInventoryAging = createServerFn({ method: 'GET' })
       .from(inventoryCostLayers)
       .innerJoin(inventory, eq(inventoryCostLayers.inventoryId, inventory.id))
       .innerJoin(products, eq(inventory.productId, products.id))
+      .leftJoin(locations, eq(inventory.locationId, locations.id))
       .where(
         and(
           ...conditions,
@@ -445,6 +471,12 @@ export const getInventoryAging = createServerFn({ method: 'GET' })
         )
       )
       .orderBy(asc(inventoryCostLayers.receivedAt));
+
+    // Calculate total value for percentage calculations
+    const totalValue = aging.reduce(
+      (sum, item) => sum + item.quantityRemaining * Number(item.unitCost),
+      0
+    );
 
     // Group by age bucket
     const bucketData = bucketLabels.map((label, index) => {
@@ -456,41 +488,140 @@ export const getInventoryAging = createServerFn({ method: 'GET' })
       );
 
       const totalQuantity = itemsInBucket.reduce((sum, item) => sum + item.quantityRemaining, 0);
-      const totalValue = itemsInBucket.reduce(
+      const bucketValue = itemsInBucket.reduce(
         (sum, item) => sum + item.quantityRemaining * Number(item.unitCost),
         0
       );
+
+      // Determine risk level based on age
+      const risk = maxDays === Infinity || maxDays >= 365
+        ? 'critical'
+        : maxDays >= 180
+        ? 'high'
+        : maxDays >= 90
+        ? 'medium'
+        : 'low';
+
+      // Aggregate items by productId + locationId
+      const aggregatedMap = new Map<string, AggregatedAgingItem>();
+      
+      itemsInBucket.forEach((item) => {
+        const key = `${item.productId}-${item.locationId}`;
+        const quantity = item.quantityRemaining;
+        const unitCost = Number(item.unitCost);
+        const itemValue = quantity * unitCost;
+        const itemAge = item.ageInDays;
+        const itemRisk: 'low' | 'medium' | 'high' | 'critical' = 
+          itemAge >= 365 ? 'critical' :
+          itemAge >= 180 ? 'high' :
+          itemAge >= 90 ? 'medium' : 'low';
+
+        const existing = aggregatedMap.get(key);
+        if (existing) {
+          // Aggregate: sum quantities and values, track oldest date, highest risk
+          existing.totalQuantity += quantity;
+          existing.totalValue += itemValue;
+          existing.weightedAverageCost = existing.totalQuantity > 0 
+            ? existing.totalValue / existing.totalQuantity 
+            : 0;
+          
+          if (item.receivedAt < existing.oldestReceivedAt) {
+            existing.oldestReceivedAt = item.receivedAt;
+            existing.ageInDays = itemAge;
+          }
+          
+          // Update risk to highest level
+          const riskLevels: Record<'low' | 'medium' | 'high' | 'critical', number> = { 
+            low: 0, 
+            medium: 1, 
+            high: 2, 
+            critical: 3 
+          };
+          if (riskLevels[itemRisk] > riskLevels[existing.highestRisk]) {
+            existing.highestRisk = itemRisk;
+          }
+        } else {
+          // Create new aggregated item
+          aggregatedMap.set(key, {
+            productId: item.productId,
+            productSku: item.productSku ?? '',
+            productName: item.productName ?? 'Unknown Product',
+            locationId: item.locationId,
+            locationName: item.locationName ?? 'Unknown',
+            totalQuantity: quantity,
+            totalValue: itemValue,
+            weightedAverageCost: unitCost,
+            oldestReceivedAt: item.receivedAt,
+            highestRisk: itemRisk,
+            ageInDays: itemAge,
+          });
+        }
+      });
+
+      // Convert to array and sort by totalValue descending, then limit to top 10
+      const aggregatedItems = Array.from(aggregatedMap.values())
+        .sort((a, b) => b.totalValue - a.totalValue)
+        .slice(0, 10)
+        .map((agg) => ({
+          inventoryId: '', // Not applicable for aggregated items
+          productId: agg.productId,
+          productSku: agg.productSku,
+          productName: agg.productName,
+          locationId: agg.locationId,
+          locationName: agg.locationName,
+          layerId: '', // Not applicable for aggregated items
+          receivedAt: agg.oldestReceivedAt,
+          quantity: agg.totalQuantity,
+          unitCost: agg.weightedAverageCost,
+          totalValue: agg.totalValue,
+          ageInDays: agg.ageInDays,
+          risk: agg.highestRisk,
+        }));
 
       return {
         bucket: label,
         minDays,
         maxDays: maxDays === Infinity ? null : maxDays,
-        itemCount: itemsInBucket.length,
+        itemCount: aggregatedMap.size, // Count of unique product+location combinations
         totalQuantity,
-        totalValue,
-        items: itemsInBucket.slice(0, 10), // Top 10 items per bucket
+        totalValue: bucketValue,
+        percentOfTotal: totalValue > 0 ? (bucketValue / totalValue) * 100 : 0,
+        risk,
+        items: aggregatedItems,
       };
     });
 
     // Summary
     const totalQuantity = aging.reduce((sum, item) => sum + item.quantityRemaining, 0);
-    const totalValue = aging.reduce(
-      (sum, item) => sum + item.quantityRemaining * Number(item.unitCost),
-      0
-    );
     const avgAge =
-      aging.length > 0
+      aging.length > 0 && totalQuantity > 0
         ? aging.reduce((sum, item) => sum + item.ageInDays * item.quantityRemaining, 0) /
           totalQuantity
         : 0;
 
+    // Calculate value at risk (items over 180 days old)
+    const valueAtRisk = bucketData
+      .filter((b) => b.minDays >= 180)
+      .reduce((sum, b) => sum + b.totalValue, 0);
+    const riskPercentage = totalValue > 0 ? (valueAtRisk / totalValue) * 100 : 0;
+
+    // Count unique product+location combinations across all buckets
+    const uniqueProductLocations = new Set<string>();
+    bucketData.forEach((bucket) => {
+      bucket.items.forEach((item) => {
+        uniqueProductLocations.add(`${item.productId}-${item.locationId}`);
+      });
+    });
+
     return {
       aging: bucketData,
       summary: {
-        totalItems: aging.length,
+        totalItems: uniqueProductLocations.size, // Count unique product+location combinations
         totalQuantity,
         totalValue,
         averageAge: Math.round(avgAge),
+        valueAtRisk,
+        riskPercentage,
         oldestItem: aging.length > 0 ? aging[0] : null,
       },
       recommendations: generateAgingRecommendations(bucketData),
@@ -540,7 +671,7 @@ function generateAgingRecommendations(
  */
 export const getInventoryTurnover = createServerFn({ method: 'GET' })
   .inputValidator(inventoryTurnoverQuerySchema)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<InventoryTurnoverResult> => {
     const ctx = await withAuth();
 
     const periodDays = data.period === '30d' ? 30 : data.period === '90d' ? 90 : 365;
@@ -560,19 +691,20 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
       .where(and(...conditions));
 
     // Get COGS for period (sum of outbound movements * cost)
-    const [cogsPeriod] = await db.execute<{ cogs: number }>(
+    // Exclude positive adjust movements - only count actual outbound movements
+    const cogsPeriodResult = await db.execute<{ cogs: number }>(
       sql`
         SELECT COALESCE(SUM(ABS(total_cost)), 0)::numeric as cogs
         FROM inventory_movements
         WHERE organization_id = ${ctx.organizationId}
-          AND movement_type IN ('pick', 'ship', 'adjust')
+          AND movement_type IN ('pick', 'ship')
           AND quantity < 0
           AND created_at >= NOW() - INTERVAL '${sql.raw(String(periodDays))} days'
           ${data.productId ? sql`AND product_id = ${data.productId}` : sql``}
       `
     );
 
-    const cogs = Number((cogsPeriod as unknown as { cogs: number }[])[0]?.cogs ?? 0);
+    const cogs = Number((cogsPeriodResult as unknown as { cogs: number }[])[0]?.cogs ?? 0);
     const avgInventory = Number(currentInventory?.totalValue ?? 0);
 
     // Calculate turnover rate
@@ -596,7 +728,7 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
             COALESCE(SUM(ABS(total_cost)), 0) as period_cogs
           FROM inventory_movements
           WHERE organization_id = ${ctx.organizationId}
-            AND movement_type IN ('pick', 'ship', 'adjust')
+            AND movement_type IN ('pick', 'ship')
             AND quantity < 0
             AND created_at >= NOW() - INTERVAL '${sql.raw(String(periodDays))} days'
           GROUP BY product_id
@@ -611,8 +743,8 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
         )
         SELECT
           p.id as product_id,
-          p.sku as product_sku,
-          p.name as product_name,
+          COALESCE(NULLIF(p.sku, ''), 'N/A') as product_sku,
+          COALESCE(NULLIF(p.name, ''), 'Unknown Product') as product_name,
           COALESCE(pi.inventory_value, 0)::numeric as inventory_value,
           COALESCE(pc.period_cogs, 0)::numeric as period_cogs,
           CASE
@@ -624,11 +756,47 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
         LEFT JOIN product_inventory pi ON p.id = pi.product_id
         LEFT JOIN product_cogs pc ON p.id = pc.product_id
         WHERE p.organization_id = ${ctx.organizationId}
-          AND (pi.inventory_value > 0 OR pc.period_cogs > 0)
+          AND p.deleted_at IS NULL
+          AND p.name IS NOT NULL
+          AND TRIM(p.name) != ''
+          AND (COALESCE(pi.inventory_value, 0) > 0 OR COALESCE(pc.period_cogs, 0) > 0)
         ORDER BY turnover_rate DESC
         LIMIT 20
       `
     );
+
+    // Calculate trends for last 4 periods (monthly if 90d, weekly if 30d)
+    const trendPeriods: Array<{ period: string; turnoverRate: number; daysOnHand: number }> = [];
+    const trendInterval = periodDays === 30 ? 7 : periodDays === 90 ? 30 : 90; // weeks for 30d, months for 90d, quarters for 365d
+
+    for (let i = 3; i >= 0; i--) {
+      const periodStart = periodDays - (i + 1) * trendInterval;
+      const periodEnd = periodDays - i * trendInterval;
+
+      const trendCogsResult = await db.execute<{ cogs: number }>(
+        sql`
+          SELECT COALESCE(SUM(ABS(total_cost)), 0)::numeric as cogs
+          FROM inventory_movements
+          WHERE organization_id = ${ctx.organizationId}
+            AND movement_type IN ('pick', 'ship')
+            AND quantity < 0
+            AND created_at >= NOW() - INTERVAL '${sql.raw(String(periodEnd))} days'
+            AND created_at < NOW() - INTERVAL '${sql.raw(String(periodStart))} days'
+            ${data.productId ? sql`AND product_id = ${data.productId}` : sql``}
+        `
+      );
+
+      const trendCogsNum = Number((trendCogsResult as unknown as { cogs: number }[])[0]?.cogs ?? 0);
+      const trendAnnualizedCOGS = (trendCogsNum / trendInterval) * 365;
+      const trendTurnoverRate = avgInventory > 0 ? trendAnnualizedCOGS / avgInventory : 0;
+      const trendDaysOnHand = trendTurnoverRate > 0 ? 365 / trendTurnoverRate : 0;
+
+      trendPeriods.push({
+        period: i === 0 ? 'Current' : `Period ${4 - i}`,
+        turnoverRate: Math.round(trendTurnoverRate * 100) / 100,
+        daysOnHand: Math.round(trendDaysOnHand),
+      });
+    }
 
     return {
       turnover: {
@@ -642,19 +810,30 @@ export const getInventoryTurnover = createServerFn({ method: 'GET' })
       },
       byProduct: (
         turnoverByProduct as unknown as Array<{
-          productId: string;
-          productSku: string;
-          productName: string;
-          inventoryValue: number;
-          periodCOGS: number;
-          turnoverRate: number;
+          product_id: string;
+          product_sku: string;
+          product_name: string;
+          inventory_value: number;
+          period_cogs: number;
+          turnover_rate: number;
         }>
-      ).map((p) => ({
-        ...p,
-        inventoryValue: Number(p.inventoryValue),
-        periodCOGS: Number(p.periodCOGS),
-        turnoverRate: Number(p.turnoverRate),
-      })),
+      ).map((p) => {
+        const inventoryValue = Number(p.inventory_value ?? 0);
+        const periodCOGS = Number(p.period_cogs ?? 0);
+        const turnoverRate = Number(p.turnover_rate ?? 0);
+
+        return {
+          productId: p.product_id ?? '',
+          productSku: p.product_sku ?? '',
+          productName: p.product_name ?? 'Unknown Product',
+          inventoryValue: isNaN(inventoryValue) ? 0 : inventoryValue,
+          periodCOGS: isNaN(periodCOGS) ? 0 : periodCOGS,
+          turnoverRate: isNaN(turnoverRate) ? 0 : turnoverRate,
+          trend: 'stable' as const, // TODO: Calculate trend comparison
+          trendPercentage: 0, // TODO: Calculate trend percentage
+        };
+      }),
+      trends: trendPeriods,
       benchmarks: {
         excellent: 12, // 12+ turns per year
         good: 6, // 6-12 turns

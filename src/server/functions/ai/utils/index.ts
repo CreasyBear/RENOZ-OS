@@ -6,10 +6,12 @@ export {
   checkBudget,
   getBudgetStatus,
   createBudgetExceededResponse,
+  getOrgDailyLimit,
+  getUserDailyLimit,
 } from './budget';
 
 export {
-  calculateCostCents,
+  calculateCost,
   estimateCost,
   trackCost,
   trackCostFromSDK,

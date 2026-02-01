@@ -25,6 +25,15 @@ import {
 } from '@/lib/schemas/communications'
 import { withAuth } from '@/lib/server/protected'
 import { PERMISSIONS } from '@/lib/auth/permissions'
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context'
+import { computeChanges } from '@/lib/activity-logger'
+
+// Excluded fields for activity logging
+const SCHEDULED_CALL_EXCLUDED_FIELDS: string[] = [
+  'organizationId',
+  'createdAt',
+  'updatedAt',
+]
 
 // ============================================================================
 // SERVER FUNCTIONS
@@ -51,6 +60,27 @@ export const scheduleCall = createServerFn({ method: 'POST' })
         status: 'pending',
       })
       .returning()
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx)
+    logger.logAsync({
+      entityType: 'call',
+      entityId: call.id,
+      action: 'created',
+      description: `Scheduled call: ${call.purpose}`,
+      changes: computeChanges({
+        before: null,
+        after: call,
+        excludeFields: SCHEDULED_CALL_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        customerId: call.customerId,
+        callId: call.id,
+        purpose: call.purpose,
+        scheduledAt: call.scheduledAt.toISOString(),
+        assigneeId: call.assigneeId ?? undefined,
+      },
+    })
 
     return call
   })
@@ -167,6 +197,26 @@ export const updateScheduledCall = createServerFn({ method: 'POST' })
       .where(eq(scheduledCalls.id, data.id))
       .returning()
 
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx)
+    logger.logAsync({
+      entityType: 'call',
+      entityId: updated.id,
+      action: 'updated',
+      description: `Updated scheduled call: ${updated.purpose}`,
+      changes: computeChanges({
+        before: existing,
+        after: updated,
+        excludeFields: SCHEDULED_CALL_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        customerId: updated.customerId,
+        callId: updated.id,
+        purpose: updated.purpose,
+        changedFields: Object.keys(updateData),
+      },
+    })
+
     return updated
   })
 
@@ -178,13 +228,10 @@ export const cancelScheduledCall = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.update })
 
-    const [updated] = await db
-      .update(scheduledCalls)
-      .set({
-        status: 'cancelled',
-        cancelledAt: new Date(),
-        cancelReason: data.reason,
-      })
+    // Get existing for logging
+    const [existing] = await db
+      .select()
+      .from(scheduledCalls)
       .where(
         and(
           eq(scheduledCalls.id, data.id),
@@ -192,11 +239,43 @@ export const cancelScheduledCall = createServerFn({ method: 'POST' })
           eq(scheduledCalls.status, 'pending'),
         ),
       )
-      .returning()
+      .limit(1)
 
-    if (!updated) {
+    if (!existing) {
       throw new Error('Scheduled call not found or cannot be cancelled')
     }
+
+    const [updated] = await db
+      .update(scheduledCalls)
+      .set({
+        status: 'cancelled',
+        cancelledAt: new Date(),
+        cancelReason: data.reason,
+      })
+      .where(eq(scheduledCalls.id, data.id))
+      .returning()
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx)
+    logger.logAsync({
+      entityType: 'call',
+      entityId: updated.id,
+      action: 'updated',
+      description: `Cancelled scheduled call: ${updated.purpose}`,
+      changes: computeChanges({
+        before: existing,
+        after: updated,
+        excludeFields: SCHEDULED_CALL_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        customerId: updated.customerId,
+        callId: updated.id,
+        purpose: updated.purpose,
+        previousStatus: existing.status,
+        newStatus: updated.status,
+        reason: data.reason,
+      },
+    })
 
     return updated
   })
@@ -249,6 +328,28 @@ export const rescheduleCall = createServerFn({ method: 'POST' })
         rescheduledToId: newCall.id,
       })
       .where(eq(scheduledCalls.id, data.id))
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx)
+    logger.logAsync({
+      entityType: 'call',
+      entityId: newCall.id,
+      action: 'created',
+      description: `Rescheduled call: ${newCall.purpose}`,
+      changes: computeChanges({
+        before: null,
+        after: newCall,
+        excludeFields: SCHEDULED_CALL_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        customerId: newCall.customerId,
+        callId: newCall.id,
+        purpose: newCall.purpose,
+        originalCallId: data.id,
+        originalScheduledAt: original.scheduledAt.toISOString(),
+        newScheduledAt: newCall.scheduledAt.toISOString(),
+      },
+    })
 
     return newCall
   })

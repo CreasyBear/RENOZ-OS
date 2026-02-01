@@ -24,7 +24,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Package, RefreshCw } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { InventoryDashboardSkeleton } from "@/components/skeletons/inventory";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { toast } from "@/hooks";
 import {
   useInventoryDashboard,
@@ -84,37 +85,128 @@ function InventoryDashboard() {
   const topMovers = (dashboardData?.topMoving ?? []).map((m: any) => ({
     productId: m.productId,
     productName: m.productName ?? "Unknown",
-    sku: m.sku ?? "",
+    sku: m.productSku ?? m.sku ?? "", // Server returns productSku, not sku
     movementCount: m.movementCount ?? 0,
     totalQuantity: m.totalQuantity ?? 0,
     trend: (m.trend ?? "stable") as "up" | "down" | "stable",
   }));
 
-  const movements = ((movementsData as any)?.movements ?? []).map((m: any) => ({
+  // Aggregate movements by SKU + movementType for better readability
+  const rawMovements = ((movementsData as any)?.movements ?? []).map((m: any) => ({
     id: m.id,
+    productId: m.productId,
     productName: m.productName ?? "Unknown Product",
+    productSku: m.productSku ?? "",
     movementType: m.movementType,
-    quantity: m.quantity,
+    quantity: Number(m.quantity),
     locationName: m.locationName ?? "Unknown Location",
-    performedAt: m.performedAt,
-    performedBy: m.performedByName ?? "Unknown",
+    locationCode: m.locationCode ?? null,
+    referenceType: m.referenceType ?? null,
+    referenceId: m.referenceId ?? null,
+    metadataReason: m.metadata?.reason ?? null,
+    performedAt: m.createdAt ? new Date(m.createdAt) : new Date(),
+    performedBy: "System",
   }));
 
-  const alerts: InventoryAlert[] = (alertsData?.alerts ?? []).map((a: any) => ({
-    id: a.id,
-    alertType: a.alertType,
-    severity: a.severity ?? "warning",
-    productId: a.productId,
-    productName: a.productName,
-    locationId: a.locationId,
-    locationName: a.locationName,
-    message: a.message ?? "Alert triggered",
-    value: a.value,
-    threshold: a.threshold,
-    triggeredAt: a.triggeredAt ?? new Date(),
-    acknowledgedAt: a.acknowledgedAt,
-    acknowledgedBy: a.acknowledgedBy,
-  }));
+  // Group by SKU + movementType, aggregate quantities and track most recent time
+  const aggregatedMap = new Map<string, {
+    productId: string;
+    productName: string;
+    productSku: string;
+    movementType: string;
+    totalQuantity: number;
+    movementCount: number;
+    locationName: string;
+    locationCode: string | null;
+    referenceType: string | null;
+    referenceId: string | null;
+    metadataReason: string | null;
+    mostRecentAt: Date;
+    performedBy: string;
+  }>();
+
+  rawMovements.forEach((m) => {
+    const key = `${m.productSku || m.productId}-${m.movementType}`;
+    const existing = aggregatedMap.get(key);
+    
+    if (existing) {
+      existing.totalQuantity += m.quantity;
+      existing.movementCount += 1;
+      // Keep the most recent timestamp and its associated metadata
+      if (m.performedAt > existing.mostRecentAt) {
+        existing.mostRecentAt = m.performedAt;
+        existing.locationName = m.locationName;
+        existing.locationCode = m.locationCode;
+        existing.referenceType = m.referenceType;
+        existing.referenceId = m.referenceId;
+        existing.metadataReason = m.metadataReason;
+      }
+    } else {
+      aggregatedMap.set(key, {
+        productId: m.productId,
+        productName: m.productName,
+        productSku: m.productSku,
+        movementType: m.movementType,
+        totalQuantity: m.quantity,
+        movementCount: 1,
+        locationName: m.locationName,
+        locationCode: m.locationCode,
+        referenceType: m.referenceType,
+        referenceId: m.referenceId,
+        metadataReason: m.metadataReason,
+        mostRecentAt: m.performedAt,
+        performedBy: m.performedBy,
+      });
+    }
+  });
+
+  // Convert to array and sort by most recent time
+  const movements = Array.from(aggregatedMap.values())
+    .sort((a, b) => b.mostRecentAt.getTime() - a.mostRecentAt.getTime())
+    .slice(0, 10) // Limit to 10 aggregated items
+    .map((agg) => ({
+      id: `${agg.productId}-${agg.movementType}`,
+      productId: agg.productId,
+      productName: agg.productName,
+      productSku: agg.productSku,
+      movementType: agg.movementType,
+      quantity: agg.totalQuantity,
+      movementCount: agg.movementCount,
+      locationName: agg.locationName,
+      locationCode: agg.locationCode,
+      referenceType: agg.referenceType,
+      referenceId: agg.referenceId,
+      metadataReason: agg.metadataReason,
+      performedAt: agg.mostRecentAt,
+      performedBy: agg.performedBy,
+    }));
+
+  const alerts: InventoryAlert[] = (alertsData?.alerts ?? []).map((a: any) => {
+    // Map server severity ('critical' | 'high' | 'medium' | 'low') to component severity ('critical' | 'warning' | 'info')
+    const severityMap: Record<string, 'critical' | 'warning' | 'info'> = {
+      critical: 'critical',
+      high: 'warning',
+      medium: 'info',
+      low: 'info',
+    };
+    
+    return {
+      id: a.alert?.id ?? a.id,
+      alertType: a.alert?.alertType ?? 'low_stock', // alertType is nested in alert property
+      severity: severityMap[a.severity] ?? 'warning',
+      productId: a.product?.id,
+      productName: a.product?.name,
+      locationId: a.location?.id,
+      locationName: a.location?.name,
+      message: a.message ?? "Alert triggered",
+      value: a.currentValue,
+      threshold: a.thresholdValue,
+      triggeredAt: a.alert?.lastTriggeredAt ? new Date(a.alert.lastTriggeredAt) : new Date(),
+      acknowledgedAt: a.alert?.acknowledgedAt ? new Date(a.alert.acknowledgedAt) : undefined,
+      acknowledgedBy: a.alert?.acknowledgedBy,
+      isFallback: a.isFallback,
+    };
+  });
 
   const locations = (utilizationData?.locations ?? []).map((l: any) => ({
     locationId: l.id ?? l.locationId,
@@ -246,16 +338,18 @@ function InventoryDashboard() {
                 setting up your warehouse locations.
               </p>
               <div className="mt-6 flex justify-center gap-3">
-                <Button asChild>
-                  <Link to="/inventory">
-                    Receive Inventory
-                  </Link>
-                </Button>
-                <Button variant="outline" asChild>
-                  <Link to="/settings">
-                    Set Up Locations
-                  </Link>
-                </Button>
+                <Link
+                  to="/inventory"
+                  className={cn(buttonVariants())}
+                >
+                  Receive Inventory
+                </Link>
+                <Link
+                  to="/settings"
+                  className={cn(buttonVariants({ variant: "outline" }))}
+                >
+                  Set Up Locations
+                </Link>
               </div>
             </div>
           )}

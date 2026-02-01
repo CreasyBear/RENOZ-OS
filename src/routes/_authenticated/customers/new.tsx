@@ -4,14 +4,17 @@
  * Multi-step wizard for creating new customers with contacts and addresses.
  */
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useMutation } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
 import { PageLayout, RouteErrorFallback } from '@/components/layout'
 import { FormSkeleton } from '@/components/skeletons/shared/form-skeleton'
 import { Button } from '@/components/ui/button'
 import { CustomerWizard } from '@/components/domain/customers/customer-wizard'
-import { useCustomerTags, useCreateCustomer } from '@/hooks/customers'
-import { createContact, createAddress } from '@/server/customers'
+import {
+  useCustomerTags,
+  useCreateCustomer,
+  useCreateContact,
+  useCreateAddress,
+} from '@/hooks/customers'
 import { toast } from 'sonner'
 
 // ============================================================================
@@ -52,19 +55,11 @@ function NewCustomerPage() {
   // Create customer using centralized hook (handles cache invalidation)
   const createCustomerMutation = useCreateCustomer()
 
-  // Create contact mutation
-  const createContactMutation = useMutation({
-    mutationFn: async (data: Parameters<typeof createContact>[0]['data']) => {
-      return createContact({ data })
-    },
-  })
+  // Create contact using centralized hook
+  const createContactMutation = useCreateContact()
 
-  // Create address mutation
-  const createAddressMutation = useMutation({
-    mutationFn: async (data: Parameters<typeof createAddress>[0]['data']) => {
-      return createAddress({ data })
-    },
-  })
+  // Create address using centralized hook
+  const createAddressMutation = useCreateAddress()
 
   const handleSubmit = async (wizardData: {
     customer: {

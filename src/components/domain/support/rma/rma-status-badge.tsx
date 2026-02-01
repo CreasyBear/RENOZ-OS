@@ -1,79 +1,55 @@
 /**
  * RMA Status Badge Component
  *
- * Displays RMA status with color-coded badge.
+ * Displays RMA status with semantic colors using StatusBadge.
  *
  * @see src/lib/schemas/support/rma.ts - RmaStatus type
+ * @see docs/design-system/STATUS-BADGE-STANDARDS.md
  */
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import type { RmaStatus } from '@/lib/schemas/support/rma';
-import { Clock, CheckCircle, Package, PackageCheck, XCircle } from 'lucide-react';
+import { StatusBadge, type StatusConfig } from '@/components/shared';
+import type { RmaStatus, RmaReason, RmaResolution } from '@/lib/schemas/support/rma';
+
+/**
+ * RMA Status Configuration
+ *
+ * Semantic color mapping for RMA workflow states:
+ * - requested: pending (awaiting approval)
+ * - approved: info (approved to proceed)
+ * - received: progress (item received, processing)
+ * - processed: success (completed)
+ * - rejected: error (rejected)
+ */
+export const RMA_STATUS_CONFIG: StatusConfig = {
+  requested: { variant: 'pending', label: 'Requested' },
+  approved: { variant: 'info', label: 'Approved' },
+  received: { variant: 'progress', label: 'Received' },
+  processed: { variant: 'success', label: 'Processed' },
+  rejected: { variant: 'error', label: 'Rejected' },
+};
 
 interface RmaStatusBadgeProps {
   status: RmaStatus;
   className?: string;
+  /** @deprecated Icons are not used with StatusBadge */
   showIcon?: boolean;
 }
 
-const STATUS_CONFIG: Record<
-  RmaStatus,
-  {
-    label: string;
-    variant: 'default' | 'secondary' | 'destructive' | 'outline';
-    className: string;
-    Icon: React.ElementType;
-  }
-> = {
-  requested: {
-    label: 'Requested',
-    variant: 'secondary',
-    className: 'bg-blue-100 text-blue-800 border-blue-200',
-    Icon: Clock,
-  },
-  approved: {
-    label: 'Approved',
-    variant: 'secondary',
-    className: 'bg-green-100 text-green-800 border-green-200',
-    Icon: CheckCircle,
-  },
-  received: {
-    label: 'Received',
-    variant: 'secondary',
-    className: 'bg-purple-100 text-purple-800 border-purple-200',
-    Icon: Package,
-  },
-  processed: {
-    label: 'Processed',
-    variant: 'secondary',
-    className: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-    Icon: PackageCheck,
-  },
-  rejected: {
-    label: 'Rejected',
-    variant: 'destructive',
-    className: 'bg-red-100 text-red-800 border-red-200',
-    Icon: XCircle,
-  },
-};
-
-export function RmaStatusBadge({ status, className, showIcon = true }: RmaStatusBadgeProps) {
-  const config = STATUS_CONFIG[status];
-  const { Icon } = config;
-
+export function RmaStatusBadge({ status, className }: RmaStatusBadgeProps) {
   return (
-    <Badge variant={config.variant} className={cn(config.className, 'font-medium', className)}>
-      {showIcon && <Icon className="mr-1 h-3 w-3" />}
-      {config.label}
-    </Badge>
+    <StatusBadge
+      status={status}
+      statusConfig={RMA_STATUS_CONFIG}
+      className={className}
+    />
   );
 }
 
 /**
  * RMA Reason Badge Component
  */
-import type { RmaReason } from '@/lib/schemas/support/rma';
 
 interface RmaReasonBadgeProps {
   reason: RmaReason;
@@ -101,7 +77,6 @@ export function RmaReasonBadge({ reason, className }: RmaReasonBadgeProps) {
 /**
  * RMA Resolution Badge Component
  */
-import type { RmaResolution } from '@/lib/schemas/support/rma';
 
 interface RmaResolutionBadgeProps {
   resolution: RmaResolution;

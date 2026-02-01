@@ -39,18 +39,6 @@ import {
 } from '@/server/functions/installers';
 import type {
   InstallerListQuery,
-  CreateInstallerProfileInput,
-  UpdateInstallerProfileInput,
-  CreateCertificationInput,
-  UpdateCertificationInput,
-  VerifyCertificationInput,
-  CreateSkillInput,
-  UpdateSkillInput,
-  CreateTerritoryInput,
-  UpdateTerritoryInput,
-  CreateBlockoutInput,
-  UpdateBlockoutInput,
-  CheckAvailabilityInput,
   SuggestInstallersInput,
 } from '@/lib/schemas/jobs/installers';
 
@@ -91,7 +79,7 @@ export function useAllInstallers(enabled = true) {
         const result = await listInstallers({
           data: { page, pageSize: 100, status: 'active' } as InstallerListQuery,
         });
-        allResults.push(...result.items);
+        allResults.push(...(result.items as InstallerListItem[]));
         hasMore =
           result.items.length === 100 &&
           allResults.length < result.pagination.totalItems;
@@ -109,7 +97,7 @@ export function useAllInstallers(enabled = true) {
 // DETAIL HOOKS
 // ============================================================================
 
-interface InstallerListItem {
+export interface InstallerListItem {
   id: string;
   user?: {
     id: string;
@@ -123,7 +111,7 @@ interface InstallerListItem {
   vehicleType: string;
 }
 
-interface InstallerDetail extends InstallerListItem {
+export interface InstallerDetail extends InstallerListItem {
   vehicleReg: string | null;
   equipment: string[];
   maxTravelKm: number | null;
@@ -138,7 +126,7 @@ interface InstallerDetail extends InstallerListItem {
   blockouts: Blockout[];
 }
 
-interface Certification {
+export interface Certification {
   id: string;
   certificationType: string;
   licenseNumber: string | null;
@@ -149,7 +137,7 @@ interface Certification {
   documentUrl: string | null;
 }
 
-interface Skill {
+export interface Skill {
   id: string;
   skill: string;
   proficiencyLevel: number;
@@ -158,7 +146,7 @@ interface Skill {
   isVerified: boolean;
 }
 
-interface Territory {
+export interface Territory {
   id: string;
   postcode: string;
   suburb: string | null;
@@ -166,12 +154,39 @@ interface Territory {
   priority: number;
 }
 
-interface Blockout {
+export interface Blockout {
   id: string;
   startDate: string;
   endDate: string;
   reason: string | null;
   blockoutType: string | null;
+}
+
+export interface AvailabilityResult {
+  installerId: string;
+  dateRange: { startDate: string; endDate: string };
+  availability: Record<
+    string,
+    { available: boolean; reason?: string; existingJobs: number }
+  >;
+  maxJobsPerDay: number;
+}
+
+export interface WorkloadResult {
+  installerId: string;
+  activeProjects: number;
+  upcomingVisits: number;
+  thisWeekVisits: number;
+}
+
+export interface Suggestion {
+  installerId: string;
+  name: string;
+  score: number;
+  skills: Skill[];
+  yearsExperience: number;
+  reasons: string[];
+  warnings: string[];
 }
 
 /**
@@ -189,16 +204,6 @@ export function useInstaller(installerId: string, enabled = true) {
 // ============================================================================
 // AVAILABILITY & WORKLOAD HOOKS
 // ============================================================================
-
-interface AvailabilityResult {
-  installerId: string;
-  dateRange: { startDate: string; endDate: string };
-  availability: Record<
-    string,
-    { available: boolean; reason?: string; existingJobs: number }
-  >;
-  maxJobsPerDay: number;
-}
 
 /**
  * Check installer availability for date range
@@ -220,13 +225,6 @@ export function useInstallerAvailability(
   });
 }
 
-interface WorkloadResult {
-  installerId: string;
-  activeProjects: number;
-  upcomingVisits: number;
-  thisWeekVisits: number;
-}
-
 /**
  * Get installer workload (current assignments)
  */
@@ -239,29 +237,20 @@ export function useInstallerWorkload(installerId: string, enabled = true) {
   });
 }
 
-interface Suggestion {
-  installerId: string;
-  name: string;
-  score: number;
-  skills: Skill[];
-  yearsExperience: number;
-  reasons: string[];
-  warnings: string[];
-}
-
 /**
  * Get smart installer suggestions for a job
  */
 export function useSuggestInstallers(
   postcode: string,
-  options: Omit<SuggestInstallersInput, 'postcode'> = {},
+  options: Partial<Omit<SuggestInstallersInput, 'postcode'>> = {},
   enabled = true
 ) {
+  const normalizedOptions: Omit<SuggestInstallersInput, 'postcode'> = { limit: 5, ...options };
   return useQuery({
-    queryKey: queryKeys.installers.suggestions(postcode, options),
+    queryKey: queryKeys.installers.suggestions(postcode, normalizedOptions),
     queryFn: () =>
       suggestInstallers({
-        data: { postcode, ...options },
+        data: { postcode, ...normalizedOptions },
       }),
     enabled: enabled && !!postcode,
     staleTime: 5 * 60 * 1000, // 5 minutes - suggestions don't change often

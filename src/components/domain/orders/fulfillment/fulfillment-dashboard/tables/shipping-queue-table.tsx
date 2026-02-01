@@ -120,7 +120,7 @@ export function ShippingQueueTable({
               </TableCell>
               <TableCell>{getOrderStatusBadge(order.status)}</TableCell>
               <TableCell className="text-right font-medium">
-                <FormatAmount amount={order.total} cents={false} />
+                <FormatAmount amount={order.total} />
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">

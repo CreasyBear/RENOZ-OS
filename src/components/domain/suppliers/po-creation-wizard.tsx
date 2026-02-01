@@ -49,12 +49,7 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "@/hooks";
-import { formatCurrency as formatCurrencyCents } from "@/lib/formatters";
-
-// Helper to format currency from dollar values (not cents)
-function formatCurrency(value: number): string {
-  return formatCurrencyCents(value * 100, { cents: true, showCents: true });
-}
+import { useOrgFormat } from "@/hooks/use-org-format";
 
 // Supplier type from listSuppliers (matches actual server function return)
 export interface SupplierItem {
@@ -299,7 +294,7 @@ function Step1SupplierSelection({
         <Alert>
           <Check className="h-4 w-4" />
           <AlertDescription>
-            Supplier selected. Click "Next" to continue.
+            Supplier selected. Click &quot;Next&quot; to continue.
           </AlertDescription>
         </Alert>
       )}
@@ -386,6 +381,9 @@ interface LineItemCardProps {
 }
 
 function LineItemCard({ index, item, products, onUpdate, onRemove }: LineItemCardProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
   const [searchQuery, setSearchQuery] = useState("");
   const [showProductSearch, setShowProductSearch] = useState(!item.productId);
 
@@ -449,7 +447,7 @@ function LineItemCard({ index, item, products, onUpdate, onRemove }: LineItemCar
                       </p>
                     )}
                     <p className="text-sm text-muted-foreground">
-                      {formatCurrency(product.costPrice || product.basePrice || 0)}
+                      {formatCurrencyDisplay(product.costPrice || product.basePrice || 0)}
                     </p>
                   </button>
                 ))}
@@ -529,7 +527,7 @@ function LineItemCard({ index, item, products, onUpdate, onRemove }: LineItemCar
 
             <div className="flex justify-between items-center pt-2 border-t">
               <span className="text-sm text-muted-foreground">Line Total</span>
-              <span className="font-semibold">{formatCurrency(lineTotal)}</span>
+              <span className="font-semibold">{formatCurrencyDisplay(lineTotal)}</span>
             </div>
           </div>
         )}
@@ -550,6 +548,9 @@ interface Step3ReviewProps {
 }
 
 function Step3Review({ formData, suppliers, onSubmit, isSubmitting }: Step3ReviewProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
   const supplier = suppliers.find((s) => s.id === formData.supplierId);
 
   const totals = useMemo(() => {
@@ -648,10 +649,10 @@ function Step3Review({ formData, suppliers, onSubmit, isSubmitting }: Step3Revie
                   </TableCell>
                   <TableCell className="text-right">{item.quantity}</TableCell>
                   <TableCell className="text-right">
-                    {formatCurrency(item.unitPrice)}
+                    {formatCurrencyDisplay(item.unitPrice)}
                   </TableCell>
                   <TableCell className="text-right">
-                    {formatCurrency(item.quantity * item.unitPrice)}
+                    {formatCurrencyDisplay(item.quantity * item.unitPrice)}
                   </TableCell>
                 </TableRow>
               ))}
@@ -666,16 +667,16 @@ function Step3Review({ formData, suppliers, onSubmit, isSubmitting }: Step3Revie
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>{formatCurrency(totals.subtotal)}</span>
+              <span>{formatCurrencyDisplay(totals.subtotal)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">GST (10%)</span>
-              <span>{formatCurrency(totals.taxAmount)}</span>
+              <span>{formatCurrencyDisplay(totals.taxAmount)}</span>
             </div>
             <Separator />
             <div className="flex justify-between text-lg font-semibold">
               <span>Total</span>
-              <span>{formatCurrency(totals.total)}</span>
+              <span>{formatCurrencyDisplay(totals.total)}</span>
             </div>
           </div>
         </CardContent>

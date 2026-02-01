@@ -5,7 +5,7 @@
  * Table category: business (per column-patterns.json)
  *
  * Australian B2B context:
- * - All monetary values in AUD cents
+ * - All monetary values in AUD dollars (numeric(12,2))
  * - 10% GST applied to quotes
  * - Pipeline stages: New (10%) → Qualified (30%) → Quoted (60%) → Pending (80%) → Won (100%) / Lost (0%)
  * - Quote validity: 30-day default with 7-day warning period
@@ -73,9 +73,9 @@ export interface QuoteLineItem {
   sku?: string;
   description: string;
   quantity: number;
-  unitPriceCents: number; // Price in cents
+  unitPrice: number; // Price in dollars
   discountPercent?: number;
-  totalCents: number; // Line total in cents
+  total: number; // Line total in dollars
 }
 
 // ============================================================================

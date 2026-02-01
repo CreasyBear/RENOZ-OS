@@ -60,7 +60,10 @@ import {
   useCancelStockCount,
   useCreateStockCount,
   useLocations,
+  type WarehouseLocation,
 } from "@/hooks/inventory";
+import type { StockCountItemWithRelations } from "@/lib/schemas/inventory";
+import type { StockCount as StockCountDb } from "drizzle/schema/inventory/inventory";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -127,15 +130,15 @@ function StockCountsPage() {
   const { locations: locationsData } = useLocations({ initialFilters: {}, autoFetch: true });
 
   // Transform data for list
-  const counts: StockCount[] = (countsData?.counts ?? []).map((c: any) => ({
+  const counts: StockCount[] = (countsData?.counts ?? []).map((c: StockCountDb) => ({
     id: c.id,
     countCode: c.countCode,
-    countType: c.countType,
-    status: c.status,
-    locationId: c.locationId,
-    assignedTo: c.assignedTo,
+    countType: c.countType as StockCount["countType"],
+    status: c.status as StockCount["status"],
+    locationId: c.locationId ?? undefined,
+    assignedTo: c.assignedTo ?? undefined,
     varianceThreshold: c.varianceThreshold ? Number(c.varianceThreshold) : undefined,
-    notes: c.notes,
+    notes: c.notes ?? undefined,
     startedAt: c.startedAt ? new Date(c.startedAt) : null,
     completedAt: c.completedAt ? new Date(c.completedAt) : null,
     createdAt: new Date(c.createdAt),
@@ -158,18 +161,20 @@ function StockCountsPage() {
 
   const progress: CountProgress | null = countDetailData?.progress ?? null;
 
-  const countItems: CountItem[] = (countDetailData?.count?.items ?? []).map((item: any) => ({
-    id: item.id,
-    inventoryId: item.inventoryId,
-    productId: item.inventory?.productId ?? "",
-    productName: item.inventory?.product?.name ?? item.inventoryId,
-    productSku: item.inventory?.product?.sku ?? "",
-    locationName: item.inventory?.location?.name ?? "",
-    expectedQuantity: item.expectedQuantity,
-    countedQuantity: item.countedQuantity,
-    varianceReason: item.varianceReason,
-    countedAt: item.countedAt ? new Date(item.countedAt) : null,
-  }));
+  const countItems: CountItem[] = (countDetailData?.count?.items ?? [])
+    .filter((item: StockCountItemWithRelations) => item.id) // Filter out items without IDs to prevent duplicate empty keys
+    .map((item: StockCountItemWithRelations) => ({
+      id: item.id,
+      inventoryId: item.inventoryId,
+      productId: item.inventory?.productId ?? "",
+      productName: item.inventory?.product?.name ?? item.inventoryId,
+      productSku: item.inventory?.product?.sku ?? "",
+      locationName: item.inventory?.location?.name ?? "",
+      expectedQuantity: item.expectedQuantity,
+      countedQuantity: item.countedQuantity,
+      varianceReason: item.varianceReason ?? undefined,
+      countedAt: item.countedAt ? new Date(item.countedAt) : null,
+    }));
 
   // Handlers
   const handleViewCount = useCallback(
@@ -315,7 +320,7 @@ function StockCountsPage() {
             onStart={handleStartCount}
           />
         ) : selectedCount?.status === "in_progress" ? (
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "count" | "variances")}>
             <TabsList className="mb-4">
               <TabsTrigger value="count">
                 <ClipboardList className="h-4 w-4 mr-2" aria-hidden="true" />
@@ -396,7 +401,7 @@ function StockCountsPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="countType">Count Type</Label>
-                  <Select value={countType} onValueChange={(v) => setCountType(v as any)}>
+                  <Select value={countType} onValueChange={(v) => setCountType(v as "cycle" | "full" | "spot")}>
                     <SelectTrigger id="countType">
                       <SelectValue />
                     </SelectTrigger>
@@ -409,17 +414,22 @@ function StockCountsPage() {
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="location">Location</Label>
-                  <Select value={locationId} onValueChange={setLocationId}>
+                  <Select 
+                    value={locationId || "all"} 
+                    onValueChange={(v) => setLocationId(v === "all" ? "" : v)}
+                  >
                     <SelectTrigger id="location">
                       <SelectValue placeholder="All locations" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All locations</SelectItem>
-                      {(locationsData ?? []).map((loc: any) => (
-                        <SelectItem key={loc.id} value={loc.id}>
-                          {loc.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem key="all-locations" value="all">All locations</SelectItem>
+                      {(locationsData ?? [])
+                        .filter((loc: WarehouseLocation) => loc.id) // Filter out locations without IDs
+                        .map((loc: WarehouseLocation) => (
+                          <SelectItem key={loc.id} value={loc.id}>
+                            {loc.name}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>

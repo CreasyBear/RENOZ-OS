@@ -35,17 +35,17 @@ export type SiteVisitStatus = z.infer<typeof siteVisitStatusSchema>;
 export type SiteVisitType = z.infer<typeof siteVisitTypeSchema>;
 
 // ============================================================================
-// LOCATION SCHEMA
+// LOCATION SCHEMA (GPS coordinates for site visits)
 // ============================================================================
 
-export const locationSchema = z.object({
+export const siteVisitLocationSchema = z.object({
   lat: z.number(),
   lng: z.number(),
   accuracy: z.number().optional(),
   timestamp: z.string().optional(),
 });
 
-export type LocationData = z.infer<typeof locationSchema>;
+export type SiteVisitLocationData = z.infer<typeof siteVisitLocationSchema>;
 
 // ============================================================================
 // SITE VISIT CRUD SCHEMAS
@@ -77,8 +77,8 @@ export const updateSiteVisitSchema = z.object({
   internalNotes: z.string().optional(),
   actualStartTime: z.string().optional(),
   actualEndTime: z.string().optional(),
-  startLocation: locationSchema.optional(),
-  completeLocation: locationSchema.optional(),
+  startLocation: siteVisitLocationSchema.optional(),
+  completeLocation: siteVisitLocationSchema.optional(),
 });
 
 export const siteVisitListQuerySchema = z.object({
@@ -100,13 +100,13 @@ export const siteVisitListQuerySchema = z.object({
 
 export const checkInSchema = z.object({
   siteVisitId: z.string().uuid(),
-  location: locationSchema.optional(),
+  location: siteVisitLocationSchema.optional(),
   notes: z.string().optional(),
 });
 
 export const checkOutSchema = z.object({
   siteVisitId: z.string().uuid(),
-  location: locationSchema.optional(),
+  location: siteVisitLocationSchema.optional(),
   notes: z.string().optional(),
 });
 
@@ -132,3 +132,73 @@ export type SiteVisitListQuery = z.infer<typeof siteVisitListQuerySchema>;
 export type CheckInInput = z.infer<typeof checkInSchema>;
 export type CheckOutInput = z.infer<typeof checkOutSchema>;
 export type CustomerSignOffInput = z.infer<typeof customerSignOffSchema>;
+
+// ============================================================================
+// RESPONSE TYPES (for hooks - explicit types matching server function returns)
+// ============================================================================
+
+/**
+ * A single site visit item with project info (from list endpoint)
+ */
+export interface SiteVisitItem {
+  id: string;
+  organizationId: string;
+  projectId: string;
+  visitNumber: string;
+  visitType: SiteVisitType;
+  status: SiteVisitStatus;
+  scheduledDate: string;
+  scheduledTime: string | null;
+  estimatedDuration: number | null;
+  actualStartTime: string | null;
+  actualEndTime: string | null;
+  installerId: string;
+  startLocation: SiteVisitLocationData | null;
+  completeLocation: SiteVisitLocationData | null;
+  notes: string | null;
+  internalNotes: string | null;
+  signatureUrl: string | null;
+  signedByName: string | null;
+  signOffToken: string | null;
+  signOffTokenExpiresAt: string | null;
+  confirmationStatus: string | null;
+  confirmationToken: string | null;
+  confirmedAt: string | null;
+  customerSignOffName: string | null;
+  customerSignOffDate: string | null;
+  customerSignOffConfirmed: boolean | null;
+  customerRating: number | null;
+  customerFeedback: string | null;
+  metadata: Record<string, unknown> | null;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+  // Joined fields from list query
+  projectTitle: string;
+  projectNumber: string;
+  // Optional joined project info
+  project?: {
+    id: string;
+    name: string;
+  };
+}
+
+/**
+ * Pagination info for list responses
+ */
+export interface SiteVisitPagination {
+  page: number;
+  pageSize: number;
+  totalItems: number;
+  totalPages: number;
+}
+
+/**
+ * List response from getSiteVisits
+ */
+export interface SiteVisitListResult {
+  items: SiteVisitItem[];
+  pagination: SiteVisitPagination;
+}

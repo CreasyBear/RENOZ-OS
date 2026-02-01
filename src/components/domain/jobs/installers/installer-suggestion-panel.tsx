@@ -28,6 +28,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/shared';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -247,13 +248,9 @@ function SuggestionCard({
                   {checkingAvailability ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
                   ) : isAvailable === false ? (
-                    <Badge variant="destructive" className="text-xs">
-                      Unavailable
-                    </Badge>
+                    <StatusBadge status="unavailable" variant="error" className="text-xs" />
                   ) : isAvailable === true ? (
-                    <Badge className="bg-green-100 text-green-700 text-xs">
-                      Available
-                    </Badge>
+                    <StatusBadge status="available" variant="success" className="text-xs" />
                   ) : null}
                 </>
               )}

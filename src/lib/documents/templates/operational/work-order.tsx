@@ -49,7 +49,7 @@ const styles = StyleSheet.create({
   },
   // Job info section
   jobInfoSection: {
-    backgroundColor: colors.background.light,
+    backgroundColor: colors.background.subtle,
     padding: spacing.md,
     marginTop: spacing.lg,
     borderRadius: 4,
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   materialHeader: {
     borderBottomWidth: 1,
     borderBottomColor: colors.border.dark,
-    backgroundColor: colors.background.light,
+    backgroundColor: colors.background.subtle,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.xs,
   },
@@ -503,10 +503,6 @@ function WorkOrderContent({
           title="WORK ORDER"
           documentNumber={data.documentNumber}
           date={data.issueDate}
-          labels={{
-            documentNumber: "WO Number:",
-            date: "Created:",
-          }}
         />
 
         {/* Two-column: Customer/Site info and Job Info */}

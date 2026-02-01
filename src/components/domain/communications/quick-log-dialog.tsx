@@ -25,7 +25,6 @@ import {
   Clock,
   Loader2,
   ArrowLeft,
-  User,
 } from "lucide-react";
 
 import {
@@ -407,7 +406,7 @@ function QuickLogDialogPresenter({
 export function QuickLogDialog(props: QuickLogDialogProps) {
   const { customerId, opportunityId } = props;
   const createQuickLogMutation = useCreateQuickLog();
-  
+
   // Require customer selection if no context provided
   const requireCustomerSelection = !customerId && !opportunityId;
 
@@ -415,7 +414,7 @@ export function QuickLogDialog(props: QuickLogDialogProps) {
     try {
       // Use customerId from form values (selected in dialog) or from props
       const finalCustomerId = values.customerId || customerId || null;
-      
+
       await createQuickLogMutation.mutateAsync({
         type: values.type,
         notes: values.notes,

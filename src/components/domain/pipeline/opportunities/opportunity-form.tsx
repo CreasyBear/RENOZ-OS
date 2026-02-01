@@ -28,6 +28,7 @@ import {
   STAGE_PROBABILITY_DEFAULTS,
   type OpportunityStage,
 } from "@/lib/schemas/pipeline";
+import { useOrgFormat } from "@/hooks/use-org-format";
 
 // ============================================================================
 // TYPES
@@ -87,6 +88,7 @@ export const OpportunityForm = memo(function OpportunityForm({
   onCancel,
   isLoading = false,
 }: OpportunityFormProps) {
+  const { formatCurrency } = useOrgFormat();
   // Form state
   const [title, setTitle] = useState(opportunity.title);
   const [description, setDescription] = useState(opportunity.description ?? "");
@@ -136,14 +138,11 @@ export const OpportunityForm = memo(function OpportunityForm({
     setTags(tags.filter((t) => t !== tagToRemove));
   };
 
-  // Convert cents to dollars for display
-  const valueInDollars = value / 100;
-
   // Update value from dollars input
   const handleValueChange = (dollars: string) => {
     const num = parseFloat(dollars);
     if (!isNaN(num)) {
-      setValue(Math.round(num * 100));
+      setValue(num);
     } else if (dollars === "") {
       setValue(0);
     }
@@ -252,7 +251,7 @@ export const OpportunityForm = memo(function OpportunityForm({
                 <Input
                   id="value"
                   type="number"
-                  value={valueInDollars || ""}
+                  value={value || ""}
                   onChange={(e) => handleValueChange(e.target.value)}
                   placeholder="0.00"
                   min={0}
@@ -261,7 +260,7 @@ export const OpportunityForm = memo(function OpportunityForm({
                 />
               </div>
               <p className="text-xs text-muted-foreground">
-                Weighted value: ${((value * probability) / 10000).toFixed(2)}
+                Weighted value: {formatCurrency((value * probability) / 100, { cents: false, showCents: true })}
               </p>
             </div>
 

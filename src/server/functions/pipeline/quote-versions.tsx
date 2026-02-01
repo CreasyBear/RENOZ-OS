@@ -2,14 +2,13 @@
  * Quote Versions Server Functions
  *
  * API for quote creation, versioning, PDF generation, and sending.
- * All monetary values in AUD cents. GST is 10%.
+ * All monetary values in AUD dollars (numeric(12,2)). GST is 10%.
  *
  * @see _Initiation/_prd/2-domains/pipeline/pipeline.prd.json (PIPE-QUOTE-BUILDER-API)
  */
 
 'use server';
 
-import React from 'react';
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { eq, and, desc, sql, isNull, isNotNull, gt, lte, lt } from 'drizzle-orm';
@@ -27,6 +26,7 @@ import {
   type QuoteLineItem,
 } from '@/lib/schemas';
 import { GST_RATE } from '@/lib/order-calculations';
+import { formatCurrency } from '@/lib/formatters';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
 
 // ============================================================================
@@ -42,16 +42,17 @@ const DEFAULT_QUOTE_VALIDITY_DAYS = 30;
 
 /**
  * Calculate line item total from quantity and unit price, applying discount
+ * Returns total in dollars
  */
 function calculateLineItemTotal(item: QuoteLineItem): number {
-  const subtotal = item.quantity * item.unitPriceCents;
+  const subtotal = item.quantity * item.unitPrice;
   const discount = item.discountPercent ? subtotal * (item.discountPercent / 100) : 0;
-  return Math.round(subtotal - discount);
+  return Math.round((subtotal - discount) * 100) / 100; // Round to 2 decimal places
 }
 
 /**
  * Calculate quote totals from line items
- * @returns { subtotal, taxAmount, total } all in cents
+ * @returns { subtotal, taxAmount, total } all in dollars
  */
 function calculateQuoteTotals(items: QuoteLineItem[]): {
   subtotal: number;
@@ -61,12 +62,12 @@ function calculateQuoteTotals(items: QuoteLineItem[]): {
   // Recalculate each line item total to ensure consistency
   const processedItems = items.map((item) => ({
     ...item,
-    totalCents: calculateLineItemTotal(item),
+    total: calculateLineItemTotal(item),
   }));
 
-  const subtotal = processedItems.reduce((sum, item) => sum + item.totalCents, 0);
-  const taxAmount = Math.round(subtotal * GST_RATE);
-  const total = subtotal + taxAmount;
+  const subtotal = processedItems.reduce((sum, item) => sum + (item.total ?? 0), 0);
+  const taxAmount = Math.round(subtotal * GST_RATE * 100) / 100; // Round to 2 decimal places
+  const total = Math.round((subtotal + taxAmount) * 100) / 100; // Round to 2 decimal places
 
   return { subtotal, taxAmount, total };
 }
@@ -125,10 +126,10 @@ export const createQuoteVersion = createServerFn({ method: 'POST' })
     // Get next version number
     const versionNumber = await getNextVersionNumber(opportunityId);
 
-    // Process line items to ensure totalCents is correct
+    // Process line items to ensure total is correct
     const processedItems = items.map((item) => ({
       ...item,
-      totalCents: calculateLineItemTotal(item),
+      total: calculateLineItemTotal(item),
     }));
 
     // Wrap quote creation and opportunity update in transaction for atomicity
@@ -684,26 +685,32 @@ export const generateQuotePdf = createServerFn({ method: 'POST' })
               country: customerAddress.country,
             }
           : undefined,
-        lineItems: (quoteVersion.items || []).map((item, index) => ({
-          id: item.productId || `line-${index}`,
-          lineNumber: index + 1,
-          sku: item.sku,
-          description: item.description,
-          quantity: item.quantity,
-          unitPrice: item.unitPriceCents / 100,
-          discountPercent: item.discountPercent || 0,
-          discountAmount: 0,
-          taxAmount: 0,
-          total: (item.totalCents || item.quantity * item.unitPriceCents) / 100,
-          notes: undefined,
-        })),
-        subtotal: Number(quoteVersion.subtotal) / 100 || 0,
+        lineItems: (quoteVersion.items || []).map((item, index) => {
+          // Handle both old (cents) and new (dollars) formats for backward compatibility
+          const unitPrice = 'unitPrice' in item ? item.unitPrice : (item as any).unitPriceCents / 100;
+          const total = 'total' in item ? item.total : ((item as any).totalCents || item.quantity * unitPrice);
+
+          return {
+            id: item.productId || `line-${index}`,
+            lineNumber: index + 1,
+            sku: item.sku,
+            description: item.description,
+            quantity: item.quantity,
+            unitPrice,
+            discountPercent: item.discountPercent || 0,
+            discountAmount: 0,
+            taxAmount: 0,
+            total,
+            notes: undefined,
+          };
+        }),
+        subtotal: Number(quoteVersion.subtotal) || 0,
         discount: 0,
         discountPercent: 0,
         discountType: 'fixed',
         taxRate: 10,
-        taxAmount: Number(quoteVersion.taxAmount) / 100 || 0,
-        total: Number(quoteVersion.total) / 100 || 0,
+        taxAmount: Number(quoteVersion.taxAmount) || 0,
+        total: Number(quoteVersion.total) || 0,
         customerNotes: quoteVersion.notes || undefined,
         internalNotes: undefined,
       },
@@ -910,9 +917,9 @@ export const sendQuote = createServerFn({ method: 'POST' })
   <p>Quote Details:</p>
   <ul>
     <li>Quote Version: ${quoteVersion.versionNumber}</li>
-    <li>Subtotal: $${(Number(quoteVersion.subtotal) / 100).toFixed(2)}</li>
-    <li>GST (10%): $${(Number(quoteVersion.taxAmount) / 100).toFixed(2)}</li>
-    <li>Total: $${(Number(quoteVersion.total) / 100).toFixed(2)}</li>
+    <li>Subtotal: ${formatCurrency(Number(quoteVersion.subtotal) || 0)}</li>
+    <li>GST (10%): ${formatCurrency(Number(quoteVersion.taxAmount) || 0)}</li>
+    <li>Total: ${formatCurrency(Number(quoteVersion.total) || 0)}</li>
   </ul>
   <p>Please review the attached PDF and let us know if you have any questions.</p>
   <p>Best regards,<br>${fromName} Team</p>
@@ -928,9 +935,9 @@ ${emailMessage}
 
 Quote Details:
 - Quote Version: ${quoteVersion.versionNumber}
-- Subtotal: $${(Number(quoteVersion.subtotal) / 100).toFixed(2)}
-- GST (10%): $${(Number(quoteVersion.taxAmount) / 100).toFixed(2)}
-- Total: $${(Number(quoteVersion.total) / 100).toFixed(2)}
+- Subtotal: ${formatCurrency(Number(quoteVersion.subtotal) || 0)}
+- GST (10%): ${formatCurrency(Number(quoteVersion.taxAmount) || 0)}
+- Total: ${formatCurrency(Number(quoteVersion.total) || 0)}
 
 Please review the attached PDF and let us know if you have any questions.
 

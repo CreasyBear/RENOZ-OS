@@ -12,7 +12,7 @@
  * - Mobile-responsive design
  */
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useState, useCallback, useMemo } from 'react'
+import { useCallback } from 'react'
 import { Plus, Users, DollarSign, TrendingUp, AlertCircle } from 'lucide-react'
 import { z } from 'zod'
 import { PageLayout, RouteErrorFallback } from '@/components/layout'
@@ -41,6 +41,7 @@ const searchParamsSchema = z.object({
   search: z.string().optional(),
   status: z.enum(['prospect', 'active', 'inactive', 'suspended', 'blacklisted']).optional(),
   type: z.enum(['individual', 'business', 'government', 'non_profit']).optional(),
+  tag: z.string().uuid().optional(), // Single tag ID for filtering (maps to tags array in CustomerListQuery)
   sortBy: z.string().optional().default('name'),
   sortOrder: z.enum(['asc', 'desc']).optional().default('asc'),
 })
@@ -75,15 +76,6 @@ function CustomersPage() {
   const navigate = useNavigate()
   const search = Route.useSearch() as SearchParams
 
-  // Compute filters from URL search params
-  const filters = useMemo<CustomerFiltersState>(() => ({
-    search: search.search || '',
-    status: search.status ? [search.status] : [],
-    type: search.type ? [search.type] : [],
-    size: [],
-    tags: [],
-  }), [search])
-
   // Fetch customers using centralized hook
   const {
     data: customersData,
@@ -97,6 +89,7 @@ function CustomersPage() {
     search: search.search,
     status: search.status,
     type: search.type,
+    tags: search.tag ? [search.tag] : undefined, // Map single tag to tags array
   })
 
   // Fetch available tags using centralized hook
@@ -175,7 +168,7 @@ function CustomersPage() {
   // Export handler for selected customers
   const handleExport = useCallback(async (ids: string[], _format: 'csv' | 'xlsx' | 'json') => {
     const customersToExport = customersData?.items?.filter((c) => ids.includes(c.id)) || []
-    
+
     if (customersToExport.length === 0) {
       toastError('No customers selected for export')
       return
@@ -232,8 +225,7 @@ function CustomersPage() {
             title="Total Customers"
             value={kpisData?.kpis[0]?.value ?? '—'}
             subtitle={kpisData?.kpis[0]?.changeLabel}
-            trend={kpisData?.kpis[0]?.change ? `${kpisData.kpis[0].change > 0 ? '+' : ''}${kpisData.kpis[0].change}%` : undefined}
-            trendUp={kpisData?.kpis[0]?.change ? kpisData.kpis[0].change > 0 : undefined}
+            delta={kpisData?.kpis[0]?.change}
             icon={Users}
             isLoading={isLoadingKpis}
           />
@@ -241,8 +233,7 @@ function CustomersPage() {
             title="Total Revenue"
             value={kpisData?.kpis[1]?.value ?? '—'}
             subtitle={kpisData?.kpis[1]?.changeLabel}
-            trend={kpisData?.kpis[1]?.change ? `${kpisData.kpis[1].change > 0 ? '+' : ''}${kpisData.kpis[1].change}%` : undefined}
-            trendUp={kpisData?.kpis[1]?.change ? kpisData.kpis[1].change > 0 : undefined}
+            delta={kpisData?.kpis[1]?.change}
             icon={DollarSign}
             isLoading={isLoadingKpis}
           />

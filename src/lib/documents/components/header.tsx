@@ -11,7 +11,6 @@ import {
   colors,
   fontSize,
   spacing,
-  lineHeight,
   letterSpacing,
   borderRadius,
   FONT_FAMILY,

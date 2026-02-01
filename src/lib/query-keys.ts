@@ -501,8 +501,10 @@ export const queryKeys = {
       [...queryKeys.orders.lists(), { status }] as const,
     fulfillment: (status?: string) =>
       [...queryKeys.orders.all, 'fulfillment', status ?? ''] as const,
-    shipments: (orderId?: string) =>
-      [...queryKeys.orders.all, 'shipments', orderId ?? ''] as const,
+    shipments: (filters?: Record<string, unknown>) =>
+      [...queryKeys.orders.all, 'shipments', filters ?? {}] as const,
+    shipmentDetail: (shipmentId: string) =>
+      [...queryKeys.orders.all, 'shipments', 'detail', shipmentId] as const,
     templates: (search?: string) =>
       [...queryKeys.orders.all, 'templates', search ?? ''] as const,
     templateDetail: (id: string) =>
@@ -515,6 +517,7 @@ export const queryKeys = {
       [...queryKeys.orders.details(), orderId, 'withCustomer'] as const,
     assignees: (orgId?: string, roles?: readonly string[]) =>
       [...queryKeys.orders.all, 'assignees', orgId, roles] as const,
+    stats: () => [...queryKeys.orders.all, 'stats'] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -599,7 +602,9 @@ export const queryKeys = {
     details: () => [...queryKeys.jobs.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.jobs.details(), id] as const,
     active: () => [...queryKeys.jobs.all, 'active'] as const,
+    activeProjects: (limit?: number) => [...queryKeys.jobs.all, 'activeProjects', limit] as const,
     viewSync: (interval?: number) => [...queryKeys.jobs.all, 'viewSync', interval] as const,
+    materials: (jobId: string) => [...queryKeys.jobs.detail(jobId), 'materials'] as const,
   },
 
   // -------------------------------------------------------------------------
@@ -1279,6 +1284,21 @@ export const queryKeys = {
   },
 
   // -------------------------------------------------------------------------
+  // UNIFIED ACTIVITIES (Audit Trail + Planned Activities)
+  // -------------------------------------------------------------------------
+  unifiedActivities: {
+    all: ['unifiedActivities'] as const,
+    entity: (entityType: string, entityId: string) =>
+      [...queryKeys.unifiedActivities.all, entityType, entityId] as const,
+    entityAudit: (entityType: string, entityId: string) =>
+      [...queryKeys.unifiedActivities.entity(entityType, entityId), 'audit'] as const,
+    entityPlanned: (entityType: string, entityId: string) =>
+      [...queryKeys.unifiedActivities.entity(entityType, entityId), 'planned'] as const,
+    filtered: (entityType: string, entityId: string, filters: Record<string, unknown>) =>
+      [...queryKeys.unifiedActivities.entity(entityType, entityId), filters] as const,
+  },
+
+  // -------------------------------------------------------------------------
   // JOB CALENDAR / TASKS / TIME / MATERIALS / ASSIGNMENTS
   // -------------------------------------------------------------------------
   jobCalendar: {
@@ -1687,6 +1707,12 @@ export const queryKeys = {
         [...queryKeys.reports.reportFavorites.lists(), filters ?? {}] as const,
       details: () => [...queryKeys.reports.reportFavorites.all(), 'detail'] as const,
       detail: (id: string) => [...queryKeys.reports.reportFavorites.details(), id] as const,
+    },
+
+    // Metrics
+    metrics: {
+      all: () => [...queryKeys.reports.all, 'metrics'] as const,
+      available: () => [...queryKeys.reports.metrics.all(), 'available'] as const,
     },
   },
 

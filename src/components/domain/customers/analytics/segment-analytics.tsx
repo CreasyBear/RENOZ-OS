@@ -29,7 +29,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-import { FormatAmount } from '@/components/shared/format'
+import { FormatAmount, MetricCard } from '@/components/shared'
 
 // ============================================================================
 // TYPES
@@ -89,37 +89,7 @@ interface SegmentAnalyticsProps {
 // HELPER FUNCTIONS
 // ============================================================================
 
-// ============================================================================
-// KPI CARD COMPONENT
-// ============================================================================
-
-interface KpiCardProps {
-  title: string
-  value: React.ReactNode
-  icon: React.ElementType
-  description?: string
-}
-
-function KpiCard({ title, value, icon: Icon, description }: KpiCardProps) {
-  return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <p className="text-sm text-muted-foreground">{title}</p>
-            <div className="text-2xl font-bold">{value}</div>
-            {description && (
-              <p className="text-xs text-muted-foreground">{description}</p>
-            )}
-          </div>
-          <div className="rounded-full bg-muted p-3">
-            <Icon className="h-5 w-5 text-muted-foreground" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
+// Note: Using shared MetricCard from @/components/shared
 
 // ============================================================================
 // HEALTH DISTRIBUTION CHART
@@ -412,26 +382,26 @@ export function SegmentAnalytics({
 
       {/* KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <KpiCard
+        <MetricCard
           title="Customers"
           value={segment.customerCount.toLocaleString()}
           icon={Users}
         />
-        <KpiCard
+        <MetricCard
           title="Total Value"
           value={<FormatAmount amount={segment.totalValue} cents={false} compact showCents={false} />}
           icon={DollarSign}
         />
-        <KpiCard
+        <MetricCard
           title="Avg Health Score"
           value={segment.avgHealthScore}
           icon={Activity}
         />
-        <KpiCard
+        <MetricCard
           title="Criteria"
           value={segment.criteriaCount}
           icon={TrendingUp}
-          description="Filter conditions"
+          subtitle="Filter conditions"
         />
       </div>
 

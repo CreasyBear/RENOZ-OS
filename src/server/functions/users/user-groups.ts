@@ -26,6 +26,18 @@ import {
   type GroupMember,
 } from '@/lib/schemas/users';
 import { idParamSchema, paginationSchema } from '@/lib/schemas';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { computeChanges } from '@/lib/activity-logger';
+
+// Excluded fields for activity logging
+const GROUP_EXCLUDED_FIELDS: string[] = [
+  'updatedAt',
+  'updatedBy',
+  'createdAt',
+  'createdBy',
+  'organizationId',
+  'version',
+];
 
 // ============================================================================
 // CREATE GROUP
@@ -68,6 +80,25 @@ export const createGroup = createServerFn({ method: 'POST' })
         updatedBy: ctx.user.id,
       })
       .returning();
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'user',
+      entityId: group.id,
+      action: 'created',
+      description: `Created team: ${group.name}`,
+      changes: computeChanges({
+        before: null,
+        after: group,
+        excludeFields: GROUP_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        groupId: group.id,
+        groupName: group.name,
+        color: group.color ?? undefined,
+      },
+    });
 
     return {
       id: group.id,
@@ -217,7 +248,7 @@ export const updateGroup = createServerFn({ method: 'POST' })
 
     // Verify group exists and belongs to organization
     const [existing] = await db
-      .select({ id: userGroups.id })
+      .select()
       .from(userGroups)
       .where(
         and(
@@ -262,6 +293,25 @@ export const updateGroup = createServerFn({ method: 'POST' })
       .where(eq(userGroups.id, data.id))
       .returning();
 
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'user',
+      entityId: updated.id,
+      action: 'updated',
+      description: `Updated team: ${updated.name}`,
+      changes: computeChanges({
+        before: existing,
+        after: updated,
+        excludeFields: GROUP_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        groupId: updated.id,
+        groupName: updated.name,
+        changedFields: Object.keys(data.updates),
+      },
+    });
+
     return {
       id: updated.id,
       organizationId: updated.organizationId,
@@ -291,7 +341,7 @@ export const deleteGroup = createServerFn({ method: 'POST' })
 
     // Verify group exists and belongs to organization
     const [existing] = await db
-      .select({ id: userGroups.id })
+      .select({ id: userGroups.id, name: userGroups.name })
       .from(userGroups)
       .where(
         and(
@@ -306,6 +356,12 @@ export const deleteGroup = createServerFn({ method: 'POST' })
       throw new NotFoundError('Group not found', 'group');
     }
 
+    // Get member count for logging
+    const [{ memberCount }] = await db
+      .select({ memberCount: sql<number>`count(*)::int` })
+      .from(userGroupMembers)
+      .where(eq(userGroupMembers.groupId, data.id));
+
     // Soft delete group (members will be cascade deleted by FK)
     await db
       .update(userGroups)
@@ -318,6 +374,21 @@ export const deleteGroup = createServerFn({ method: 'POST' })
 
     // Also delete all memberships
     await db.delete(userGroupMembers).where(eq(userGroupMembers.groupId, data.id));
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'user',
+      entityId: data.id,
+      action: 'deleted',
+      description: `Deleted team: ${existing.name}`,
+      changes: undefined,
+      metadata: {
+        groupId: data.id,
+        groupName: existing.name,
+        memberCount,
+      },
+    });
 
     return { success: true };
   });
@@ -408,7 +479,7 @@ export const addGroupMember = createServerFn({ method: 'POST' })
 
     // Verify group belongs to organization
     const [group] = await db
-      .select({ id: userGroups.id })
+      .select({ id: userGroups.id, name: userGroups.name })
       .from(userGroups)
       .where(
         and(eq(userGroups.id, data.groupId), eq(userGroups.organizationId, ctx.organizationId))
@@ -456,6 +527,24 @@ export const addGroupMember = createServerFn({ method: 'POST' })
       })
       .returning();
 
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'user',
+      entityId: data.userId,
+      action: 'updated',
+      description: `Added ${user.name ?? user.email} to team: ${group.name}`,
+      changes: undefined,
+      metadata: {
+        groupId: data.groupId,
+        groupName: group.name,
+        userId: data.userId,
+        userName: user.name ?? undefined,
+        userEmail: user.email,
+        memberRole: data.role,
+      },
+    });
+
     return {
       id: member.id,
       groupId: member.groupId,
@@ -490,6 +579,7 @@ export const updateGroupMemberRole = createServerFn({ method: 'POST' })
       .select({
         id: userGroupMembers.id,
         organizationId: userGroupMembers.organizationId,
+        role: userGroupMembers.role,
       })
       .from(userGroupMembers)
       .where(
@@ -505,6 +595,21 @@ export const updateGroupMemberRole = createServerFn({ method: 'POST' })
       throw new NotFoundError('Membership not found', 'membership');
     }
 
+    // Get group and user names for logging
+    const [group] = await db
+      .select({ name: userGroups.name })
+      .from(userGroups)
+      .where(eq(userGroups.id, data.groupId))
+      .limit(1);
+
+    const [user] = await db
+      .select({ name: users.name, email: users.email })
+      .from(users)
+      .where(eq(users.id, data.userId))
+      .limit(1);
+
+    const previousRole = membership.role;
+
     // Update role
     await db
       .update(userGroupMembers)
@@ -516,6 +621,24 @@ export const updateGroupMemberRole = createServerFn({ method: 'POST' })
       .where(
         and(eq(userGroupMembers.groupId, data.groupId), eq(userGroupMembers.userId, data.userId))
       );
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'user',
+      entityId: data.userId,
+      action: 'updated',
+      description: `Changed ${user?.name ?? user?.email ?? 'user'} role in ${group?.name ?? 'team'}: ${previousRole} → ${data.role}`,
+      changes: undefined,
+      metadata: {
+        groupId: data.groupId,
+        groupName: group?.name ?? undefined,
+        userId: data.userId,
+        userName: user?.name ?? undefined,
+        previousRole,
+        newRole: data.role,
+      },
+    });
 
     return { success: true };
   });
@@ -543,6 +666,7 @@ export const removeGroupMember = createServerFn({ method: 'POST' })
       .select({
         id: userGroupMembers.id,
         organizationId: userGroupMembers.organizationId,
+        role: userGroupMembers.role,
       })
       .from(userGroupMembers)
       .where(
@@ -558,12 +682,43 @@ export const removeGroupMember = createServerFn({ method: 'POST' })
       throw new NotFoundError('Membership not found', 'membership');
     }
 
+    // Get group and user names for logging
+    const [group] = await db
+      .select({ name: userGroups.name })
+      .from(userGroups)
+      .where(eq(userGroups.id, data.groupId))
+      .limit(1);
+
+    const [user] = await db
+      .select({ name: users.name, email: users.email })
+      .from(users)
+      .where(eq(users.id, data.userId))
+      .limit(1);
+
     // Remove member
     await db
       .delete(userGroupMembers)
       .where(
         and(eq(userGroupMembers.groupId, data.groupId), eq(userGroupMembers.userId, data.userId))
       );
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'user',
+      entityId: data.userId,
+      action: 'updated',
+      description: `Removed ${user?.name ?? user?.email ?? 'user'} from team: ${group?.name ?? 'team'}`,
+      changes: undefined,
+      metadata: {
+        groupId: data.groupId,
+        groupName: group?.name ?? undefined,
+        userId: data.userId,
+        userName: user?.name ?? undefined,
+        userEmail: user?.email ?? undefined,
+        previousRole: membership.role,
+      },
+    });
 
     return { success: true };
   });

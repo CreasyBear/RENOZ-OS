@@ -22,7 +22,6 @@ import {
   Package,
   Archive,
   Bell,
-  BellOff,
   MoreHorizontal,
   Edit,
   Trash2,
@@ -32,7 +31,6 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -52,6 +50,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { StatusCell } from "@/components/shared/data-table";
+import { ALERT_ACTIVE_STATUS_CONFIG } from "../inventory-status-config";
 
 // ============================================================================
 // TYPES
@@ -404,19 +404,11 @@ export const AlertsList = memo(function AlertsList({
                           aria-label={alert.isActive ? "Disable alert" : "Enable alert"}
                         />
                       ) : (
-                        <Badge variant={alert.isActive ? "default" : "secondary"}>
-                          {alert.isActive ? (
-                            <>
-                              <Bell className="h-3 w-3 mr-1" aria-hidden="true" />
-                              Active
-                            </>
-                          ) : (
-                            <>
-                              <BellOff className="h-3 w-3 mr-1" aria-hidden="true" />
-                              Inactive
-                            </>
-                          )}
-                        </Badge>
+                        <StatusCell
+                          status={alert.isActive ? "active" : "inactive"}
+                          statusConfig={ALERT_ACTIVE_STATUS_CONFIG}
+                          showIcon
+                        />
                       )}
                     </TableCell>
 

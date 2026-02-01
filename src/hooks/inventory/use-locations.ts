@@ -23,68 +23,42 @@ import {
   deleteLocation,
 } from '@/server/functions/inventory/locations';
 import { listInventory } from '@/server/functions/inventory/inventory';
+import type {
+  LocationType,
+  HookWarehouseLocation,
+  HookLocationHierarchy,
+  HookLocationContents,
+  HookLocationFilters,
+  CreateLocationInput,
+  UpdateLocationInput,
+} from '@/lib/schemas/inventory';
 
 // ============================================================================
-// TYPES
+// TYPE RE-EXPORTS FOR BACKWARDS COMPATIBILITY
 // ============================================================================
 
-export type LocationType = 'warehouse' | 'zone' | 'aisle' | 'rack' | 'shelf' | 'bin';
+export type { LocationType } from '@/lib/schemas/inventory';
+export type WarehouseLocation = HookWarehouseLocation;
+export type LocationHierarchy = HookLocationHierarchy;
+export type LocationContents = HookLocationContents;
+export type LocationFilters = HookLocationFilters;
 
-export interface WarehouseLocation {
-  id: string;
-  code: string;
-  name: string;
-  locationType: LocationType;
-  parentId: string | null;
-  parentPath: string[];
-  capacity: number | null;
-  currentOccupancy: number;
-  utilization: number;
-  isActive: boolean;
-  attributes: Record<string, any>;
-  childCount: number;
-  itemCount: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface LocationHierarchy extends WarehouseLocation {
-  children: LocationHierarchy[];
-}
-
-export interface LocationContents {
-  items: Array<{
-    inventoryId: string;
-    productId: string;
-    productName: string;
-    productSku: string;
-    quantity: number;
-    totalValue: number;
-  }>;
-  totalItems: number;
-  totalValue: number;
-  utilization: number;
-}
-
-export interface LocationFilters extends Record<string, unknown> {
-  parentId?: string;
-  type?: LocationType;
-  active?: boolean;
-  search?: string;
-}
+// ============================================================================
+// HOOK INTERFACE TYPES
+// ============================================================================
 
 interface UseLocationsOptions {
-  initialFilters?: LocationFilters;
+  initialFilters?: HookLocationFilters;
   includeHierarchy?: boolean;
   autoFetch?: boolean;
 }
 
 interface UseLocationsResult {
   // Data
-  locations: WarehouseLocation[];
-  hierarchy: LocationHierarchy[];
-  currentLocation: WarehouseLocation | null;
-  contents: LocationContents | null;
+  locations: HookWarehouseLocation[];
+  hierarchy: HookLocationHierarchy[];
+  currentLocation: HookWarehouseLocation | null;
+  contents: HookLocationContents | null;
 
   // State
   isLoading: boolean;
@@ -92,44 +66,27 @@ interface UseLocationsResult {
   isSubmitting: boolean;
 
   // Actions
-  fetchLocations: (filters?: LocationFilters) => Promise<void>;
-  fetchLocation: (locationId: string) => Promise<WarehouseLocation | null>;
-  fetchContents: (locationId: string) => Promise<LocationContents | null>;
-  createNewLocation: (data: CreateLocationData) => Promise<WarehouseLocation | null>;
+  fetchLocations: (filters?: HookLocationFilters) => Promise<void>;
+  fetchLocation: (locationId: string) => Promise<HookWarehouseLocation | null>;
+  fetchContents: (locationId: string) => Promise<HookLocationContents | null>;
+  createNewLocation: (data: CreateLocationInput) => Promise<HookWarehouseLocation | null>;
   updateExistingLocation: (
     locationId: string,
-    data: UpdateLocationData
-  ) => Promise<WarehouseLocation | null>;
+    data: UpdateLocationInput
+  ) => Promise<HookWarehouseLocation | null>;
   deleteExistingLocation: (locationId: string) => Promise<boolean>;
 
   // Hierarchy helpers
-  getParentChain: (locationId: string) => WarehouseLocation[];
-  getChildren: (parentId: string) => WarehouseLocation[];
-  findLocation: (locationId: string) => WarehouseLocation | undefined;
+  getParentChain: (locationId: string) => HookWarehouseLocation[];
+  getChildren: (parentId: string) => HookWarehouseLocation[];
+  findLocation: (locationId: string) => HookWarehouseLocation | undefined;
 
   // Optimization
-  getSuggestedLocation: (productId: string, quantity: number) => Promise<WarehouseLocation | null>;
+  getSuggestedLocation: (productId: string, quantity: number) => Promise<HookWarehouseLocation | null>;
 
   // Filters
-  filters: LocationFilters;
-  setFilters: (filters: LocationFilters) => void;
-}
-
-interface CreateLocationData {
-  code: string;
-  name: string;
-  locationType: LocationType;
-  parentId?: string;
-  capacity?: number;
-  attributes?: Record<string, any>;
-}
-
-interface UpdateLocationData {
-  code?: string;
-  name?: string;
-  capacity?: number;
-  isActive?: boolean;
-  attributes?: Record<string, any>;
+  filters: HookLocationFilters;
+  setFilters: (filters: HookLocationFilters) => void;
 }
 
 // ============================================================================
@@ -140,22 +97,22 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
   const { initialFilters = {}, includeHierarchy = false, autoFetch = false } = options;
   const queryClient = useQueryClient();
 
-  const [filters, setFilters] = useState<LocationFilters>(initialFilters);
+  const [filters, setFilters] = useState<HookLocationFilters>(initialFilters);
 
   // Query for locations list
   const locationsQuery = useQuery({
     queryKey: queryKeys.locations.list(filters),
     queryFn: async () => {
-      const data = (await (listLocations as any)({
+      const data = await listLocations({
         data: {
           page: 1,
           pageSize: 200,
           ...(filters.parentId && { parentId: filters.parentId }),
-          ...(filters.type && { type: filters.type }),
-          ...(filters.active !== undefined && { active: filters.active }),
+          ...(filters.type && { locationType: filters.type }),
+          ...(filters.active !== undefined && { isActive: filters.active }),
           ...(filters.search && { search: filters.search }),
         },
-      })) as any;
+      });
 
       if (data?.locations) {
         const mappedLocations = data.locations.map(mapLocationFromApi);
@@ -180,10 +137,10 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
     queryKey: queryKeys.locations.detail(currentLocationId || ''),
     queryFn: async () => {
       if (!currentLocationId) return null;
-      const data = (await (getLocation as any)({
+      const data = await getLocation({
         data: { id: currentLocationId },
-      })) as any;
-      return data?.location ? mapLocationFromApi(data.location) : null;
+      });
+      return data?.location ? mapLocationDetailFromApi(data.location) : null;
     },
     enabled: !!currentLocationId,
     staleTime: 30 * 1000,
@@ -195,34 +152,47 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
   const [currentContentsId, setCurrentContentsId] = useState<string | null>(null);
   const contentsQuery = useQuery({
     queryKey: queryKeys.locations.contents(currentContentsId || ''),
-    queryFn: async () => {
+    queryFn: async (): Promise<HookLocationContents | null> => {
       if (!currentContentsId) return null;
-      const data = (await listInventory({
+      const data = await listInventory({
         data: { locationId: currentContentsId, page: 1, pageSize: 100 },
-      })) as any;
+      });
 
       if (data?.items) {
-        const totalValue = data.items.reduce(
-          (sum: number, item: any) => sum + (item.totalValue || 0),
+        interface InventoryItemWithQuantity {
+          id: string;
+          productId: string;
+          productName?: string;
+          productSku?: string;
+          quantity?: number;
+          quantityOnHand?: number;
+          totalValue?: number;
+          capacity?: number;
+        }
+        const items = data.items as InventoryItemWithQuantity[];
+        const totalValue = items.reduce(
+          (sum, item) => sum + (item.totalValue || 0),
           0
         );
+        const quantities = items.map(item => item.quantity ?? item.quantityOnHand ?? 0);
+        const capacities = items.map(item => item.capacity || 1);
         const utilization =
-          data.items.length > 0
-            ? (data.items.reduce((sum: number, item: any) => sum + item.quantity, 0) /
-                Math.max(...data.items.map((item: any) => item.capacity || 1))) *
+          items.length > 0
+            ? (quantities.reduce((sum, q) => sum + q, 0) /
+                Math.max(...capacities)) *
               100
             : 0;
 
         return {
-          items: data.items.map((item: any) => ({
+          items: items.map((item) => ({
             inventoryId: item.id,
             productId: item.productId,
-            productName: item.productName,
-            productSku: item.productSku,
-            quantity: item.quantity,
-            totalValue: item.totalValue,
+            productName: item.productName ?? '',
+            productSku: item.productSku ?? '',
+            quantity: item.quantity ?? item.quantityOnHand ?? 0,
+            totalValue: item.totalValue ?? 0,
           })),
-          totalItems: data.items.length,
+          totalItems: items.length,
           totalValue,
           utilization,
         };
@@ -270,18 +240,17 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
 
   // Create location mutation
   const createLocationMutation = useMutation({
-    mutationFn: async (data: CreateLocationData) => {
-      const result = (await (createLocation as any)({
+    mutationFn: async (data: CreateLocationInput) => {
+      const result = await createLocation({
         data: {
           code: data.code,
           name: data.name,
-          locationType: data.locationType,
           ...(data.parentId && { parentId: data.parentId }),
           ...(data.capacity !== undefined && { capacity: data.capacity }),
           ...(data.attributes && { attributes: data.attributes }),
         },
-      })) as any;
-      return result?.location ? mapLocationFromApi(result.location) : null;
+      });
+      return result?.location ? mapLocationDetailFromApi(result.location) : null;
     },
     onSuccess: (location) => {
       if (location) {
@@ -291,13 +260,13 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
         queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
       }
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error.message ?? 'Failed to create location');
     },
   });
 
   const createNewLocation = useCallback(
-    async (data: CreateLocationData): Promise<WarehouseLocation | null> => {
+    async (data: CreateLocationInput): Promise<HookWarehouseLocation | null> => {
       const result = await createLocationMutation.mutateAsync(data);
       return result ?? null;
     },
@@ -306,8 +275,8 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
 
   // Update location mutation
   const updateLocationMutation = useMutation({
-    mutationFn: async ({ locationId, data }: { locationId: string; data: UpdateLocationData }) => {
-      const result = (await (updateLocation as any)({
+    mutationFn: async ({ locationId, data }: { locationId: string; data: UpdateLocationInput }) => {
+      const result = await updateLocation({
         data: {
           id: locationId,
           data: {
@@ -318,20 +287,20 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
             ...(data.attributes && { attributes: data.attributes }),
           },
         },
-      })) as any;
-      return result?.location ? mapLocationFromApi(result.location) : null;
+      });
+      return result?.location ? mapUpdateResultFromApi(result.location) : null;
     },
     onSuccess: () => {
       toast.success('Location updated');
       queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error.message ?? 'Failed to update location');
     },
   });
 
   const updateExistingLocation = useCallback(
-    async (locationId: string, data: UpdateLocationData): Promise<WarehouseLocation | null> => {
+    async (locationId: string, data: UpdateLocationInput): Promise<HookWarehouseLocation | null> => {
       const result = await updateLocationMutation.mutateAsync({ locationId, data });
       return result ?? null;
     },
@@ -350,7 +319,7 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
       toast.success('Location deleted');
       queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast.error(error.message ?? 'Failed to delete location. Ensure it is empty.');
     },
   });
@@ -488,29 +457,95 @@ export function useLocations(options: UseLocationsOptions = {}): UseLocationsRes
 // HELPERS
 // ============================================================================
 
-function mapLocationFromApi(data: any): WarehouseLocation {
+/**
+ * Server response types - inferred from server functions for type safety
+ * Uses TypeScript type inference to get the actual return types
+ */
+type ListLocationsResponse = Awaited<ReturnType<typeof listLocations>>;
+type GetLocationResponse = Awaited<ReturnType<typeof getLocation>>;
+type UpdateLocationResponse = Awaited<ReturnType<typeof updateLocation>>;
+
+// Location record from list response
+type ServerLocationRecord = ListLocationsResponse['locations'][number];
+// Location record from getLocation response
+type ServerLocationDetail = GetLocationResponse['location'];
+// Location record from update response
+type ServerLocationUpdateResult = UpdateLocationResponse['location'];
+
+/**
+ * Maps a server location record from list response to the hook's representation
+ */
+function mapLocationFromApi(data: ServerLocationRecord): HookWarehouseLocation {
   return {
     id: data.id,
-    code: data.code ?? '',
-    name: data.name ?? '',
-    locationType: data.locationType ?? 'bin',
-    parentId: data.parentId ?? null,
-    parentPath: data.parentPath ?? [],
-    capacity: data.capacity ?? null,
-    currentOccupancy: data.currentOccupancy ?? 0,
-    utilization: data.utilization ?? 0,
+    code: data.locationCode,
+    name: data.name,
+    locationType: data.locationType,
+    parentId: data.parentId,
+    parentPath: [],
+    capacity: data.capacity,
+    currentOccupancy: 0, // Calculated separately via inventory queries
+    utilization: 0, // Calculated separately via inventory queries
     isActive: data.isActive ?? true,
-    attributes: data.attributes ?? {},
-    childCount: data.childCount ?? 0,
-    itemCount: data.itemCount ?? 0,
-    createdAt: new Date(data.createdAt ?? Date.now()),
-    updatedAt: new Date(data.updatedAt ?? Date.now()),
+    // Spread to convert LocationAttributes to plain Record
+    attributes: data.attributes ? { ...data.attributes } : {},
+    childCount: 0, // Populated via separate hierarchy query
+    itemCount: 0, // Populated via separate inventory query
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
   };
 }
 
-function buildHierarchy(locations: WarehouseLocation[]): LocationHierarchy[] {
-  const map = new Map<string, LocationHierarchy>();
-  const roots: LocationHierarchy[] = [];
+/**
+ * Maps a server location detail response to the hook's representation
+ * (Same underlying type as list, but separate function for type clarity)
+ */
+function mapLocationDetailFromApi(data: ServerLocationDetail): HookWarehouseLocation {
+  return {
+    id: data.id,
+    code: data.locationCode,
+    name: data.name,
+    locationType: data.locationType,
+    parentId: data.parentId,
+    parentPath: [],
+    capacity: data.capacity,
+    currentOccupancy: 0,
+    utilization: 0,
+    isActive: data.isActive ?? true,
+    attributes: data.attributes ? { ...data.attributes } : {},
+    childCount: 0,
+    itemCount: 0,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+}
+
+/**
+ * Maps an update response location to the hook's representation
+ */
+function mapUpdateResultFromApi(data: ServerLocationUpdateResult): HookWarehouseLocation {
+  return {
+    id: data.id,
+    code: data.locationCode,
+    name: data.name,
+    locationType: data.locationType,
+    parentId: data.parentId,
+    parentPath: [],
+    capacity: data.capacity,
+    currentOccupancy: 0,
+    utilization: 0,
+    isActive: data.isActive ?? true,
+    attributes: data.attributes ? { ...data.attributes } : {},
+    childCount: 0,
+    itemCount: 0,
+    createdAt: data.createdAt,
+    updatedAt: data.updatedAt,
+  };
+}
+
+function buildHierarchy(locations: HookWarehouseLocation[]): HookLocationHierarchy[] {
+  const map = new Map<string, HookLocationHierarchy>();
+  const roots: HookLocationHierarchy[] = [];
 
   // Create hierarchy nodes
   locations.forEach((loc) => {
@@ -575,20 +610,43 @@ export function useLocationDetail(locationId: string, enabled = true) {
 }
 
 /**
+ * Input type for creating a warehouse location
+ */
+interface CreateWarehouseLocationInput {
+  locationCode: string;
+  name: string;
+  locationType: LocationType;
+  parentId?: string | null;
+  capacity?: number | null;
+  isActive?: boolean;
+  isPickable?: boolean;
+  isReceivable?: boolean;
+  attributes?: Record<string, unknown>;
+}
+
+/**
+ * Input type for updating a warehouse location
+ */
+interface UpdateWarehouseLocationData {
+  name?: string;
+  locationType?: LocationType;
+  parentId?: string | null;
+  capacity?: number | null;
+  isActive?: boolean;
+  isPickable?: boolean;
+  isReceivable?: boolean;
+  attributes?: Record<string, unknown>;
+}
+
+/**
  * Create a warehouse location
  */
 export function useCreateWarehouseLocation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (data: {
-      locationCode: string;
-      name: string;
-      locationType: string;
-      parentId?: string;
-      capacity?: number;
-      attributes?: Record<string, any>;
-    }) => createWarehouseLocation({ data: data as any }),
+    mutationFn: (data: CreateWarehouseLocationInput) =>
+      createWarehouseLocation({ data }),
     onSuccess: () => {
       toast.success('Location created');
       queryClient.invalidateQueries({ queryKey: queryKeys.locations.all });
@@ -606,7 +664,7 @@ export function useUpdateWarehouseLocation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) =>
+    mutationFn: ({ id, data }: { id: string; data: UpdateWarehouseLocationData }) =>
       updateWarehouseLocation({ data: { id, data } }),
     onSuccess: (_data, variables) => {
       toast.success('Location updated');

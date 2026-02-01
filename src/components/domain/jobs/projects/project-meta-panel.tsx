@@ -25,8 +25,11 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { StatusCell } from '@/components/shared/data-table';
+import { PROJECT_STATUS_CONFIG } from './project-status-config';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import { ProgressCircle } from './progress-circle';
 import { TimeCard } from './time-card';
 import { BacklogCard } from './backlog-card';
@@ -87,17 +90,8 @@ interface ProjectMetaPanelProps {
 }
 
 // ============================================================================
-// STATUS CONFIG
+// PRIORITY CONFIG
 // ============================================================================
-
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  quoting: { label: 'Quoting', color: 'text-gray-700', bg: 'bg-gray-100' },
-  approved: { label: 'Approved', color: 'text-blue-700', bg: 'bg-blue-100' },
-  in_progress: { label: 'In Progress', color: 'text-teal-700', bg: 'bg-teal-100' },
-  completed: { label: 'Completed', color: 'text-green-700', bg: 'bg-green-100' },
-  cancelled: { label: 'Cancelled', color: 'text-red-700', bg: 'bg-red-100' },
-  on_hold: { label: 'On Hold', color: 'text-orange-700', bg: 'bg-orange-100' },
-};
 
 const PRIORITY_CONFIG: Record<string, { label: string; color: string }> = {
   urgent: { label: 'Urgent', color: 'text-red-600' },
@@ -115,21 +109,16 @@ export function ProjectMetaPanel({
   onToggle,
   className,
 }: ProjectMetaPanelProps) {
-  const status = STATUS_CONFIG[project.status];
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: string | number | null) =>
+    formatCurrency(value == null ? 0 : Number(value), { cents: false, showCents: true });
   const priority = PRIORITY_CONFIG[project.priority];
-
-  const formatCurrency = (value: string | number | null) => {
-    if (!value) return null;
-    const num = typeof value === 'string' ? parseFloat(value) : value;
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD',
-      maximumFractionDigits: 0,
-    }).format(num);
-  };
-
-  const estimatedValue = formatCurrency(project.estimatedTotalValue);
-  const actualCost = formatCurrency(project.actualTotalCost);
+  const estimatedValue = project.estimatedTotalValue
+    ? formatCurrencyDisplay(project.estimatedTotalValue)
+    : null;
+  const actualCost = project.actualTotalCost
+    ? formatCurrencyDisplay(project.actualTotalCost)
+    : null;
 
   // Calculate task stats from workstreams
   const taskStats = project.workstreams
@@ -196,14 +185,12 @@ export function ProjectMetaPanel({
               progress={project.progressPercent}
               size={48}
               strokeWidth={4}
-              color={status.bg.replace('bg-', '') === 'bg-gray-100' ? '#6b7280' : '#10b981'}
+              color={project.status === 'quoting' ? '#6b7280' : '#10b981'}
               showLabel
             />
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <Badge className={cn(status.bg, status.color, 'border-0')}>
-                  {status.label}
-                </Badge>
+                <StatusCell status={project.status} statusConfig={PROJECT_STATUS_CONFIG} showIcon />
               </div>
               <p className={cn('text-xs', priority.color)}>
                 {priority.label} Priority

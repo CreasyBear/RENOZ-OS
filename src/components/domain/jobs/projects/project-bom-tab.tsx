@@ -30,7 +30,6 @@ import {
   Link as LinkIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { formatCurrency } from '@/lib/utils/currency';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -68,6 +67,7 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from '@/lib/toast';
+import { useOrgFormat } from '@/hooks/use-org-format';
 // Hooks
 import {
   useProjectBom,
@@ -99,10 +99,10 @@ interface BomItemWithProduct extends ProjectBomItem {
 // STATUS CONFIG
 // ============================================================================
 
-const ITEM_STATUS_CONFIG: Record<BomItemStatus, { 
-  label: string; 
-  icon: React.ElementType; 
-  color: string; 
+const ITEM_STATUS_CONFIG: Record<BomItemStatus, {
+  label: string;
+  icon: React.ElementType;
+  color: string;
   bg: string;
   description: string;
 }> = {
@@ -169,19 +169,22 @@ function AddBomItemDialog({
   bomId: string;
   onSuccess?: () => void;
 }) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [unitCost, setUnitCost] = useState<number | undefined>();
   const [notes, setNotes] = useState('');
-  
+
   const debouncedQuery = useDebounce(searchQuery, 300);
   const { data: searchResults, isFetching: isSearching } = useProductSearch(
     debouncedQuery,
     { limit: 20 },
     debouncedQuery.length >= 2
   );
-  
+
   const addItem = useAddBomItem(projectId);
   const products = searchResults?.products || [];
 
@@ -193,7 +196,7 @@ function AddBomItemDialog({
 
   const handleSubmit = async () => {
     if (!selectedProduct) return;
-    
+
     try {
       await addItem.mutateAsync({
         data: {
@@ -204,7 +207,7 @@ function AddBomItemDialog({
           notes: notes || undefined,
         }
       });
-      
+
       toast.success(`${selectedProduct.name} added to BOM`);
       onOpenChange(false);
       resetForm();
@@ -222,8 +225,8 @@ function AddBomItemDialog({
     setSearchQuery('');
   };
 
-  const totalCost = selectedProduct && unitCost 
-    ? quantity * unitCost 
+  const totalCost = selectedProduct && unitCost
+    ? quantity * unitCost
     : 0;
 
   return (
@@ -281,7 +284,7 @@ function AddBomItemDialog({
                         </div>
                         {product.basePrice && (
                           <span className="text-sm font-medium">
-                            {formatCurrency(product.basePrice)}
+                            {formatCurrencyDisplay(product.basePrice)}
                           </span>
                         )}
                       </button>
@@ -349,7 +352,7 @@ function AddBomItemDialog({
               {totalCost > 0 && (
                 <div className="flex items-center justify-between p-3 bg-primary/5 rounded-lg">
                   <span className="text-sm text-muted-foreground">Total Line Cost</span>
-                  <span className="text-lg font-semibold">{formatCurrency(totalCost)}</span>
+                  <span className="text-lg font-semibold">{formatCurrencyDisplay(totalCost)}</span>
                 </div>
               )}
 
@@ -370,11 +373,13 @@ function AddBomItemDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button 
-            onClick={handleSubmit} 
+          <Button
+            onClick={handleSubmit}
             disabled={!selectedProduct || addItem.isPending}
           >
-            {addItem.isPending ? 'Adding...' : `Add Item${totalCost > 0 ? ` (${formatCurrency(totalCost)})` : ''}`}
+            {addItem.isPending
+              ? 'Adding...'
+              : `Add Item${totalCost > 0 ? ` (${formatCurrencyDisplay(totalCost)})` : ''}`}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -399,6 +404,9 @@ function EditBomItemDialog({
   item: BomItemWithProduct | null;
   onSuccess?: () => void;
 }) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
   const [quantity, setQuantity] = useState(1);
   const [unitCost, setUnitCost] = useState<number | undefined>();
   const [status, setStatus] = useState<BomItemStatus>('planned');
@@ -505,7 +513,7 @@ function EditBomItemDialog({
           {totalCost > 0 && (
             <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
               <span className="text-sm text-muted-foreground">Total</span>
-              <span className="font-semibold">{formatCurrency(totalCost)}</span>
+              <span className="font-semibold">{formatCurrencyDisplay(totalCost)}</span>
             </div>
           )}
 
@@ -537,13 +545,16 @@ function EditBomItemDialog({
 // BOM SUMMARY CARDS
 // ============================================================================
 
-function BomSummaryCards({ 
-  items, 
-  bom 
-}: { 
-  items: BomItemWithProduct[]; 
+function BomSummaryCards({
+  items,
+  bom
+}: {
+  items: BomItemWithProduct[];
   bom: ProjectBom;
 }) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
   const stats = useMemo(() => {
     const totalItems = items.length;
     const totalEstimatedCost = items.reduce((sum, item) => {
@@ -612,7 +623,7 @@ function BomSummaryCards({
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Estimated Cost</p>
-              <p className="font-semibold">{formatCurrency(stats.totalEstimatedCost)}</p>
+              <p className="font-semibold">{formatCurrencyDisplay(stats.totalEstimatedCost)}</p>
             </div>
           </div>
         </CardContent>
@@ -655,6 +666,9 @@ function BomItemsTable({
   onEdit: (item: BomItemWithProduct) => void;
   onDelete: (item: BomItemWithProduct) => void;
 }) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
   if (items.length === 0) {
     return (
       <div className="text-center py-12 border rounded-lg bg-muted/30">
@@ -712,17 +726,17 @@ function BomItemsTable({
                 </TableCell>
                 <TableCell className="text-right font-mono">{qty}</TableCell>
                 <TableCell className="text-right font-mono">
-                  {unitCost > 0 ? formatCurrency(unitCost) : '-'}
+                  {unitCost > 0 ? formatCurrencyDisplay(unitCost) : '-'}
                 </TableCell>
                 <TableCell className="text-right font-semibold">
-                  {total > 0 ? formatCurrency(total) : '-'}
+                  {total > 0 ? formatCurrencyDisplay(total) : '-'}
                 </TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         <MoreHorizontal className="h-4 w-4" />
@@ -734,7 +748,7 @@ function BomItemsTable({
                         Edit
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         className="text-destructive"
                         onClick={() => onDelete(item)}
                       >
@@ -830,7 +844,7 @@ export function ProjectBomTab({ projectId }: ProjectBomTabProps) {
           </div>
           <h3 className="text-lg font-medium mb-2">No BOM yet</h3>
           <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-            Create a Bill of Materials to estimate costs, track materials through procurement, 
+            Create a Bill of Materials to estimate costs, track materials through procurement,
             and monitor installation progress.
           </p>
           <Button onClick={handleCreateBom} disabled={createBom.isPending}>
@@ -876,7 +890,7 @@ export function ProjectBomTab({ projectId }: ProjectBomTabProps) {
         <div className="flex items-start gap-2 p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground">
           <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
           <p>
-            Materials can be allocated to specific workstreams or site visits. 
+            Materials can be allocated to specific workstreams or site visits.
             Edit an item to set its status and track progress from planned → ordered → received → installed.
           </p>
         </div>

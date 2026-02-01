@@ -109,6 +109,10 @@ export function ProcurementReportsPage() {
       toast.success('Procurement report exported as CSV');
     } else {
       const reportFormat = format === 'excel' ? 'xlsx' : 'pdf';
+      if (!dateRange.from || !dateRange.to) {
+        toast.error('Please select a date range');
+        return;
+      }
       generateReport
         .mutateAsync({
           metrics: ['orders_count', 'average_order_value', 'revenue'],

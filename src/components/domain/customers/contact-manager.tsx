@@ -7,9 +7,7 @@
  * - Role flags (primary, decision maker, influencer)
  * - Department and title
  */
-import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useState, useEffect } from 'react'
 import { z } from 'zod'
 import {
   Mail,
@@ -21,17 +19,7 @@ import {
   Plus,
   Star,
 } from 'lucide-react'
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -52,6 +40,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form'
+import {
+  TextField,
+  EmailField,
+  PhoneField,
+  CheckboxField,
+} from '@/components/shared/forms'
 
 // ============================================================================
 // TYPES
@@ -254,29 +249,46 @@ function ContactFormDialog({
   defaultValues,
   mode,
 }: ContactFormDialogProps) {
-  const form = useForm<ContactFormValues>({
-    resolver: zodResolver(contactFormSchema),
+  const form = useTanStackForm({
+    schema: contactFormSchema,
     defaultValues: {
-      firstName: '',
-      lastName: '',
-      title: '',
-      email: '',
-      phone: '',
-      mobile: '',
-      department: '',
-      isPrimary: false,
-      decisionMaker: false,
-      influencer: false,
-      notes: '',
-      ...defaultValues,
+      firstName: defaultValues?.firstName ?? '',
+      lastName: defaultValues?.lastName ?? '',
+      title: defaultValues?.title ?? '',
+      email: defaultValues?.email ?? '',
+      phone: defaultValues?.phone ?? '',
+      mobile: defaultValues?.mobile ?? '',
+      department: defaultValues?.department ?? '',
+      isPrimary: defaultValues?.isPrimary ?? false,
+      decisionMaker: defaultValues?.decisionMaker ?? false,
+      influencer: defaultValues?.influencer ?? false,
+      notes: defaultValues?.notes ?? '',
+    },
+    onSubmit: async (data) => {
+      onSubmit(data)
+      form.reset()
+      onOpenChange(false)
     },
   })
 
-  const handleSubmit = (data: ContactFormValues) => {
-    onSubmit(data)
-    form.reset()
-    onOpenChange(false)
-  }
+  // Reset form when dialog opens with new values
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        firstName: defaultValues?.firstName ?? '',
+        lastName: defaultValues?.lastName ?? '',
+        title: defaultValues?.title ?? '',
+        email: defaultValues?.email ?? '',
+        phone: defaultValues?.phone ?? '',
+        mobile: defaultValues?.mobile ?? '',
+        department: defaultValues?.department ?? '',
+        isPrimary: defaultValues?.isPrimary ?? false,
+        decisionMaker: defaultValues?.decisionMaker ?? false,
+        influencer: defaultValues?.influencer ?? false,
+        notes: defaultValues?.notes ?? '',
+      })
+    }
+  }, [open, defaultValues, form])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -288,167 +300,124 @@ function ContactFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-            <div className="grid gap-4 grid-cols-2">
-              <FormField
-                control={form.control}
-                name="firstName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>First Name *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="John" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="lastName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Last Name *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Smith" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid gap-4 grid-cols-2">
-              <FormField
-                control={form.control}
-                name="title"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Job Title</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., CEO, Manager" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="department"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Department</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g., Sales, IT" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                      <Input className="pl-10" placeholder="john@company.com" {...field} />
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            form.handleSubmit()
+          }}
+          className="space-y-4"
+        >
+          <div className="grid gap-4 grid-cols-2">
+            <form.Field name="firstName">
+              {(field) => (
+                <TextField
+                  field={field}
+                  label="First Name"
+                  placeholder="John"
+                  required
+                />
               )}
-            />
+            </form.Field>
+            <form.Field name="lastName">
+              {(field) => (
+                <TextField
+                  field={field}
+                  label="Last Name"
+                  placeholder="Smith"
+                  required
+                />
+              )}
+            </form.Field>
+          </div>
 
-            <div className="grid gap-4 grid-cols-2">
-              <FormField
-                control={form.control}
-                name="phone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Phone</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input className="pl-10" placeholder="+61 2 1234 5678" {...field} />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="mobile"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Mobile</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Smartphone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input className="pl-10" placeholder="+61 4XX XXX XXX" {...field} />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+          <div className="grid gap-4 grid-cols-2">
+            <form.Field name="title">
+              {(field) => (
+                <TextField
+                  field={field}
+                  label="Job Title"
+                  placeholder="e.g., CEO, Manager"
+                />
+              )}
+            </form.Field>
+            <form.Field name="department">
+              {(field) => (
+                <TextField
+                  field={field}
+                  label="Department"
+                  placeholder="e.g., Sales, IT"
+                />
+              )}
+            </form.Field>
+          </div>
 
-            <div className="space-y-3 pt-2">
-              <FormField
-                control={form.control}
-                name="isPrimary"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                    <FormLabel className="font-normal">Primary contact for this customer</FormLabel>
-                  </FormItem>
-                )}
+          <form.Field name="email">
+            {(field) => (
+              <EmailField
+                field={field}
+                label="Email"
+                placeholder="john@company.com"
               />
-              <FormField
-                control={form.control}
-                name="decisionMaker"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                    <FormLabel className="font-normal">Decision maker</FormLabel>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="influencer"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                    <FormControl>
-                      <Checkbox checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                    <FormLabel className="font-normal">Influencer in purchase decisions</FormLabel>
-                  </FormItem>
-                )}
-              />
-            </div>
+            )}
+          </form.Field>
 
-            <div className="flex justify-end gap-3 pt-4">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit">
-                {mode === 'add' ? 'Add Contact' : 'Save Changes'}
-              </Button>
-            </div>
-          </form>
-        </Form>
+          <div className="grid gap-4 grid-cols-2">
+            <form.Field name="phone">
+              {(field) => (
+                <PhoneField
+                  field={field}
+                  label="Phone"
+                  placeholder="+61 2 1234 5678"
+                />
+              )}
+            </form.Field>
+            <form.Field name="mobile">
+              {(field) => (
+                <PhoneField
+                  field={field}
+                  label="Mobile"
+                  placeholder="+61 4XX XXX XXX"
+                />
+              )}
+            </form.Field>
+          </div>
+
+          <div className="space-y-3 pt-2">
+            <form.Field name="isPrimary">
+              {(field) => (
+                <CheckboxField
+                  field={field}
+                  label="Primary contact for this customer"
+                />
+              )}
+            </form.Field>
+            <form.Field name="decisionMaker">
+              {(field) => (
+                <CheckboxField
+                  field={field}
+                  label="Decision maker"
+                />
+              )}
+            </form.Field>
+            <form.Field name="influencer">
+              {(field) => (
+                <CheckboxField
+                  field={field}
+                  label="Influencer in purchase decisions"
+                />
+              )}
+            </form.Field>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit">
+              {mode === 'add' ? 'Add Contact' : 'Save Changes'}
+            </Button>
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   )

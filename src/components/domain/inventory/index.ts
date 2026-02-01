@@ -4,6 +4,34 @@
  * Export all inventory-related components for use throughout the application.
  */
 
+// --- Containers (Data Fetching + State Management) ---
+export {
+  InventoryDetailContainer,
+  type InventoryDetailContainerProps,
+  type InventoryDetailContainerRenderProps,
+} from './containers/inventory-detail-container';
+
+// --- Views (Presenters - Pure UI) ---
+export {
+  InventoryDetailView,
+  type InventoryDetailViewProps,
+  type LocationStock,
+  type SupplierInfo,
+} from './views/inventory-detail-view';
+
+// --- Status Configs ---
+export {
+  INVENTORY_STATUS_CONFIG,
+  QUALITY_STATUS_CONFIG,
+  MOVEMENT_TYPE_CONFIG,
+  ALERT_SEVERITY_CONFIG,
+  ALERT_ACTIVE_STATUS_CONFIG,
+  FORECAST_ACCURACY_CONFIG,
+  STOCK_STATUS_CONFIG,
+  ALERT_TYPE_DISPLAY_CONFIG,
+  getForecastAccuracyLevel,
+} from './inventory-status-config';
+
 // --- Core Components ---
 export {
   MetricCard,
@@ -19,11 +47,19 @@ export {
 
 export { QuickActionsBar, QuickActionsGrid } from './quick-actions';
 
+// --- Filter Config (FILTER-STANDARDS compliant) ---
 export {
-  FilterPanel,
-  type InventoryFilters,
-  defaultInventoryFilters,
-} from './filter-panel';
+  INVENTORY_FILTER_CONFIG,
+  INVENTORY_STATUS_OPTIONS,
+  QUALITY_STATUS_OPTIONS,
+  AGE_RANGE_OPTIONS,
+  DEFAULT_INVENTORY_FILTERS,
+  createInventoryFilterConfig,
+  type InventoryFiltersState,
+  type InventoryStatus,
+  type QualityStatus,
+  type AgeRange,
+} from './inventory-filter-config';
 
 export {
   ViewModeToggle,
@@ -96,4 +132,5 @@ export type {
   MovementByType,
   TopMover as ReportTopMover,
   MovementTrend,
+  MovementType,
 } from './reports/movement-analytics';

@@ -2,7 +2,7 @@
  * Pipeline Zod Schemas
  *
  * Validation schemas for opportunities, activities, quotes, and win/loss reasons.
- * All monetary values are in AUD cents.
+ * All monetary values are in AUD dollars (numeric(12,2)).
  *
  * @see drizzle/schema/pipeline.ts for database schema
  */
@@ -293,9 +293,9 @@ export const quoteLineItemSchema = z.object({
   sku: z.string().max(50).optional(),
   description: z.string().min(1).max(500),
   quantity: z.number().positive(),
-  unitPriceCents: currencySchema, // Price in cents
+  unitPrice: currencySchema, // Price in dollars
   discountPercent: percentageSchema.optional(),
-  totalCents: currencySchema, // Line total in cents
+  total: currencySchema, // Line total in dollars
 });
 
 export type QuoteLineItem = z.infer<typeof quoteLineItemSchema>;

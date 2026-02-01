@@ -14,7 +14,6 @@ import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { PipelineDetailSkeleton } from "@/components/skeletons/pipeline";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +25,8 @@ import { toastSuccess, toastError } from "@/hooks";
 import { OpportunityDetail } from "@/components/domain/pipeline";
 import { OpportunityForm } from "@/components/domain/pipeline";
 import { WonLostDialog } from "@/components/domain/pipeline";
+import { StatusCell } from "@/components/shared/data-table";
+import { OPPORTUNITY_STAGE_CONFIG } from "@/components/domain/pipeline/opportunities/opportunity-status-config";
 import {
   useOpportunity,
   useUpdateOpportunity,
@@ -69,28 +70,6 @@ export const Route = createFileRoute("/_authenticated/pipeline/$opportunityId")(
     </PageLayout>
   ),
 });
-
-// ============================================================================
-// STAGE BADGE STYLING
-// ============================================================================
-
-const stageBadgeVariants: Record<OpportunityStage, "default" | "secondary" | "outline" | "destructive"> = {
-  new: "secondary",
-  qualified: "secondary",
-  proposal: "default",
-  negotiation: "default",
-  won: "default",
-  lost: "destructive",
-};
-
-const stageLabels: Record<OpportunityStage, string> = {
-  new: "New",
-  qualified: "Qualified",
-  proposal: "Proposal",
-  negotiation: "Negotiation",
-  won: "Won",
-  lost: "Lost",
-};
 
 // ============================================================================
 // MAIN COMPONENT
@@ -283,9 +262,11 @@ function OpportunityDetailPage() {
           title={opportunity.title}
           description={
             <div className="flex items-center gap-3">
-              <Badge variant={stageBadgeVariants[opportunity.stage as OpportunityStage]}>
-                {stageLabels[opportunity.stage as OpportunityStage]}
-              </Badge>
+              <StatusCell
+                status={opportunity.stage as OpportunityStage}
+                statusConfig={OPPORTUNITY_STAGE_CONFIG}
+                showIcon
+              />
               <span className="text-muted-foreground">
                 {customer?.name ?? "Unknown Customer"}
               </span>

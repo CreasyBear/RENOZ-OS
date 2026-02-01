@@ -23,6 +23,7 @@ import { relations, sql } from "drizzle-orm";
 import { organizations } from "../settings/organizations";
 import { users } from "../users";
 import { aiAgentTaskStatusEnum, aiAgentNameEnum } from "./enums";
+import { currencyColumnNullable } from "../_shared/patterns";
 
 // ============================================================================
 // INTERFACES
@@ -101,7 +102,7 @@ export const aiAgentTasks = pgTable(
 
     // Cost tracking
     tokensUsed: integer("tokens_used").default(0),
-    costCents: integer("cost_cents").default(0),
+    cost: currencyColumnNullable("cost").default(0),
 
     // Lifecycle timestamps
     queuedAt: timestamp("queued_at", { withTimezone: true }).defaultNow(),

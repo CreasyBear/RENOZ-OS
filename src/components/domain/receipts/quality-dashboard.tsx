@@ -10,6 +10,7 @@ import { Package, CheckCircle, XCircle, AlertCircle, Percent } from 'lucide-reac
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
+import { MetricCard } from '@/components/shared';
 
 // ============================================================================
 // TYPES
@@ -30,41 +31,6 @@ interface QualityMetrics {
 interface QualityDashboardProps {
   metrics: QualityMetrics | null;
   isLoading?: boolean;
-}
-
-// ============================================================================
-// METRIC CARD
-// ============================================================================
-
-interface MetricCardProps {
-  title: string;
-  value: string | number;
-  description?: string;
-  icon: typeof Package;
-  iconColor?: string;
-}
-
-function MetricCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-  iconColor = 'text-muted-foreground',
-}: MetricCardProps) {
-  return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-muted-foreground text-sm">{title}</p>
-            <p className="text-2xl font-bold">{value}</p>
-            {description && <p className="text-muted-foreground mt-1 text-xs">{description}</p>}
-          </div>
-          <Icon className={`h-8 w-8 ${iconColor}`} />
-        </div>
-      </CardContent>
-    </Card>
-  );
 }
 
 // ============================================================================
@@ -130,13 +96,13 @@ function QualityDashboard({ metrics, isLoading = false }: QualityDashboardProps)
           title="Items Accepted"
           value={metrics.totalItemsAccepted}
           icon={CheckCircle}
-          iconColor="text-green-600"
+          iconClassName="text-green-600"
         />
         <MetricCard
           title="Items Rejected"
           value={metrics.totalItemsRejected}
           icon={XCircle}
-          iconColor="text-red-600"
+          iconClassName="text-red-600"
         />
       </div>
 

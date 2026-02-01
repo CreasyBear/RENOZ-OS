@@ -10,8 +10,7 @@
  * SPRINT-05: Wired up TaskEditDialog with API integration
  */
 
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { useEffect } from 'react';
 import { z } from 'zod';
 import { Plus, Info, Edit3 } from 'lucide-react';
 import {
@@ -23,26 +22,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useNavigate } from '@tanstack/react-router';
 import type { JobTask } from 'drizzle/schema';
-import { useEffect } from 'react';
+
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
+import { TextField, TextareaField, SelectField, NumberField } from '@/components/shared/forms';
 import { useUpdateTask } from '@/hooks/jobs';
 import { toast } from '@/lib/toast';
 
@@ -54,10 +38,15 @@ const taskFormSchema = z.object({
   title: z.string().min(1, 'Title is required').max(255),
   description: z.string().optional(),
   status: z.enum(['pending', 'in_progress', 'completed', 'blocked']),
-  estimatedHours: z.number().min(0).optional(),
+  estimatedHours: z.number().min(0).optional().nullable(),
 });
 
-type TaskFormData = z.infer<typeof taskFormSchema>;
+const statusOptions = [
+  { value: 'pending', label: 'Pending' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'blocked', label: 'Blocked' },
+];
 
 // ============================================================================
 // CREATE DIALOG
@@ -142,14 +131,35 @@ export function TaskEditDialog({
   onSuccess,
 }: TaskEditDialogProps) {
   const updateTask = useUpdateTask();
-  
-  const form = useForm<TaskFormData>({
-    resolver: zodResolver(taskFormSchema),
+
+  const form = useTanStackForm({
+    schema: taskFormSchema,
     defaultValues: {
       title: '',
       description: '',
-      status: 'pending',
-      estimatedHours: undefined,
+      status: 'pending' as const,
+      estimatedHours: null,
+    },
+    onSubmit: async (data) => {
+      if (!task) return;
+
+      try {
+        await updateTask.mutateAsync({
+          taskId: task.id,
+          title: data.title,
+          description: data.description,
+          status: data.status,
+          estimatedHours: data.estimatedHours ?? undefined,
+        });
+
+        toast.success('Task updated successfully');
+        form.reset();
+        onOpenChange(false);
+        onSuccess?.();
+      } catch (error) {
+        console.error('Error updating task:', error);
+        toast.error('Failed to update task');
+      }
     },
   });
 
@@ -159,32 +169,11 @@ export function TaskEditDialog({
       form.reset({
         title: task.title,
         description: task.description || '',
-        status: (task.status as TaskFormData['status']) || 'pending',
-        estimatedHours: task.estimatedHours || undefined,
+        status: (task.status as 'pending' | 'in_progress' | 'completed' | 'blocked') || 'pending',
+        estimatedHours: task.estimatedHours || null,
       });
     }
   }, [task, open, form]);
-
-  const onSubmit = async (data: TaskFormData) => {
-    if (!task) return;
-
-    try {
-      await updateTask.mutateAsync({
-        taskId: task.id,
-        title: data.title,
-        description: data.description,
-        status: data.status,
-        estimatedHours: data.estimatedHours,
-      });
-      
-      toast.success('Task updated successfully');
-      onOpenChange(false);
-      onSuccess?.();
-    } catch (error) {
-      console.error('Error updating task:', error);
-      toast.error('Failed to update task');
-    }
-  };
 
   if (!task) return null;
 
@@ -199,91 +188,64 @@ export function TaskEditDialog({
           <DialogDescription>Update task details</DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Title *</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="space-y-4"
+        >
+          <form.Field name="title">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Title"
+                required
+              />
+            )}
+          </form.Field>
 
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="blocked">Blocked</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form.Field name="status">
+            {(field) => (
+              <SelectField
+                field={field}
+                label="Status"
+                options={statusOptions}
+              />
+            )}
+          </form.Field>
 
-            <FormField
-              control={form.control}
-              name="estimatedHours"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Estimated Hours</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      min={0}
-                      step={0.5}
-                      placeholder="e.g., 4"
-                      {...field}
-                      onChange={(e) => field.onChange(e.target.value ? parseFloat(e.target.value) : undefined)}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form.Field name="estimatedHours">
+            {(field) => (
+              <NumberField
+                field={field}
+                label="Estimated Hours"
+                placeholder="e.g., 4"
+                min={0}
+                step={0.5}
+              />
+            )}
+          </form.Field>
 
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea className="min-h-[80px]" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form.Field name="description">
+            {(field) => (
+              <TextareaField
+                field={field}
+                label="Description"
+                rows={3}
+              />
+            )}
+          </form.Field>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={updateTask.isPending}>
-                {updateTask.isPending ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={updateTask.isPending}>
+              {updateTask.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

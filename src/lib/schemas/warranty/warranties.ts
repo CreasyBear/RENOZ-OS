@@ -4,7 +4,7 @@
  * Zod schemas for warranty CRUD, retrieval, and notification settings.
  *
  * @see drizzle/schema/warranty/warranties.ts
- * @see src/server/functions/warranty/warranties.ts
+ * @see src/server/functions/warranty/core/warranties.ts
  * @see _Initiation/_prd/2-domains/warranty/warranty.prd.json
  */
 

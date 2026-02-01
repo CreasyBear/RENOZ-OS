@@ -16,7 +16,8 @@ import {
   Zap,
   ArrowRight,
 } from 'lucide-react';
-import { formatCurrency } from '@/lib/formatters';
+import { FormatAmount, MetricCard } from '@/components/shared';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import { PageLayout } from '@/components/layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DateRangeSelector } from '@/components/domain/dashboard';
@@ -49,6 +50,7 @@ export const Route = createFileRoute('/_authenticated/dashboard/')({
 });
 
 function DashboardPage() {
+  const { formatCurrency } = useOrgFormat();
   const [dateRange, setDateRange] = useState<DateRange>(() => {
     const range = getPresetRange('30d');
     return range || { from: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), to: new Date() };
@@ -93,14 +95,14 @@ function DashboardPage() {
       label: 'Revenue',
       value: summary?.revenue?.current ?? 0,
       change: summary?.revenue?.change,
-      format: formatCurrency,
+      format: (v: number) => formatCurrency(v, { cents: false, showCents: true }),
       icon: DollarSign,
     },
     {
       label: 'Pipeline',
       value: summary?.pipelineValue?.current ?? 0,
       change: summary?.pipelineValue?.change,
-      format: formatCurrency,
+      format: (v: number) => formatCurrency(v, { cents: false, showCents: true }),
       icon: TrendingUp,
     },
     {
@@ -131,7 +133,7 @@ function DashboardPage() {
       format: (v: number) => v.toString(),
       icon: TrendingUp,
     },
-  ], [summary]);
+  ], [summary, formatCurrency]);
 
   const recentOrders = ordersData?.orders?.slice(0, 5) ?? [];
   const lowStockItems = lowStockData?.items?.slice(0, 5) ?? [];
@@ -160,12 +162,12 @@ function DashboardPage() {
         {/* KPI Cards */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 mb-6">
           {kpis.map((kpi) => (
-            <KpiCard
+            <MetricCard
               key={kpi.label}
-              label={kpi.label}
+              title={kpi.label}
               value={kpi.format(kpi.value)}
-              change={kpi.change}
               icon={kpi.icon}
+              delta={kpi.change}
               isLoading={isMetricsLoading}
             />
           ))}
@@ -237,7 +239,7 @@ function DashboardPage() {
                           {order.customer?.name || 'Unknown Customer'}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {formatCurrency(order.total ?? 0, { cents: false, showCents: true })}
+                          <FormatAmount amount={order.total ?? 0} cents={false} showCents={true} />
                         </p>
                       </div>
                       <OrderStatusBadge status={order.status} />
@@ -342,55 +344,9 @@ function DashboardActivityWidget({
 // SUB-COMPONENTS
 // ============================================================================
 
-function KpiCard({
-  label,
-  value,
-  change,
-  icon: Icon,
-  isLoading,
-}: {
-  label: string;
-  value: string;
-  change?: number;
-  icon: React.ComponentType<{ className?: string }>;
-  isLoading?: boolean;
-}) {
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="p-4">
-          <div className="h-16 bg-muted rounded animate-pulse" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">{label}</span>
-          <Icon className="h-4 w-4 text-muted-foreground" />
-        </div>
-        <div className="mt-2 flex items-baseline gap-2">
-          <span className="text-2xl font-semibold">{value}</span>
-          {change !== undefined && change !== 0 && (
-            <span
-              className={cn(
-                'text-xs font-medium',
-                change > 0 ? 'text-green-600' : 'text-red-600'
-              )}
-            >
-              {change > 0 ? '+' : ''}{change.toFixed(1)}%
-            </span>
-          )}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 function SimpleRevenueChart({ data }: { data: Array<{ date: string; label?: string; value: number }> }) {
+  const { formatCurrency } = useOrgFormat();
+
   if (!data || data.length === 0) {
     return (
       <div className="h-48 flex items-center justify-center text-muted-foreground">
@@ -409,7 +365,7 @@ function SimpleRevenueChart({ data }: { data: Array<{ date: string; label?: stri
           <div
             key={i}
             className="flex-1 flex flex-col items-center gap-1"
-            title={`${point.label || point.date}: ${formatCurrency(point.value)}`}
+            title={`${point.label || point.date}: ${formatCurrency(point.value, { cents: false, showCents: true })}`}
           >
             <div
               className="w-full bg-primary/20 rounded-t hover:bg-primary/30 transition-colors"

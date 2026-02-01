@@ -123,6 +123,16 @@ export {
 } from './use-report-favorites';
 
 // ============================================================================
+// METRICS HOOKS
+// ============================================================================
+export {
+  useAvailableMetrics,
+  type UseAvailableMetricsOptions,
+  type MetricId,
+  type MetricDefinition,
+} from './use-available-metrics';
+
+// ============================================================================
 // TYPE EXPORTS
 // ============================================================================
 export type {

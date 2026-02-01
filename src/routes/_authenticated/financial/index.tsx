@@ -20,8 +20,9 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { subMonths, startOfYear } from 'date-fns';
 import { Clock, TrendingUp, RefreshCw, Bell, ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { buttonVariants } from '@/components/ui/button';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
+import { cn } from '@/lib/utils';
 import { FinancialDashboardSkeleton } from '@/components/skeletons/financial';
 import { FinancialDashboard } from '@/components/domain/financial/financial-dashboard';
 import {
@@ -164,12 +165,13 @@ function FinancialDashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <CardDescription className="mb-4">{page.description}</CardDescription>
-                  <Button variant="outline" size="sm" asChild>
-                    <Link to={page.href}>
-                      View
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Link>
-                  </Button>
+                  <Link
+                    to={page.href}
+                    className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                  >
+                    View
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
                 </CardContent>
               </Card>
             );

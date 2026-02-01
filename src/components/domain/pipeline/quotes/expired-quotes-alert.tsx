@@ -1,16 +1,17 @@
 /**
- * ExpiredQuotesAlert Component
+ * ExpiredQuotesAlert Presenter
  *
  * Dashboard alert showing expired and expiring quotes.
  * Allows quick actions like extending validity or viewing details.
  *
+ * Pure presenter - all data passed via props from container.
+ *
+ * @see ./expired-quotes-alert-container.tsx (container)
  * @see _Initiation/_prd/2-domains/pipeline/pipeline.prd.json (PIPE-VALIDITY-UI)
  */
 
-import { memo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
-import { Link } from "@tanstack/react-router";
+import { memo, useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import {
   AlertTriangle,
   XCircle,
@@ -18,82 +19,95 @@ import {
   ChevronRight,
   ExternalLink,
   RefreshCw,
-} from "lucide-react";
+} from 'lucide-react';
 import {
   Alert,
   AlertDescription,
   AlertTitle,
-} from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+} from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
+} from '@/components/ui/card';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
-import { FormatAmount } from "@/components/shared/format";
-import { TruncateTooltip } from "@/components/shared/truncate-tooltip";
-import { formatDistanceToNow } from "date-fns";
-import {
-  getExpiringQuotes,
-  getExpiredQuotes,
-} from "@/server/functions/pipeline/quote-versions";
-import { ExtendValidityDialog } from "./extend-validity-dialog";
+} from '@/components/ui/collapsible';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
+import { FormatAmount } from '@/components/shared/format';
+import { TruncateTooltip } from '@/components/shared/truncate-tooltip';
+import { formatDistanceToNow } from 'date-fns';
+import { ExtendValidityDialog } from './extend-validity-dialog';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export interface ExpiredQuotesAlertProps {
+type QuoteItem = {
+  opportunityId: string;
+  opportunityTitle: string;
+  customerId: string;
+  quoteExpiresAt: Date | null;
+  value: number;
+  stage: string;
+  daysUntilExpiry?: number;
+  daysSinceExpiry?: number;
+};
+
+/**
+ * Container props - used by parent components
+ */
+export interface ExpiredQuotesAlertContainerProps {
   warningDays?: number;
   maxItems?: number;
   showExpired?: boolean;
   showExpiring?: boolean;
-  variant?: "alert" | "card";
+  variant?: 'alert' | 'card';
+  className?: string;
+}
+
+/**
+ * Presenter props - receives data from container
+ */
+export interface ExpiredQuotesAlertPresenterProps {
+  /** @source useExpiringQuotes hook */
+  expiringQuotes: QuoteItem[];
+  /** @source useExpiredQuotes hook */
+  expiredQuotes: QuoteItem[];
+  /** @source Combined loading state from container */
+  isLoading: boolean;
+  warningDays: number;
+  maxItems: number;
+  showExpired: boolean;
+  showExpiring: boolean;
+  variant: 'alert' | 'card';
   className?: string;
 }
 
 // ============================================================================
-// COMPONENT
+// PRESENTER COMPONENT
 // ============================================================================
 
-export const ExpiredQuotesAlert = memo(function ExpiredQuotesAlert({
-  warningDays = 7,
-  maxItems = 5,
-  showExpired = true,
-  showExpiring = true,
-  variant = "card",
+export const ExpiredQuotesAlertPresenter = memo(function ExpiredQuotesAlertPresenter({
+  expiringQuotes,
+  expiredQuotes,
+  isLoading,
+  warningDays,
+  maxItems,
+  showExpired,
+  showExpiring,
+  variant,
   className,
-}: ExpiredQuotesAlertProps) {
+}: ExpiredQuotesAlertPresenterProps) {
   const [expiredOpen, setExpiredOpen] = useState(true);
   const [expiringOpen, setExpiringOpen] = useState(true);
-
-  // Fetch expiring quotes
-  const expiringQuery = useQuery({
-    queryKey: queryKeys.pipeline.expiringQuotes(warningDays),
-    queryFn: () => getExpiringQuotes({ data: { warningDays } }),
-    enabled: showExpiring,
-  });
-
-  // Fetch expired quotes
-  const expiredQuery = useQuery({
-    queryKey: queryKeys.pipeline.expiredQuotes(),
-    queryFn: () => getExpiredQuotes({ data: {} }),
-    enabled: showExpired,
-  });
-
-  const expiringQuotes = expiringQuery.data?.expiringQuotes ?? [];
-  const expiredQuotes = expiredQuery.data?.expiredQuotes ?? [];
-  const isLoading = expiringQuery.isLoading || expiredQuery.isLoading;
 
   const totalExpired = expiredQuotes.length;
   const totalExpiring = expiringQuotes.length;
@@ -102,17 +116,6 @@ export const ExpiredQuotesAlert = memo(function ExpiredQuotesAlert({
   if (!isLoading && totalExpired === 0 && totalExpiring === 0) {
     return null;
   }
-
-  type QuoteItem = {
-    opportunityId: string;
-    opportunityTitle: string;
-    customerId: string;
-    quoteExpiresAt: Date | null;
-    value: number;
-    stage: string;
-    daysUntilExpiry?: number;
-    daysSinceExpiry?: number;
-  };
 
   const renderQuoteItem = (quote: QuoteItem, isExpired: boolean) => (
     <div
@@ -162,16 +165,16 @@ export const ExpiredQuotesAlert = memo(function ExpiredQuotesAlert({
     </div>
   );
 
-  if (variant === "alert") {
+  if (variant === 'alert') {
     return (
-      <div className={cn("space-y-2", className)}>
+      <div className={cn('space-y-2', className)}>
         {showExpired && totalExpired > 0 && (
           <Alert variant="destructive">
             <XCircle className="h-4 w-4" />
             <AlertTitle>Expired Quotes</AlertTitle>
             <AlertDescription>
-              {totalExpired} quote{totalExpired !== 1 ? "s have" : " has"} expired
-              and can no longer be accepted.{" "}
+              {totalExpired} quote{totalExpired !== 1 ? 's have' : ' has'} expired
+              and can no longer be accepted.{' '}
               <Link
                 to="/pipeline"
                 className="underline"
@@ -187,8 +190,8 @@ export const ExpiredQuotesAlert = memo(function ExpiredQuotesAlert({
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Expiring Soon</AlertTitle>
             <AlertDescription>
-              {totalExpiring} quote{totalExpiring !== 1 ? "s are" : " is"} expiring
-              within the next {warningDays} days.{" "}
+              {totalExpiring} quote{totalExpiring !== 1 ? 's are' : ' is'} expiring
+              within the next {warningDays} days.{' '}
               <Link
                 to="/pipeline"
                 className="underline"
@@ -238,8 +241,8 @@ export const ExpiredQuotesAlert = memo(function ExpiredQuotesAlert({
                     </div>
                     <ChevronRight
                       className={cn(
-                        "h-4 w-4 transition-transform",
-                        expiredOpen && "rotate-90"
+                        'h-4 w-4 transition-transform',
+                        expiredOpen && 'rotate-90'
                       )}
                     />
                   </Button>
@@ -278,8 +281,8 @@ export const ExpiredQuotesAlert = memo(function ExpiredQuotesAlert({
                     </div>
                     <ChevronRight
                       className={cn(
-                        "h-4 w-4 transition-transform",
-                        expiringOpen && "rotate-90"
+                        'h-4 w-4 transition-transform',
+                        expiringOpen && 'rotate-90'
                       )}
                     />
                   </Button>
@@ -315,4 +318,10 @@ export const ExpiredQuotesAlert = memo(function ExpiredQuotesAlert({
   );
 });
 
-export default ExpiredQuotesAlert;
+/**
+ * @deprecated Use ExpiredQuotesAlertContainer instead for new code.
+ * This export is kept for backwards compatibility.
+ */
+export const ExpiredQuotesAlert = ExpiredQuotesAlertPresenter;
+
+export default ExpiredQuotesAlertPresenter;

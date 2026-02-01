@@ -6,8 +6,7 @@
  * SPRINT-03: New component for project-centric jobs model
  */
 
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { useEffect } from 'react';
 import { z } from 'zod';
 import { Calendar } from 'lucide-react';
 import {
@@ -19,34 +18,19 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-  FormDescription,
-} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+  TextareaField,
+  SelectField,
+  NumberField,
+  DateField,
+} from '@/components/shared/forms';
 import { useCreateSiteVisit } from '@/hooks/jobs';
 import { useUsers } from '@/hooks/users';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 
 // ============================================================================
@@ -57,12 +41,20 @@ const createSiteVisitFormSchema = z.object({
   visitType: z.enum(['assessment', 'installation', 'commissioning', 'service', 'warranty', 'inspection', 'maintenance']),
   scheduledDate: z.date(),
   scheduledTime: z.string().optional(),
-  estimatedDuration: z.number().min(15).max(480).optional(),
+  estimatedDuration: z.number().min(15).max(480).optional().nullable(),
   installerId: z.string().optional(),
   notes: z.string().optional(),
 });
 
-type CreateSiteVisitFormData = z.infer<typeof createSiteVisitFormSchema>;
+const visitTypeOptions = [
+  { value: 'assessment', label: 'Site Assessment' },
+  { value: 'installation', label: 'Installation' },
+  { value: 'commissioning', label: 'Commissioning' },
+  { value: 'service', label: 'Service Call' },
+  { value: 'warranty', label: 'Warranty Repair' },
+  { value: 'inspection', label: 'Inspection' },
+  { value: 'maintenance', label: 'Maintenance' },
+];
 
 // ============================================================================
 // TYPES
@@ -90,39 +82,63 @@ export function SiteVisitCreateDialog({
   const { data: usersData } = useUsers();
 
   // Filter installers (users with installer type)
-  const installers = usersData?.items?.filter((user) => 
+  const installers = usersData?.items?.filter((user) =>
     user.type === 'installer'
   ) ?? [];
 
-  const form = useForm<CreateSiteVisitFormData>({
-    resolver: zodResolver(createSiteVisitFormSchema),
+  const installerOptions = [
+    { value: 'unassigned', label: 'Unassigned' },
+    ...installers.map((installer) => ({
+      value: installer.id,
+      label: installer.name ?? 'Unknown',
+    })),
+  ];
+
+  const form = useTanStackForm({
+    schema: createSiteVisitFormSchema,
     defaultValues: {
-      visitType: 'installation',
+      visitType: 'installation' as const,
+      scheduledDate: new Date(),
+      scheduledTime: '',
       estimatedDuration: 120,
+      installerId: 'unassigned',
       notes: '',
+    },
+    onSubmit: async (data) => {
+      try {
+        const result = await createSiteVisit.mutateAsync({
+          projectId,
+          visitType: data.visitType,
+          scheduledDate: format(data.scheduledDate, 'yyyy-MM-dd'),
+          scheduledTime: data.scheduledTime || undefined,
+          estimatedDuration: data.estimatedDuration ?? undefined,
+          installerId: data.installerId === 'unassigned' ? undefined : data.installerId,
+          notes: data.notes,
+        });
+
+        toast.success('Site visit scheduled successfully');
+        onOpenChange(false);
+        form.reset();
+        onSuccess?.(result.id);
+      } catch {
+        toast.error('Failed to schedule site visit');
+      }
     },
   });
 
-  const onSubmit = async (data: CreateSiteVisitFormData) => {
-    try {
-      const result = await createSiteVisit.mutateAsync({
-        projectId,
-        visitType: data.visitType,
-        scheduledDate: format(data.scheduledDate, 'yyyy-MM-dd'),
-        scheduledTime: data.scheduledTime,
-        estimatedDuration: data.estimatedDuration,
-        installerId: data.installerId,
-        notes: data.notes,
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        visitType: 'installation',
+        scheduledDate: new Date(),
+        scheduledTime: '',
+        estimatedDuration: 120,
+        installerId: 'unassigned',
+        notes: '',
       });
-
-      toast.success('Site visit scheduled successfully');
-      onOpenChange(false);
-      form.reset();
-      onSuccess?.(result.id);
-    } catch (error) {
-      toast.error('Failed to schedule site visit');
     }
-  };
+  }, [open, form]);
 
   const isSubmitting = createSiteVisit.isPending;
 
@@ -139,174 +155,108 @@ export function SiteVisitCreateDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="space-y-4">
-              {/* Visit Type */}
-              <FormField
-                control={form.control}
-                name="visitType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Visit Type</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="assessment">Site Assessment</SelectItem>
-                        <SelectItem value="installation">Installation</SelectItem>
-                        <SelectItem value="commissioning">Commissioning</SelectItem>
-                        <SelectItem value="service">Service Call</SelectItem>
-                        <SelectItem value="warranty">Warranty Repair</SelectItem>
-                        <SelectItem value="inspection">Inspection</SelectItem>
-                        <SelectItem value="maintenance">Maintenance</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="space-y-6"
+        >
+          <div className="space-y-4">
+            {/* Visit Type */}
+            <form.Field name="visitType">
+              {(field) => (
+                <SelectField
+                  field={field}
+                  label="Visit Type"
+                  options={visitTypeOptions}
+                  required
+                />
+              )}
+            </form.Field>
+
+            {/* Date & Time */}
+            <div className="grid grid-cols-2 gap-4">
+              <form.Field name="scheduledDate">
+                {(field) => (
+                  <DateField
+                    field={field}
+                    label="Date"
+                    required
+                  />
                 )}
-              />
+              </form.Field>
 
-              {/* Date & Time */}
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="scheduledDate"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-col">
-                      <FormLabel>Date</FormLabel>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <FormControl>
-                            <Button
-                              variant="outline"
-                              className={cn(
-                                'pl-3 text-left font-normal',
-                                !field.value && 'text-muted-foreground'
-                              )}
-                            >
-                              {field.value ? format(field.value, 'PP') : 'Pick date'}
-                            </Button>
-                          </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <CalendarComponent
-                            mode="single"
-                            selected={field.value}
-                            onSelect={field.onChange}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="scheduledTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Time (Optional)</FormLabel>
-                      <FormControl>
-                        <Input type="time" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {/* Duration & Installer */}
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="estimatedDuration"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Duration (minutes)</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          min={15}
-                          max={480}
-                          step={15}
-                          {...field}
-                          onChange={(e) => field.onChange(e.target.valueAsNumber || undefined)}
-                        />
-                      </FormControl>
-                      <FormDescription>Estimated visit duration</FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="installerId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Assigned Installer</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || ''}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select installer" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="">Unassigned</SelectItem>
-                          {installers.map((installer) => (
-                            <SelectItem key={installer.id} value={installer.id}>
-                              {installer.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              {/* Notes */}
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notes</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Any special instructions or notes for this visit..."
-                        className="min-h-[80px]"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
+              {/* Time - using native time input since we don't have a TimeField */}
+              <form.Field name="scheduledTime">
+                {(field) => (
+                  <div className="space-y-2">
+                    <Label>Time (Optional)</Label>
+                    <Input
+                      type="time"
+                      value={field.state.value ?? ''}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                    />
+                  </div>
                 )}
-              />
+              </form.Field>
             </div>
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={isSubmitting}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Scheduling...' : 'Schedule Visit'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+            {/* Duration & Installer */}
+            <div className="grid grid-cols-2 gap-4">
+              <form.Field name="estimatedDuration">
+                {(field) => (
+                  <NumberField
+                    field={field}
+                    label="Duration (minutes)"
+                    description="Estimated visit duration"
+                    min={15}
+                    max={480}
+                    step={15}
+                  />
+                )}
+              </form.Field>
+
+              <form.Field name="installerId">
+                {(field) => (
+                  <SelectField
+                    field={field}
+                    label="Assigned Installer"
+                    options={installerOptions}
+                    placeholder="Select installer"
+                  />
+                )}
+              </form.Field>
+            </div>
+
+            {/* Notes */}
+            <form.Field name="notes">
+              {(field) => (
+                <TextareaField
+                  field={field}
+                  label="Notes"
+                  placeholder="Any special instructions or notes for this visit..."
+                  rows={3}
+                />
+              )}
+            </form.Field>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Scheduling...' : 'Schedule Visit'}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

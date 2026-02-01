@@ -19,7 +19,8 @@ import {
   BarChart3,
   Plus,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -105,12 +106,14 @@ export const QuickActionsBar = memo(function QuickActionsBar({
           const Icon = action.icon;
           if (action.href) {
             return (
-              <Button key={action.id} variant="outline" size="sm" asChild>
-                <Link to={action.href as any}>
-                  <Icon className="h-4 w-4 mr-2" aria-hidden="true" />
-                  {action.label}
-                </Link>
-              </Button>
+              <Link
+                key={action.id}
+                to={action.href as any}
+                className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+              >
+                <Icon className="h-4 w-4 mr-2" aria-hidden="true" />
+                {action.label}
+              </Link>
             );
           }
           return (

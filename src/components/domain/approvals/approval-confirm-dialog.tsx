@@ -22,7 +22,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { formatCurrency } from '@/lib/formatters';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import {
   approvalRejectionReasons,
   approvalRejectionReasonLabels,
@@ -58,6 +58,7 @@ export function ApprovalConfirmDialog({
   const [comment, setComment] = useState('');
   const [reason, setReason] = useState<ApprovalRejectionReason | ''>('');
   const [error, setError] = useState<string | null>(null);
+  const { formatCurrency } = useOrgFormat();
 
   const isApprove = action === 'approve';
 
@@ -121,7 +122,7 @@ export function ApprovalConfirmDialog({
                   {order.supplierName || 'Unknown Supplier'}
                 </p>
                 <p className="text-lg font-bold">
-                  {formatCurrency(order.totalAmount, { cents: false })}
+                  {formatCurrency(order.totalAmount, { cents: false, showCents: true })}
                 </p>
               </div>
             </CardContent>

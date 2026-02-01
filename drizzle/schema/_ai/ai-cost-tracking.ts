@@ -23,6 +23,7 @@ import { organizations } from "../settings/organizations";
 import { users } from "../users";
 import { aiConversations } from "./ai-conversations";
 import { aiAgentTasks } from "./ai-agent-tasks";
+import { currencyColumn } from "../_shared/patterns";
 
 // ============================================================================
 // AI COST TRACKING TABLE
@@ -62,8 +63,8 @@ export const aiCostTracking = pgTable(
     cacheReadTokens: integer("cache_read_tokens").default(0),
     cacheWriteTokens: integer("cache_write_tokens").default(0),
 
-    // Cost in cents (avoids floating point issues)
-    costCents: integer("cost_cents").notNull(),
+    // Cost in dollars (numeric(12,2) for precision)
+    cost: currencyColumn("cost"),
 
     // Date for aggregation (without time)
     date: date("date").notNull(),

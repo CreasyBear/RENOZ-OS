@@ -29,7 +29,6 @@ export * from './knowledge-base';
 
 // --- Analytics ---
 export {
-  MetricCard,
   SummaryMetricsGrid,
   ClaimsByProductChart,
   ClaimsByTypeChart,
@@ -40,3 +39,6 @@ export {
   ExtensionTypeChart,
   ResolutionTypeChart,
 } from './warranty-analytics-charts';
+
+// Re-export shared MetricCard for domain consumers
+export { MetricCard, type MetricCardProps } from '@/components/shared';

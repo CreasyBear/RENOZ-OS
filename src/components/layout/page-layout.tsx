@@ -32,7 +32,6 @@
  */
 import { type ReactNode, createContext, useContext } from 'react'
 import { cn } from '@/lib/utils'
-import { Breadcrumbs } from './breadcrumbs'
 import { useIsMobile } from '@/hooks/_shared/use-mobile'
 import {
   Drawer,
@@ -61,12 +60,14 @@ interface PageLayoutProps {
 }
 
 interface PageHeaderProps {
-  title: ReactNode
+  /**
+   * Page title. Set to `null` for detail pages where EntityHeader displays the title.
+   * When null, only actions are rendered (if provided).
+   */
+  title: ReactNode | null
   description?: ReactNode
   actions?: ReactNode
   className?: string
-  /** Show breadcrumbs above the title (default: true) */
-  showBreadcrumbs?: boolean
 }
 
 interface PageContentProps {
@@ -116,35 +117,47 @@ const containerStyles: Record<PageLayoutVariant, string> = {
 
 /**
  * Page header with title, optional description, and action buttons.
- * Breadcrumbs are shown by default above the title.
+ *
+ * NOTE: Breadcrumbs are rendered by the global Header component, not here.
+ * This follows the single-responsibility principle:
+ * - Global Header → navigation concerns (breadcrumbs, search, user menu)
+ * - PageLayout.Header → page concerns (title, description, actions)
+ * - EntityHeader (in detail views) → entity concerns (name, status, avatar)
  */
 function PageHeader({
   title,
   description,
   actions,
   className,
-  showBreadcrumbs = true,
 }: PageHeaderProps) {
+  // Don't render header if title is explicitly null (detail pages use EntityHeader instead)
+  if (title === null) {
+    return actions ? (
+      <div className={cn('py-4 flex justify-end', className)}>
+        <div className="flex items-center gap-3">{actions}</div>
+      </div>
+    ) : null
+  }
+
   return (
     <div
       className={cn(
-        'py-6 border-b border-gray-200',
+        'py-6 border-b border-border',
         className
       )}
     >
-      {showBreadcrumbs && (
-        <div className="mb-3">
-          <Breadcrumbs />
-        </div>
-      )}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">{title}</h1>
+        <div className="min-w-0 flex-1">
+          <h1 className="text-2xl font-semibold text-foreground truncate">{title}</h1>
           {description && (
-            <p className="mt-1 text-sm text-gray-500">{description}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{description}</p>
           )}
         </div>
-        {actions && <div className="flex items-center gap-3">{actions}</div>}
+        {actions && (
+          <div className="flex items-center gap-3 shrink-0 transition-opacity duration-200">
+            {actions}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -213,8 +226,8 @@ function PageSidebar({
       <aside
         className={cn(
           'hidden lg:fixed lg:right-0 lg:top-16 lg:bottom-0 lg:w-80',
-          'lg:block lg:overflow-y-auto lg:border-l lg:border-gray-200',
-          'bg-white p-6',
+          'lg:block lg:overflow-y-auto lg:border-l lg:border-border',
+          'bg-background p-6',
           className
         )}
       >

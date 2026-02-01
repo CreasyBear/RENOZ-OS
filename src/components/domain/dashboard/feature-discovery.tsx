@@ -26,7 +26,7 @@ import {
   X,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { buttonVariants } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { cn } from '@/lib/utils'
 
@@ -225,13 +225,14 @@ export function FeatureDiscovery({
                 <p className="text-sm text-muted-foreground mt-1">
                   {nextFeature.description}
                 </p>
-                <Button size="sm" className="mt-3" asChild>
-                  <Link to={nextFeature.href}>
-                    <Zap className="mr-1.5 h-3.5 w-3.5" />
-                    Try it now
-                    <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                  </Link>
-                </Button>
+                <Link
+                  to={nextFeature.href}
+                  className={cn(buttonVariants({ size: "sm" }), "mt-3")}
+                >
+                  <Zap className="mr-1.5 h-3.5 w-3.5" />
+                  Try it now
+                  <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                </Link>
               </div>
             </div>
           </div>

@@ -33,6 +33,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { StatusCell } from "@/components/shared/data-table";
+import { ALERT_SEVERITY_CONFIG, ALERT_TYPE_DISPLAY_CONFIG } from "../inventory-status-config";
 
 // ============================================================================
 // TYPES
@@ -62,73 +64,34 @@ export interface InventoryAlert {
   triggeredAt: Date;
   acknowledgedAt?: Date;
   acknowledgedBy?: string;
+  isFallback?: boolean; // Flag to distinguish fallback alerts (cannot be acknowledged)
 }
 
 // ============================================================================
-// ALERT TYPE CONFIG
+// ALERT TYPE ICONS
 // ============================================================================
 
-const ALERT_TYPE_CONFIG: Record<AlertType, {
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  description: string;
-}> = {
-  low_stock: {
-    label: "Low Stock",
-    icon: TrendingDown,
-    description: "Stock below reorder point",
-  },
-  out_of_stock: {
-    label: "Out of Stock",
-    icon: Package,
-    description: "No available inventory",
-  },
-  overstock: {
-    label: "Overstock",
-    icon: AlertCircle,
-    description: "Excess inventory above threshold",
-  },
-  expiry: {
-    label: "Expiring Soon",
-    icon: Clock,
-    description: "Items approaching expiry date",
-  },
-  slow_moving: {
-    label: "Slow Moving",
-    icon: TrendingDown,
-    description: "Low turnover inventory",
-  },
-  forecast_deviation: {
-    label: "Forecast Deviation",
-    icon: AlertTriangle,
-    description: "Actual differs from forecast",
-  },
+const ALERT_TYPE_ICONS: Record<AlertType, React.ComponentType<{ className?: string }>> = {
+  low_stock: TrendingDown,
+  out_of_stock: Package,
+  overstock: AlertCircle,
+  expiry: Clock,
+  slow_moving: TrendingDown,
+  forecast_deviation: AlertTriangle,
 };
 
-const SEVERITY_CONFIG: Record<AlertSeverity, {
-  icon: React.ComponentType<{ className?: string }>;
-  color: string;
-  bgColor: string;
-  label: string;
-}> = {
-  critical: {
-    icon: AlertCircle,
-    color: "text-red-600",
-    bgColor: "bg-red-50 dark:bg-red-950/50",
-    label: "Critical",
-  },
-  warning: {
-    icon: AlertTriangle,
-    color: "text-orange-600",
-    bgColor: "bg-orange-50 dark:bg-orange-950/50",
-    label: "Warning",
-  },
-  info: {
-    icon: Bell,
-    color: "text-blue-600",
-    bgColor: "bg-blue-50 dark:bg-blue-950/50",
-    label: "Info",
-  },
+// Severity background colors for the alert item container
+const SEVERITY_BG_COLORS: Record<AlertSeverity, string> = {
+  critical: "bg-red-50 dark:bg-red-950/50",
+  warning: "bg-orange-50 dark:bg-orange-950/50",
+  info: "bg-blue-50 dark:bg-blue-950/50",
+};
+
+// Severity icon colors
+const SEVERITY_ICON_COLORS: Record<AlertSeverity, string> = {
+  critical: "text-red-600",
+  warning: "text-orange-600",
+  info: "text-blue-600",
 };
 
 // ============================================================================
@@ -146,10 +109,12 @@ const AlertItem = memo(function AlertItem({
   onAcknowledge,
   onViewDetails,
 }: AlertItemProps) {
-  const typeConfig = ALERT_TYPE_CONFIG[alert.alertType];
-  const severityConfig = SEVERITY_CONFIG[alert.severity];
-  const TypeIcon = typeConfig.icon;
-  const SeverityIcon = severityConfig.icon;
+  // Safe access with fallback for unknown alert types
+  const typeConfig = ALERT_TYPE_DISPLAY_CONFIG[alert.alertType] ?? ALERT_TYPE_DISPLAY_CONFIG.low_stock;
+  const TypeIcon = ALERT_TYPE_ICONS[alert.alertType] ?? ALERT_TYPE_ICONS.low_stock;
+  const severityBgColor = SEVERITY_BG_COLORS[alert.severity] ?? SEVERITY_BG_COLORS.warning;
+  const severityIconColor = SEVERITY_ICON_COLORS[alert.severity] ?? SEVERITY_ICON_COLORS.warning;
+  const SeverityIcon = ALERT_SEVERITY_CONFIG[alert.severity]?.icon ?? AlertTriangle;
 
   return (
     <div
@@ -157,13 +122,13 @@ const AlertItem = memo(function AlertItem({
         "flex items-start gap-3 p-3 rounded-lg border transition-colors",
         alert.acknowledgedAt
           ? "opacity-60 bg-muted/50"
-          : severityConfig.bgColor
+          : severityBgColor
       )}
       role="listitem"
     >
       {/* Severity + Type Icon - color + icon for accessibility */}
       <div className="flex-shrink-0 mt-0.5">
-        <div className={cn("relative", severityConfig.color)}>
+        <div className={cn("relative", severityIconColor)}>
           <TypeIcon className="h-5 w-5" aria-hidden="true" />
           <SeverityIcon
             className="h-3 w-3 absolute -top-1 -right-1"
@@ -194,23 +159,17 @@ const AlertItem = memo(function AlertItem({
             </div>
           </div>
 
-          {/* Severity badge with icon */}
+          {/* Severity badge with semantic colors */}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Badge
-                  variant={
-                    alert.severity === "critical"
-                      ? "destructive"
-                      : alert.severity === "warning"
-                        ? "secondary"
-                        : "outline"
-                  }
-                  className="flex-shrink-0"
-                >
-                  <SeverityIcon className="h-3 w-3 mr-1" aria-hidden="true" />
-                  {severityConfig.label}
-                </Badge>
+                <span className="flex-shrink-0">
+                  <StatusCell
+                    status={alert.severity}
+                    statusConfig={ALERT_SEVERITY_CONFIG}
+                    showIcon
+                  />
+                </span>
               </TooltipTrigger>
               <TooltipContent>
                 <p>{typeConfig.description}</p>

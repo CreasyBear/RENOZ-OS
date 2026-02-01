@@ -20,6 +20,7 @@ import {
   CheckCircle,
   Package,
   ShoppingCart,
+  MapPin,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -52,6 +53,14 @@ export interface ReorderRecommendation {
   recommendedQuantity: number;
   urgency: ReorderUrgency;
   daysUntilStockout: number | null;
+  locationCount?: number;
+  locations?: Array<{
+    locationId: string;
+    locationName: string;
+    locationCode: string | null;
+    quantityOnHand: number;
+    quantityAvailable: number;
+  }>;
 }
 
 interface ReorderRecommendationsProps {
@@ -231,10 +240,12 @@ export const ReorderRecommendations = memo(function ReorderRecommendations({
               {recommendations.map((rec) => {
                 const urgencyConfig = URGENCY_CONFIG[rec.urgency];
                 const UrgencyIcon = urgencyConfig.icon;
-                const stockPercentage = Math.min(
-                  100,
-                  Math.round((rec.currentStock / rec.reorderPoint) * 100)
-                );
+                // Handle division by zero: if reorderPoint is 0, show 0% or handle appropriately
+                const stockPercentage = rec.reorderPoint > 0
+                  ? Math.min(100, Math.round((rec.currentStock / rec.reorderPoint) * 100))
+                  : rec.currentStock > 0
+                    ? 100 // If no reorder point but has stock, show 100%
+                    : 0; // If no stock and no reorder point, show 0%
 
                 return (
                   <TableRow key={rec.productId}>
@@ -244,11 +255,25 @@ export const ReorderRecommendations = memo(function ReorderRecommendations({
                           className="h-4 w-4 text-muted-foreground"
                           aria-hidden="true"
                         />
-                        <div>
-                          <div className="font-medium">{rec.productName}</div>
-                          <div className="text-xs text-muted-foreground font-mono">
-                            {rec.productSku}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="font-medium truncate">{rec.productName}</div>
+                            <Badge variant="outline" className="text-xs font-mono shrink-0">
+                              {rec.productSku}
+                            </Badge>
                           </div>
+                          {rec.locations && rec.locations.length > 0 && (
+                            <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1 flex-wrap">
+                              <MapPin className="h-3 w-3" aria-hidden="true" />
+                              <span>
+                                {rec.locations.length === 1
+                                  ? rec.locations[0].locationCode
+                                    ? `${rec.locations[0].locationName} (${rec.locations[0].locationCode})`
+                                    : rec.locations[0].locationName
+                                  : `${rec.locations.length} locations`}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </TableCell>

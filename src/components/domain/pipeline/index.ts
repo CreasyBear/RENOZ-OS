@@ -27,11 +27,16 @@ export {
 } from './pipeline-list-view';
 export type { PipelineViewMode } from './pipeline-kanban-container';
 export { PipelineMetrics, type PipelineMetricsProps } from './pipeline-metrics';
+
+// --- Filter Config (FILTER-STANDARDS compliant) ---
 export {
-  PipelineFilters,
-  type PipelineFiltersProps,
+  PIPELINE_FILTER_CONFIG,
+  PIPELINE_STAGE_OPTIONS,
+  ACTIVE_STAGE_OPTIONS,
+  DEFAULT_PIPELINE_FILTERS,
+  createPipelineFilterConfig,
   type PipelineFiltersState,
-} from './pipeline-filters';
+} from './pipeline-filter-config';
 export { WonLostDialog, type WonLostDialogProps } from './won-lost-dialog';
 export {
   ProductQuickAdd,
@@ -41,20 +46,26 @@ export {
 
 // --- Quotes ---
 export * from './quotes';
-export type { QuoteBuilderProps } from './quotes/quote-builder';
-export type { QuoteVersionHistoryProps } from './quotes/quote-version-history';
-export type { QuotePdfPreviewProps } from './quotes/quote-pdf-preview';
+export type { QuoteBuilderContainerProps, QuoteBuilderPresenterProps } from './quotes/quote-builder';
+export type { QuoteVersionHistoryContainerProps, QuoteVersionHistoryPresenterProps } from './quotes/quote-version-history';
+export type { QuotePdfPreviewContainerProps, QuotePdfPreviewPresenterProps } from './quotes/quote-pdf-preview';
 export type { QuoteValidityBadgeProps } from './quotes/quote-validity-badge';
 export type { ExtendValidityDialogProps } from './quotes/extend-validity-dialog';
-export type { ExpiredQuotesAlertProps } from './quotes/expired-quotes-alert';
-export type { QuickQuoteFormProps } from './quotes/quick-quote-form';
+export type { ExpiredQuotesAlertContainerProps, ExpiredQuotesAlertPresenterProps } from './quotes/expired-quotes-alert';
+export type { QuickQuoteFormContainerProps, QuickQuoteFormPresenterProps } from './quotes/quick-quote-form';
 export type { QuickQuoteDialogProps } from './quotes/quick-quote-dialog';
 
 // --- Opportunities ---
 export * from './opportunities';
 export type { OpportunityCardProps } from './opportunities/opportunity-card';
+/** @deprecated Use OpportunityDetailViewProps instead */
 export type { OpportunityDetailProps } from './opportunities/opportunity-detail';
 export type { OpportunityFormProps } from './opportunities/opportunity-form';
+export type {
+  OpportunityDetailContainerProps,
+  OpportunityDetailContainerRenderProps,
+} from './opportunities/containers/opportunity-detail-container';
+export type { OpportunityDetailViewProps } from './opportunities/views/opportunity-detail-view';
 
 // --- Activities ---
 export * from './activities';

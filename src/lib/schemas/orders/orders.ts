@@ -240,3 +240,41 @@ export const updateOrderStatusSchema = z.object({
 });
 
 export type UpdateOrderStatus = z.infer<typeof updateOrderStatusSchema>;
+
+// ============================================================================
+// ORDER LINE ITEM OPERATIONS
+// ============================================================================
+
+/**
+ * Input for adding a line item to an existing order
+ * Matches server function: { orderId, item: {...} }
+ */
+export const addOrderLineItemInputSchema = z.object({
+  orderId: z.string().uuid(),
+  item: createOrderLineItemSchema,
+});
+
+export type AddOrderLineItemInput = z.infer<typeof addOrderLineItemInputSchema>;
+
+/**
+ * Input for updating an existing line item
+ * Matches server function: { orderId, itemId, data: {...} }
+ */
+export const updateOrderLineItemInputSchema = z.object({
+  orderId: z.string().uuid(),
+  itemId: z.string().uuid(),
+  data: createOrderLineItemSchema.partial(),
+});
+
+export type UpdateOrderLineItemInput = z.infer<typeof updateOrderLineItemInputSchema>;
+
+/**
+ * Input for deleting a line item
+ * Matches server function: { orderId, itemId }
+ */
+export const deleteOrderLineItemInputSchema = z.object({
+  orderId: z.string().uuid(),
+  itemId: z.string().uuid(),
+});
+
+export type DeleteOrderLineItemInput = z.infer<typeof deleteOrderLineItemInputSchema>;

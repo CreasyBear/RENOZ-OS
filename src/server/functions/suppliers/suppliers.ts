@@ -18,6 +18,19 @@ import { purchaseOrders } from 'drizzle/schema/suppliers';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { computeChanges } from '@/lib/activity-logger';
+
+// Excluded fields for activity logging (system-managed fields)
+const SUPPLIER_EXCLUDED_FIELDS: string[] = [
+  'updatedAt',
+  'updatedBy',
+  'createdAt',
+  'createdBy',
+  'deletedAt',
+  'organizationId',
+  'version',
+];
 
 // ============================================================================
 // INPUT SCHEMAS
@@ -312,7 +325,29 @@ export const createSupplier = createServerFn({ method: 'POST' })
       })
       .returning();
 
-    return result[0];
+    const supplier = result[0];
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'supplier',
+      entityId: supplier.id,
+      action: 'created',
+      description: `Created supplier: ${supplier.name}`,
+      changes: computeChanges({
+        before: null,
+        after: supplier,
+        excludeFields: SUPPLIER_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        supplierCode: supplier.supplierCode,
+        supplierName: supplier.name,
+        supplierType: supplier.supplierType ?? undefined,
+        status: supplier.status,
+      },
+    });
+
+    return supplier;
   });
 
 /**
@@ -324,6 +359,23 @@ export const updateSupplier = createServerFn({ method: 'POST' })
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
     const { id, ...updateData } = data;
+
+    // Get existing supplier for change tracking
+    const [existingSupplier] = await db
+      .select()
+      .from(suppliers)
+      .where(
+        and(
+          eq(suppliers.id, id),
+          eq(suppliers.organizationId, ctx.organizationId),
+          isNull(suppliers.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!existingSupplier) {
+      throw new NotFoundError('Supplier not found', 'Supplier');
+    }
 
     // Build update object
     const updates: Record<string, unknown> = {
@@ -376,7 +428,28 @@ export const updateSupplier = createServerFn({ method: 'POST' })
       throw new NotFoundError('Supplier not found', 'Supplier');
     }
 
-    return result[0];
+    const updatedSupplier = result[0];
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'supplier',
+      entityId: updatedSupplier.id,
+      action: 'updated',
+      description: `Updated supplier: ${updatedSupplier.name}`,
+      changes: computeChanges({
+        before: existingSupplier,
+        after: updatedSupplier,
+        excludeFields: SUPPLIER_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        supplierCode: updatedSupplier.supplierCode,
+        supplierName: updatedSupplier.name,
+        changedFields: Object.keys(updateData),
+      },
+    });
+
+    return updatedSupplier;
   });
 
 /**
@@ -386,6 +459,23 @@ export const deleteSupplier = createServerFn({ method: 'POST' })
   .inputValidator(getSupplierSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.delete });
+
+    // Get existing supplier for logging
+    const [existingSupplier] = await db
+      .select()
+      .from(suppliers)
+      .where(
+        and(
+          eq(suppliers.id, data.id),
+          eq(suppliers.organizationId, ctx.organizationId),
+          isNull(suppliers.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!existingSupplier) {
+      throw new NotFoundError('Supplier not found', 'Supplier');
+    }
 
     // Check if supplier has active purchase orders
     const activeOrders = await db
@@ -423,6 +513,24 @@ export const deleteSupplier = createServerFn({ method: 'POST' })
       throw new NotFoundError('Supplier not found', 'Supplier');
     }
 
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'supplier',
+      entityId: existingSupplier.id,
+      action: 'deleted',
+      description: `Deleted supplier: ${existingSupplier.name}`,
+      changes: computeChanges({
+        before: existingSupplier,
+        after: null,
+        excludeFields: SUPPLIER_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        supplierCode: existingSupplier.supplierCode,
+        supplierName: existingSupplier.name,
+      },
+    });
+
     return { success: true, id: result[0].id };
   });
 
@@ -437,6 +545,23 @@ export const updateSupplierRating = createServerFn({ method: 'POST' })
   .inputValidator(updateSupplierRatingSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
+
+    // Get existing supplier for logging
+    const [existingSupplier] = await db
+      .select()
+      .from(suppliers)
+      .where(
+        and(
+          eq(suppliers.id, data.id),
+          eq(suppliers.organizationId, ctx.organizationId),
+          isNull(suppliers.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!existingSupplier) {
+      throw new NotFoundError('Supplier not found', 'Supplier');
+    }
 
     // Calculate overall rating
     const overallRating =
@@ -454,14 +579,8 @@ export const updateSupplierRating = createServerFn({ method: 'POST' })
 
     // Append notes if provided
     if (data.notes) {
-      const current = await db
-        .select({ notes: suppliers.notes })
-        .from(suppliers)
-        .where(and(eq(suppliers.id, data.id), eq(suppliers.organizationId, ctx.organizationId)))
-        .limit(1);
-
-      if (current[0]?.notes) {
-        updates.notes = `${current[0].notes}\n\n[${new Date().toISOString()}] Rating update: ${data.notes}`;
+      if (existingSupplier.notes) {
+        updates.notes = `${existingSupplier.notes}\n\n[${new Date().toISOString()}] Rating update: ${data.notes}`;
       } else {
         updates.notes = `[${new Date().toISOString()}] Rating update: ${data.notes}`;
       }
@@ -482,6 +601,29 @@ export const updateSupplierRating = createServerFn({ method: 'POST' })
     if (!result[0]) {
       throw new NotFoundError('Supplier not found', 'Supplier');
     }
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'supplier',
+      entityId: existingSupplier.id,
+      action: 'updated',
+      description: `Updated supplier rating: ${existingSupplier.name}`,
+      changes: computeChanges({
+        before: existingSupplier,
+        after: result[0],
+        excludeFields: SUPPLIER_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        supplierCode: existingSupplier.supplierCode,
+        supplierName: existingSupplier.name,
+        previousRating: existingSupplier.overallRating ?? undefined,
+        newRating: overallRating,
+        qualityRating: data.qualityRating,
+        deliveryRating: data.deliveryRating,
+        communicationRating: data.communicationRating,
+      },
+    });
 
     return {
       success: true,

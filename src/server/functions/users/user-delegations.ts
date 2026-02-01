@@ -22,6 +22,18 @@ import {
 } from '@/lib/schemas/users';
 import { idParamSchema, paginationSchema } from '@/lib/schemas';
 import { NotFoundError, ConflictError } from '@/lib/server/errors';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { computeChanges } from '@/lib/activity-logger';
+
+// Excluded fields for activity logging
+const DELEGATION_EXCLUDED_FIELDS: string[] = [
+  'updatedAt',
+  'updatedBy',
+  'createdAt',
+  'createdBy',
+  'organizationId',
+  'version',
+];
 
 // ============================================================================
 // CREATE DELEGATION
@@ -84,6 +96,31 @@ export const createDelegation = createServerFn({ method: 'POST' })
         updatedBy: ctx.user.id,
       })
       .returning();
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'user',
+      entityId: delegation.id,
+      action: 'created',
+      description: `Created delegation to ${delegate.name ?? delegate.email}`,
+      changes: computeChanges({
+        before: null,
+        after: delegation,
+        excludeFields: DELEGATION_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        delegationId: delegation.id,
+        delegatorId: ctx.user.id,
+        delegatorName: ctx.user.name ?? undefined,
+        delegateId: delegate.id,
+        delegateName: delegate.name ?? undefined,
+        delegateEmail: delegate.email,
+        startDate: delegation.startDate.toISOString(),
+        endDate: delegation.endDate.toISOString(),
+        reason: delegation.reason ?? undefined,
+      },
+    });
 
     return {
       id: delegation.id,
@@ -422,6 +459,27 @@ export const updateDelegation = createServerFn({ method: 'POST' })
       .where(eq(users.id, updated.delegateId))
       .limit(1);
 
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'user',
+      entityId: updated.id,
+      action: 'updated',
+      description: `Updated delegation to ${delegate?.name ?? delegate?.email ?? 'user'}`,
+      changes: computeChanges({
+        before: existing,
+        after: updated,
+        excludeFields: DELEGATION_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        delegationId: updated.id,
+        delegatorId: ctx.user.id,
+        delegateId: updated.delegateId,
+        delegateName: delegate?.name ?? undefined,
+        changedFields: Object.keys(data.updates),
+      },
+    });
+
     return {
       id: updated.id,
       organizationId: updated.organizationId,
@@ -457,7 +515,12 @@ export const cancelDelegation = createServerFn({ method: 'POST' })
 
     // Verify delegation exists and belongs to current user
     const [existing] = await db
-      .select({ id: userDelegations.id })
+      .select({
+        id: userDelegations.id,
+        delegateId: userDelegations.delegateId,
+        startDate: userDelegations.startDate,
+        endDate: userDelegations.endDate,
+      })
       .from(userDelegations)
       .where(
         and(
@@ -472,6 +535,13 @@ export const cancelDelegation = createServerFn({ method: 'POST' })
       throw new NotFoundError('Delegation not found', 'delegation');
     }
 
+    // Get delegate info for logging
+    const [delegate] = await db
+      .select({ name: users.name, email: users.email })
+      .from(users)
+      .where(eq(users.id, existing.delegateId))
+      .limit(1);
+
     await db
       .update(userDelegations)
       .set({
@@ -480,6 +550,27 @@ export const cancelDelegation = createServerFn({ method: 'POST' })
         version: sql`version + 1`,
       })
       .where(eq(userDelegations.id, data.id));
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'user',
+      entityId: data.id,
+      action: 'updated',
+      description: `Cancelled delegation to ${delegate?.name ?? delegate?.email ?? 'user'}`,
+      changes: undefined,
+      metadata: {
+        delegationId: data.id,
+        delegatorId: ctx.user.id,
+        delegateId: existing.delegateId,
+        delegateName: delegate?.name ?? undefined,
+        delegateEmail: delegate?.email ?? undefined,
+        startDate: existing.startDate.toISOString(),
+        endDate: existing.endDate.toISOString(),
+        previousStatus: 'active',
+        newStatus: 'cancelled',
+      },
+    });
 
     return { success: true };
   });

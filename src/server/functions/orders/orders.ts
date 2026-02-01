@@ -905,6 +905,7 @@ export const updateOrder = createServerFn({ method: 'POST' })
         description: `Updated order: ${updated.orderNumber}`,
         metadata: {
           orderNumber: updated.orderNumber,
+          customerId: updated.customerId, // Include customerId for customer timeline lookup
           changedFields: changes.fields,
         },
       });
@@ -947,8 +948,6 @@ export const updateOrderStatus = createServerFn({ method: 'POST' })
     if (!existing) {
       throw new NotFoundError('Order not found', 'order');
     }
-
-    const before = existing;
 
     // Validate status transition
     const currentStatus = existing.status as OrderStatus;
@@ -1044,6 +1043,7 @@ export const updateOrderStatus = createServerFn({ method: 'POST' })
       description: `Status changed: ${currentStatus} → ${newStatus}`,
       metadata: {
         orderNumber: updated.orderNumber,
+        customerId: updated.customerId, // Include customerId for customer timeline lookup
         previousStatus: currentStatus,
         newStatus,
         notes: data.notes ?? null,

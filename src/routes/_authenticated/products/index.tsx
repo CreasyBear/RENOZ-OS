@@ -9,22 +9,18 @@
  */
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
-import { Plus, Download, Upload, Search, X, Loader2, Trash2, Tag, Package, AlertTriangle, Layers, DollarSign } from "lucide-react";
+import { Plus, Download, Upload, X, Loader2, Trash2, Tag, Package, AlertTriangle, Layers, DollarSign } from "lucide-react";
 import { z } from "zod";
 
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
-import { Button } from "@/components/ui/button";
-import { toastSuccess } from "@/hooks";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { useConfirmation } from "@/hooks";
 import { ProductTableSkeleton } from "@/components/skeletons/products/table-skeleton";
-import { Input } from "@/components/ui/input";
+import { ConfirmationDialog } from "@/components/ui/confirmation-dialog";
+import { confirmations } from "@/hooks/_shared/use-confirmation";
+import { useBulkDeleteProducts } from "@/hooks/products";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { EmptyState } from "@/components/shared/empty-state";
 import { SearchEmptyState } from "@/components/shared/search-empty-state";
 import { MetricCard } from "@/components/shared/metric-card";
@@ -33,7 +29,14 @@ import { exportProducts } from "@/server/functions/products/product-bulk-ops";
 import { useState as useStateCallback } from "react";
 import { ProductTable } from "@/components/domain/products/product-table";
 import { CategorySidebar } from "@/components/domain/products";
-import { formatCurrency } from "@/lib/formatters";
+import { useOrgFormat } from "@/hooks/use-org-format";
+import { DomainFilterBar } from "@/components/shared/filters";
+import {
+  PRODUCT_FILTER_CONFIG,
+  DEFAULT_PRODUCT_FILTERS,
+  type ProductFiltersState,
+} from "@/components/domain/products/product-filter-config";
+import { useTransformedFilterUrlState } from "@/hooks/filters/use-filter-url-state";
 
 // Search params schema for URL-based filtering
 const searchParamsSchema = z.object({
@@ -74,9 +77,35 @@ export const Route = createFileRoute("/_authenticated/products/")({
   ),
 });
 
+// ============================================================================
+// URL FILTER TRANSFORMERS
+// ============================================================================
+
+/** Transform URL search params to ProductFiltersState */
+const fromUrlParams = (search: SearchParams): ProductFiltersState => ({
+  search: search.search ?? "",
+  status: search.status ? [search.status] : [],
+  type: search.type ? [search.type] : [],
+  priceRange: null, // Not yet in URL schema
+  tags: [],
+});
+
+/** Transform ProductFiltersState to URL search params */
+const toUrlParams = (filters: ProductFiltersState): Record<string, unknown> => ({
+  search: filters.search || undefined,
+  status: filters.status.length > 0 ? filters.status[0] : undefined,
+  type: filters.type.length > 0 ? filters.type[0] : undefined,
+});
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+
 function ProductsPage() {
-  // Use type assertions since route types aren't generated yet
   const navigate = useNavigate();
+  const { formatCurrency } = useOrgFormat();
+  const confirm = useConfirmation();
+  const bulkDeleteProducts = useBulkDeleteProducts();
   const search = Route.useSearch() as SearchParams;
   const loaderData = Route.useLoaderData() as {
     productsResult: Awaited<ReturnType<typeof listProducts>>;
@@ -84,13 +113,25 @@ function ProductsPage() {
   };
   const { productsResult, categoryTree } = loaderData;
 
-  // Local state for search input (debounced before URL update)
-  const [searchInput, setSearchInput] = useState(search.search ?? "");
+  // URL-synced filter state with transformations
+  const { filters, setFilters } = useTransformedFilterUrlState({
+    currentSearch: search,
+    navigate,
+    defaults: DEFAULT_PRODUCT_FILTERS,
+    fromUrlParams,
+    toUrlParams,
+    resetPageOnChange: ['search', 'status', 'type'],
+  });
+
+  // Handle filter changes
+  const handleFiltersChange = (newFilters: ProductFiltersState) => {
+    setFilters(newFilters);
+  };
 
   // Selected rows for bulk actions
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
 
-  // Update URL search params
+  // Update URL search params (for pagination, sort, category)
   const updateSearch = (updates: Partial<SearchParams>) => {
     const newSearch = {
       ...search,
@@ -101,25 +142,6 @@ function ProductsPage() {
     navigate({
       to: ".",
       search: newSearch as Record<string, unknown>,
-    });
-  };
-
-  // Handle search with debounce
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    updateSearch({ search: searchInput || undefined });
-  };
-
-  // Clear all filters
-  const clearFilters = () => {
-    setSearchInput("");
-    navigate({
-      to: ".",
-      search: {
-        page: 1,
-        pageSize: search.pageSize,
-        sortOrder: "desc",
-      },
     });
   };
 
@@ -160,12 +182,15 @@ function ProductsPage() {
       },
       {
         title: 'Avg Price',
-        value: totalProducts > 0 ? formatCurrency(totalValue / totalProducts) : formatCurrency(0),
+        value:
+          totalProducts > 0
+            ? formatCurrency(totalValue / totalProducts, { cents: false, showCents: true })
+            : formatCurrency(0, { cents: false, showCents: true }),
         subtitle: 'Per product',
         icon: DollarSign,
       },
     ];
-  }, [productsResult]);
+  }, [productsResult, formatCurrency]);
 
   return (
     <PageLayout variant="full-width">
@@ -174,12 +199,13 @@ function ProductsPage() {
         description={`${productsResult.total} products in catalog`}
         actions={
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/products/import">
-                <Upload className="mr-2 h-4 w-4" />
-                Import
-              </Link>
-            </Button>
+            <Link
+              to="/products/import"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Import
+            </Link>
             <ExportButton />
             <Button
               onClick={() => navigate({ to: "/products/new" as string })}
@@ -220,129 +246,27 @@ function ProductsPage() {
             ))}
           </div>
 
-          {/* Search and filters bar */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            {/* Search input */}
-            <form onSubmit={handleSearchSubmit} className="flex-1 flex gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search products by name, SKU, or description..."
-                  value={searchInput}
-                  onChange={(e) => setSearchInput(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Button type="submit" variant="secondary">
-                Search
-              </Button>
-            </form>
+          {/* Filters bar using DomainFilterBar */}
+          <DomainFilterBar<ProductFiltersState>
+            config={PRODUCT_FILTER_CONFIG}
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+            defaultFilters={DEFAULT_PRODUCT_FILTERS}
+            resultCount={productsResult.total}
+          />
 
-            {/* Quick filters */}
-            <div className="flex gap-2">
-              <Select
-                value={search.status ?? "all"}
-                onValueChange={(value) =>
-                  updateSearch({
-                    status: value === "all" ? undefined : (value as SearchParams["status"]),
-                  })
-                }
-              >
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                  <SelectItem value="discontinued">Discontinued</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select
-                value={search.type ?? "all"}
-                onValueChange={(value) =>
-                  updateSearch({
-                    type: value === "all" ? undefined : (value as SearchParams["type"]),
-                  })
-                }
-              >
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="physical">Physical</SelectItem>
-                  <SelectItem value="service">Service</SelectItem>
-                  <SelectItem value="digital">Digital</SelectItem>
-                  <SelectItem value="bundle">Bundle</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {hasActiveFilters && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearFilters}
-                  className="text-muted-foreground"
-                >
-                  <X className="mr-1 h-4 w-4" />
-                  Clear
-                </Button>
-              )}
-            </div>
-          </div>
-
-          {/* Active filter badges */}
-          {hasActiveFilters && (
+          {/* Category filter badge (managed separately via sidebar) */}
+          {search.categoryId && (
             <div className="flex flex-wrap gap-2">
-              {search.search && (
-                <Badge variant="secondary">
-                  Search: {search.search}
-                  <button
-                    onClick={() => {
-                      setSearchInput("");
-                      updateSearch({ search: undefined });
-                    }}
-                    className="ml-1 hover:text-destructive"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              )}
-              {search.categoryId && (
-                <Badge variant="secondary">
-                  Category filtered
-                  <button
-                    onClick={() => updateSearch({ categoryId: undefined })}
-                    className="ml-1 hover:text-destructive"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              )}
-              {search.status && (
-                <Badge variant="secondary">
-                  Status: {search.status}
-                  <button
-                    onClick={() => updateSearch({ status: undefined })}
-                    className="ml-1 hover:text-destructive"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              )}
-              {search.type && (
-                <Badge variant="secondary">
-                  Type: {search.type}
-                  <button
-                    onClick={() => updateSearch({ type: undefined })}
-                    className="ml-1 hover:text-destructive"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              )}
+              <Badge variant="secondary">
+                Category filtered
+                <button
+                  onClick={() => updateSearch({ categoryId: undefined })}
+                  className="ml-1 hover:text-destructive"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
             </div>
           )}
 
@@ -374,13 +298,19 @@ function ProductsPage() {
                 <Button
                   variant="destructive"
                   size="sm"
-                  onClick={() => {
-                    if (confirm(`Delete ${selectedRows.length} selected products?`)) {
-                      // TODO: Implement bulk delete
-                      toastSuccess(`Deleted ${selectedRows.length} products`);
-                      setSelectedRows([]);
+                  onClick={async () => {
+                    const { confirmed } = await confirm.confirm({
+                      ...confirmations.bulkDelete(selectedRows.length, 'products'),
+                    });
+                    if (confirmed) {
+                      bulkDeleteProducts.mutate(selectedRows, {
+                        onSuccess: () => {
+                          setSelectedRows([]);
+                        },
+                      });
                     }
                   }}
+                  disabled={bulkDeleteProducts.isPending}
                 >
                   <Trash2 className="mr-2 h-4 w-4" />
                   Delete
@@ -396,10 +326,12 @@ function ProductsPage() {
                 query={search.search ?? ""}
                 hasFilters={!!(search.categoryId || search.status || search.type)}
                 onClearSearch={() => {
-                  setSearchInput("");
-                  updateSearch({ search: undefined });
+                  setFilters({ ...filters, search: "" });
                 }}
-                onClearFilters={clearFilters}
+                onClearFilters={() => {
+                  setFilters(DEFAULT_PRODUCT_FILTERS);
+                  updateSearch({ categoryId: undefined });
+                }}
               />
             ) : (
               <EmptyState
@@ -433,6 +365,9 @@ function ProductsPage() {
           )}
         </div>
       </PageLayout.Content>
+
+      {/* Confirmation Dialog */}
+      <ConfirmationDialog />
     </PageLayout>
   );
 }

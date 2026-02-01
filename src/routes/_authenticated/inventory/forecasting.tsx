@@ -12,6 +12,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useState, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { TrendingUp, Package, RefreshCw, AlertTriangle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { InventoryTabsSkeleton } from "@/components/skeletons/inventory";
 import { Button } from "@/components/ui/button";
@@ -266,14 +267,25 @@ function ForecastingPage() {
                             : "hover:bg-muted/50"
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-medium">{rec.productName}</div>
-                            <div className="text-xs text-muted-foreground font-mono">
-                              {rec.productSku}
+                        <div className="flex items-center justify-between w-full">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <div className="font-medium truncate">{rec.productName}</div>
+                              <Badge variant="outline" className="text-xs font-mono shrink-0">
+                                {rec.productSku}
+                              </Badge>
                             </div>
+                            {rec.locations && rec.locations.length > 0 && (
+                              <div className="text-xs text-muted-foreground mt-1">
+                                {rec.locations.length === 1
+                                  ? rec.locations[0].locationCode
+                                    ? `${rec.locations[0].locationName} (${rec.locations[0].locationCode})`
+                                    : rec.locations[0].locationName
+                                  : `${rec.locations.length} locations`}
+                              </div>
+                            )}
                           </div>
-                          <div className="text-right">
+                          <div className="text-right shrink-0 ml-2">
                             <div className="text-sm tabular-nums">
                               {rec.currentStock.toLocaleString()} units
                             </div>

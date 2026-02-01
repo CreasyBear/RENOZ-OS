@@ -27,6 +27,7 @@ import {
   parseImportFile,
   importProducts,
 } from '@/server/functions/products';
+import { bulkDeleteProducts } from '@/server/functions/products/product-bulk-ops';
 
 // ============================================================================
 // TYPES
@@ -178,6 +179,29 @@ export function useDeleteProduct() {
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to delete product');
+    },
+  });
+}
+
+/**
+ * Bulk delete multiple products (soft delete)
+ */
+export function useBulkDeleteProducts() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (productIds: string[]) =>
+      bulkDeleteProducts({ data: { productIds } }),
+    onSuccess: (_, productIds) => {
+      toast.success(`Deleted ${productIds.length} product${productIds.length > 1 ? 's' : ''}`);
+      // Remove each deleted product from cache
+      productIds.forEach((id) => {
+        queryClient.removeQueries({ queryKey: queryKeys.products.detail(id) });
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.products.lists() });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to delete products');
     },
   });
 }

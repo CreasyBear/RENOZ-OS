@@ -117,7 +117,7 @@ export async function POST({ request }: { request: Request }) {
     const memoryProvider = getDrizzleMemoryProvider();
     const [rateLimitResult, budgetResult, conversation] = await Promise.all([
       checkRateLimit('chat', ctx.user.id),
-      checkBudget(ctx.organizationId, ctx.user.id, costEstimate.costCents),
+      checkBudget(ctx.organizationId, ctx.user.id, costEstimate.cost),
       memoryProvider.getOrCreateConversation(
         ctx.user.id,
         ctx.organizationId,

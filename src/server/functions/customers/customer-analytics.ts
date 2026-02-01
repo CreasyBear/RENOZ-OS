@@ -9,7 +9,7 @@
 
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
-import { sql, eq, and, gte, lte, count, sum, avg, ne } from 'drizzle-orm';
+import { sql, eq, and, gte, lte, count, ne, inArray } from 'drizzle-orm';
 import { cache } from 'react';
 import { db } from '@/lib/db';
 import { customers, customerTags, customerTagAssignments, orders, customerActivities } from 'drizzle/schema';
@@ -53,43 +53,84 @@ const _getCustomerKpis = cache(async (data: { range: string }, organizationId: s
   const startDate = getStartDate(range, now);
   const previousStartDate = getPreviousStartDate(range, startDate);
 
+  // Build order conditions for valid orders
+  const validOrderCondition = and(
+    eq(orders.organizationId, organizationId),
+    sql`${orders.deletedAt} IS NULL`,
+    sql`${orders.status} NOT IN ('draft', 'cancelled')`
+  );
+
+  const currentCustomerCondition = and(
+    eq(customers.organizationId, organizationId),
+    sql`${customers.deletedAt} IS NULL`,
+    startDate ? gte(customers.createdAt, startDate) : sql`1=1`
+  );
+
+  const previousCustomerCondition = and(
+    eq(customers.organizationId, organizationId),
+    sql`${customers.deletedAt} IS NULL`,
+    previousStartDate ? gte(customers.createdAt, previousStartDate) : sql`1=1`,
+    startDate ? lte(customers.createdAt, startDate) : sql`1=1`
+  );
+
   // Run current and previous period queries in parallel to eliminate waterfall
-  const [currentMetrics, previousMetrics] = await Promise.all([
-    // Current period metrics
+  const [currentMetrics, previousMetrics, currentRevenue, previousRevenue] = await Promise.all([
+    // Current period customer metrics
     db
       .select({
         totalCustomers: count(),
-        totalRevenue: sum(customers.lifetimeValue),
-        avgLifetimeValue: avg(customers.lifetimeValue),
         activeCustomers: count(sql`CASE WHEN ${customers.status} = 'active' THEN 1 END`),
       })
       .from(customers)
-      .where(
-        and(
-          eq(customers.organizationId, organizationId),
-          sql`${customers.deletedAt} IS NULL`,
-          startDate ? gte(customers.createdAt, startDate) : sql`1=1`
-        )
-      ),
-    // Previous period for comparison
+      .where(currentCustomerCondition),
+    // Previous period customer metrics
     db
       .select({
         totalCustomers: count(),
-        totalRevenue: sum(customers.lifetimeValue),
       })
       .from(customers)
-      .where(
+      .where(previousCustomerCondition),
+    // Current period revenue from orders - aggregate directly from orders joined with customers
+    // Note: avgLifetimeValue will be calculated as totalRevenue / totalCustomers
+    db
+      .select({
+        totalRevenue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+      })
+      .from(orders)
+      .innerJoin(
+        customers,
         and(
-          eq(customers.organizationId, organizationId),
-          sql`${customers.deletedAt} IS NULL`,
-          previousStartDate ? gte(customers.createdAt, previousStartDate) : sql`1=1`,
-          startDate ? lte(customers.createdAt, startDate) : sql`1=1`
+          eq(orders.customerId, customers.id),
+          currentCustomerCondition
         )
-      ),
+      )
+      .where(validOrderCondition),
+    // Previous period revenue from orders
+    db
+      .select({
+        totalRevenue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+      })
+      .from(orders)
+      .innerJoin(
+        customers,
+        and(
+          eq(orders.customerId, customers.id),
+          previousCustomerCondition
+        )
+      )
+      .where(validOrderCondition),
   ]);
 
   const current = currentMetrics[0];
   const previous = previousMetrics[0];
+  const currentRev = currentRevenue[0] ?? { totalRevenue: 0 };
+  const previousRev = previousRevenue[0] ?? { totalRevenue: 0 };
+  
+  // Calculate average LTV: total revenue / number of customers (including those with 0 orders)
+  const totalCustomers = Number(current?.totalCustomers ?? 0);
+  const avgLifetimeValue = totalCustomers > 0 
+    ? Number(currentRev?.totalRevenue ?? 0) / totalCustomers 
+    : 0;
 
   // Calculate changes
   const customerChange = calculatePercentChange(
@@ -97,8 +138,8 @@ const _getCustomerKpis = cache(async (data: { range: string }, organizationId: s
     Number(previous?.totalCustomers ?? 0)
   );
   const revenueChange = calculatePercentChange(
-    Number(current?.totalRevenue ?? 0),
-    Number(previous?.totalRevenue ?? 0)
+    Number(currentRev?.totalRevenue ?? 0),
+    Number(previousRev?.totalRevenue ?? 0)
   );
 
   return {
@@ -112,14 +153,14 @@ const _getCustomerKpis = cache(async (data: { range: string }, organizationId: s
       },
       {
         label: 'Total Revenue',
-        value: formatCurrency(Number(current?.totalRevenue ?? 0)),
+        value: formatCurrency(Number(currentRev?.totalRevenue ?? 0)),
         change: revenueChange,
         changeLabel: `vs previous ${range}`,
         icon: 'dollar',
       },
       {
         label: 'Average LTV',
-        value: formatCurrency(Number(current?.avgLifetimeValue ?? 0)),
+        value: formatCurrency(avgLifetimeValue),
         change: 0, // Would need historical avg
         changeLabel: 'lifetime',
         icon: 'trending',
@@ -210,29 +251,74 @@ export const getCustomerTrends = createServerFn({ method: 'GET' })
     const { range } = data;
     const intervals = getIntervals(range);
 
-    // Get customer counts by period
-    const trends = await db.execute<{
-      period: string;
-      customer_count: number;
-      revenue: number;
-    }>(sql`
-      SELECT
-        TO_CHAR(DATE_TRUNC(${intervals.truncate}, ${customers.createdAt}::timestamp), ${intervals.format}) as period,
-        COUNT(*) as customer_count,
-        COALESCE(SUM(${customers.lifetimeValue}), 0) as revenue
-      FROM ${customers}
-      WHERE ${customers.organizationId} = ${ctx.organizationId}
-        AND ${customers.deletedAt} IS NULL
-        AND ${customers.createdAt} >= ${intervals.startDate.toISOString()}
-      GROUP BY DATE_TRUNC(${intervals.truncate}, ${customers.createdAt}::timestamp)
-      ORDER BY DATE_TRUNC(${intervals.truncate}, ${customers.createdAt}::timestamp) ASC
-    `);
+    // Build order aggregation conditions
+    const validOrderCondition = and(
+      eq(orders.organizationId, ctx.organizationId),
+      sql`${orders.deletedAt} IS NULL`,
+      sql`${orders.status} NOT IN ('draft', 'cancelled')`
+    );
 
-    const trendsData = trends as unknown as {
-      period: string;
-      customer_count: number;
-      revenue: number;
-    }[];
+    // Get customer counts by period with revenue aggregated from orders
+    // Use subquery to aggregate revenue per customer first, then group by period
+    const customerRevenues = await db
+      .select({
+        customerId: customers.id,
+        createdAt: customers.createdAt,
+        revenue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+      })
+      .from(customers)
+      .leftJoin(
+        orders,
+        and(
+          eq(orders.customerId, customers.id),
+          validOrderCondition
+        )
+      )
+      .where(
+        and(
+          eq(customers.organizationId, ctx.organizationId),
+          sql`${customers.deletedAt} IS NULL`,
+          gte(customers.createdAt, intervals.startDate)
+        )
+      )
+      .groupBy(customers.id, customers.createdAt);
+
+    // Group by period in JavaScript (since DATE_TRUNC requires raw SQL)
+    // This is acceptable as we're processing already-aggregated data
+    const trendsMap = new Map<string, { customer_count: number; revenue: number }>();
+    
+    customerRevenues.forEach((cr) => {
+      const date = new Date(cr.createdAt);
+      let period: string;
+      
+      // Match the DATE_TRUNC logic based on intervals.truncate
+      if (intervals.truncate === 'day') {
+        period = date.toISOString().split('T')[0];
+      } else if (intervals.truncate === 'week') {
+        const weekStart = new Date(date);
+        weekStart.setDate(date.getDate() - date.getDay());
+        period = weekStart.toISOString().split('T')[0];
+      } else if (intervals.truncate === 'month') {
+        period = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      } else {
+        period = `${date.getFullYear()}-Q${Math.floor(date.getMonth() / 3) + 1}`;
+      }
+
+      if (!trendsMap.has(period)) {
+        trendsMap.set(period, { customer_count: 0, revenue: 0 });
+      }
+      const trend = trendsMap.get(period)!;
+      trend.customer_count += 1;
+      trend.revenue += Number(cr.revenue ?? 0);
+    });
+
+    const trendsData = Array.from(trendsMap.entries())
+      .map(([period, data]) => ({
+        period,
+        customer_count: data.customer_count,
+        revenue: data.revenue,
+      }))
+      .sort((a, b) => a.period.localeCompare(b.period));
 
     return {
       customerTrend: trendsData.map((row) => ({
@@ -258,44 +344,54 @@ export const getSegmentPerformance = createServerFn({ method: 'GET' })
   .handler(async () => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
-    // Get metrics per tag (segment)
-    const segments = await db.execute<{
-      id: string;
-      name: string;
-      customer_count: number;
-      total_revenue: number;
-      avg_health_score: number;
-    }>(sql`
-      SELECT
-        ct.id,
-        ct.name,
-        COUNT(DISTINCT cta.customer_id) as customer_count,
-        COALESCE(SUM(c.lifetime_value), 0) as total_revenue,
-        COALESCE(AVG(c.health_score), 0) as avg_health_score
-      FROM ${customerTags} ct
-      LEFT JOIN ${customerTagAssignments} cta ON cta.tag_id = ct.id
-      LEFT JOIN ${customers} c ON c.id = cta.customer_id AND c.deleted_at IS NULL
-      WHERE ct.organization_id = ${ctx.organizationId}
-      GROUP BY ct.id, ct.name
-      ORDER BY total_revenue DESC
-      LIMIT 10
-    `);
+    // Build order aggregation conditions
+    const validOrderCondition = and(
+      eq(orders.organizationId, ctx.organizationId),
+      sql`${orders.deletedAt} IS NULL`,
+      sql`${orders.status} NOT IN ('draft', 'cancelled')`
+    );
 
-    const segmentsData = segments as unknown as {
-      id: string;
-      name: string;
-      customer_count: number;
-      total_revenue: number;
-      avg_health_score: number;
-    }[];
+    // Get metrics per tag (segment) with revenue aggregated from orders
+    const segments = await db
+      .select({
+        id: customerTags.id,
+        name: customerTags.name,
+        customerCount: sql<number>`COUNT(DISTINCT ${customers.id})::int`,
+        totalRevenue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+        avgHealthScore: sql<number>`COALESCE(AVG(${customers.healthScore}), 0)::numeric`,
+      })
+      .from(customerTags)
+      .leftJoin(
+        customerTagAssignments,
+        eq(customerTagAssignments.tagId, customerTags.id)
+      )
+      .leftJoin(
+        customers,
+        and(
+          eq(customers.id, customerTagAssignments.customerId),
+          eq(customers.organizationId, ctx.organizationId),
+          sql`${customers.deletedAt} IS NULL`
+        )
+      )
+      .leftJoin(
+        orders,
+        and(
+          eq(orders.customerId, customers.id),
+          validOrderCondition
+        )
+      )
+      .where(eq(customerTags.organizationId, ctx.organizationId))
+      .groupBy(customerTags.id, customerTags.name)
+      .orderBy(sql`COALESCE(SUM(${orders.total}), 0) DESC`)
+      .limit(10);
 
     return {
-      segments: segmentsData.map((row) => ({
+      segments: segments.map((row) => ({
         id: row.id,
         name: row.name,
-        customers: Number(row.customer_count),
-        revenue: Number(row.total_revenue),
-        healthScore: Math.round(Number(row.avg_health_score)),
+        customers: Number(row.customerCount ?? 0),
+        revenue: Number(row.totalRevenue ?? 0),
+        healthScore: Math.round(Number(row.avgHealthScore ?? 0)),
         growth: 0, // Would need historical comparison
       })),
     };
@@ -326,32 +422,85 @@ export const getSegmentAnalytics = createServerFn({ method: 'GET' })
       throw new NotFoundError('Segment not found', 'customer_tag');
     }
 
-    // Get customer metrics for this segment
-    const metrics = await db.execute<{
-      customer_count: number;
-      total_value: number;
-      avg_value: number;
-      avg_health: number;
-      excellent_count: number;
-      good_count: number;
-      fair_count: number;
-      at_risk_count: number;
-    }>(sql`
-      SELECT
-        COUNT(DISTINCT c.id) as customer_count,
-        COALESCE(SUM(c.lifetime_value), 0) as total_value,
-        COALESCE(AVG(c.lifetime_value), 0) as avg_value,
-        COALESCE(AVG(c.health_score), 0) as avg_health,
-        COUNT(CASE WHEN c.health_score >= 80 THEN 1 END) as excellent_count,
-        COUNT(CASE WHEN c.health_score >= 60 AND c.health_score < 80 THEN 1 END) as good_count,
-        COUNT(CASE WHEN c.health_score >= 40 AND c.health_score < 60 THEN 1 END) as fair_count,
-        COUNT(CASE WHEN c.health_score < 40 THEN 1 END) as at_risk_count
-      FROM ${customers} c
-      INNER JOIN ${customerTagAssignments} cta ON cta.customer_id = c.id
-      WHERE cta.tag_id = ${tagId}
-        AND c.organization_id = ${ctx.organizationId}
-        AND c.deleted_at IS NULL
-    `);
+    // Build order aggregation conditions
+    const validOrderCondition = and(
+      eq(orders.organizationId, ctx.organizationId),
+      sql`${orders.deletedAt} IS NULL`,
+      sql`${orders.status} NOT IN ('draft', 'cancelled')`
+    );
+
+    // Get customer count and health metrics
+    const [customerMetrics] = await db
+      .select({
+        customerCount: sql<number>`COUNT(DISTINCT ${customers.id})::int`,
+        avgHealth: sql<number>`COALESCE(AVG(${customers.healthScore}), 0)::numeric`,
+        excellentCount: sql<number>`COUNT(CASE WHEN ${customers.healthScore} >= 80 THEN 1 END)::int`,
+        goodCount: sql<number>`COUNT(CASE WHEN ${customers.healthScore} >= 60 AND ${customers.healthScore} < 80 THEN 1 END)::int`,
+        fairCount: sql<number>`COUNT(CASE WHEN ${customers.healthScore} >= 40 AND ${customers.healthScore} < 60 THEN 1 END)::int`,
+        atRiskCount: sql<number>`COUNT(CASE WHEN ${customers.healthScore} < 40 THEN 1 END)::int`,
+      })
+      .from(customers)
+      .innerJoin(
+        customerTagAssignments,
+        eq(customerTagAssignments.customerId, customers.id)
+      )
+      .where(
+        and(
+          eq(customerTagAssignments.tagId, tagId),
+          eq(customers.organizationId, ctx.organizationId),
+          sql`${customers.deletedAt} IS NULL`
+        )
+      );
+
+    // Get revenue aggregated from orders for customers in this segment
+    const customerIds = await db
+      .select({ customerId: customers.id })
+      .from(customers)
+      .innerJoin(
+        customerTagAssignments,
+        eq(customerTagAssignments.customerId, customers.id)
+      )
+      .where(
+        and(
+          eq(customerTagAssignments.tagId, tagId),
+          eq(customers.organizationId, ctx.organizationId),
+          sql`${customers.deletedAt} IS NULL`
+        )
+      );
+
+    const customerIdList = customerIds.map(c => c.customerId);
+    const totalCustomers = Number(customerMetrics?.customerCount ?? 0);
+
+    let totalValue = 0;
+    let avgValue = 0;
+
+    if (customerIdList.length > 0) {
+      const [revenueMetrics] = await db
+        .select({
+          totalValue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+        })
+        .from(orders)
+        .where(
+          and(
+            validOrderCondition,
+            inArray(orders.customerId, customerIdList)
+          )
+        );
+
+      totalValue = Number(revenueMetrics?.totalValue ?? 0);
+      avgValue = totalCustomers > 0 ? totalValue / totalCustomers : 0;
+    }
+
+    const metrics = [{
+      customerCount: totalCustomers,
+      totalValue,
+      avgValue,
+      avgHealth: Number(customerMetrics?.avgHealth ?? 0),
+      excellentCount: Number(customerMetrics?.excellentCount ?? 0),
+      goodCount: Number(customerMetrics?.goodCount ?? 0),
+      fairCount: Number(customerMetrics?.fairCount ?? 0),
+      atRiskCount: Number(customerMetrics?.atRiskCount ?? 0),
+    }];
 
     const metricsData = metrics as unknown as {
       customer_count: number;
@@ -809,9 +958,10 @@ export const getValueKpis = createServerFn({ method: 'GET' })
     const startDate = getValueStartDate(data.range, now);
     const startDateString = startDate ? startDate.toISOString().split('T')[0] : null;
 
-    const [customerValue] = await db
+    // Get customer count for the period
+    const [customerCountResult] = await db
       .select({
-        avgLifetimeValue: sql<number>`COALESCE(AVG(${customers.lifetimeValue}), 0)`,
+        customerCount: count(),
       })
       .from(customers)
       .where(
@@ -822,46 +972,54 @@ export const getValueKpis = createServerFn({ method: 'GET' })
         )
       );
 
-    const orderMetrics = await db.execute<{
-      total_revenue: number;
-      avg_order_value: number;
-      order_count: number;
-      customer_count: number;
-    }>(sql`
-      SELECT
-        COALESCE(SUM(o.total), 0) AS total_revenue,
-        COALESCE(AVG(o.total), 0) AS avg_order_value,
-        COUNT(*) AS order_count,
-        COUNT(DISTINCT o.customer_id) AS customer_count
-      FROM ${orders} o
-      WHERE o.organization_id = ${ctx.organizationId}
-        AND o.deleted_at IS NULL
-        AND o.status NOT IN ('draft', 'cancelled')
-        ${startDateString ? sql`AND o.order_date >= ${startDateString}` : sql``}
-    `);
+    // Get order metrics aggregated from orders table
+    const orderMetrics = await db
+      .select({
+        totalRevenue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+        avgOrderValue: sql<number>`COALESCE(AVG(${orders.total}), 0)::numeric`,
+        orderCount: sql<number>`COUNT(*)::int`,
+        customerCount: sql<number>`COUNT(DISTINCT ${orders.customerId})::int`,
+      })
+      .from(orders)
+      .innerJoin(
+        customers,
+        and(
+          eq(orders.customerId, customers.id),
+          eq(customers.organizationId, ctx.organizationId),
+          sql`${customers.deletedAt} IS NULL`,
+          startDate ? gte(customers.createdAt, startDate) : sql`1=1`
+        )
+      )
+      .where(
+        and(
+          eq(orders.organizationId, ctx.organizationId),
+          sql`${orders.deletedAt} IS NULL`,
+          sql`${orders.status} NOT IN ('draft', 'cancelled')`,
+          startDateString ? gte(orders.orderDate, startDateString) : sql`1=1`
+        )
+      );
 
-    const orderRow = orderMetrics as unknown as {
-      total_revenue: number;
-      avg_order_value: number;
-      order_count: number;
-      customer_count: number;
-    }[];
-
-    const totals = orderRow[0] ?? {
-      total_revenue: 0,
-      avg_order_value: 0,
-      order_count: 0,
-      customer_count: 0,
+    const orderStats = orderMetrics[0] ?? {
+      totalRevenue: 0,
+      avgOrderValue: 0,
+      orderCount: 0,
+      customerCount: 0,
     };
 
-    const orderCount = Number(totals.order_count ?? 0);
-    const customerCount = Number(totals.customer_count ?? 0);
+    const totalCustomers = Number(customerCountResult?.customerCount ?? 0);
+    const orderCount = Number(orderStats.orderCount ?? 0);
+    const customerCountWithOrders = Number(orderStats.customerCount ?? 0);
+
+    // Calculate average LTV: total revenue / total customers (including those with 0 orders)
+    const avgLifetimeValue = totalCustomers > 0 
+      ? Number(orderStats.totalRevenue ?? 0) / totalCustomers 
+      : 0;
 
     return {
-      avgLifetimeValue: Number(customerValue?.avgLifetimeValue ?? 0),
-      totalRevenue: Number(totals.total_revenue ?? 0),
-      avgOrderValue: Number(totals.avg_order_value ?? 0),
-      ordersPerCustomer: customerCount > 0 ? orderCount / customerCount : 0,
+      avgLifetimeValue,
+      totalRevenue: Number(orderStats.totalRevenue ?? 0),
+      avgOrderValue: Number(orderStats.avgOrderValue ?? 0),
+      ordersPerCustomer: customerCountWithOrders > 0 ? orderCount / customerCountWithOrders : 0,
     };
   });
 
@@ -873,38 +1031,55 @@ export const getValueTiers = createServerFn({ method: 'GET' })
   .handler(async () => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
-    // Define tier thresholds (configurable in future)
-    const tiers = await db.execute<{
-      tier: string;
-      customer_count: number;
-      total_revenue: number;
-      avg_value: number;
-    }>(sql`
-      SELECT
-        CASE
-          WHEN ${customers.lifetimeValue} >= 100000 THEN 'Platinum'
-          WHEN ${customers.lifetimeValue} >= 50000 THEN 'Gold'
-          WHEN ${customers.lifetimeValue} >= 10000 THEN 'Silver'
-          ELSE 'Bronze'
-        END as tier,
-        COUNT(*) as customer_count,
-        COALESCE(SUM(${customers.lifetimeValue}), 0) as total_revenue,
-        COALESCE(AVG(${customers.lifetimeValue}), 0) as avg_value
-      FROM ${customers}
-      WHERE ${customers.organizationId} = ${ctx.organizationId}
-        AND ${customers.deletedAt} IS NULL
-      GROUP BY 1
-      ORDER BY avg_value DESC
-    `);
+    // Get customer revenues aggregated from orders, then group by tier
+    const customerRevenues = await db
+      .select({
+        customerId: customers.id,
+        revenue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+      })
+      .from(customers)
+      .leftJoin(
+        orders,
+        and(
+          eq(orders.customerId, customers.id),
+          eq(orders.organizationId, ctx.organizationId),
+          sql`${orders.deletedAt} IS NULL`,
+          sql`${orders.status} NOT IN ('draft', 'cancelled')`
+        )
+      )
+      .where(
+        and(
+          eq(customers.organizationId, ctx.organizationId),
+          sql`${customers.deletedAt} IS NULL`
+        )
+      )
+      .groupBy(customers.id);
 
-    const tiersData = tiers as unknown as {
-      tier: string;
-      customer_count: number;
-      total_revenue: number;
-      avg_value: number;
-    }[];
+    // Group by tier thresholds
+    const tierGroups = customerRevenues.reduce((acc, cr) => {
+      const revenue = Number(cr.revenue ?? 0);
+      let tier: string;
+      if (revenue >= 100000) tier = 'Platinum';
+      else if (revenue >= 50000) tier = 'Gold';
+      else if (revenue >= 10000) tier = 'Silver';
+      else tier = 'Bronze';
 
-    const total = tiersData.reduce((sum, t) => sum + Number(t.customer_count), 0) || 1;
+      if (!acc[tier]) {
+        acc[tier] = { customer_count: 0, total_revenue: 0 };
+      }
+      acc[tier].customer_count += 1;
+      acc[tier].total_revenue += revenue;
+      return acc;
+    }, {} as Record<string, { customer_count: number; total_revenue: number }>);
+
+    const tiers = Object.entries(tierGroups).map(([tier, data]) => ({
+      tier,
+      customer_count: data.customer_count,
+      total_revenue: data.total_revenue,
+      avg_value: data.customer_count > 0 ? data.total_revenue / data.customer_count : 0,
+    })).sort((a, b) => b.avg_value - a.avg_value);
+
+    const total = tiers.reduce((sum, t) => sum + t.customer_count, 0) || 1;
 
     const tierColors: Record<string, string> = {
       Platinum: 'bg-purple-500',
@@ -914,12 +1089,12 @@ export const getValueTiers = createServerFn({ method: 'GET' })
     };
 
     return {
-      tiers: tiersData.map((t) => ({
+      tiers: tiers.map((t) => ({
         name: t.tier,
-        customers: Number(t.customer_count),
-        percentage: Math.round((Number(t.customer_count) / total) * 100 * 10) / 10,
-        revenue: Number(t.total_revenue),
-        avgValue: Math.round(Number(t.avg_value)),
+        customers: t.customer_count,
+        percentage: Math.round((t.customer_count / total) * 100 * 10) / 10,
+        revenue: t.total_revenue,
+        avgValue: Math.round(t.avg_value),
         color: tierColors[t.tier] ?? 'bg-gray-500',
       })),
     };
@@ -933,21 +1108,45 @@ export const getTopCustomers = createServerFn({ method: 'GET' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.customer.read });
 
+    // Build order aggregation conditions
+    const validOrderCondition = and(
+      eq(orders.organizationId, ctx.organizationId),
+      sql`${orders.deletedAt} IS NULL`,
+      sql`${orders.status} NOT IN ('draft', 'cancelled')`
+    );
+
     const topCustomers = await db
       .select({
         id: customers.id,
         name: customers.name,
         customerCode: customers.customerCode,
-        lifetimeValue: customers.lifetimeValue,
-        totalOrders: customers.totalOrders,
+        lifetimeValue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+        totalOrders: sql<number>`COUNT(${orders.id})::int`,
         healthScore: customers.healthScore,
         status: customers.status,
       })
       .from(customers)
-      .where(
-        and(eq(customers.organizationId, ctx.organizationId), sql`${customers.deletedAt} IS NULL`)
+      .leftJoin(
+        orders,
+        and(
+          eq(orders.customerId, customers.id),
+          validOrderCondition
+        )
       )
-      .orderBy(sql`${customers.lifetimeValue} DESC NULLS LAST`)
+      .where(
+        and(
+          eq(customers.organizationId, ctx.organizationId),
+          sql`${customers.deletedAt} IS NULL`
+        )
+      )
+      .groupBy(
+        customers.id,
+        customers.name,
+        customers.customerCode,
+        customers.healthScore,
+        customers.status
+      )
+      .orderBy(sql`COALESCE(SUM(${orders.total}), 0) DESC`)
       .limit(data.limit);
 
     return {

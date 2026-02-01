@@ -8,8 +8,6 @@
  */
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Folder, MapPin, Calendar, DollarSign } from 'lucide-react';
 import {
@@ -21,34 +19,18 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-  FormDescription,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { ScrollArea } from '@/components/ui/scroll-area';
+
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
+import {
+  TextField,
+  TextareaField,
+  SelectField,
+  NumberField,
+  DateField,
+} from '@/components/shared/forms';
 import { useUpdateProject } from '@/hooks/jobs';
 import { toast } from '@/lib/toast';
-import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import type { Project } from 'drizzle/schema/jobs/projects';
 
@@ -69,13 +51,37 @@ const editProjectFormSchema = z.object({
     postalCode: z.string().min(1, 'Postal code is required'),
     country: z.string(),
   }),
-  startDate: z.date().optional(),
-  targetCompletionDate: z.date().optional(),
-  estimatedTotalValue: z.number().min(0).optional(),
+  startDate: z.date().optional().nullable(),
+  targetCompletionDate: z.date().optional().nullable(),
+  estimatedTotalValue: z.number().min(0).optional().nullable(),
   progressPercent: z.number().min(0).max(100),
 });
 
-type EditProjectFormValues = z.infer<typeof editProjectFormSchema>;
+const statusOptions = [
+  { value: 'quoting', label: 'Quoting' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'on_hold', label: 'On Hold' },
+  { value: 'cancelled', label: 'Cancelled' },
+];
+
+const projectTypeOptions = [
+  { value: 'solar', label: 'Solar Only' },
+  { value: 'battery', label: 'Battery Only' },
+  { value: 'solar_battery', label: 'Solar + Battery' },
+  { value: 'service', label: 'Service' },
+  { value: 'warranty', label: 'Warranty' },
+  { value: 'inspection', label: 'Inspection' },
+  { value: 'commissioning', label: 'Commissioning' },
+];
+
+const priorityOptions = [
+  { value: 'urgent', label: 'Urgent' },
+  { value: 'high', label: 'High' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'low', label: 'Low' },
+];
 
 // ============================================================================
 // TYPES
@@ -100,14 +106,14 @@ export function ProjectEditDialog({
 }: ProjectEditDialogProps) {
   const updateProject = useUpdateProject();
 
-  const form = useForm<EditProjectFormValues>({
-    resolver: zodResolver(editProjectFormSchema),
+  const form = useTanStackForm({
+    schema: editProjectFormSchema,
     defaultValues: {
       title: '',
       description: '',
-      status: 'quoting',
-      projectType: 'solar_battery',
-      priority: 'medium',
+      status: 'quoting' as const,
+      projectType: 'solar_battery' as const,
+      priority: 'medium' as const,
       siteAddress: {
         street: '',
         city: '',
@@ -115,7 +121,37 @@ export function ProjectEditDialog({
         postalCode: '',
         country: 'Australia',
       },
+      startDate: null,
+      targetCompletionDate: null,
+      estimatedTotalValue: null,
       progressPercent: 0,
+    },
+    onSubmit: async (data) => {
+      if (!project) return;
+
+      try {
+        await updateProject.mutateAsync({
+          projectId: project.id,
+          title: data.title,
+          description: data.description,
+          status: data.status,
+          projectType: data.projectType,
+          priority: data.priority,
+          siteAddress: data.siteAddress,
+          startDate: data.startDate ? format(data.startDate, 'yyyy-MM-dd') : undefined,
+          targetCompletionDate: data.targetCompletionDate
+            ? format(data.targetCompletionDate, 'yyyy-MM-dd')
+            : undefined,
+          estimatedTotalValue: data.estimatedTotalValue ?? undefined,
+          progressPercent: data.progressPercent,
+        });
+
+        toast.success('Project updated successfully');
+        onOpenChange(false);
+        onSuccess?.();
+      } catch {
+        toast.error('Failed to update project');
+      }
     },
   });
 
@@ -126,8 +162,8 @@ export function ProjectEditDialog({
         title: project.title,
         description: project.description || '',
         status: project.status,
-        projectType: project.projectType as EditProjectFormValues['projectType'],
-        priority: project.priority as EditProjectFormValues['priority'],
+        projectType: project.projectType as 'solar' | 'battery' | 'solar_battery' | 'service' | 'warranty' | 'inspection' | 'commissioning',
+        priority: project.priority as 'urgent' | 'high' | 'medium' | 'low',
         siteAddress: project.siteAddress || {
           street: '',
           city: '',
@@ -135,45 +171,17 @@ export function ProjectEditDialog({
           postalCode: '',
           country: 'Australia',
         },
-        startDate: project.startDate ? parseISO(project.startDate) : undefined,
+        startDate: project.startDate ? parseISO(project.startDate) : null,
         targetCompletionDate: project.targetCompletionDate
           ? parseISO(project.targetCompletionDate)
-          : undefined,
+          : null,
         estimatedTotalValue: project.estimatedTotalValue
           ? parseFloat(project.estimatedTotalValue.toString())
-          : undefined,
+          : null,
         progressPercent: project.progressPercent || 0,
       });
     }
   }, [project, open, form]);
-
-  const onSubmit = async (data: EditProjectFormValues) => {
-    if (!project) return;
-
-    try {
-      await updateProject.mutateAsync({
-        projectId: project.id,
-        title: data.title,
-        description: data.description,
-        status: data.status,
-        projectType: data.projectType,
-        priority: data.priority,
-        siteAddress: data.siteAddress,
-        startDate: data.startDate ? format(data.startDate, 'yyyy-MM-dd') : undefined,
-        targetCompletionDate: data.targetCompletionDate
-          ? format(data.targetCompletionDate, 'yyyy-MM-dd')
-          : undefined,
-        estimatedTotalValue: data.estimatedTotalValue,
-        progressPercent: data.progressPercent,
-      });
-
-      toast.success('Project updated successfully');
-      onOpenChange(false);
-      onSuccess?.();
-    } catch (error) {
-      toast.error('Failed to update project');
-    }
-  };
 
   if (!project) return null;
 
@@ -190,382 +198,238 @@ export function ProjectEditDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col h-full">
-            <ScrollArea className="flex-1 px-6 py-4">
-              <div className="space-y-6">
-                {/* Basic Info */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                    Basic Information
-                  </h3>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="flex flex-col h-full"
+        >
+          <ScrollArea className="flex-1 px-6 py-4">
+            <div className="space-y-6">
+              {/* Basic Info */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                  Basic Information
+                </h3>
 
-                  <FormField
-                    control={form.control}
-                    name="title"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Project Title *</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Enter project title" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                <form.Field name="title">
+                  {(field) => (
+                    <TextField
+                      field={field}
+                      label="Project Title"
+                      placeholder="Enter project title"
+                      required
+                    />
+                  )}
+                </form.Field>
+
+                <form.Field name="description">
+                  {(field) => (
+                    <TextareaField
+                      field={field}
+                      label="Description"
+                      placeholder="Enter project description"
+                      rows={3}
+                    />
+                  )}
+                </form.Field>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <form.Field name="status">
+                    {(field) => (
+                      <SelectField
+                        field={field}
+                        label="Status"
+                        options={statusOptions}
+                        required
+                      />
                     )}
-                  />
+                  </form.Field>
 
-                  <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Description</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="Enter project description"
-                            className="min-h-[80px]"
-                            {...field}
+                  <form.Field name="priority">
+                    {(field) => (
+                      <SelectField
+                        field={field}
+                        label="Priority"
+                        options={priorityOptions}
+                        required
+                      />
+                    )}
+                  </form.Field>
+                </div>
+
+                <form.Field name="projectType">
+                  {(field) => (
+                    <SelectField
+                      field={field}
+                      label="Project Type"
+                      options={projectTypeOptions}
+                      required
+                    />
+                  )}
+                </form.Field>
+              </div>
+
+              {/* Progress */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+                  Progress
+                </h3>
+
+                <form.Field name="progressPercent">
+                  {(field) => (
+                    <div className="space-y-2">
+                      <NumberField
+                        field={field}
+                        label="Completion Percentage"
+                        min={0}
+                        max={100}
+                        className="w-24"
+                      />
+                      <div className="flex items-center gap-4">
+                        <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary transition-all"
+                            style={{ width: `${field.state.value ?? 0}%` }}
                           />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                        </div>
+                        <span className="text-sm text-muted-foreground">{field.state.value ?? 0}%</span>
+                      </div>
+                    </div>
+                  )}
+                </form.Field>
+              </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="status"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Status</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select status" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="quoting">Quoting</SelectItem>
-                              <SelectItem value="approved">Approved</SelectItem>
-                              <SelectItem value="in_progress">In Progress</SelectItem>
-                              <SelectItem value="completed">Completed</SelectItem>
-                              <SelectItem value="on_hold">On Hold</SelectItem>
-                              <SelectItem value="cancelled">Cancelled</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
+              {/* Site Address */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  Site Address
+                </h3>
+
+                <form.Field name="siteAddress.street">
+                  {(field) => (
+                    <TextField
+                      field={field}
+                      label="Street"
+                      placeholder="Enter street address"
+                      required
                     />
+                  )}
+                </form.Field>
 
-                    <FormField
-                      control={form.control}
-                      name="priority"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Priority</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select priority" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="urgent">Urgent</SelectItem>
-                              <SelectItem value="high">High</SelectItem>
-                              <SelectItem value="medium">Medium</SelectItem>
-                              <SelectItem value="low">Low</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <FormField
-                    control={form.control}
-                    name="projectType"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Project Type</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select type" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="solar">Solar Only</SelectItem>
-                            <SelectItem value="battery">Battery Only</SelectItem>
-                            <SelectItem value="solar_battery">Solar + Battery</SelectItem>
-                            <SelectItem value="service">Service</SelectItem>
-                            <SelectItem value="warranty">Warranty</SelectItem>
-                            <SelectItem value="inspection">Inspection</SelectItem>
-                            <SelectItem value="commissioning">Commissioning</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
+                <div className="grid grid-cols-2 gap-4">
+                  <form.Field name="siteAddress.city">
+                    {(field) => (
+                      <TextField
+                        field={field}
+                        label="City"
+                        placeholder="Enter city"
+                        required
+                      />
                     )}
-                  />
+                  </form.Field>
+
+                  <form.Field name="siteAddress.state">
+                    {(field) => (
+                      <TextField
+                        field={field}
+                        label="State"
+                        placeholder="Enter state"
+                        required
+                      />
+                    )}
+                  </form.Field>
                 </div>
 
-                {/* Progress */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                    Progress
-                  </h3>
-
-                  <FormField
-                    control={form.control}
-                    name="progressPercent"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Completion Percentage</FormLabel>
-                        <FormControl>
-                          <div className="flex items-center gap-4">
-                            <Input
-                              type="number"
-                              min={0}
-                              max={100}
-                              {...field}
-                              onChange={(e) => field.onChange(parseInt(e.target.value) || 0)}
-                              className="w-24"
-                            />
-                            <span className="text-sm text-muted-foreground">%</span>
-                            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-primary transition-all"
-                                style={{ width: `${field.value}%` }}
-                              />
-                            </div>
-                          </div>
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                <div className="grid grid-cols-2 gap-4">
+                  <form.Field name="siteAddress.postalCode">
+                    {(field) => (
+                      <TextField
+                        field={field}
+                        label="Postal Code"
+                        placeholder="Enter postal code"
+                        required
+                      />
                     )}
-                  />
-                </div>
+                  </form.Field>
 
-                {/* Site Address */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                    <MapPin className="h-4 w-4" />
-                    Site Address
-                  </h3>
-
-                  <FormField
-                    control={form.control}
-                    name="siteAddress.street"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Street *</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Enter street address" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
+                  <form.Field name="siteAddress.country">
+                    {(field) => (
+                      <TextField
+                        field={field}
+                        label="Country"
+                        placeholder="Enter country"
+                      />
                     )}
-                  />
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="siteAddress.city"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>City *</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter city" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="siteAddress.state"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>State *</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter state" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="siteAddress.postalCode"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Postal Code *</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter postal code" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="siteAddress.country"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Country</FormLabel>
-                          <FormControl>
-                            <Input placeholder="Enter country" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-
-                {/* Dates */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    Project Dates
-                  </h3>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="startDate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Start Date</FormLabel>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <FormControl>
-                                <Button
-                                  variant="outline"
-                                  className={cn(
-                                    'w-full pl-3 text-left font-normal',
-                                    !field.value && 'text-muted-foreground'
-                                  )}
-                                >
-                                  {field.value ? (
-                                    format(field.value, 'PPP')
-                                  ) : (
-                                    <span>Pick a date</span>
-                                  )}
-                                  <Calendar className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
-                              </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <CalendarComponent
-                                mode="single"
-                                selected={field.value}
-                                onSelect={field.onChange}
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    <FormField
-                      control={form.control}
-                      name="targetCompletionDate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Target Completion</FormLabel>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <FormControl>
-                                <Button
-                                  variant="outline"
-                                  className={cn(
-                                    'w-full pl-3 text-left font-normal',
-                                    !field.value && 'text-muted-foreground'
-                                  )}
-                                >
-                                  {field.value ? (
-                                    format(field.value, 'PPP')
-                                  ) : (
-                                    <span>Pick a date</span>
-                                  )}
-                                  <Calendar className="ml-auto h-4 w-4 opacity-50" />
-                                </Button>
-                              </FormControl>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0" align="start">
-                              <CalendarComponent
-                                mode="single"
-                                selected={field.value}
-                                onSelect={field.onChange}
-                                initialFocus
-                              />
-                            </PopoverContent>
-                          </Popover>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-
-                {/* Budget */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
-                    <DollarSign className="h-4 w-4" />
-                    Budget
-                  </h3>
-
-                  <FormField
-                    control={form.control}
-                    name="estimatedTotalValue"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Estimated Total Value</FormLabel>
-                        <FormControl>
-                          <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">$</span>
-                            <Input
-                              type="number"
-                              min={0}
-                              step="0.01"
-                              placeholder="0.00"
-                              className="pl-7"
-                              {...field}
-                              onChange={(e) => field.onChange(parseFloat(e.target.value) || undefined)}
-                              value={field.value || ''}
-                            />
-                          </div>
-                        </FormControl>
-                        <FormDescription>Estimated total project value in AUD</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  </form.Field>
                 </div>
               </div>
-            </ScrollArea>
 
-            <DialogFooter className="px-6 py-4 border-t">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={updateProject.isPending}>
-                {updateProject.isPending ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+              {/* Dates */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Project Dates
+                </h3>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <form.Field name="startDate">
+                    {(field) => (
+                      <DateField
+                        field={field}
+                        label="Start Date"
+                        placeholder="Pick a date"
+                      />
+                    )}
+                  </form.Field>
+
+                  <form.Field name="targetCompletionDate">
+                    {(field) => (
+                      <DateField
+                        field={field}
+                        label="Target Completion"
+                        placeholder="Pick a date"
+                      />
+                    )}
+                  </form.Field>
+                </div>
+              </div>
+
+              {/* Budget */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <DollarSign className="h-4 w-4" />
+                  Budget
+                </h3>
+
+                <form.Field name="estimatedTotalValue">
+                  {(field) => (
+                    <NumberField
+                      field={field}
+                      label="Estimated Total Value"
+                      description="Estimated total project value in AUD"
+                      placeholder="0.00"
+                      min={0}
+                      step={0.01}
+                      prefix="$"
+                    />
+                  )}
+                </form.Field>
+              </div>
+            </div>
+          </ScrollArea>
+
+          <DialogFooter className="px-6 py-4 border-t">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={updateProject.isPending}>
+              {updateProject.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

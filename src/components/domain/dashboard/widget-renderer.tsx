@@ -11,6 +11,7 @@
 
 import { memo } from 'react';
 import { useDashboardMetrics } from '@/hooks/dashboard';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import type { DateRange } from '@/lib/utils/date-presets';
 
 // Widget components
@@ -18,10 +19,10 @@ import { KPIWidget } from './widgets/kpi-widget';
 import { ChartWidget, type ChartDataPoint } from './widgets/chart-widget';
 import type { WidgetConfig } from './dashboard-grid';
 
-import { 
-  TrendingUp, 
-  Users, 
-  ShoppingCart, 
+import {
+  TrendingUp,
+  Users,
+  ShoppingCart,
   Zap,
   DollarSign,
   PieChart,
@@ -51,26 +52,26 @@ export interface WidgetRendererProps {
 // WIDGET TYPE DEFINITIONS
 // ============================================================================
 
-const WIDGET_METADATA: Record<string, { 
-  label: string; 
+const WIDGET_METADATA: Record<string, {
+  label: string;
   icon: React.ComponentType<{ className?: string }>;
   category: 'kpi' | 'chart' | 'feed' | 'actions' | 'progress' | 'other';
 }> = {
   // Composite KPI Widget
   'kpi_cards': { label: 'KPI Overview', icon: LayoutDashboard, category: 'kpi' },
-  
+
   // Chart Widgets
   'revenue_chart': { label: 'Revenue Trend', icon: DollarSign, category: 'chart' },
   'orders_chart': { label: 'Orders', icon: ShoppingCart, category: 'chart' },
   'customers_chart': { label: 'Customer Growth', icon: Users, category: 'chart' },
   'pipeline_chart': { label: 'Pipeline', icon: PieChart, category: 'chart' },
   'inventory_chart': { label: 'Inventory', icon: Zap, category: 'chart' },
-  
+
   // Feed Widgets
   'recent_activities': { label: 'Recent Activity', icon: Activity, category: 'feed' },
   'upcoming_tasks': { label: 'Upcoming Tasks', icon: CheckSquare, category: 'feed' },
   'alerts': { label: 'Alerts', icon: Bell, category: 'feed' },
-  
+
   // Other Widgets
   'quick_actions': { label: 'Quick Actions', icon: Bolt, category: 'actions' },
   'target_progress': { label: 'Target Progress', icon: Target, category: 'progress' },
@@ -86,16 +87,10 @@ function KPICardsWidget({ dateRange }: { dateRange: DateRange }) {
     dateTo: dateRange.to.toISOString().split('T')[0],
   });
 
-  const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD',
-      maximumFractionDigits: 0,
-    }).format(val);
-  };
+  const { formatCurrency, formatNumber } = useOrgFormat();
 
-  const formatNumber = (val: number) => {
-    return new Intl.NumberFormat('en-AU').format(val);
+  const formatCurrencyDisplay = (val: number) => {
+    return formatCurrency(val, { cents: false, showCents: true });
   };
 
   const kpis = [
@@ -104,7 +99,7 @@ function KPICardsWidget({ dateRange }: { dateRange: DateRange }) {
       label: 'Revenue',
       value: metrics?.summary?.revenue?.current ?? 0,
       trend: metrics?.summary?.revenue?.change,
-      format: formatCurrency,
+      format: formatCurrencyDisplay,
       icon: DollarSign,
     },
     {
@@ -112,7 +107,7 @@ function KPICardsWidget({ dateRange }: { dateRange: DateRange }) {
       label: 'Pipeline',
       value: metrics?.summary?.pipelineValue?.current ?? 0,
       trend: metrics?.summary?.pipelineValue?.change,
-      format: formatCurrency,
+      format: formatCurrencyDisplay,
       icon: TrendingUp,
     },
     {
@@ -120,7 +115,7 @@ function KPICardsWidget({ dateRange }: { dateRange: DateRange }) {
       label: 'Orders',
       value: metrics?.summary?.ordersCount?.current ?? 0,
       trend: metrics?.summary?.ordersCount?.change,
-      format: formatNumber,
+      format: (val: number) => formatNumber(val, { decimals: 0 }),
       icon: ShoppingCart,
     },
     {
@@ -128,7 +123,7 @@ function KPICardsWidget({ dateRange }: { dateRange: DateRange }) {
       label: 'Customers',
       value: metrics?.summary?.customerCount?.current ?? 0,
       trend: metrics?.summary?.customerCount?.change,
-      format: formatNumber,
+      format: (val: number) => formatNumber(val, { decimals: 0 }),
       icon: Users,
     },
   ];
@@ -171,11 +166,11 @@ function KPICardsWidget({ dateRange }: { dateRange: DateRange }) {
 // CHART WIDGET RENDERER
 // ============================================================================
 
-function ChartWidgetRenderer({ 
-  type, 
-  dateRange 
-}: { 
-  type: string; 
+function ChartWidgetRenderer({
+  type,
+  dateRange
+}: {
+  type: string;
   dateRange: DateRange;
 }) {
   const { data: metrics, isLoading, error } = useDashboardMetrics({
@@ -276,8 +271,8 @@ function ActivityFeedWidget({ dateRange }: { dateRange: DateRange }) {
   return (
     <div className="space-y-2 max-h-64 overflow-y-auto">
       {activities.slice(0, 10).map((activity) => (
-        <div 
-          key={activity.id} 
+        <div
+          key={activity.id}
           className="flex items-start gap-3 rounded-lg p-3 hover:bg-gray-50 transition-colors"
         >
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
@@ -312,7 +307,7 @@ function ActivityFeedWidget({ dateRange }: { dateRange: DateRange }) {
 function PlaceholderWidget({ type }: { type: string }) {
   const meta = WIDGET_METADATA[type];
   const Icon = meta?.icon ?? Sparkles;
-  
+
   return (
     <div className="flex h-48 flex-col items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white p-6">
       <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-100 text-gray-400">
@@ -334,7 +329,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({
   className,
 }: WidgetRendererProps) {
   const meta = WIDGET_METADATA[widget.type];
-  
+
   // Render based on widget category
   if (widget.type === 'kpi_cards') {
     return (
@@ -343,7 +338,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({
       </div>
     );
   }
-  
+
   if (meta?.category === 'chart') {
     return (
       <div className={className}>
@@ -351,7 +346,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({
       </div>
     );
   }
-  
+
   if (widget.type === 'recent_activities') {
     return (
       <div className={className}>
@@ -359,7 +354,7 @@ export const WidgetRenderer = memo(function WidgetRenderer({
       </div>
     );
   }
-  
+
   // Fallback for unimplemented widget types
   return (
     <div className={className}>

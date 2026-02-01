@@ -22,7 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatCurrency } from '@/lib/formatters';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import type { ProcurementKPI, OrderAnalytics, CostSavings } from '@/lib/schemas/analytics';
 
 // ============================================================================
@@ -125,6 +125,9 @@ interface KPICardsProps {
 }
 
 function KPICards({ kpis }: KPICardsProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       {kpis.map((kpi) => {
@@ -143,7 +146,7 @@ function KPICards({ kpis }: KPICardsProps) {
             <CardContent>
               <div className="flex items-baseline gap-2">
                 <span className={`text-2xl font-bold ${getStatusColor(kpi.status)}`}>
-                  {kpi.unit === 'AUD' ? formatCurrency(kpi.value, { cents: false }) : kpi.value}
+                  {kpi.unit === 'AUD' ? formatCurrencyDisplay(kpi.value) : kpi.value}
                 </span>
                 {kpi.unit !== 'AUD' && (
                   <span className="text-muted-foreground text-sm">{kpi.unit}</span>
@@ -154,7 +157,7 @@ function KPICards({ kpis }: KPICardsProps) {
                 <span className="text-muted-foreground">
                   Target:{' '}
                   {kpi.unit === 'AUD'
-                    ? formatCurrency(kpi.target, { cents: false })
+                    ? formatCurrencyDisplay(kpi.target)
                     : `${kpi.target}${kpi.unit}`}
                 </span>
                 <span
@@ -181,6 +184,9 @@ interface OrderAnalyticsCardProps {
 }
 
 function OrderAnalyticsCard({ data }: OrderAnalyticsCardProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
   const metrics = [
     {
       icon: ShoppingCart,
@@ -191,13 +197,13 @@ function OrderAnalyticsCard({ data }: OrderAnalyticsCardProps) {
     {
       icon: DollarSign,
       label: 'Total Value',
-      value: formatCurrency(data.totalValue, { cents: false }),
+      value: formatCurrencyDisplay(data.totalValue),
       subtext: 'Order value',
     },
     {
       icon: Target,
       label: 'Avg Order Value',
-      value: formatCurrency(data.avgOrderValue, { cents: false }),
+      value: formatCurrencyDisplay(data.avgOrderValue),
       subtext: 'Per order',
     },
     {
@@ -256,6 +262,9 @@ interface CostSavingsCardProps {
 }
 
 function CostSavingsCard({ data }: CostSavingsCardProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
   const savingsBreakdown = [
     {
       label: 'Negotiated Savings',
@@ -285,7 +294,7 @@ function CostSavingsCard({ data }: CostSavingsCardProps) {
           <div className="flex items-baseline justify-between">
             <span className="text-sm text-green-700 dark:text-green-400">Total Savings</span>
             <span className="text-2xl font-bold text-green-700 dark:text-green-400">
-              {formatCurrency(data.totalSavings, { cents: false })}
+              {formatCurrencyDisplay(data.totalSavings)}
             </span>
           </div>
           <div className="mt-1 flex items-center gap-1 text-sm text-green-600">
@@ -299,7 +308,7 @@ function CostSavingsCard({ data }: CostSavingsCardProps) {
             <div key={item.label} className="space-y-1">
               <div className="flex items-center justify-between text-sm">
                 <span>{item.label}</span>
-                <span className="font-medium">{formatCurrency(item.value, { cents: false })}</span>
+                <span className="font-medium">{formatCurrencyDisplay(item.value)}</span>
               </div>
               <Progress value={item.percent} className="h-2" />
             </div>
@@ -318,7 +327,7 @@ function CostSavingsCard({ data }: CostSavingsCardProps) {
  * Procurement Metrics Presenter
  * Displays KPI cards, order analytics, and cost savings.
  * Receives all data via props - no sample data defaults.
- * 
+ *
  * @source kpis from useProcurementDashboard or useSpendMetrics hook
  * @source orderAnalytics from useOrderMetrics hook
  * @source costSavings from useProcurementDashboard hook

@@ -1,11 +1,11 @@
 import { memo } from "react";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/formatters";
+import { useOrgFormat } from "@/hooks/use-org-format";
 
 export interface PriceCellProps {
-  /** Price value (in cents by default, or dollars if centsInput=false) */
+  /** Price value (in dollars by default, or cents if centsInput=true) */
   value: number | null | undefined;
-  /** Whether input is in cents (default: true) */
+  /** Whether input is in cents (default: false) */
   centsInput?: boolean;
   /** Currency code (default: "AUD") */
   currency?: string;
@@ -15,7 +15,7 @@ export interface PriceCellProps {
   colorNegative?: boolean;
   /** Text alignment (default: "right") */
   align?: "left" | "center" | "right";
-  /** Show cents/decimal places (default: false for whole dollars) */
+  /** Show cents/decimal places (default: true) */
   showCents?: boolean;
   /** Additional className */
   className?: string;
@@ -23,13 +23,15 @@ export interface PriceCellProps {
 
 export const PriceCell = memo(function PriceCell({
   value,
-  centsInput = true,
+  centsInput = false,
   colorPositive = false,
   colorNegative = true,
   align = "right",
-  showCents = false,
+  showCents = true,
+  currency,
   className,
 }: PriceCellProps) {
+  const { formatCurrency } = useOrgFormat();
   if (value == null) {
     return (
       <span
@@ -59,7 +61,7 @@ export const PriceCell = memo(function PriceCell({
         className
       )}
     >
-      {formatCurrency(value, { cents: centsInput, showCents })}
+      {formatCurrency(value, { cents: centsInput, showCents, currency })}
     </span>
   );
 });

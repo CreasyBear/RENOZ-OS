@@ -9,3 +9,10 @@ count.txt
 .tanstack
 .wrangler
 _reference/
+.claude/
+.cursor/
+_Initiation/
+_development/
+docs/**
+!docs/migrations/**
+skills/

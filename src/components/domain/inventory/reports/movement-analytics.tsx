@@ -36,6 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useOrgFormat } from "@/hooks/use-org-format";
 
 // ============================================================================
 // TYPES
@@ -171,13 +172,9 @@ export const MovementAnalytics = memo(function MovementAnalytics({
   isLoading,
   className,
 }: MovementAnalyticsProps) {
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("en-AU", {
-      style: "currency",
-      currency: "AUD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
 
   // Loading state
   if (isLoading) {
@@ -248,7 +245,7 @@ export const MovementAnalytics = memo(function MovementAnalytics({
               +{summary.totalUnitsIn.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {formatCurrency(summary.totalValueIn)}
+              {formatCurrencyDisplay(summary.totalValueIn)}
             </p>
           </CardContent>
         </Card>
@@ -265,7 +262,7 @@ export const MovementAnalytics = memo(function MovementAnalytics({
               -{summary.totalUnitsOut.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {formatCurrency(summary.totalValueOut)}
+              {formatCurrencyDisplay(summary.totalValueOut)}
             </p>
           </CardContent>
         </Card>
@@ -288,7 +285,7 @@ export const MovementAnalytics = memo(function MovementAnalytics({
               {netUnits.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {formatCurrency(Math.abs(netValue))} {netValue >= 0 ? "added" : "removed"}
+              {formatCurrencyDisplay(Math.abs(netValue))} {netValue >= 0 ? "added" : "removed"}
             </p>
           </CardContent>
         </Card>
@@ -353,7 +350,7 @@ export const MovementAnalytics = memo(function MovementAnalytics({
                       />
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>{item.units.toLocaleString()} units</span>
-                        <span>{formatCurrency(item.value)}</span>
+                        <span>{formatCurrencyDisplay(item.value)}</span>
                       </div>
                     </div>
                   );

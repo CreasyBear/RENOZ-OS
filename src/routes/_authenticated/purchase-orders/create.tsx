@@ -14,7 +14,7 @@ import { useCallback } from "react";
 import { ArrowLeft } from "lucide-react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { Button } from "@/components/ui/button";
-import { 
+import {
   POCreationWizard,
   type SupplierItem,
   type ProductItem,
@@ -133,7 +133,17 @@ function PurchaseOrderCreatePage() {
   // ============================================================================
 
   const suppliers = (suppliersData?.items || []) as SupplierItem[];
-  const products = (productsData?.products || []) as ProductItem[];
+  // Map ProductWithInventory to ProductItem (ProductItem is a subset of ProductWithInventory)
+  const products: ProductItem[] = (productsData?.products || []).map((product) => ({
+    id: product.id,
+    name: product.name,
+    sku: product.sku,
+    description: product.description,
+    basePrice: product.basePrice ? Number(product.basePrice) : null,
+    costPrice: product.costPrice ? Number(product.costPrice) : null,
+    status: product.status,
+    isActive: product.isActive,
+  }));
 
   // ============================================================================
   // LOADING STATE

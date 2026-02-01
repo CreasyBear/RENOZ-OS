@@ -19,7 +19,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { formatCurrency } from '@/lib/formatters';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import type { ApprovalActionBarOrder } from '@/lib/schemas/approvals';
 
 // ============================================================================
@@ -46,6 +46,7 @@ export function ApprovalSubmitDialog({
   isSubmitting = false,
 }: ApprovalSubmitDialogProps) {
   const [note, setNote] = useState('');
+  const { formatCurrency } = useOrgFormat();
 
   const handleSubmit = async () => {
     await onSubmit(note.trim() || undefined);
@@ -79,7 +80,7 @@ export function ApprovalSubmitDialog({
                   {order.supplierName || 'Unknown Supplier'}
                 </p>
                 <p className="text-lg font-bold">
-                  {formatCurrency(order.totalAmount, { cents: false })}
+                  {formatCurrency(order.totalAmount, { cents: false, showCents: true })}
                 </p>
               </div>
             </CardContent>

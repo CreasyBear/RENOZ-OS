@@ -31,7 +31,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ActivityItem } from '@/components/domain/activity/activity-item';
+import { ActivityItem } from '@/components/shared/activity';
 import type { ActivityWithUser, ActivityEntityType } from '@/lib/schemas/activities';
 import { format, isToday, isYesterday, isSameDay } from 'date-fns';
 

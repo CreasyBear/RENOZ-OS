@@ -6,12 +6,14 @@
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { DomainFilterBar } from '@/components/shared/filters';
 import { POTable } from './po-table';
-import { POFilters } from './po-filters';
-import type {
-  PurchaseOrderTableData,
-  PurchaseOrderFiltersState,
-} from '@/lib/schemas/purchase-orders';
+import {
+  PO_FILTER_CONFIG,
+  DEFAULT_PO_FILTERS,
+  type POFiltersState,
+} from './po-filter-config';
+import type { PurchaseOrderTableData } from '@/lib/schemas/purchase-orders';
 
 // ============================================================================
 // TYPES
@@ -20,9 +22,8 @@ import type {
 interface PODirectoryProps {
   orders: PurchaseOrderTableData[];
   isLoading?: boolean;
-  filters: PurchaseOrderFiltersState;
-  onFiltersChange: (filters: PurchaseOrderFiltersState) => void;
-  onSearch: (search: string) => void;
+  filters: POFiltersState;
+  onFiltersChange: (filters: POFiltersState) => void;
   pagination: {
     page: number;
     pageSize: number;
@@ -125,7 +126,6 @@ export function PODirectory({
   isLoading = false,
   filters,
   onFiltersChange,
-  onSearch,
   pagination,
   onPageChange,
   onView,
@@ -135,7 +135,12 @@ export function PODirectory({
 }: PODirectoryProps) {
   return (
     <div className="space-y-4">
-      <POFilters filters={filters} onFiltersChange={onFiltersChange} onSearch={onSearch} />
+      <DomainFilterBar<POFiltersState>
+        config={PO_FILTER_CONFIG}
+        filters={filters}
+        onFiltersChange={onFiltersChange}
+        defaultFilters={DEFAULT_PO_FILTERS}
+      />
 
       <div className="rounded-lg border">
         <POTable

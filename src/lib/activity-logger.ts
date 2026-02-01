@@ -53,6 +53,8 @@ export interface LogActivityParams {
   metadata?: ActivityMetadata;
   /** Human-readable description */
   description?: string;
+  /** Denormalized entity name for display without joins (e.g., customer name, order number) */
+  entityName?: string;
 }
 
 /**
@@ -96,13 +98,61 @@ export interface ComputeChangesParams<T extends Record<string, unknown>> {
  * });
  * ```
  */
+// ============================================================================
+// ERROR TRACKING
+// ============================================================================
+
+/** Error counter for activity logging failures (for monitoring) */
+let activityLogErrorCount = 0;
+let lastErrorTimestamp: Date | null = null;
+
+/**
+ * Get activity logging error metrics.
+ * Useful for monitoring dashboards and alerting.
+ */
+export function getActivityLogMetrics() {
+  return {
+    errorCount: activityLogErrorCount,
+    lastErrorAt: lastErrorTimestamp,
+  };
+}
+
+/**
+ * Reset activity logging error metrics.
+ * Call periodically (e.g., hourly) to track error rate over time.
+ */
+export function resetActivityLogMetrics() {
+  activityLogErrorCount = 0;
+  lastErrorTimestamp = null;
+}
+
+// ============================================================================
+// ACTIVITY LOGGER CLASS
+// ============================================================================
+
 export class ActivityLogger {
   private context: ActivityContext;
   private queue: Promise<void>[] = [];
   private maxQueueSize = 100;
+  private failedLogs: Array<{ params: LogActivityParams; error: Error; timestamp: Date }> = [];
+  private maxFailedLogs = 50;
 
   constructor(context: ActivityContext) {
     this.context = context;
+  }
+
+  /**
+   * Get failed log attempts for debugging/retry.
+   */
+  getFailedLogs() {
+    return [...this.failedLogs];
+  }
+
+  /**
+   * Clear failed logs after processing.
+   */
+  clearFailedLogs() {
+    this.failedLogs = [];
   }
 
   /**
@@ -113,7 +163,7 @@ export class ActivityLogger {
    * @returns Promise that resolves when the activity is logged
    */
   async log(params: LogActivityParams): Promise<void> {
-    const { entityType, entityId, action, changes, metadata, description } = params;
+    const { entityType, entityId, action, changes, metadata, description, entityName } = params;
 
     // Add requestId to metadata if available
     const enrichedMetadata: ActivityMetadata = {
@@ -133,14 +183,29 @@ export class ActivityLogger {
         ipAddress: this.context.ipAddress ?? null,
         userAgent: this.context.userAgent ?? null,
         description: description ?? null,
+        entityName: entityName ?? null, // Denormalized for display
         createdBy: this.context.userId ?? null,
       });
     } catch (error) {
+      // Track error metrics for monitoring
+      activityLogErrorCount++;
+      lastErrorTimestamp = new Date();
+
+      // Store failed log for potential retry
+      if (this.failedLogs.length < this.maxFailedLogs) {
+        this.failedLogs.push({
+          params,
+          error: error instanceof Error ? error : new Error(String(error)),
+          timestamp: new Date(),
+        });
+      }
+
       // Log error but don't throw - activity logging should not fail the main operation
       console.error("[ActivityLogger] Failed to log activity:", error, {
         entityType,
         entityId,
         action,
+        errorCount: activityLogErrorCount,
       });
     }
   }
@@ -316,8 +381,8 @@ export function computeChanges<T extends Record<string, unknown>>(
   // For updates
   if (before && after) {
     const changedFields: string[] = [];
-    const beforeChanges: Record<string, unknown> = {};
-    const afterChanges: Record<string, unknown> = {};
+    const beforeChanges: Record<string, string | number | boolean | null | string[] | number[]> = {};
+    const afterChanges: Record<string, string | number | boolean | null | string[] | number[]> = {};
 
     // Find all keys from both objects
     const allKeys = new Set([...Object.keys(before), ...Object.keys(after)]);
@@ -337,11 +402,12 @@ export function computeChanges<T extends Record<string, unknown>>(
 
         // Mask sensitive fields
         if (sensitiveFields.includes(key as keyof T)) {
-          beforeChanges[key] = beforeValue !== undefined ? "[REDACTED]" : undefined;
-          afterChanges[key] = afterValue !== undefined ? "[REDACTED]" : undefined;
+          beforeChanges[key] = beforeValue !== undefined ? "[REDACTED]" : null;
+          afterChanges[key] = afterValue !== undefined ? "[REDACTED]" : null;
         } else {
-          beforeChanges[key] = beforeValue;
-          afterChanges[key] = afterValue;
+          // Cast to JSON-serializable type (activity changes store audit data)
+          beforeChanges[key] = beforeValue as string | number | boolean | null | string[] | number[];
+          afterChanges[key] = afterValue as string | number | boolean | null | string[] | number[];
         }
       }
     }
@@ -361,19 +427,23 @@ export function computeChanges<T extends Record<string, unknown>>(
 // HELPER FUNCTIONS
 // ============================================================================
 
+/** JSON-serializable value type for activity changes */
+type ActivityChangeValue = string | number | boolean | null | string[] | number[];
+
 /**
  * Mask sensitive fields in an object.
  */
 function maskSensitiveFields<T extends Record<string, unknown>>(
   obj: T,
   sensitiveFields: (keyof T)[]
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
+): Record<string, ActivityChangeValue> {
+  const result: Record<string, ActivityChangeValue> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (sensitiveFields.includes(key as keyof T)) {
-      result[key] = value !== undefined ? "[REDACTED]" : undefined;
+      result[key] = value !== undefined ? "[REDACTED]" : null;
     } else {
-      result[key] = value;
+      // Cast to JSON-serializable type
+      result[key] = value as ActivityChangeValue;
     }
   }
   return result;
@@ -383,10 +453,10 @@ function maskSensitiveFields<T extends Record<string, unknown>>(
  * Exclude fields from an object.
  */
 function excludeFieldsFromObject<T extends Record<string, unknown>>(
-  obj: Record<string, unknown>,
+  obj: Record<string, ActivityChangeValue>,
   excludeFields: (keyof T)[]
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
+): Record<string, ActivityChangeValue> {
+  const result: Record<string, ActivityChangeValue> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (!excludeFields.includes(key as keyof T)) {
       result[key] = value;

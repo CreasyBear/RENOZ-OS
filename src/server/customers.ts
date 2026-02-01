@@ -12,7 +12,7 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { eq, and, ilike, desc, asc, sql, inArray, gte, lte } from "drizzle-orm";
+import { eq, and, or, ilike, desc, asc, sql, inArray, gte, lte, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { containsPattern } from "@/lib/db/utils";
 import {
@@ -24,6 +24,9 @@ import {
   customerTagAssignments,
   customerHealthMetrics,
   customerPriorities,
+  orders,
+  users,
+  activities,
 } from "drizzle/schema";
 import {
   createCustomerSchema,
@@ -78,7 +81,7 @@ export const getCustomers = createServerFn({ method: "GET" })
     // Build where conditions - ALWAYS include organizationId for isolation
     const conditions = [
       eq(customers.organizationId, ctx.organizationId),
-      sql`${customers.deletedAt} IS NULL`,
+      isNull(customers.deletedAt),
     ];
 
     if (search) {
@@ -105,23 +108,127 @@ export const getCustomers = createServerFn({ method: "GET" })
 
     const whereClause = and(...conditions);
 
-    // Get total count
+    // Get total count - use COUNT(DISTINCT) to account for potential duplicates from JOINs
+    // Since we GROUP BY customers.id, this should match the grouped result count
     const countResult = await db
-      .select({ count: sql<number>`count(*)` })
+      .select({ count: sql<number>`COUNT(DISTINCT ${customers.id})` })
       .from(customers)
       .where(whereClause);
     const totalItems = Number(countResult[0]?.count ?? 0);
 
-    // Get paginated results
+    // Get paginated results with aggregated order metrics
     const offset = (page - 1) * pageSize;
-    const orderColumn = sortBy === "name" ? customers.name : customers.createdAt;
     const orderDirection = sortOrder === "asc" ? asc : desc;
+    
+    // Determine order column based on sortBy
+    // For aggregated fields, we need to use sql template literals
+    let orderByClause;
+    if (sortBy === "name") {
+      orderByClause = orderDirection(customers.name);
+    } else if (sortBy === "lifetimeValue") {
+      orderByClause = orderDirection(sql`COALESCE(SUM(${orders.total}), 0)`);
+    } else if (sortBy === "totalOrders") {
+      orderByClause = orderDirection(sql`COUNT(${orders.id})`);
+    } else if (sortBy === "healthScore") {
+      orderByClause = orderDirection(customers.healthScore);
+    } else if (sortBy === "lastOrderDate") {
+      orderByClause = orderDirection(sql`MAX(${orders.orderDate})`);
+    } else if (sortBy === "status") {
+      orderByClause = orderDirection(customers.status);
+    } else {
+      // Default to createdAt
+      orderByClause = orderDirection(customers.createdAt);
+    }
+
+    // Build order aggregation conditions
+    const validOrderCondition = and(
+      eq(orders.organizationId, ctx.organizationId),
+      isNull(orders.deletedAt),
+      sql`${orders.status} NOT IN ('draft', 'cancelled')`
+    );
 
     const items = await db
-      .select()
+      .select({
+        id: customers.id,
+        organizationId: customers.organizationId,
+        customerCode: customers.customerCode,
+        name: customers.name,
+        legalName: customers.legalName,
+        email: customers.email,
+        phone: customers.phone,
+        website: customers.website,
+        status: customers.status,
+        type: customers.type,
+        size: customers.size,
+        industry: customers.industry,
+        taxId: customers.taxId,
+        registrationNumber: customers.registrationNumber,
+        parentId: customers.parentId,
+        creditLimit: customers.creditLimit,
+        creditHold: customers.creditHold,
+        creditHoldReason: customers.creditHoldReason,
+        healthScore: customers.healthScore,
+        healthScoreUpdatedAt: customers.healthScoreUpdatedAt,
+        // Aggregated order metrics using LEFT JOIN with GROUP BY
+        lifetimeValue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+        totalOrderValue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+        averageOrderValue: sql<number>`COALESCE(AVG(${orders.total}), 0)::numeric`,
+        totalOrders: sql<number>`COUNT(${orders.id})::int`,
+        firstOrderDate: sql<Date | null>`MIN(${orders.orderDate})`,
+        lastOrderDate: sql<Date | null>`MAX(${orders.orderDate})`,
+        tags: customers.tags,
+        customFields: customers.customFields,
+        warrantyExpiryAlertOptOut: customers.warrantyExpiryAlertOptOut,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+        createdBy: customers.createdBy,
+        updatedBy: customers.updatedBy,
+        deletedAt: customers.deletedAt,
+      })
       .from(customers)
+      .leftJoin(
+        orders,
+        and(
+          eq(orders.customerId, customers.id),
+          validOrderCondition
+        )
+      )
       .where(whereClause)
-      .orderBy(orderDirection(orderColumn))
+      .groupBy(
+        customers.id,
+        customers.organizationId,
+        customers.customerCode,
+        customers.name,
+        customers.legalName,
+        customers.email,
+        customers.phone,
+        customers.website,
+        customers.status,
+        customers.type,
+        customers.size,
+        customers.industry,
+        customers.taxId,
+        customers.registrationNumber,
+        customers.parentId,
+        customers.creditLimit,
+        customers.creditHold,
+        customers.creditHoldReason,
+        customers.healthScore,
+        customers.healthScoreUpdatedAt,
+        customers.tags,
+        customers.customFields,
+        customers.warrantyExpiryAlertOptOut,
+        customers.createdAt,
+        customers.updatedAt,
+        customers.createdBy,
+        customers.updatedBy,
+        customers.deletedAt
+      )
+      .orderBy(
+        orderByClause,
+        // Add secondary sort by createdAt (descending) for recently created, unless already sorting by createdAt
+        ...(sortBy !== "createdAt" ? [desc(customers.createdAt)] : [])
+      )
       .limit(pageSize)
       .offset(offset);
 
@@ -192,10 +299,90 @@ export const getCustomersCursor = createServerFn({ method: "GET" })
     const whereClause = and(...conditions);
     const orderDirection = sortOrder === "asc" ? asc : desc;
 
+    // Build order aggregation conditions
+    const validOrderCondition = and(
+      eq(orders.organizationId, ctx.organizationId),
+      isNull(orders.deletedAt),
+      sql`${orders.status} NOT IN ('draft', 'cancelled')`
+    );
+
     const results = await db
-      .select()
+      .select({
+        id: customers.id,
+        organizationId: customers.organizationId,
+        customerCode: customers.customerCode,
+        name: customers.name,
+        legalName: customers.legalName,
+        email: customers.email,
+        phone: customers.phone,
+        website: customers.website,
+        status: customers.status,
+        type: customers.type,
+        size: customers.size,
+        industry: customers.industry,
+        taxId: customers.taxId,
+        registrationNumber: customers.registrationNumber,
+        parentId: customers.parentId,
+        creditLimit: customers.creditLimit,
+        creditHold: customers.creditHold,
+        creditHoldReason: customers.creditHoldReason,
+        healthScore: customers.healthScore,
+        healthScoreUpdatedAt: customers.healthScoreUpdatedAt,
+        // Aggregated order metrics
+        lifetimeValue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+        totalOrderValue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+        averageOrderValue: sql<number>`COALESCE(AVG(${orders.total}), 0)::numeric`,
+        totalOrders: sql<number>`COUNT(${orders.id})::int`,
+        firstOrderDate: sql<Date | null>`MIN(${orders.orderDate})`,
+        lastOrderDate: sql<Date | null>`MAX(${orders.orderDate})`,
+        tags: customers.tags,
+        customFields: customers.customFields,
+        warrantyExpiryAlertOptOut: customers.warrantyExpiryAlertOptOut,
+        createdAt: customers.createdAt,
+        updatedAt: customers.updatedAt,
+        createdBy: customers.createdBy,
+        updatedBy: customers.updatedBy,
+        deletedAt: customers.deletedAt,
+      })
       .from(customers)
+      .leftJoin(
+        orders,
+        and(
+          eq(orders.customerId, customers.id),
+          validOrderCondition
+        )
+      )
       .where(whereClause)
+      .groupBy(
+        customers.id,
+        customers.organizationId,
+        customers.customerCode,
+        customers.name,
+        customers.legalName,
+        customers.email,
+        customers.phone,
+        customers.website,
+        customers.status,
+        customers.type,
+        customers.size,
+        customers.industry,
+        customers.taxId,
+        customers.registrationNumber,
+        customers.parentId,
+        customers.creditLimit,
+        customers.creditHold,
+        customers.creditHoldReason,
+        customers.healthScore,
+        customers.healthScoreUpdatedAt,
+        customers.tags,
+        customers.customFields,
+        customers.warrantyExpiryAlertOptOut,
+        customers.createdAt,
+        customers.updatedAt,
+        customers.createdBy,
+        customers.updatedBy,
+        customers.deletedAt
+      )
       .orderBy(orderDirection(customers.createdAt), orderDirection(customers.id))
       .limit(pageSize + 1);
 
@@ -204,6 +391,7 @@ export const getCustomersCursor = createServerFn({ method: "GET" })
 
 /**
  * Get single customer with 360-degree view (contacts, addresses, activities)
+ * Includes aggregated order metrics computed from orders table
  */
 export const getCustomerById = createServerFn({ method: "GET" })
   .inputValidator(customerParamsSchema)
@@ -212,6 +400,7 @@ export const getCustomerById = createServerFn({ method: "GET" })
 
     const { id } = data;
 
+    // Get customer with relations using relational query
     const customer = await db.query.customers.findFirst({
       where: and(
         eq(customers.id, id),
@@ -238,7 +427,227 @@ export const getCustomerById = createServerFn({ method: "GET" })
       throw new Error("Customer not found");
     }
 
-    return customer;
+    // Get aggregated order metrics
+    const validOrderCondition = and(
+      eq(orders.organizationId, ctx.organizationId),
+      isNull(orders.deletedAt),
+      sql`${orders.status} NOT IN ('draft', 'cancelled')`
+    );
+
+    // Get order metrics and summaries in parallel
+    const [
+      orderMetrics,
+      recentOrders,
+      ordersByStatus,
+      plannedActivitySummary,
+      auditActivitySummary,
+      plannedActivityCountResult,
+      auditActivityCountResult,
+    ] = await Promise.all([
+      // Aggregated order metrics
+      db
+        .select({
+          lifetimeValue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+          totalOrderValue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+          averageOrderValue: sql<number>`COALESCE(AVG(${orders.total}), 0)::numeric`,
+          totalOrders: sql<number>`COUNT(${orders.id})::int`,
+          firstOrderDate: sql<Date | null>`MIN(${orders.orderDate})`,
+          lastOrderDate: sql<Date | null>`MAX(${orders.orderDate})`,
+        })
+        .from(orders)
+        .where(
+          and(
+            eq(orders.customerId, id),
+            validOrderCondition
+          )
+        ),
+      // Recent orders (last 5)
+      db
+        .select({
+          id: orders.id,
+          orderNumber: orders.orderNumber,
+          status: orders.status,
+          paymentStatus: orders.paymentStatus,
+          total: orders.total,
+          orderDate: orders.orderDate,
+          dueDate: orders.dueDate,
+        })
+        .from(orders)
+        .where(
+          and(
+            eq(orders.customerId, id),
+            eq(orders.organizationId, ctx.organizationId),
+            isNull(orders.deletedAt)
+          )
+        )
+        .orderBy(desc(orders.orderDate))
+        .limit(5),
+      // Orders by status breakdown
+      db
+        .select({
+          status: orders.status,
+          count: sql<number>`COUNT(*)::int`,
+          totalValue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+        })
+        .from(orders)
+        .where(
+          and(
+            eq(orders.customerId, id),
+            eq(orders.organizationId, ctx.organizationId),
+            isNull(orders.deletedAt),
+            sql`${orders.status} NOT IN ('draft', 'cancelled')`
+          )
+        )
+        .groupBy(orders.status),
+      // Planned activity summary by type (customerActivities table)
+      db
+        .select({
+          activityType: customerActivities.activityType,
+          count: sql<number>`COUNT(*)::int`,
+          lastActivityDate: sql<Date | null>`MAX(${customerActivities.createdAt}::timestamp)`,
+        })
+        .from(customerActivities)
+        .where(
+          and(
+            eq(customerActivities.customerId, id),
+            eq(customerActivities.organizationId, ctx.organizationId)
+          )
+        )
+        .groupBy(customerActivities.activityType),
+      // Audit activity summary by action (activities table)
+      // Include both customer activities and order activities
+      db
+        .select({
+          activityType: activities.action,
+          count: sql<number>`COUNT(*)::int`,
+          lastActivityDate: sql<Date | null>`MAX(${activities.createdAt})`,
+        })
+        .from(activities)
+        .where(
+          and(
+            eq(activities.organizationId, ctx.organizationId),
+            or(
+              // Direct customer activities
+              and(
+                eq(activities.entityType, 'customer'),
+                eq(activities.entityId, id)
+              ),
+              // Order activities where metadata.customerId matches
+              and(
+                eq(activities.entityType, 'order'),
+                sql`${activities.metadata}->>'customerId' = ${id}`
+              )
+            )!
+          )
+        )
+        .groupBy(activities.action),
+      // Planned activity total count
+      db
+        .select({
+          totalCount: sql<number>`COUNT(*)::int`,
+        })
+        .from(customerActivities)
+        .where(
+          and(
+            eq(customerActivities.customerId, id),
+            eq(customerActivities.organizationId, ctx.organizationId)
+          )
+        ),
+      // Audit activity total count
+      db
+        .select({
+          totalCount: sql<number>`COUNT(*)::int`,
+        })
+        .from(activities)
+        .where(
+          and(
+            eq(activities.organizationId, ctx.organizationId),
+            or(
+              // Direct customer activities
+              and(
+                eq(activities.entityType, 'customer'),
+                eq(activities.entityId, id)
+              ),
+              // Order activities where metadata.customerId matches
+              and(
+                eq(activities.entityType, 'order'),
+                sql`${activities.metadata}->>'customerId' = ${id}`
+              )
+            )!
+          )
+        ),
+    ]);
+
+    // Merge activity summaries from both sources
+    const activityTypeMap = new Map<string, { count: number; lastActivityDate: Date | string | null }>();
+
+    // Add planned activities
+    plannedActivitySummary.forEach((item) => {
+      activityTypeMap.set(item.activityType, {
+        count: Number(item.count),
+        lastActivityDate: item.lastActivityDate,
+      });
+    });
+
+    // Merge audit activities (sum counts, take latest date)
+    auditActivitySummary.forEach((item) => {
+      const existing = activityTypeMap.get(item.activityType);
+      if (existing) {
+        existing.count += Number(item.count);
+        // Take the latest date
+        const existingDate = existing.lastActivityDate ? new Date(existing.lastActivityDate) : null;
+        const newDate = item.lastActivityDate ? new Date(item.lastActivityDate) : null;
+        if (newDate && (!existingDate || newDate > existingDate)) {
+          existing.lastActivityDate = item.lastActivityDate;
+        }
+      } else {
+        activityTypeMap.set(item.activityType, {
+          count: Number(item.count),
+          lastActivityDate: item.lastActivityDate,
+        });
+      }
+    });
+
+    const activitySummary = Array.from(activityTypeMap.entries()).map(([activityType, data]) => ({
+      activityType,
+      count: data.count,
+      lastActivityDate: data.lastActivityDate,
+    }));
+
+    const totalActivityCount =
+      Number(plannedActivityCountResult[0]?.totalCount ?? 0) +
+      Number(auditActivityCountResult[0]?.totalCount ?? 0);
+
+    // Extract first result from orderMetrics array
+    const orderMetricsData = orderMetrics[0] ?? {
+      lifetimeValue: 0,
+      totalOrderValue: 0,
+      averageOrderValue: 0,
+      totalOrders: 0,
+      firstOrderDate: null,
+      lastOrderDate: null,
+    };
+
+    // Merge order metrics and summaries into customer object
+    return {
+      ...customer,
+      lifetimeValue: orderMetricsData.lifetimeValue,
+      totalOrderValue: orderMetricsData.totalOrderValue,
+      averageOrderValue: orderMetricsData.averageOrderValue,
+      totalOrders: orderMetricsData.totalOrders,
+      firstOrderDate: orderMetricsData.firstOrderDate,
+      lastOrderDate: orderMetricsData.lastOrderDate,
+      // Order summary data
+      orderSummary: {
+        recentOrders: recentOrders ?? [],
+        ordersByStatus: ordersByStatus ?? [],
+      },
+      // Activity summary data
+      activitySummary: {
+        byType: activitySummary ?? [],
+        totalActivities: totalActivityCount,
+      },
+    };
   });
 
 /**
@@ -541,6 +950,7 @@ export const deleteAddress = createServerFn({ method: "POST" })
 
 /**
  * Get activities for a customer (timeline)
+ * Includes user attribution for proper display in unified timeline
  */
 export const getCustomerActivities = createServerFn({ method: "GET" })
   .inputValidator(customerActivityFilterSchema)
@@ -575,14 +985,27 @@ export const getCustomerActivities = createServerFn({ method: "GET" })
       conditions.push(lte(customerActivities.createdAt, endDate));
     }
 
+    // Query with user join for attribution
     const results = await db
-      .select()
+      .select({
+        activity: customerActivities,
+        user: {
+          id: users.id,
+          name: users.name,
+          email: users.email,
+        },
+      })
       .from(customerActivities)
+      .leftJoin(users, eq(customerActivities.createdBy, users.id))
       .where(and(...conditions))
       .orderBy(desc(customerActivities.createdAt))
       .limit(100);
 
-    return results;
+    // Transform results to include user data
+    return results.map((r) => ({
+      ...r.activity,
+      user: r.user?.id ? r.user : null,
+    }));
   });
 
 /**

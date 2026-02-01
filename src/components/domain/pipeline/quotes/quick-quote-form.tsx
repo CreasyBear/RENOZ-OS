@@ -1,15 +1,17 @@
 /**
- * QuickQuoteForm Component
+ * QuickQuoteForm Presenter
  *
  * Streamlined quote creation form for rapid quoting.
  * Allows creating quotes with minimal input - customer, products, and basic details.
  *
+ * Pure presenter - all data passed via props from container.
+ *
+ * @see ./quick-quote-form-container.tsx (container)
  * @see _Initiation/_prd/2-domains/pipeline/pipeline.prd.json (PIPE-QUICK-QUOTE-UI)
  */
 
 import { memo, useState, useCallback, useMemo } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import type { UseMutationResult } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   Zap,
@@ -68,18 +70,52 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { FormatAmount } from "@/components/shared/format";
 import { toastSuccess, toastError } from "@/hooks";
-import { getCustomers } from "@/server/customers";
-import { listProducts } from "@/server/functions/products/products";
-import { createQuoteVersion } from "@/server/functions/pipeline/quote-versions";
 import { GST_RATE } from "@/lib/order-calculations";
+import type { CreateQuoteVersionInput } from "@/hooks/pipeline";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export interface QuickQuoteFormProps {
+// Minimal customer type for presenter - only fields used in the UI
+interface CustomerItem {
+  id: string;
+  name: string;
+  email: string | null;
+}
+
+interface ProductItem {
+  id: string;
+  name: string;
+  sku: string;
+  basePrice: number;
+}
+
+/**
+ * Container props - used by parent components
+ */
+export interface QuickQuoteFormContainerProps {
   opportunityId?: string;
   customerId?: string;
+  onSuccess?: (quoteId: string) => void;
+  onCancel?: () => void;
+  className?: string;
+}
+
+/**
+ * Presenter props - receives data from container
+ */
+export interface QuickQuoteFormPresenterProps {
+  opportunityId?: string;
+  customerId?: string;
+  /** @source useCustomers hook */
+  customers: CustomerItem[];
+  /** @source useProducts hook */
+  products: ProductItem[];
+  /** @source Combined loading state from container - available for loading UI */
+  isLoading?: boolean;
+  /** @source useCreateQuoteVersion hook */
+  createMutation: UseMutationResult<unknown, Error, CreateQuoteVersionInput>;
   onSuccess?: (quoteId: string) => void;
   onCancel?: () => void;
   className?: string;
@@ -107,18 +143,22 @@ function calculateLineTotal(item: QuoteLineItem): number {
 }
 
 // ============================================================================
-// COMPONENT
+// PRESENTER COMPONENT
 // ============================================================================
 
-export const QuickQuoteForm = memo(function QuickQuoteForm({
+export const QuickQuoteFormPresenter = memo(function QuickQuoteFormPresenter({
   opportunityId,
   customerId: initialCustomerId,
+  customers,
+  products,
+  isLoading: _isLoading,
+  createMutation,
   onSuccess,
   onCancel,
   className,
-}: QuickQuoteFormProps) {
+}: QuickQuoteFormPresenterProps) {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  // Note: isLoading passed from container is available for skeleton/loading UI if needed
 
   // Form state
   const [customerId, setCustomerId] = useState(initialCustomerId ?? "");
@@ -127,21 +167,6 @@ export const QuickQuoteForm = memo(function QuickQuoteForm({
   const [lineItems, setLineItems] = useState<QuoteLineItem[]>([]);
   const [validityDays, setValidityDays] = useState(DEFAULT_VALIDITY_DAYS);
   const [notes, setNotes] = useState("");
-
-  // Fetch customers
-  const customersQuery = useQuery({
-    queryKey: queryKeys.customers.list({ pageSize: 100 }),
-    queryFn: () => getCustomers({ data: { page: 1, pageSize: 100 } }),
-  });
-
-  // Fetch products
-  const productsQuery = useQuery({
-    queryKey: queryKeys.products.list({ status: "active" }),
-    queryFn: () => listProducts({ data: { pageSize: 100, status: "active" } }),
-  });
-
-  const customers = customersQuery.data?.items ?? [];
-  const products = productsQuery.data?.products ?? [];
 
   const selectedCustomer = useMemo(
     () => customers.find((c) => c.id === customerId),
@@ -205,52 +230,7 @@ export const QuickQuoteForm = memo(function QuickQuoteForm({
     setLineItems((prev) => prev.filter((item) => item.productId !== productId));
   }, []);
 
-  // Create quote mutation
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      if (!opportunityId) {
-        throw new Error("Opportunity ID is required");
-      }
-
-      return createQuoteVersion({
-        data: {
-          opportunityId,
-          notes: notes.trim() || undefined,
-          items: lineItems.map((item) => {
-            const subtotal = item.quantity * item.unitPrice;
-            const discount = item.discount ? subtotal * (item.discount / 100) : 0;
-            const totalCents = Math.round(subtotal - discount);
-
-            return {
-              productId: item.productId,
-              description: item.productName || "Item",
-              quantity: item.quantity,
-              unitPriceCents: item.unitPrice,
-              discountPercent: item.discount,
-              totalCents,
-            };
-          }),
-        },
-      });
-    },
-    onSuccess: (result) => {
-      toastSuccess("Quote created successfully");
-      queryClient.invalidateQueries({ queryKey: queryKeys.quotes.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.all });
-
-      if (onSuccess) {
-        onSuccess(result.quoteVersion.id);
-      } else {
-        // TODO: Fix route - /pipeline/quotes/$quoteId may not be configured yet
-        // Using safe fallback until route is implemented
-        navigate({ to: "/pipeline" });
-      }
-    },
-    onError: () => {
-      toastError("Failed to create quote");
-    },
-  });
-
+  // Handle submit using mutation from container
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -264,7 +244,46 @@ export const QuickQuoteForm = memo(function QuickQuoteForm({
       return;
     }
 
-    createMutation.mutate();
+    if (!opportunityId) {
+      toastError("Opportunity ID is required");
+      return;
+    }
+
+    createMutation.mutate(
+      {
+        opportunityId,
+        notes: notes.trim() || undefined,
+        items: lineItems.map((item) => {
+          const subtotal = item.quantity * item.unitPrice;
+          const discount = item.discount ? subtotal * (item.discount / 100) : 0;
+          const total = Math.round((subtotal - discount) * 100) / 100;
+
+          return {
+            productId: item.productId,
+            description: item.productName || "Item",
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            discountPercent: item.discount,
+            total,
+          };
+        }),
+      },
+      {
+        onSuccess: (result) => {
+          toastSuccess("Quote created successfully");
+          // Cast result to expected type
+          const data = result as { quoteVersion: { id: string } };
+          if (onSuccess && data?.quoteVersion?.id) {
+            onSuccess(data.quoteVersion.id);
+          } else {
+            navigate({ to: "/pipeline" });
+          }
+        },
+        onError: () => {
+          toastError("Failed to create quote");
+        },
+      }
+    );
   };
 
   const canSubmit = customerId && lineItems.length > 0;
@@ -586,4 +605,10 @@ export const QuickQuoteForm = memo(function QuickQuoteForm({
   );
 });
 
-export default QuickQuoteForm;
+/**
+ * @deprecated Use QuickQuoteFormContainer instead for new code.
+ * This export is kept for backwards compatibility.
+ */
+export const QuickQuoteForm = QuickQuoteFormPresenter;
+
+export default QuickQuoteFormPresenter;

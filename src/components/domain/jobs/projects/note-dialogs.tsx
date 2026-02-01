@@ -8,8 +8,6 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Plus, Mic, MicOff, Edit3 } from 'lucide-react';
 import {
@@ -21,24 +19,14 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
+import {
+  TextField,
+  TextareaField,
+  SelectField,
+} from '@/components/shared/forms';
 import { useCreateNote, useUpdateNote } from '@/hooks/jobs';
 import { toast } from '@/lib/toast';
 import type { ProjectNote } from 'drizzle/schema';
@@ -53,7 +41,19 @@ const noteFormSchema = z.object({
   noteType: z.enum(['general', 'meeting', 'audio', 'site_visit', 'client_feedback']),
 });
 
-type NoteFormData = z.infer<typeof noteFormSchema>;
+const noteTypeOptions = [
+  { value: 'general', label: 'General' },
+  { value: 'meeting', label: 'Meeting' },
+  { value: 'audio', label: 'Audio' },
+  { value: 'site_visit', label: 'Site Visit' },
+  { value: 'client_feedback', label: 'Client Feedback' },
+];
+
+const noteStatusOptions = [
+  { value: 'draft', label: 'Draft' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'processing', label: 'Processing' },
+];
 
 // ============================================================================
 // CREATE DIALOG
@@ -74,14 +74,43 @@ export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: N
   const audioChunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const form = useForm<NoteFormData>({
-    resolver: zodResolver(noteFormSchema),
+  const form = useTanStackForm({
+    schema: noteFormSchema,
     defaultValues: {
       title: '',
       content: '',
-      noteType: 'general',
+      noteType: 'general' as const,
+    },
+    onSubmit: async (data) => {
+      try {
+        await createNote.mutateAsync({
+          title: data.title,
+          content: data.content,
+          noteType: data.noteType,
+          status: 'completed',
+        });
+
+        toast.success('Note created');
+        onOpenChange(false);
+        form.reset();
+        onSuccess?.();
+      } catch {
+        toast.error('Failed to create note');
+      }
     },
   });
+
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        title: '',
+        content: '',
+        noteType: 'general',
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- form.reset is stable
+  }, [open]);
 
   const startRecording = async () => {
     try {
@@ -101,8 +130,8 @@ export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: N
         new Blob(audioChunksRef.current, { type: 'audio/webm' });
         // In a real implementation, we'd upload this and process it
         // For now, just add a placeholder
-        const currentContent = form.getValues('content');
-        form.setValue('content', currentContent + '\n\n[Audio recording attached]');
+        const currentContent = form.getFieldValue('content') ?? '';
+        form.setFieldValue('content', currentContent + '\n\n[Audio recording attached]');
         toast.success('Audio recorded and attached');
 
         // Stop all tracks
@@ -117,7 +146,7 @@ export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: N
       timerRef.current = setInterval(() => {
         setRecordingTime((prev) => prev + 1);
       }, 1000);
-    } catch (error) {
+    } catch {
       toast.error('Could not access microphone');
     }
   };
@@ -139,26 +168,6 @@ export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: N
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const onSubmit = async (data: NoteFormData) => {
-    try {
-      await createNote.mutateAsync({
-        title: data.title,
-        content: data.content,
-        noteType: data.noteType,
-        status: 'completed',
-      });
-
-      toast.success('Note created');
-      onOpenChange(false);
-      form.reset();
-      onSuccess?.();
-    } catch (error) {
-      toast.error('Failed to create note');
-    }
-  };
-
-
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
@@ -170,103 +179,88 @@ export function NoteCreateDialog({ open, onOpenChange, projectId, onSuccess }: N
           <DialogDescription>Create a new note for this project</DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Title</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Optional title..." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="space-y-4"
+        >
+          <form.Field name="title">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Title"
+                placeholder="Optional title..."
+                required
+              />
+            )}
+          </form.Field>
 
-            <FormField
-              control={form.control}
-              name="noteType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Note Type</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="general">General</SelectItem>
-                      <SelectItem value="meeting">Meeting</SelectItem>
-                      <SelectItem value="audio">Audio</SelectItem>
-                      <SelectItem value="site_visit">Site Visit</SelectItem>
-                      <SelectItem value="client_feedback">Client Feedback</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form.Field name="noteType">
+            {(field) => (
+              <SelectField
+                field={field}
+                label="Note Type"
+                options={noteTypeOptions}
+                required
+              />
+            )}
+          </form.Field>
 
-            <FormField
-              control={form.control}
-              name="content"
-              render={({ field }) => (
-                <FormItem>
-                  <div className="flex items-center justify-between">
-                    <FormLabel>Content *</FormLabel>
-                    <div className="flex items-center gap-2">
-                      {isRecording && (
-                        <span className="text-sm text-destructive font-mono">
-                          {formatTime(recordingTime)}
-                        </span>
-                      )}
-                      <Button
-                        type="button"
-                        variant={isRecording ? 'destructive' : 'outline'}
-                        size="sm"
-                        className="gap-1"
-                        onClick={isRecording ? stopRecording : startRecording}
-                      >
-                        {isRecording ? (
-                          <>
-                            <MicOff className="h-4 w-4" />
-                            Stop
-                          </>
-                        ) : (
-                          <>
-                            <Mic className="h-4 w-4" />
-                            Record
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Enter note content..."
-                      className="min-h-[120px]"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+          {/* Content field with custom label including record button */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <Label>Content *</Label>
+              <div className="flex items-center gap-2">
+                {isRecording && (
+                  <span className="text-sm text-destructive font-mono">
+                    {formatTime(recordingTime)}
+                  </span>
+                )}
+                <Button
+                  type="button"
+                  variant={isRecording ? 'destructive' : 'outline'}
+                  size="sm"
+                  className="gap-1"
+                  onClick={isRecording ? stopRecording : startRecording}
+                >
+                  {isRecording ? (
+                    <>
+                      <MicOff className="h-4 w-4" />
+                      Stop
+                    </>
+                  ) : (
+                    <>
+                      <Mic className="h-4 w-4" />
+                      Record
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+            <form.Field name="content">
+              {(field) => (
+                <TextareaField
+                  field={field}
+                  label=""
+                  placeholder="Enter note content..."
+                  rows={5}
+                  className="[&>label]:hidden"
+                />
               )}
-            />
+            </form.Field>
+          </div>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createNote.isPending}>
-                {createNote.isPending ? 'Creating...' : 'Create'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={createNote.isPending}>
+              {createNote.isPending ? 'Creating...' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
@@ -290,8 +284,6 @@ const noteEditFormSchema = z.object({
   status: z.enum(['draft', 'completed', 'processing']),
 });
 
-type NoteEditFormData = z.infer<typeof noteEditFormSchema>;
-
 export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEditDialogProps) {
   const updateNote = useUpdateNote(note?.projectId ?? '');
   const [isRecording, setIsRecording] = useState(false);
@@ -300,19 +292,41 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  const form = useForm<NoteEditFormData>({
-    resolver: zodResolver(noteEditFormSchema),
+  const form = useTanStackForm({
+    schema: noteEditFormSchema,
     defaultValues: {
-      title: '',
-      content: '',
-      noteType: 'general',
-      status: 'completed',
+      title: note?.title ?? '',
+      content: note?.content ?? '',
+      noteType: note?.noteType ?? 'general',
+      status: note?.status ?? 'completed',
+    },
+    onSubmit: async (data) => {
+      if (!note) return;
+
+      // Stop recording if active
+      if (isRecording) {
+        stopRecording();
+      }
+
+      try {
+        await updateNote.mutateAsync({
+          id: note.id,
+          ...data,
+        });
+
+        toast.success('Note updated successfully');
+        form.reset();
+        onOpenChange(false);
+        onSuccess?.();
+      } catch {
+        toast.error('Failed to update note');
+      }
     },
   });
 
   // Update form values when note changes
   useEffect(() => {
-    if (note) {
+    if (open && note) {
       form.reset({
         title: note.title,
         content: note.content ?? '',
@@ -320,7 +334,8 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
         status: note.status,
       });
     }
-  }, [note, form]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- form.reset is stable
+  }, [open, note]);
 
   const startRecording = async () => {
     try {
@@ -336,9 +351,9 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        console.log('Audio recorded:', audioUrl);
+        // Audio blob created - in production, this would be uploaded to storage
+        // For now, the recording is captured but not persisted
+        new Blob(audioChunksRef.current, { type: 'audio/webm' });
       };
 
       mediaRecorder.start();
@@ -348,8 +363,7 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
       recordingIntervalRef.current = setInterval(() => {
         setRecordingTime((prev) => prev + 1);
       }, 1000);
-    } catch (error) {
-      console.error('Error starting recording:', error);
+    } catch {
       toast.error('Could not access microphone');
     }
   };
@@ -373,30 +387,6 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
     onOpenChange(false);
   };
 
-  const onSubmit = async (data: NoteEditFormData) => {
-    if (!note) return;
-
-    // Stop recording if active
-    if (isRecording) {
-      stopRecording();
-    }
-
-    try {
-      await updateNote.mutateAsync({
-        id: note.id,
-        ...data,
-      });
-
-      toast.success('Note updated successfully');
-      form.reset();
-      onOpenChange(false);
-      onSuccess?.();
-    } catch (error) {
-      console.error('Error updating note:', error);
-      toast.error('Failed to update note');
-    }
-  };
-
   // Clean up on unmount
   useEffect(() => {
     return () => {
@@ -417,125 +407,93 @@ export function NoteEditDialog({ open, onOpenChange, note, onSuccess }: NoteEdit
           <DialogDescription>Update this project note.</DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Title</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Enter note title..." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="noteType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Type</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="general">General</SelectItem>
-                        <SelectItem value="meeting">Meeting</SelectItem>
-                        <SelectItem value="audio">Audio</SelectItem>
-                        <SelectItem value="site_visit">Site Visit</SelectItem>
-                        <SelectItem value="client_feedback">Client Feedback</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="space-y-4"
+        >
+          <form.Field name="title">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Title"
+                placeholder="Enter note title..."
+                required
               />
+            )}
+          </form.Field>
 
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="draft">Draft</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="processing">Processing</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+          <div className="grid grid-cols-2 gap-4">
+            <form.Field name="noteType">
+              {(field) => (
+                <SelectField
+                  field={field}
+                  label="Type"
+                  options={noteTypeOptions}
+                  required
+                />
+              )}
+            </form.Field>
+
+            <form.Field name="status">
+              {(field) => (
+                <SelectField
+                  field={field}
+                  label="Status"
+                  options={noteStatusOptions}
+                  required
+                />
+              )}
+            </form.Field>
+          </div>
+
+          {/* Audio Recording */}
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant={isRecording ? 'destructive' : 'outline'}
+              size="sm"
+              onClick={isRecording ? stopRecording : startRecording}
+            >
+              {isRecording ? (
+                <>
+                  <MicOff className="mr-2 h-4 w-4" />
+                  Stop ({Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')})
+                </>
+              ) : (
+                <>
+                  <Mic className="mr-2 h-4 w-4" />
+                  Record Audio
+                </>
+              )}
+            </Button>
+            {isRecording && (
+              <span className="text-sm text-destructive animate-pulse">Recording...</span>
+            )}
+          </div>
+
+          <form.Field name="content">
+            {(field) => (
+              <TextareaField
+                field={field}
+                label="Content"
+                placeholder="Enter note content..."
+                rows={5}
               />
-            </div>
+            )}
+          </form.Field>
 
-            {/* Audio Recording */}
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant={isRecording ? 'destructive' : 'outline'}
-                size="sm"
-                onClick={isRecording ? stopRecording : startRecording}
-              >
-                {isRecording ? (
-                  <>
-                    <MicOff className="mr-2 h-4 w-4" />
-                    Stop ({Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, '0')})
-                  </>
-                ) : (
-                  <>
-                    <Mic className="mr-2 h-4 w-4" />
-                    Record Audio
-                  </>
-                )}
-              </Button>
-              {isRecording && (
-                <span className="text-sm text-destructive animate-pulse">Recording...</span>
-              )}
-            </div>
-
-            <FormField
-              control={form.control}
-              name="content"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Content</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Enter note content..."
-                      className="min-h-[120px]"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={handleCancel}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={updateNote.isPending}>
-                {updateNote.isPending ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={handleCancel}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={updateNote.isPending}>
+              {updateNote.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

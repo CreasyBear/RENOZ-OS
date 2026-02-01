@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
   },
   // Pro forma disclaimer banner
   disclaimerBanner: {
-    backgroundColor: colors.background.light,
+    backgroundColor: colors.background.subtle,
     borderWidth: 1,
     borderColor: colors.border.medium,
     padding: spacing.md,
@@ -232,12 +232,7 @@ function ProFormaContent({ data, qrCodeDataUrl }: ProFormaPdfTemplateProps) {
           title="PRO FORMA INVOICE"
           documentNumber={data.documentNumber}
           date={data.issueDate}
-          dueDate={data.validUntil}
-          labels={{
-            documentNumber: "Pro Forma #:",
-            date: "Date:",
-            dueDate: "Valid Until:",
-          }}
+          validUntil={data.validUntil}
         />
 
         {/* NOT A TAX INVOICE disclaimer banner */}
@@ -259,7 +254,6 @@ function ProFormaContent({ data, qrCodeDataUrl }: ProFormaPdfTemplateProps) {
           lineItems={order.lineItems}
           showSku={order.lineItems.some((item) => item.sku)}
           showNotes={order.lineItems.some((item) => item.notes)}
-          alternateRows
         />
 
         {/* Totals summary (no balance section since not invoiced yet) */}
@@ -271,7 +265,7 @@ function ProFormaContent({ data, qrCodeDataUrl }: ProFormaPdfTemplateProps) {
           taxAmount={order.taxAmount}
           shippingAmount={order.shippingAmount}
           total={order.total}
-          showBalance={false}
+          balanceDue={null}
         />
 
         {/* Footer with payment details, terms, and notes */}
@@ -295,7 +289,7 @@ function ProFormaContent({ data, qrCodeDataUrl }: ProFormaPdfTemplateProps) {
         {/* QR Code for quick access */}
         {qrCodeDataUrl && (
           <View style={styles.qrSection}>
-            <QRCode dataUrl={qrCodeDataUrl} size={60} />
+            <QRCode dataUrl={qrCodeDataUrl} size={80} />
           </View>
         )}
       </View>

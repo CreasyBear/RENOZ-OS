@@ -1,0 +1,311 @@
+/**
+ * Form Draft Hook
+ *
+ * Auto-saves form state to localStorage with debouncing.
+ * Follows Vercel best practice: version and minimize localStorage data.
+ *
+ * Features:
+ * - Debounced auto-save (default 1s)
+ * - Schema versioning for safe migrations
+ * - Restore/discard draft functionality
+ * - Integrates with TanStack Form
+ * - Clears draft on successful submit
+ *
+ * @example
+ * ```tsx
+ * const form = useTanStackForm({
+ *   schema: customerSchema,
+ *   defaultValues: { name: '', email: '' },
+ *   onSubmit: async (values) => {
+ *     await createCustomer({ data: values });
+ *     draft.clear(); // Clear draft on success
+ *   },
+ * });
+ *
+ * const draft = useFormDraft({
+ *   key: 'customer-create',
+ *   version: 1,
+ *   form,
+ *   enabled: true,
+ * });
+ *
+ * // Show restore prompt if draft exists
+ * {draft.hasDraft && (
+ *   <DraftRestorePrompt
+ *     onRestore={draft.restore}
+ *     onDiscard={draft.clear}
+ *     savedAt={draft.savedAt}
+ *   />
+ * )}
+ * ```
+ */
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { TanStackFormApi } from './use-tanstack-form';
+
+// ============================================================================
+// TYPES
+// ============================================================================
+
+interface DraftData<T> {
+  version: number;
+  values: T;
+  savedAt: string;
+}
+
+export interface UseFormDraftOptions<TFormData> {
+  /** Unique key for this form type (e.g., 'customer-create', 'order-edit-123') */
+  key: string;
+  /** Schema version - increment when form structure changes to invalidate old drafts */
+  version: number;
+  /** TanStack Form instance */
+  form: TanStackFormApi<TFormData>;
+  /** Enable/disable auto-save (default: true) */
+  enabled?: boolean;
+  /** Debounce delay in ms (default: 1000) */
+  debounceMs?: number;
+  /** Fields to exclude from draft (e.g., sensitive data) */
+  excludeFields?: (keyof TFormData)[];
+  /** Callback when draft is restored */
+  onRestore?: (values: TFormData) => void;
+  /** Callback when draft is cleared */
+  onClear?: () => void;
+}
+
+export interface UseFormDraftReturn<TFormData> {
+  /** Whether a valid draft exists */
+  hasDraft: boolean;
+  /** When the draft was last saved */
+  savedAt: Date | null;
+  /** Whether auto-save is currently pending */
+  isSaving: boolean;
+  /** Restore the draft to the form */
+  restore: () => void;
+  /** Clear the draft without restoring */
+  clear: () => void;
+  /** Manually save current form state */
+  save: () => void;
+  /** The draft values (if any) */
+  draftValues: TFormData | null;
+}
+
+// ============================================================================
+// STORAGE HELPERS
+// ============================================================================
+
+const DRAFT_PREFIX = 'form-draft:';
+
+function getDraftKey(key: string): string {
+  return `${DRAFT_PREFIX}${key}`;
+}
+
+function readDraft<T>(key: string, expectedVersion: number): DraftData<T> | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const stored = localStorage.getItem(getDraftKey(key));
+    if (!stored) return null;
+
+    const data = JSON.parse(stored) as DraftData<T>;
+
+    // Version mismatch - invalidate old draft
+    if (data.version !== expectedVersion) {
+      localStorage.removeItem(getDraftKey(key));
+      return null;
+    }
+
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft<T>(key: string, version: number, values: T): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const data: DraftData<T> = {
+      version,
+      values,
+      savedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(getDraftKey(key), JSON.stringify(data));
+  } catch (error) {
+    console.warn('Failed to save form draft:', error);
+  }
+}
+
+function clearDraft(key: string): void {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(getDraftKey(key));
+}
+
+// ============================================================================
+// HOOK
+// ============================================================================
+
+export function useFormDraft<TFormData>({
+  key,
+  version,
+  form,
+  enabled = true,
+  debounceMs = 1000,
+  excludeFields = [],
+  onRestore,
+  onClear,
+}: UseFormDraftOptions<TFormData>): UseFormDraftReturn<TFormData> {
+  const [hasDraft, setHasDraft] = useState(false);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [draftValues, setDraftValues] = useState<TFormData | null>(null);
+
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isRestoringRef = useRef(false);
+
+  // Check for existing draft on mount
+  useEffect(() => {
+    if (!enabled) return;
+
+    const draft = readDraft<TFormData>(key, version);
+    if (draft) {
+      setHasDraft(true);
+      setSavedAt(new Date(draft.savedAt));
+      setDraftValues(draft.values);
+    }
+  }, [key, version, enabled]);
+
+  // Filter out excluded fields
+  const filterValues = useCallback(
+    (values: TFormData): TFormData => {
+      if (excludeFields.length === 0) return values;
+
+      const filtered = { ...values };
+      for (const field of excludeFields) {
+        delete (filtered as Record<string, unknown>)[field as string];
+      }
+      return filtered;
+    },
+    [excludeFields]
+  );
+
+  // Save draft
+  const save = useCallback(() => {
+    if (!enabled || isRestoringRef.current) return;
+
+    const values = filterValues(form.state.values);
+    writeDraft(key, version, values);
+    setSavedAt(new Date());
+    setHasDraft(true);
+    setDraftValues(values);
+    setIsSaving(false);
+  }, [enabled, form.state.values, key, version, filterValues]);
+
+  // Debounced auto-save on form changes
+  useEffect(() => {
+    if (!enabled) return;
+
+    // Clear existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Don't save while restoring
+    if (isRestoringRef.current) return;
+
+    // Check if form has been modified
+    const currentValues = JSON.stringify(form.state.values);
+    const defaultValues = JSON.stringify(form.options.defaultValues);
+
+    if (currentValues === defaultValues) {
+      // Form is at default state - no need to save draft
+      return;
+    }
+
+    setIsSaving(true);
+
+    // Debounce the save
+    debounceTimerRef.current = setTimeout(() => {
+      save();
+    }, debounceMs);
+
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [enabled, form.state.values, form.options.defaultValues, debounceMs, save]);
+
+  // Restore draft to form
+  const restore = useCallback(() => {
+    const draft = readDraft<TFormData>(key, version);
+    if (!draft) return;
+
+    isRestoringRef.current = true;
+
+    // Reset form with draft values
+    form.reset(draft.values);
+
+    // Clear the draft after restoring
+    clearDraft(key);
+    setHasDraft(false);
+    setDraftValues(null);
+
+    onRestore?.(draft.values);
+
+    // Allow auto-save again after a short delay
+    setTimeout(() => {
+      isRestoringRef.current = false;
+    }, 100);
+  }, [key, version, form, onRestore]);
+
+  // Clear draft without restoring
+  const clear = useCallback(() => {
+    clearDraft(key);
+    setHasDraft(false);
+    setSavedAt(null);
+    setDraftValues(null);
+    onClear?.();
+  }, [key, onClear]);
+
+  return {
+    hasDraft,
+    savedAt,
+    isSaving,
+    restore,
+    clear,
+    save,
+    draftValues,
+  };
+}
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+
+/**
+ * Generate a draft key for editing an existing entity
+ */
+export function getEditDraftKey(entityType: string, entityId: string): string {
+  return `${entityType}-edit-${entityId}`;
+}
+
+/**
+ * Generate a draft key for creating a new entity
+ */
+export function getCreateDraftKey(entityType: string): string {
+  return `${entityType}-create`;
+}
+
+/**
+ * Clear all form drafts (useful for logout)
+ */
+export function clearAllFormDrafts(): void {
+  if (typeof window === 'undefined') return;
+
+  const keys = Object.keys(localStorage);
+  for (const key of keys) {
+    if (key.startsWith(DRAFT_PREFIX)) {
+      localStorage.removeItem(key);
+    }
+  }
+}

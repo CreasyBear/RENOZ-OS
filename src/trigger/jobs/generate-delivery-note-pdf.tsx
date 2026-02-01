@@ -94,12 +94,9 @@ export const generateDeliveryNotePdf = task({
       organizationId,
       customerId,
       deliveryDate,
-      deliveryTimeWindow,
       carrier,
       trackingNumber,
       specialInstructions,
-      showCheckboxes = true,
-      showDimensions = false,
     } = payload;
 
     logger.info("Starting delivery note PDF generation", {
@@ -278,12 +275,16 @@ export const generateDeliveryNotePdf = task({
     const documentNumber = `DN-${order.orderNumber}`;
     const issueDate = new Date();
 
+    // DeliveryNoteDocumentData requires deliveryDate to be Date, not null
+    // Use issueDate as fallback if deliveryDate not provided
+    const effectiveDeliveryDate = deliveryDate ? new Date(deliveryDate) : issueDate;
+
     const deliveryNoteData: DeliveryNoteDocumentData = {
       documentNumber,
       orderNumber: order.orderNumber,
       issueDate,
-      deliveryDate: deliveryDate ? new Date(deliveryDate) : null,
-      deliveryTimeWindow: deliveryTimeWindow || null,
+      deliveryDate: effectiveDeliveryDate,
+      // deliveryTimeWindow not in DeliveryNoteDocumentData schema - remove
       customer: {
         id: customer.id,
         name: customer.name,
@@ -309,12 +310,11 @@ export const generateDeliveryNotePdf = task({
     };
 
     // Step 5: Render PDF to buffer
+    // Note: showCheckboxes/showDimensions are not props - they're always rendered in the template
     const { buffer, size } = await renderPdfToBuffer(
       <DeliveryNotePdfDocument
         organization={orgData}
         data={deliveryNoteData}
-        showCheckboxes={showCheckboxes}
-        showDimensions={showDimensions}
       />
     );
 

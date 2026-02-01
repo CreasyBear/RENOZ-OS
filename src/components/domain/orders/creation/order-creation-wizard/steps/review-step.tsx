@@ -20,7 +20,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { WizardState } from '../types';
-import { GST_RATE, formatPrice } from '../types';
+import { GST_RATE } from '../types';
+import { FormatAmount } from '@/components/shared/format/format-amount';
 
 interface ReviewStepProps {
   state: WizardState;
@@ -86,7 +87,7 @@ export const ReviewStep = memo(function ReviewStep({ state }: ReviewStepProps) {
                   <TableCell>{item.description}</TableCell>
                   <TableCell className="text-right">{item.quantity}</TableCell>
                   <TableCell className="text-right">
-                    {formatPrice(item.quantity * item.unitPrice)}
+                    <FormatAmount amount={item.quantity * item.unitPrice} />
                   </TableCell>
                 </TableRow>
               ))}
@@ -119,28 +120,28 @@ export const ReviewStep = memo(function ReviewStep({ state }: ReviewStepProps) {
         <CardContent className="space-y-2">
           <div className="flex justify-between text-sm">
             <span>Subtotal</span>
-            <span>{formatPrice(subtotal)}</span>
+            <FormatAmount amount={subtotal} />
           </div>
           {totalDiscount > 0 && (
             <div className="flex justify-between text-sm text-green-600">
               <span>Discount</span>
-              <span>-{formatPrice(totalDiscount)}</span>
+              <span>-<FormatAmount amount={totalDiscount} /></span>
             </div>
           )}
           <div className="flex justify-between text-sm">
             <span>GST (10%)</span>
-            <span>{formatPrice(gstAmount)}</span>
+            <FormatAmount amount={gstAmount} />
           </div>
           {state.shippingAmount > 0 && (
             <div className="flex justify-between text-sm">
               <span>Shipping</span>
-              <span>{formatPrice(state.shippingAmount)}</span>
+              <FormatAmount amount={state.shippingAmount} />
             </div>
           )}
           <Separator />
           <div className="flex justify-between text-lg font-semibold">
             <span>Total</span>
-            <span>{formatPrice(total)}</span>
+            <FormatAmount amount={total} />
           </div>
           {state.dueDate && (
             <p className="text-muted-foreground pt-2 text-xs">

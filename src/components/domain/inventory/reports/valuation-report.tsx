@@ -32,6 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useOrgFormat } from "@/hooks/use-org-format";
 
 // ============================================================================
 // TYPES
@@ -83,13 +84,9 @@ export const ValuationReport = memo(function ValuationReport({
   isLoading,
   className,
 }: ValuationReportProps) {
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("en-AU", {
-      style: "currency",
-      currency: "AUD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
 
   const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 
@@ -138,7 +135,7 @@ export const ValuationReport = memo(function ValuationReport({
               </span>
             </div>
             <div className="text-2xl font-bold mt-2 tabular-nums">
-              {formatCurrency(summary.totalValue)}
+              {formatCurrencyDisplay(summary.totalValue)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               {summary.costMethod.toUpperCase()} costing
@@ -172,7 +169,7 @@ export const ValuationReport = memo(function ValuationReport({
               </span>
             </div>
             <div className="text-2xl font-bold mt-2 tabular-nums">
-              {formatCurrency(summary.averageUnitCost)}
+              {formatCurrencyDisplay(summary.averageUnitCost)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Weighted average
@@ -234,7 +231,7 @@ export const ValuationReport = memo(function ValuationReport({
                           </div>
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {formatCurrency(cat.totalValue)}
+                          {formatCurrencyDisplay(cat.totalValue)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {cat.totalUnits.toLocaleString()}
@@ -296,7 +293,7 @@ export const ValuationReport = memo(function ValuationReport({
                           </div>
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {formatCurrency(loc.totalValue)}
+                          {formatCurrencyDisplay(loc.totalValue)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {loc.totalUnits.toLocaleString()}

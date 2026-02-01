@@ -111,7 +111,7 @@ export const ShipmentList = memo(function ShipmentList({
 }: ShipmentListProps) {
   // Fetch shipments
   const { data: shipments, isLoading, error } = useQuery({
-    queryKey: queryKeys.orders.shipments(orderId),
+    queryKey: queryKeys.orders.shipments({ orderId }),
     queryFn: () => getOrderShipments({ data: { orderId } }),
   });
 

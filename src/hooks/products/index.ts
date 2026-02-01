@@ -13,6 +13,7 @@ export {
   useCreateProduct,
   useUpdateProduct,
   useDeleteProduct,
+  useBulkDeleteProducts,
   useDuplicateProduct,
   useCreateCategory,
   useUpdateCategory,

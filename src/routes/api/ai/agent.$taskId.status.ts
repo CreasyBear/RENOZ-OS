@@ -71,7 +71,7 @@ export async function GET({ params }: { params: { taskId: string } }) {
       ...(task.status === 'completed' && {
         result: task.result,
         tokensUsed: task.tokensUsed,
-        costCents: task.costCents,
+        cost: task.cost,
       }),
       ...(task.status === 'failed' && {
         error: task.error,

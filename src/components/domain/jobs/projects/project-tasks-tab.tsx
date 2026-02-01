@@ -37,6 +37,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import type { SemanticColor } from '@/components/shared';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -91,53 +92,61 @@ type JobTaskPriority = 'urgent' | 'high' | 'normal' | 'low';
 // CONFIG
 // ============================================================================
 
-const PRIORITY_CONFIG: Record<JobTaskPriority, { label: string; color: string; bg: string; icon: React.ElementType }> = {
+const PRIORITY_CONFIG: Record<JobTaskPriority, { label: string; color: string; bg: string; icon: React.ElementType; variant: SemanticColor }> = {
   urgent: {
     label: 'Urgent',
     color: 'text-red-600',
     bg: 'bg-red-100',
     icon: AlertCircle,
+    variant: 'error',
   },
   high: {
     label: 'High',
     color: 'text-orange-600',
     bg: 'bg-orange-100',
     icon: AlertCircle,
+    variant: 'warning',
   },
   normal: {
     label: 'Normal',
     color: 'text-blue-600',
     bg: 'bg-blue-100',
     icon: Clock,
+    variant: 'info',
   },
   low: {
     label: 'Low',
     color: 'text-green-600',
     bg: 'bg-green-100',
     icon: Clock,
+    variant: 'success',
   },
 };
 
-const STATUS_CONFIG: Record<JobTaskStatus, { label: string; color: string; icon: React.ElementType }> = {
+const STATUS_CONFIG: Record<JobTaskStatus, { label: string; color: string; icon: React.ElementType; variant: SemanticColor }> = {
   pending: {
     label: 'To Do',
     color: 'text-gray-500',
     icon: Circle,
+    variant: 'neutral',
   },
   in_progress: {
     label: 'In Progress',
     color: 'text-blue-500',
     icon: Clock,
+    variant: 'progress',
   },
   completed: {
     label: 'Done',
     color: 'text-green-500',
     icon: CheckCircle2,
+    variant: 'success',
   },
   blocked: {
     label: 'Blocked',
     color: 'text-red-500',
     icon: AlertCircle,
+    variant: 'error',
   },
 };
 

@@ -14,6 +14,7 @@ import {
   text,
   boolean,
   jsonb,
+  integer,
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
@@ -88,17 +89,23 @@ export const organizations = pgTable(
     // Address
     address: jsonb("address").$type<OrganizationAddress>().default({}),
 
-    // Settings (first-class columns + JSONB)
+    // ============================================================================
+    // TIER 1 SETTINGS - Core Identity (first-class columns)
+    // ============================================================================
     timezone: text("timezone").notNull().default("Australia/Sydney"),
     locale: text("locale").notNull().default("en-AU"),
     currency: text("currency").notNull().default("AUD"),
+    dateFormat: text("date_format").notNull().default("DD/MM/YYYY"),
+    timeFormat: text("time_format").notNull().default("12h"),
+    numberFormat: text("number_format").notNull().default("1,234.56"),
+    fiscalYearStart: integer("fiscal_year_start").notNull().default(7), // Month (1-12), default July for AU
+    weekStartDay: integer("week_start_day").notNull().default(1), // 0=Sunday, 1=Monday
+    defaultTaxRate: integer("default_tax_rate").notNull().default(10), // Percentage (e.g., 10 for GST)
+    defaultPaymentTerms: integer("default_payment_terms").notNull().default(30), // Days
 
-    // Settings (extended JSONB)
+    // Settings (extended JSONB - for non-Tier 1 settings only)
+    // NOTE: Deprecating timezone, locale, currency, dateFormat from this blob
     settings: jsonb("settings").$type<OrganizationSettings>().default({
-      timezone: "Australia/Sydney",
-      locale: "en-AU",
-      currency: "AUD",
-      dateFormat: "DD/MM/YYYY",
       portalBranding: {},
     }),
 

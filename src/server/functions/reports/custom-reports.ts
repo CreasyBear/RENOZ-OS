@@ -18,7 +18,7 @@ import { eq, and, ilike, desc, asc, sql, gte, lte, ne, isNull } from 'drizzle-or
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
 import { withAuth } from '@/lib/server/protected';
-import { NotFoundError } from '@/lib/server/errors';
+import { NotFoundError, ValidationError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { customReports } from 'drizzle/schema/reports';
 import { purchaseOrders, suppliers } from 'drizzle/schema/suppliers';
@@ -217,165 +217,217 @@ export const executeCustomReport = createServerFn({ method: 'POST' })
   .handler(async ({ data }): Promise<ReportResult> => {
     const ctx = await withAuth({ permission: PERMISSIONS.report.viewOperations });
 
-    const [report] = await db
-      .select()
-      .from(customReports)
-      .where(
-        and(
-          eq(customReports.id, data.id),
-          eq(customReports.organizationId, ctx.organizationId)
+    try {
+      const [report] = await db
+        .select()
+        .from(customReports)
+        .where(
+          and(
+            eq(customReports.id, data.id),
+            eq(customReports.organizationId, ctx.organizationId)
+          )
         )
-      )
-      .limit(1);
+        .limit(1);
 
-    if (!report) {
-      throw new NotFoundError('Custom report not found', 'customReport');
-    }
+      if (!report) {
+        throw new NotFoundError('Custom report not found', 'customReport');
+      }
 
-    const definition = report.definition ?? { columns: [] };
-    const filters = (definition.filters ?? {}) as Record<string, string | number | boolean>;
-    const source = filters.source;
-    const reportType = filters.reportType;
+      const definition = report.definition ?? { columns: [] };
 
-    if (source === 'procurement') {
-      const dateFrom = data.dateFrom
-        ? new Date(data.dateFrom)
-        : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-      const dateTo = data.dateTo ? new Date(data.dateTo) : new Date();
+      // Validate report definition structure
+      if (!definition || typeof definition !== 'object') {
+        throw new ValidationError('Invalid report definition structure');
+      }
 
-      const baseConditions = [
-        eq(purchaseOrders.organizationId, ctx.organizationId),
-        isNull(purchaseOrders.deletedAt),
-        ne(purchaseOrders.status, 'draft'),
-        ne(purchaseOrders.status, 'cancelled'),
-        gte(purchaseOrders.orderDate, dateFrom.toISOString().split('T')[0]),
-        lte(purchaseOrders.orderDate, dateTo.toISOString().split('T')[0]),
-      ];
+      const filters = (definition.filters ?? {}) as Record<string, string | number | boolean>;
+      const source = filters.source;
+      const reportType = filters.reportType;
 
-      if (reportType === 'supplier-performance' || reportType === 'spend-analysis' || reportType === 'cost-savings') {
+      if (!source) {
+        throw new ValidationError('Report source not specified in definition');
+      }
+
+      if (source === 'procurement') {
+        // Validate and parse dates
+        let dateFrom: Date;
+        let dateTo: Date;
+
+        if (data.dateFrom) {
+          dateFrom = new Date(data.dateFrom);
+          if (isNaN(dateFrom.getTime())) {
+            throw new ValidationError('Invalid start date format');
+          }
+        } else {
+          dateFrom = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        }
+
+        if (data.dateTo) {
+          dateTo = new Date(data.dateTo);
+          if (isNaN(dateTo.getTime())) {
+            throw new ValidationError('Invalid end date format');
+          }
+        } else {
+          dateTo = new Date();
+        }
+
+        // Validate date range
+        if (dateFrom > dateTo) {
+          throw new ValidationError('Start date must be before end date');
+        }
+
+        // Limit date range to 1 year for performance
+        const maxRangeMs = 365 * 24 * 60 * 60 * 1000;
+        if (dateTo.getTime() - dateFrom.getTime() > maxRangeMs) {
+          throw new ValidationError('Date range cannot exceed 1 year');
+        }
+
+        // Validate report type for procurement reports
+        if (!reportType) {
+          throw new ValidationError('Report type required for procurement reports');
+        }
+
+        const baseConditions = [
+          eq(purchaseOrders.organizationId, ctx.organizationId),
+          isNull(purchaseOrders.deletedAt),
+          ne(purchaseOrders.status, 'draft'),
+          ne(purchaseOrders.status, 'cancelled'),
+          gte(purchaseOrders.orderDate, dateFrom.toISOString().split('T')[0]),
+          lte(purchaseOrders.orderDate, dateTo.toISOString().split('T')[0]),
+        ];
+
+        if (reportType === 'supplier-performance' || reportType === 'spend-analysis' || reportType === 'cost-savings') {
+          const rows = await db
+            .select({
+              supplierName: suppliers.name,
+              totalSpend: sql<number>`COALESCE(SUM(${purchaseOrders.totalAmount}), 0)`,
+              totalOrders: sql<number>`COUNT(*)`,
+              avgOrderValue: sql<number>`COALESCE(AVG(${purchaseOrders.totalAmount}), 0)`,
+              qualityRating: suppliers.qualityRating,
+              deliveryRating: suppliers.deliveryRating,
+              leadTimeDays: suppliers.leadTimeDays,
+            })
+            .from(purchaseOrders)
+            .innerJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+            .where(and(...baseConditions))
+            .groupBy(
+              suppliers.id,
+              suppliers.name,
+              suppliers.qualityRating,
+              suppliers.deliveryRating,
+              suppliers.leadTimeDays
+            )
+            .orderBy(desc(sql<number>`COALESCE(SUM(${purchaseOrders.totalAmount}), 0)`))
+            .limit(data.limit);
+
+          const columns = resolveColumns(definition.columns, [
+            'supplierName',
+            'totalSpend',
+            'totalOrders',
+            'avgOrderValue',
+            'qualityRating',
+            'deliveryRating',
+            'leadTimeDays',
+          ]);
+
+          return {
+            columns,
+            rows: rows.map((row) => pickColumns(row, columns)),
+            totalCount: rows.length,
+            generatedAt: new Date(),
+          };
+        }
+
+        if (reportType === 'efficiency') {
+          const [metrics] = await db
+            .select({
+              orderCount: sql<number>`COUNT(*)`,
+              fulfilledCount: sql<number>`COUNT(CASE WHEN ${purchaseOrders.status} IN ('received', 'closed') THEN 1 END)`,
+              onTimeCount: sql<number>`COUNT(CASE WHEN ${purchaseOrders.actualDeliveryDate} IS NOT NULL AND ${purchaseOrders.expectedDeliveryDate} IS NOT NULL AND ${purchaseOrders.actualDeliveryDate} <= ${purchaseOrders.expectedDeliveryDate} THEN 1 END)`,
+              deliveryCount: sql<number>`COUNT(CASE WHEN ${purchaseOrders.actualDeliveryDate} IS NOT NULL AND ${purchaseOrders.expectedDeliveryDate} IS NOT NULL THEN 1 END)`,
+              avgApprovalDays: sql<number>`COALESCE(AVG(EXTRACT(EPOCH FROM (${purchaseOrders.approvedAt} - ${purchaseOrders.orderedAt})) / 86400), 0)`,
+              avgDeliveryDelayDays: sql<number>`COALESCE(AVG(EXTRACT(EPOCH FROM (${purchaseOrders.actualDeliveryDate}::timestamp - ${purchaseOrders.expectedDeliveryDate}::timestamp)) / 86400), 0)`,
+            })
+            .from(purchaseOrders)
+            .where(and(...baseConditions));
+
+          const orderCount = Number(metrics?.orderCount ?? 0);
+          const fulfilledCount = Number(metrics?.fulfilledCount ?? 0);
+          const deliveryCount = Number(metrics?.deliveryCount ?? 0);
+          const onTimeCount = Number(metrics?.onTimeCount ?? 0);
+
+          const row = {
+            orderCount,
+            orderFulfillmentRate: orderCount > 0 ? (fulfilledCount / orderCount) * 100 : 0,
+            onTimeDeliveryRate: deliveryCount > 0 ? (onTimeCount / deliveryCount) * 100 : 0,
+            avgApprovalDays: Number(metrics?.avgApprovalDays ?? 0),
+            avgDeliveryDelayDays: Number(metrics?.avgDeliveryDelayDays ?? 0),
+          };
+
+          const columns = resolveColumns(definition.columns, [
+            'orderCount',
+            'orderFulfillmentRate',
+            'onTimeDeliveryRate',
+            'avgApprovalDays',
+            'avgDeliveryDelayDays',
+          ]);
+
+          return {
+            columns,
+            rows: [pickColumns(row, columns)],
+            totalCount: 1,
+            generatedAt: new Date(),
+          };
+        }
+
+        // Default: detail report
         const rows = await db
           .select({
+            poNumber: purchaseOrders.poNumber,
             supplierName: suppliers.name,
-            totalSpend: sql<number>`COALESCE(SUM(${purchaseOrders.totalAmount}), 0)`,
-            totalOrders: sql<number>`COUNT(*)`,
-            orderCount: sql<number>`COUNT(*)`,
-            avgOrderValue: sql<number>`COALESCE(AVG(${purchaseOrders.totalAmount}), 0)`,
-            qualityRating: suppliers.qualityRating,
-            deliveryRating: suppliers.deliveryRating,
-            leadTimeDays: suppliers.leadTimeDays,
+            status: purchaseOrders.status,
+            orderDate: purchaseOrders.orderDate,
+            expectedDeliveryDate: purchaseOrders.expectedDeliveryDate,
+            totalAmount: purchaseOrders.totalAmount,
           })
           .from(purchaseOrders)
           .innerJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
           .where(and(...baseConditions))
-          .groupBy(
-            suppliers.id,
-            suppliers.name,
-            suppliers.qualityRating,
-            suppliers.deliveryRating,
-            suppliers.leadTimeDays
-          )
-          .orderBy(desc(sql<number>`COALESCE(SUM(${purchaseOrders.totalAmount}), 0)`))
+          .orderBy(desc(purchaseOrders.orderDate))
           .limit(data.limit);
 
         const columns = resolveColumns(definition.columns, [
+          'poNumber',
           'supplierName',
-          'totalSpend',
-          'totalOrders',
-          'orderCount',
-          'avgOrderValue',
-          'qualityRating',
-          'deliveryRating',
-          'leadTimeDays',
+          'status',
+          'orderDate',
+          'expectedDeliveryDate',
+          'totalAmount',
         ]);
 
         return {
           columns,
-          rows: rows.map((row) => pickColumns(row, columns)) as unknown as ReportResult['rows'],
+          rows: rows.map((row) => pickColumns(row, columns)),
           totalCount: rows.length,
           generatedAt: new Date(),
         };
       }
 
-      if (reportType === 'efficiency') {
-        const [metrics] = await db
-          .select({
-            orderCount: sql<number>`COUNT(*)`,
-            fulfilledCount: sql<number>`COUNT(CASE WHEN ${purchaseOrders.status} IN ('received', 'closed') THEN 1 END)`,
-            onTimeCount: sql<number>`COUNT(CASE WHEN ${purchaseOrders.actualDeliveryDate} IS NOT NULL AND ${purchaseOrders.expectedDeliveryDate} IS NOT NULL AND ${purchaseOrders.actualDeliveryDate} <= ${purchaseOrders.expectedDeliveryDate} THEN 1 END)`,
-            deliveryCount: sql<number>`COUNT(CASE WHEN ${purchaseOrders.actualDeliveryDate} IS NOT NULL AND ${purchaseOrders.expectedDeliveryDate} IS NOT NULL THEN 1 END)`,
-            avgApprovalDays: sql<number>`COALESCE(AVG(EXTRACT(EPOCH FROM (${purchaseOrders.approvedAt} - ${purchaseOrders.orderedAt})) / 86400), 0)`,
-            avgDeliveryDelayDays: sql<number>`COALESCE(AVG(EXTRACT(EPOCH FROM (${purchaseOrders.actualDeliveryDate}::timestamp - ${purchaseOrders.expectedDeliveryDate}::timestamp)) / 86400), 0)`,
-          })
-          .from(purchaseOrders)
-          .where(and(...baseConditions));
-
-        const orderCount = Number(metrics?.orderCount ?? 0);
-        const fulfilledCount = Number(metrics?.fulfilledCount ?? 0);
-        const deliveryCount = Number(metrics?.deliveryCount ?? 0);
-        const onTimeCount = Number(metrics?.onTimeCount ?? 0);
-
-        const row = {
-          orderCount,
-          orderFulfillmentRate: orderCount > 0 ? (fulfilledCount / orderCount) * 100 : 0,
-          onTimeDeliveryRate: deliveryCount > 0 ? (onTimeCount / deliveryCount) * 100 : 0,
-          avgApprovalDays: Number(metrics?.avgApprovalDays ?? 0),
-          avgDeliveryDelayDays: Number(metrics?.avgDeliveryDelayDays ?? 0),
-        };
-
-        const columns = resolveColumns(definition.columns, [
-          'orderCount',
-          'orderFulfillmentRate',
-          'onTimeDeliveryRate',
-          'avgApprovalDays',
-          'avgDeliveryDelayDays',
-        ]);
-
-        return {
-          columns,
-          rows: [pickColumns(row, columns)] as unknown as ReportResult['rows'],
-          totalCount: 1,
-          generatedAt: new Date(),
-        };
-      }
-
-      const rows = await db
-        .select({
-          poNumber: purchaseOrders.poNumber,
-          supplierName: suppliers.name,
-          status: purchaseOrders.status,
-          orderDate: purchaseOrders.orderDate,
-          expectedDeliveryDate: purchaseOrders.expectedDeliveryDate,
-          totalAmount: purchaseOrders.totalAmount,
-        })
-        .from(purchaseOrders)
-        .innerJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
-        .where(and(...baseConditions))
-        .orderBy(desc(purchaseOrders.orderDate))
-        .limit(data.limit);
-
-      const columns = resolveColumns(definition.columns, [
-        'poNumber',
-        'supplierName',
-        'status',
-        'orderDate',
-        'expectedDeliveryDate',
-        'totalAmount',
-      ]);
-
+      // Unknown source - return empty result
       return {
-        columns,
-        rows: rows.map((row) => pickColumns(row, columns)) as unknown as ReportResult['rows'],
-        totalCount: rows.length,
+        columns: definition.columns ?? [],
+        rows: [],
+        totalCount: 0,
         generatedAt: new Date(),
       };
+    } catch (error) {
+      // Re-throw known errors
+      if (error instanceof NotFoundError || error instanceof ValidationError) {
+        throw error;
+      }
+      // Wrap unexpected errors
+      throw new Error(`Failed to execute custom report: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-
-    return {
-      columns: definition.columns ?? [],
-      rows: [],
-      totalCount: 0,
-      generatedAt: new Date(),
-    };
   });
 
 function resolveColumns(columns: string[] | undefined, fallback: string[]) {
@@ -385,7 +437,7 @@ function resolveColumns(columns: string[] | undefined, fallback: string[]) {
   return filtered.length > 0 ? filtered : fallback;
 }
 
-function pickColumns<T extends Record<string, unknown>>(row: T, columns: string[]) {
+function pickColumns<T extends Record<string, unknown>>(row: T, columns: string[]): Record<string, unknown> {
   return columns.reduce((acc, key) => {
     acc[key] = row[key];
     return acc;

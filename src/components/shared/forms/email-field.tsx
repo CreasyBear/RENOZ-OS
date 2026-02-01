@@ -19,11 +19,11 @@
  */
 import { Input } from "~/components/ui/input"
 import { FormField } from "./form-field"
-import type { FormFieldApi } from "./types"
+import type { AnyFieldApi } from "./types"
 
 export interface EmailFieldProps {
   /** TanStack Form field instance */
-  field: FormFieldApi
+  field: AnyFieldApi<string>
   /** Field label */
   label: string
   /** Placeholder text */

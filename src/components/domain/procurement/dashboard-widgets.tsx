@@ -20,7 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatCurrency } from '@/lib/formatters';
+import { FormatAmount } from '@/components/shared/format';
 
 // ============================================================================
 // TYPES
@@ -109,7 +109,7 @@ function SpendOverviewWidget({ metrics }: SpendWidgetProps) {
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">
-          {formatCurrency(metrics.totalSpend, { cents: false })}
+          <FormatAmount amount={metrics.totalSpend} />
         </div>
         <div className="mt-1 flex items-center gap-1 text-xs">
           {isTrendUp ? (
@@ -129,8 +129,8 @@ function SpendOverviewWidget({ metrics }: SpendWidgetProps) {
           </div>
           <Progress value={budgetPercent} className="h-2" />
           <div className="text-muted-foreground flex justify-between text-xs">
-            <span>{formatCurrency(metrics.budgetUsed, { cents: false })}</span>
-            <span>{formatCurrency(metrics.budgetTotal, { cents: false })}</span>
+            <span><FormatAmount amount={metrics.budgetUsed} size="sm" /></span>
+            <span><FormatAmount amount={metrics.budgetTotal} size="sm" /></span>
           </div>
         </div>
       </CardContent>
@@ -279,7 +279,7 @@ function ApprovalQueueWidget({ items }: ApprovalWidgetProps) {
                 </div>
                 <div className="mt-2 flex items-center justify-between text-sm">
                   <span className="font-medium">
-                    {formatCurrency(item.amount, { cents: false })} {item.currency}
+                    <FormatAmount amount={item.amount} currency={item.currency} />
                   </span>
                   <span className="text-muted-foreground text-xs">
                     {new Date(item.submittedAt).toLocaleDateString('en-AU')}

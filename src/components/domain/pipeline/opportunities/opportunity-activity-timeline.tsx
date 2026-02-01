@@ -1,15 +1,24 @@
 /**
  * OpportunityActivityTimeline Component
  *
- * ARCHITECTURE: Presentational component - receives all data via props from route.
+ * @deprecated Use UnifiedActivityTimeline directly or OpportunityActivityTimelineContainer.
+ * This component uses the old shared ActivityTimeline which is being phased out.
  *
- * Pipeline-specific wrapper around shared ActivityTimeline.
- * Displays opportunity activities with filtering and completion actions.
+ * Migration options:
+ * ```tsx
+ * // Option 1: Use container (handles data fetching)
+ * import { OpportunityActivityTimelineContainer } from '@/components/domain/pipeline/opportunities';
+ * <OpportunityActivityTimelineContainer opportunityId={id} />
+ *
+ * // Option 2: Use UnifiedActivityTimeline directly (if you have activities)
+ * import { UnifiedActivityTimeline } from '@/components/shared/activity';
+ * <UnifiedActivityTimeline activities={activities} onComplete={handleComplete} />
+ * ```
  *
  * @see _Initiation/_prd/2-domains/pipeline/pipeline.prd.json (PIPE-ACTIVITIES-UI)
  */
 
-import { memo, useState, useMemo } from 'react';
+import { memo, useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -94,6 +103,16 @@ export const OpportunityActivityTimeline = memo(function OpportunityActivityTime
   maxItems,
   showFilters = true,
 }: OpportunityActivityTimelineProps) {
+  // Deprecation warning
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(
+        '[DEPRECATED] OpportunityActivityTimeline is deprecated. ' +
+        'Use OpportunityActivityTimelineContainer or UnifiedActivityTimeline directly.'
+      );
+    }
+  }, []);
+
   // Local UI state only - no data hooks
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
 

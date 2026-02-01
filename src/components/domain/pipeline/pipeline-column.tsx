@@ -17,10 +17,10 @@ import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { formatCurrency } from "@/lib/formatters";
 import { FormatAmount } from "@/components/shared/format";
 import { OpportunityCard } from "./opportunities/opportunity-card";
 import type { Opportunity, OpportunityStage } from "@/lib/schemas/pipeline";
+import { useOrgFormat } from "@/hooks/use-org-format";
 
 // ============================================================================
 // TYPES
@@ -60,6 +60,7 @@ export const PipelineColumn = memo(function PipelineColumn({
   onEditOpportunity,
   onScheduleFollowup,
 }: PipelineColumnProps) {
+  const { formatCurrency } = useOrgFormat();
   const { setNodeRef } = useDroppable({
     id: stage,
     data: {
@@ -97,7 +98,7 @@ export const PipelineColumn = memo(function PipelineColumn({
         config.color,
         isOver && "ring-2 ring-primary ring-offset-2"
       )}
-      aria-label={`${config.label} stage, ${count} opportunities, ${formatCurrency(totalValue)}`}
+      aria-label={`${config.label} stage, ${count} opportunities, ${formatCurrency(totalValue, { cents: false, showCents: true })}`}
     >
       {/* Stage Header */}
       <header className={cn(

@@ -7,8 +7,7 @@
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-007b
  */
 
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { useEffect } from 'react';
 import { z } from 'zod';
 import {
   Dialog,
@@ -17,26 +16,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  TextField,
+  TextareaField,
+  NumberField,
+  SelectField,
+  SwitchField,
+} from '@/components/shared/forms';
 import type { KbCategoryResponse } from '@/lib/schemas/support/knowledge-base';
 
 // ============================================================================
@@ -84,8 +72,8 @@ export function KbCategoryFormDialog({
 }: KbCategoryFormDialogProps) {
   const isEditing = !!category;
 
-  const form = useForm<CategoryFormValues>({
-    resolver: zodResolver(categoryFormSchema) as never,
+  const form = useTanStackForm({
+    schema: categoryFormSchema,
     defaultValues: {
       name: category?.name ?? '',
       slug: category?.slug ?? '',
@@ -94,32 +82,45 @@ export function KbCategoryFormDialog({
       sortOrder: category?.sortOrder ?? 0,
       isActive: category?.isActive ?? true,
     },
+    onSubmit: async (values) => {
+      try {
+        await onSubmit(values);
+        onOpenChange(false);
+        form.reset();
+      } catch {
+        // errors handled by container
+      }
+    },
   });
 
-  // Auto-generate slug from name
-  const watchName = form.watch('name');
+  // Reset form when category changes or dialog opens
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        name: category?.name ?? '',
+        slug: category?.slug ?? '',
+        description: category?.description ?? '',
+        parentId: category?.parentId ?? null,
+        sortOrder: category?.sortOrder ?? 0,
+        isActive: category?.isActive ?? true,
+      });
+    }
+  }, [open, category, form]);
+
+  // Auto-generate slug from name when name changes and slug is empty
   const handleNameBlur = () => {
-    const currentSlug = form.getValues('slug');
-    if (!currentSlug && watchName) {
-      const generatedSlug = watchName
+    const currentSlug = form.getFieldValue('slug');
+    const currentName = form.getFieldValue('name');
+    if (!currentSlug && currentName) {
+      const generatedSlug = currentName
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '');
-      form.setValue('slug', generatedSlug);
+      form.setFieldValue('slug', generatedSlug);
     }
   };
 
-  const handleSubmit = async (values: CategoryFormValues) => {
-    try {
-      await onSubmit(values);
-      onOpenChange(false);
-      form.reset();
-    } catch {
-      // errors handled by container
-    }
-  };
-
-  const isPending = isSubmitting ?? false;
+  const isPending = isSubmitting ?? form.state.isSubmitting;
 
   // Filter out the current category and its children from parent options
   const availableParents = (categories ?? []).filter((c) => {
@@ -131,6 +132,14 @@ export function KbCategoryFormDialog({
     return true;
   });
 
+  const parentOptions = [
+    { value: '', label: 'None (Top Level)' },
+    ...availableParents.map((cat) => ({
+      value: cat.id,
+      label: cat.name,
+    })),
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
@@ -138,143 +147,95 @@ export function KbCategoryFormDialog({
           <DialogTitle>{isEditing ? 'Edit Category' : 'Create Category'}</DialogTitle>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="Getting Started"
-                      {...field}
-                      onBlur={() => {
-                        field.onBlur();
-                        handleNameBlur();
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="slug"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Slug</FormLabel>
-                  <FormControl>
-                    <Input placeholder="getting-started" {...field} />
-                  </FormControl>
-                  <FormDescription>
-                    URL-friendly identifier (auto-generated from name)
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Brief description of this category..."
-                      className="resize-none"
-                      rows={3}
-                      {...field}
-                      value={field.value ?? ''}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="parentId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Parent Category</FormLabel>
-                  <Select
-                    onValueChange={(value) => field.onChange(value === 'none' ? null : value)}
-                    value={field.value ?? 'none'}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select parent category" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="none">None (Top Level)</SelectItem>
-                      {availableParents.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>Optional parent for nested categories</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="sortOrder"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Sort Order</FormLabel>
-                    <FormControl>
-                      <Input type="number" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="space-y-4"
+        >
+          <form.Field name="name">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Name"
+                placeholder="Getting Started"
+                required
+                onBlur={handleNameBlur}
               />
+            )}
+          </form.Field>
 
-              <FormField
-                control={form.control}
-                name="isActive"
-                render={({ field }) => (
-                  <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                    <div className="space-y-0.5">
-                      <FormLabel>Active</FormLabel>
-                      <FormDescription>Show in knowledge base</FormDescription>
-                    </div>
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
-                    </FormControl>
-                  </FormItem>
-                )}
+          <form.Field name="slug">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Slug"
+                placeholder="getting-started"
+                description="URL-friendly identifier (auto-generated from name)"
+                required
               />
-            </div>
+            )}
+          </form.Field>
 
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={isPending}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending ? 'Saving...' : isEditing ? 'Update' : 'Create'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          <form.Field name="description">
+            {(field) => (
+              <TextareaField
+                field={field}
+                label="Description"
+                placeholder="Brief description of this category..."
+                rows={3}
+              />
+            )}
+          </form.Field>
+
+          <form.Field name="parentId">
+            {(field) => (
+              <SelectField
+                field={field}
+                label="Parent Category"
+                placeholder="Select parent category"
+                description="Optional parent for nested categories"
+                options={parentOptions}
+              />
+            )}
+          </form.Field>
+
+          <div className="grid grid-cols-2 gap-4">
+            <form.Field name="sortOrder">
+              {(field) => (
+                <NumberField
+                  field={field}
+                  label="Sort Order"
+                />
+              )}
+            </form.Field>
+
+            <form.Field name="isActive">
+              {(field) => (
+                <SwitchField
+                  field={field}
+                  label="Active"
+                  description="Show in knowledge base"
+                />
+              )}
+            </form.Field>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isPending}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending ? 'Saving...' : isEditing ? 'Update' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

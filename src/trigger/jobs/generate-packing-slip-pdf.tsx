@@ -113,7 +113,6 @@ export const generatePackingSlipPdf = task({
       specialInstructions,
       packageCount,
       totalWeight,
-      showLocation = false,
     } = payload;
 
     logger.info("Starting packing slip PDF generation", {
@@ -333,12 +332,12 @@ export const generatePackingSlipPdf = task({
     };
 
     // Step 6: Render PDF to buffer
+    // Note: showLocation is not a prop - location column is always rendered in the template
     const { buffer, size } = await renderPdfToBuffer(
       <PackingSlipPdfDocument
         organization={orgData}
         data={packingSlipData}
         qrCodeDataUrl={qrCodeDataUrl}
-        showLocation={showLocation}
       />
     );
 

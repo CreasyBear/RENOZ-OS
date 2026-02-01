@@ -23,7 +23,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FormatAmount } from '@/components/shared/format';
+import { FormatAmount, MetricCard } from '@/components/shared';
+import { StatusCell } from '@/components/shared/data-table';
+import { SUPPLIER_STATUS_CONFIG } from './supplier-status-config';
+import { PO_STATUS_CONFIG } from '../purchase-orders/po-status-config';
+import type { PurchaseOrderStatus } from '@/lib/schemas/purchase-orders';
 
 // ============================================================================
 // HELPERS
@@ -121,7 +125,7 @@ export interface SupplierDetailProps {
   purchaseOrders?: Array<{
     id: string;
     poNumber: string;
-    status: string;
+    status: PurchaseOrderStatus;
     totalAmount: number;
     createdAt: Date | string;
   }>;
@@ -140,27 +144,6 @@ export interface SupplierDetailProps {
 // HELPER COMPONENTS
 // ============================================================================
 
-const StatusBadge = memo(function StatusBadge({
-  status,
-}: {
-  status: Supplier['status'];
-}) {
-  const variants: Record<Supplier['status'], 'default' | 'secondary' | 'destructive' | 'outline'> = {
-    active: 'default',
-    inactive: 'secondary',
-    suspended: 'destructive',
-    blacklisted: 'destructive',
-  };
-
-  const labels: Record<Supplier['status'], string> = {
-    active: 'Active',
-    inactive: 'Inactive',
-    suspended: 'Suspended',
-    blacklisted: 'Blacklisted',
-  };
-
-  return <Badge variant={variants[status]}>{labels[status]}</Badge>;
-});
 
 const TypeBadge = memo(function TypeBadge({
   type,
@@ -227,34 +210,7 @@ const AddressDisplay = memo(function AddressDisplay({
   );
 });
 
-const MetricCard = memo(function MetricCard({
-  icon: Icon,
-  label,
-  value,
-  subtext,
-}: {
-  icon: React.ElementType;
-  label: string;
-  value: React.ReactNode;
-  subtext?: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="flex items-center gap-3">
-          <div className="rounded-lg bg-primary/10 p-2">
-            <Icon className="h-5 w-5 text-primary" />
-          </div>
-          <div>
-            <p className="text-2xl font-bold">{value}</p>
-            <p className="text-sm text-muted-foreground">{label}</p>
-            {subtext && <p className="text-xs text-muted-foreground">{subtext}</p>}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-});
+// Note: Using shared MetricCard from @/components/shared
 
 // ============================================================================
 // MAIN COMPONENT
@@ -301,14 +257,14 @@ export const SupplierDetail = memo(function SupplierDetail({
       <div className="grid gap-4 md:grid-cols-4 mb-6">
         <MetricCard
           icon={Star}
-          label="Overall Rating"
+          title="Overall Rating"
           value={<RatingStars rating={supplier.overallRating} />}
         />
         <MetricCard
           icon={Package}
-          label="Total Orders"
+          title="Total Orders"
           value={supplier.totalPurchaseOrders ?? 0}
-          subtext={
+          subtitle={
             supplier.lastOrderDate
               ? `Last order: ${new Date(supplier.lastOrderDate).toLocaleDateString()}`
               : undefined
@@ -316,12 +272,12 @@ export const SupplierDetail = memo(function SupplierDetail({
         />
         <MetricCard
           icon={Clock}
-          label="Lead Time"
+          title="Lead Time"
           value={supplier.leadTimeDays ? `${supplier.leadTimeDays} days` : 'N/A'}
         />
         <MetricCard
           icon={DollarSign}
-          label="Total Spend (12mo)"
+          title="Total Spend (12mo)"
           value={<FormatAmount amount={totalSpend} currency={toCurrency(supplier.currency)} />}
         />
       </div>
@@ -401,7 +357,7 @@ export const SupplierDetail = memo(function SupplierDetail({
                   </div>
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Status</p>
-                    <StatusBadge status={supplier.status} />
+                    <StatusCell status={supplier.status} statusConfig={SUPPLIER_STATUS_CONFIG} />
                   </div>
                   {supplier.supplierType && (
                     <div>
@@ -498,7 +454,7 @@ export const SupplierDetail = memo(function SupplierDetail({
               <div className="grid gap-4 md:grid-cols-4">
                 <MetricCard
                   icon={TrendingUp}
-                  label="On-Time Delivery"
+                  title="On-Time Delivery"
                   value={
                     latestMetrics.onTimeDeliveries && latestMetrics.totalOrdersDelivered
                       ? `${Math.round((latestMetrics.onTimeDeliveries / latestMetrics.totalOrdersDelivered) * 100)}%`
@@ -507,19 +463,19 @@ export const SupplierDetail = memo(function SupplierDetail({
                 />
                 <MetricCard
                   icon={Percent}
-                  label="Defect Rate"
+                  title="Defect Rate"
                   value={latestMetrics.defectRate ? `${latestMetrics.defectRate.toFixed(1)}%` : 'N/A'}
                 />
                 <MetricCard
                   icon={Clock}
-                  label="Avg Delivery Days"
+                  title="Avg Delivery Days"
                   value={latestMetrics.averageDeliveryDays ? `${Math.round(latestMetrics.averageDeliveryDays)}` : 'N/A'}
                 />
                 <MetricCard
                   icon={Package}
-                  label="Items Received"
+                  title="Items Received"
                   value={latestMetrics.totalItemsReceived ?? 0}
-                  subtext={
+                  subtitle={
                     latestMetrics.rejectedItems
                       ? `${latestMetrics.rejectedItems} rejected`
                       : undefined
@@ -610,7 +566,7 @@ export const SupplierDetail = memo(function SupplierDetail({
                         <tr key={po.id} className="border-b">
                           <td className="py-2 font-mono">{po.poNumber}</td>
                           <td className="py-2">
-                            <Badge variant="outline">{po.status}</Badge>
+                            <StatusCell status={po.status} statusConfig={PO_STATUS_CONFIG} />
                           </td>
                           <td className="text-right py-2">
                             <FormatAmount amount={po.totalAmount} currency={toCurrency(supplier.currency)} />

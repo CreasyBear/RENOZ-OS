@@ -28,6 +28,7 @@ import {
   Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useOrgFormat } from "@/hooks/use-org-format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -119,6 +120,9 @@ export const ReceivingForm = memo(function ReceivingForm({
   defaultLocationId,
   className,
 }: ReceivingFormProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [productOpen, setProductOpen] = useState(false);
 
@@ -161,12 +165,6 @@ export const ReceivingForm = memo(function ReceivingForm({
     },
     [onSubmit, form]
   );
-
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("en-AU", {
-      style: "currency",
-      currency: "AUD",
-    }).format(value);
 
   const quantity = form.watch("quantity") || 0;
   const unitCost = form.watch("unitCost") || 0;
@@ -355,7 +353,7 @@ export const ReceivingForm = memo(function ReceivingForm({
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Total Value</span>
                 <span className="text-lg font-bold tabular-nums">
-                  {formatCurrency(totalValue)}
+                  {formatCurrencyDisplay(totalValue)}
                 </span>
               </div>
             </div>

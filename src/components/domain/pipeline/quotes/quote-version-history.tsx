@@ -1,15 +1,17 @@
 /**
- * QuoteVersionHistory Component
+ * QuoteVersionHistory Presenter
  *
  * Displays quote version history with comparison/diff view.
  * Allows restoring previous versions.
  *
+ * Pure presenter - all data passed via props from container.
+ *
+ * @see ./quote-version-history-container.tsx (container)
  * @see _Initiation/_prd/2-domains/pipeline/pipeline.prd.json (PIPE-QUOTE-BUILDER-UI)
  */
 
 import { memo, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import type { UseMutationResult } from "@tanstack/react-query";
 import {
   History,
   RotateCcw,
@@ -54,26 +56,14 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { toastSuccess, toastError } from "@/hooks";
-import {
-  listQuoteVersions,
-  restoreQuoteVersion,
-  compareQuoteVersions,
-} from "@/server/functions/pipeline/quote-versions";
-import { formatCurrency } from "@/lib/formatters";
 import { FormatAmount } from "@/components/shared/format";
 import type { QuoteVersion } from "@/lib/schemas/pipeline";
+import { useOrgFormat } from "@/hooks/use-org-format";
+import type { RestoreQuoteVersionInput } from "@/hooks/pipeline";
 
 // ============================================================================
 // TYPES
 // ============================================================================
-
-export interface QuoteVersionHistoryProps {
-  opportunityId: string;
-  currentVersionId?: string;
-  onRestore?: (version: QuoteVersion) => void;
-  onSelectVersion?: (version: QuoteVersion) => void;
-  className?: string;
-}
 
 interface ComparisonResult {
   version1: QuoteVersion;
@@ -87,70 +77,88 @@ interface ComparisonResult {
   };
 }
 
+/**
+ * Container props - used by parent components
+ */
+export interface QuoteVersionHistoryContainerProps {
+  opportunityId: string;
+  currentVersionId?: string;
+  onRestore?: (version: QuoteVersion) => void;
+  onSelectVersion?: (version: QuoteVersion) => void;
+  className?: string;
+}
+
+/**
+ * Presenter props - receives data from container
+ */
+export interface QuoteVersionHistoryPresenterProps {
+  opportunityId: string;
+  /** @source useQuoteVersions hook */
+  versions: QuoteVersion[];
+  /** @source Combined loading state from container */
+  isLoading: boolean;
+  /** @source Error from useQuoteVersions hook */
+  error: Error | null;
+  currentVersionId?: string;
+  /** @source Container state - compare from selection */
+  compareFrom: string | null;
+  /** @source Container state - compare to selection */
+  compareTo: string | null;
+  onCompareFromChange: (value: string | null) => void;
+  onCompareToChange: (value: string | null) => void;
+  /** @source useQuoteComparison hook */
+  comparisonData: ComparisonResult | null;
+  comparisonLoading: boolean;
+  /** @source useRestoreQuoteVersion hook */
+  restoreMutation: UseMutationResult<{ quoteVersion: QuoteVersion; restoredFrom: number }, Error, RestoreQuoteVersionInput>;
+  onRestore?: (version: QuoteVersion) => void;
+  onSelectVersion?: (version: QuoteVersion) => void;
+  className?: string;
+}
+
 // ============================================================================
-// COMPONENT
+// PRESENTER COMPONENT
 // ============================================================================
 
-export const QuoteVersionHistory = memo(function QuoteVersionHistory({
+export const QuoteVersionHistoryPresenter = memo(function QuoteVersionHistoryPresenter({
   opportunityId,
+  versions,
+  isLoading,
+  error,
   currentVersionId,
+  compareFrom,
+  compareTo,
+  onCompareFromChange,
+  onCompareToChange,
+  comparisonData,
+  comparisonLoading: _comparisonLoading,
+  restoreMutation,
   onRestore,
   onSelectVersion,
   className,
-}: QuoteVersionHistoryProps) {
-  const queryClient = useQueryClient();
+}: QuoteVersionHistoryPresenterProps) {
+  const { formatCurrency } = useOrgFormat();
   const [expandedVersion, setExpandedVersion] = useState<string | null>(null);
-  const [compareFrom, setCompareFrom] = useState<string | null>(null);
-  const [compareTo, setCompareTo] = useState<string | null>(null);
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
   const [versionToRestore, setVersionToRestore] = useState<QuoteVersion | null>(null);
 
-  // Fetch version history
-  const { data, isLoading, error } = useQuery({
-    queryKey: queryKeys.pipeline.quoteVersions(opportunityId),
-    queryFn: async () => {
-      const result = await listQuoteVersions({
-        data: { opportunityId },
-      });
-      return result;
-    },
-  });
-
-  // Compare versions query
-  const compareQuery = useQuery({
-    queryKey: queryKeys.pipeline.quoteCompare(compareFrom ?? '', compareTo ?? ''),
-    queryFn: async () => {
-      if (!compareFrom || !compareTo) return null;
-      const result = await compareQuoteVersions({
-        data: { version1Id: compareFrom, version2Id: compareTo },
-      });
-      return result as ComparisonResult;
-    },
-    enabled: !!compareFrom && !!compareTo,
-  });
-
-  // Restore mutation
-  const restoreMutation = useMutation({
-    mutationFn: async (sourceVersionId: string) => {
-      return restoreQuoteVersion({
-        data: {
-          opportunityId,
-          sourceVersionId,
+  // Handle restore using mutation from container
+  const handleRestore = (sourceVersionId: string) => {
+    restoreMutation.mutate(
+      { opportunityId, sourceVersionId },
+      {
+        onSuccess: (data) => {
+          toastSuccess(`Restored to v${data.restoredFrom} as new v${data.quoteVersion.versionNumber}`);
+          setRestoreDialogOpen(false);
+          setVersionToRestore(null);
+          onRestore?.(data.quoteVersion);
         },
-      });
-    },
-    onSuccess: (data) => {
-      toastSuccess(`Restored to v${data.restoredFrom} as new v${data.quoteVersion.versionNumber}`);
-      setRestoreDialogOpen(false);
-      setVersionToRestore(null);
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.quoteVersions(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.detail(opportunityId) });
-      onRestore?.(data.quoteVersion);
-    },
-    onError: () => {
-      toastError("Failed to restore quote version");
-    },
-  });
+        onError: () => {
+          toastError("Failed to restore quote version");
+        },
+      }
+    );
+  };
 
   // Format relative time
   const formatRelativeTime = (date: Date | string) => {
@@ -177,14 +185,14 @@ export const QuoteVersionHistory = memo(function QuoteVersionHistory({
       return (
         <span className="flex items-center text-green-600 text-sm">
           <TrendingUp className="h-4 w-4 mr-1" />
-          +{isPercent ? `${diff.toFixed(1)}%` : formatCurrency(diff)}
+          +{isPercent ? `${diff.toFixed(1)}%` : formatCurrency(diff, { cents: false, showCents: true })}
         </span>
       );
     }
     return (
       <span className="flex items-center text-red-600 text-sm">
         <TrendingDown className="h-4 w-4 mr-1" />
-        {isPercent ? `${diff.toFixed(1)}%` : formatCurrency(diff)}
+        {isPercent ? `${diff.toFixed(1)}%` : formatCurrency(diff, { cents: false, showCents: true })}
       </span>
     );
   };
@@ -229,8 +237,6 @@ export const QuoteVersionHistory = memo(function QuoteVersionHistory({
     );
   }
 
-  const versions = data?.versions ?? [];
-
   return (
     <Card className={className}>
       <CardHeader>
@@ -248,7 +254,7 @@ export const QuoteVersionHistory = memo(function QuoteVersionHistory({
         {versions.length >= 2 && (
           <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
             <span className="text-sm font-medium">Compare:</span>
-            <Select value={compareFrom ?? ""} onValueChange={setCompareFrom}>
+            <Select value={compareFrom ?? ""} onValueChange={onCompareFromChange}>
               <SelectTrigger className="w-24">
                 <SelectValue placeholder="From" />
               </SelectTrigger>
@@ -261,7 +267,7 @@ export const QuoteVersionHistory = memo(function QuoteVersionHistory({
               </SelectContent>
             </Select>
             <ArrowRight className="h-4 w-4 text-muted-foreground" />
-            <Select value={compareTo ?? ""} onValueChange={setCompareTo}>
+            <Select value={compareTo ?? ""} onValueChange={onCompareToChange}>
               <SelectTrigger className="w-24">
                 <SelectValue placeholder="To" />
               </SelectTrigger>
@@ -277,36 +283,36 @@ export const QuoteVersionHistory = memo(function QuoteVersionHistory({
         )}
 
         {/* Comparison result */}
-        {compareQuery.data && (
+        {comparisonData && (
           <div className="p-3 bg-muted/30 rounded-lg space-y-2">
             <h4 className="text-sm font-medium">
-              v{compareQuery.data.version1.versionNumber} → v{compareQuery.data.version2.versionNumber}
+              v{comparisonData.version1.versionNumber} → v{comparisonData.version2.versionNumber}
             </h4>
             <div className="grid grid-cols-3 gap-4 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
-                {renderChangeIndicator(compareQuery.data.differences.subtotal)}
+                {renderChangeIndicator(comparisonData.differences.subtotal)}
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">GST</span>
-                {renderChangeIndicator(compareQuery.data.differences.taxAmount)}
+                {renderChangeIndicator(comparisonData.differences.taxAmount)}
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Total</span>
-                {renderChangeIndicator(compareQuery.data.differences.total)}
+                {renderChangeIndicator(comparisonData.differences.total)}
               </div>
             </div>
             <div className="text-xs text-muted-foreground">
-              {compareQuery.data.differences.itemCount !== 0 && (
+              {comparisonData.differences.itemCount !== 0 && (
                 <span>
-                  {compareQuery.data.differences.itemCount > 0 ? "+" : ""}
-                  {compareQuery.data.differences.itemCount} line item(s)
+                  {comparisonData.differences.itemCount > 0 ? "+" : ""}
+                  {comparisonData.differences.itemCount} line item(s)
                 </span>
               )}
-              {compareQuery.data.differences.subtotalPercent !== 0 && (
+              {comparisonData.differences.subtotalPercent !== 0 && (
                 <span className="ml-2">
-                  ({compareQuery.data.differences.subtotalPercent > 0 ? "+" : ""}
-                  {compareQuery.data.differences.subtotalPercent.toFixed(1)}%)
+                  ({comparisonData.differences.subtotalPercent > 0 ? "+" : ""}
+                  {comparisonData.differences.subtotalPercent.toFixed(1)}%)
                 </span>
               )}
             </div>
@@ -368,7 +374,7 @@ export const QuoteVersionHistory = memo(function QuoteVersionHistory({
                         </div>
                         <div className="text-right">
                           <div className="font-medium">
-                            <FormatAmount amount={version.total} cents={true} />
+                            <FormatAmount amount={version.total} />
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {version.items.length} item(s)
@@ -391,7 +397,7 @@ export const QuoteVersionHistory = memo(function QuoteVersionHistory({
                                 className="max-w-[60%]"
                               />
                               <span className="text-muted-foreground">
-                                {item.quantity} × <FormatAmount amount={item.unitPriceCents} cents={true} />
+                                {item.quantity} × <FormatAmount amount={item.unitPrice} />
                               </span>
                             </div>
                           ))}
@@ -405,15 +411,15 @@ export const QuoteVersionHistory = memo(function QuoteVersionHistory({
                         {/* Totals */}
                         <div className="flex justify-between text-sm pt-2 border-t">
                           <span>Subtotal</span>
-                          <span><FormatAmount amount={version.subtotal} cents={true} /></span>
+                          <span><FormatAmount amount={version.subtotal} /></span>
                         </div>
                         <div className="flex justify-between text-sm">
                           <span>GST (10%)</span>
-                          <span><FormatAmount amount={version.taxAmount} cents={true} /></span>
+                          <span><FormatAmount amount={version.taxAmount} /></span>
                         </div>
                         <div className="flex justify-between font-medium">
                           <span>Total</span>
-                          <span><FormatAmount amount={version.total} cents={true} /></span>
+                          <span><FormatAmount amount={version.total} /></span>
                         </div>
 
                         {version.notes && (
@@ -471,7 +477,7 @@ export const QuoteVersionHistory = memo(function QuoteVersionHistory({
           <div className="py-4">
             <p className="text-sm">
               <strong>Restore from:</strong> v{versionToRestore?.versionNumber} -{" "}
-              <FormatAmount amount={versionToRestore?.total ?? 0} cents={true} />
+              <FormatAmount amount={versionToRestore?.total ?? 0} />
             </p>
           </div>
           <DialogFooter>
@@ -483,7 +489,7 @@ export const QuoteVersionHistory = memo(function QuoteVersionHistory({
             </Button>
             <Button
               onClick={() =>
-                versionToRestore && restoreMutation.mutate(versionToRestore.id)
+                versionToRestore && handleRestore(versionToRestore.id)
               }
               disabled={restoreMutation.isPending}
             >
@@ -496,4 +502,10 @@ export const QuoteVersionHistory = memo(function QuoteVersionHistory({
   );
 });
 
-export default QuoteVersionHistory;
+/**
+ * @deprecated Use QuoteVersionHistoryContainer instead for new code.
+ * This export is kept for backwards compatibility.
+ */
+export const QuoteVersionHistory = QuoteVersionHistoryPresenter;
+
+export default QuoteVersionHistoryPresenter;

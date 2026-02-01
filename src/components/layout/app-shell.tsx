@@ -27,6 +27,7 @@ import { Header } from './header'
 import { CommandPalette } from './command-palette'
 import { AISidebar } from './ai-sidebar'
 import { KeyboardShortcutsModal } from './keyboard-shortcuts-modal'
+import { SkipLink } from './skip-link'
 import {
   SidebarProvider,
   useSidebar,
@@ -64,6 +65,9 @@ function AppShellInner({ children }: AppShellProps) {
 
   return (
     <div className="flex min-h-screen">
+      {/* Skip link for keyboard accessibility */}
+      <SkipLink />
+
       {/* Command Palette - Cmd+K */}
       <CommandPalette />
 
@@ -112,7 +116,12 @@ function AppShellInner({ children }: AppShellProps) {
         />
 
         {/* Page content */}
-        <main className="flex-1" role="main">
+        <main
+          id="main-content"
+          className="flex-1 focus:outline-none"
+          role="main"
+          tabIndex={-1}
+        >
           {children}
         </main>
       </div>

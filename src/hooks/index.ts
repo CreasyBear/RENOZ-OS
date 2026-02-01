@@ -7,6 +7,10 @@
 // --- Shared/Utilities ---
 export * from './_shared';
 
+// --- Organization Format (uses org settings from context) ---
+export { useOrgFormat } from './use-org-format';
+export type { FormatCurrencyOptions, FormatDateOptions, FormatNumberOptions } from './use-org-format';
+
 // --- Auth ---
 export * from './auth';
 

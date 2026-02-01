@@ -36,6 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useOrgFormat } from "@/hooks/use-org-format";
 import type { CountItem } from "./count-sheet";
 
 // ============================================================================
@@ -71,6 +72,9 @@ export const VarianceReport = memo(function VarianceReport({
   onRejectItem,
   className,
 }: VarianceReportProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
   // Calculate variance items with values
   const varianceItems = useMemo(() => {
     return items
@@ -105,12 +109,6 @@ export const VarianceReport = memo(function VarianceReport({
       netValue: varianceItems.reduce((sum, i) => sum + i.varianceValue, 0),
     };
   }, [varianceItems]);
-
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("en-AU", {
-      style: "currency",
-      currency: "AUD",
-    }).format(value);
 
   // Loading state
   if (isLoading) {
@@ -214,7 +212,7 @@ export const VarianceReport = memo(function VarianceReport({
               {summary.netQuantity}
             </div>
             <div className="text-sm text-muted-foreground">
-              {formatCurrency(summary.netValue)} value
+              {formatCurrencyDisplay(summary.netValue)} value
             </div>
           </CardContent>
         </Card>

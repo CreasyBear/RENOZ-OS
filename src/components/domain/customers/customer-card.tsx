@@ -70,7 +70,7 @@ function formatRelativeTime(date: string | Date | null | undefined): string {
   const diffMins = Math.floor(diffMs / 60000)
   const diffHours = Math.floor(diffMins / 60)
   const diffDays = Math.floor(diffHours / 24)
-  
+
   if (diffMins < 1) return 'Just now'
   if (diffMins < 60) return `${diffMins}m ago`
   if (diffHours < 24) return `${diffHours}h ago`
@@ -86,7 +86,6 @@ function formatRelativeTime(date: string | Date | null | undefined): string {
 export function CustomerCard({
   customer,
   isSelected = false,
-  onSelect,
   onEdit,
   onDelete,
   onClick,

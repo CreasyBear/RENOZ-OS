@@ -12,7 +12,7 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, ilike, desc, asc, sql, inArray, gte, lte } from 'drizzle-orm';
+import { eq, and, ilike, desc, asc, sql, inArray, gte, lte, isNull } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
 import { enqueueSearchIndexOutbox } from '@/server/functions/_shared/search-index-outbox';
@@ -25,6 +25,7 @@ import {
   customerTagAssignments,
   customerHealthMetrics,
   customerPriorities,
+  orders,
 } from 'drizzle/schema';
 import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import { computeChanges } from '@/lib/activity-logger';
@@ -135,6 +136,13 @@ export const getCustomers = createServerFn({ method: 'GET' })
     const orderColumn = sortBy === 'name' ? customers.name : customers.createdAt;
     const orderDirection = sortOrder === 'asc' ? asc : desc;
 
+    // Build order aggregation conditions
+    const validOrderCondition = and(
+      eq(orders.organizationId, ctx.organizationId),
+      isNull(orders.deletedAt),
+      sql`${orders.status} NOT IN ('draft', 'cancelled')`
+    );
+
     // Run count and paginated results in parallel to eliminate waterfall
     const [countResult, items] = await Promise.all([
       db
@@ -163,12 +171,14 @@ export const getCustomers = createServerFn({ method: 'GET' })
           creditHoldReason: customers.creditHoldReason,
           healthScore: customers.healthScore,
           healthScoreUpdatedAt: customers.healthScoreUpdatedAt,
-          lifetimeValue: customers.lifetimeValue,
-          firstOrderDate: customers.firstOrderDate,
-          lastOrderDate: customers.lastOrderDate,
-          totalOrders: customers.totalOrders,
-          totalOrderValue: customers.totalOrderValue,
-          averageOrderValue: customers.averageOrderValue,
+          // Aggregated order metrics using LEFT JOIN with GROUP BY
+          // Pattern matches financial-dashboard.ts getTopCustomersByRevenue
+          lifetimeValue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+          totalOrderValue: sql<number>`COALESCE(SUM(${orders.total}), 0)::numeric`,
+          averageOrderValue: sql<number>`COALESCE(AVG(${orders.total}), 0)::numeric`,
+          totalOrders: sql<number>`COUNT(${orders.id})::int`,
+          firstOrderDate: sql<Date | null>`MIN(${orders.orderDate})`,
+          lastOrderDate: sql<Date | null>`MAX(${orders.orderDate})`,
           tags: customers.tags,
           customFields: customers.customFields,
           warrantyExpiryAlertOptOut: customers.warrantyExpiryAlertOptOut,
@@ -179,7 +189,44 @@ export const getCustomers = createServerFn({ method: 'GET' })
           deletedAt: customers.deletedAt,
         })
         .from(customers)
+        .leftJoin(
+          orders,
+          and(
+            eq(orders.customerId, customers.id),
+            validOrderCondition
+          )
+        )
         .where(whereClause)
+        .groupBy(
+          customers.id,
+          customers.organizationId,
+          customers.customerCode,
+          customers.name,
+          customers.legalName,
+          customers.email,
+          customers.phone,
+          customers.website,
+          customers.status,
+          customers.type,
+          customers.size,
+          customers.industry,
+          customers.taxId,
+          customers.registrationNumber,
+          customers.parentId,
+          customers.creditLimit,
+          customers.creditHold,
+          customers.creditHoldReason,
+          customers.healthScore,
+          customers.healthScoreUpdatedAt,
+          customers.tags,
+          customers.customFields,
+          customers.warrantyExpiryAlertOptOut,
+          customers.createdAt,
+          customers.updatedAt,
+          customers.createdBy,
+          customers.updatedBy,
+          customers.deletedAt
+        )
         .orderBy(orderDirection(orderColumn))
         .limit(pageSize)
         .offset(offset),

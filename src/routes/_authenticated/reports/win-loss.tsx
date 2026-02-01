@@ -2,19 +2,17 @@
  * Win/Loss Analysis Route
  *
  * Route for analyzing win/loss patterns and trends in pipeline opportunities.
- * Uses WinLossAnalysis component which handles its own data fetching.
+ * Uses container component that handles data fetching and passes to presenter.
  *
- * Note: This component currently uses the container pattern where the component
- * does its own data fetching. The hooks in @/hooks/reports are available for
- * use when refactoring to a presenter pattern in the future.
- *
+ * @see src/components/domain/reports/win-loss-analysis-container.tsx (container)
+ * @see src/components/domain/reports/win-loss-analysis.tsx (presenter)
  * @see _Initiation/_prd/2-domains/pipeline/pipeline.prd.json (PIPE-WINLOSS-UI)
  */
 
 import { createFileRoute } from '@tanstack/react-router';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { ReportDashboardSkeleton } from '@/components/skeletons/reports';
-import { WinLossAnalysis } from '@/components/domain/reports/win-loss-analysis';
+import { WinLossAnalysisContainer } from '@/components/domain/reports/win-loss-analysis-container';
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -46,7 +44,7 @@ function WinLossAnalysisPage() {
   return (
     <PageLayout variant="full-width">
       <PageLayout.Content>
-        <WinLossAnalysis />
+        <WinLossAnalysisContainer />
       </PageLayout.Content>
     </PageLayout>
   );

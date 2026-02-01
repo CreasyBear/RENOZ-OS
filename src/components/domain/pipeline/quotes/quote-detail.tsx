@@ -17,11 +17,16 @@ import {
   ExternalLink,
   Clock,
   CheckCircle2,
-  AlertCircle,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { StatusCell } from '@/components/shared/data-table';
+import { OPPORTUNITY_STAGE_CONFIG } from '@/components/domain/pipeline/opportunities/opportunity-status-config';
+import {
+  QUOTE_STATUS_CONFIG,
+  getExpiryStatus,
+  getDaysUntilExpiry,
+} from './quote-status-config';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table,
@@ -89,54 +94,59 @@ const QuoteStatusBadge = memo(function QuoteStatusBadge({
 }: {
   expiresAt: Date | string | null | undefined;
 }) {
-  if (!expiresAt) {
-    return <Badge variant="secondary">No Expiry</Badge>;
-  }
+  const status = getExpiryStatus(expiresAt);
+  const daysUntil = getDaysUntilExpiry(expiresAt);
 
-  const expiryDate = new Date(expiresAt);
-  const now = new Date();
-  const daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-  if (daysUntilExpiry < 0) {
+  if (!status) {
     return (
-      <Badge variant="destructive" className="flex items-center gap-1">
-        <AlertCircle className="h-3 w-3" />
-        Expired
-      </Badge>
+      <StatusCell
+        status="draft"
+        statusConfig={QUOTE_STATUS_CONFIG}
+      />
     );
   }
 
-  if (daysUntilExpiry <= 7) {
+  if (status === "expired") {
     return (
-      <Badge variant="outline" className="flex items-center gap-1 border-yellow-500 text-yellow-600">
+      <StatusCell
+        status="expired"
+        statusConfig={QUOTE_STATUS_CONFIG}
+        showIcon
+      />
+    );
+  }
+
+  if (status === "expiring" && daysUntil !== null) {
+    // For "expiring soon", we still use expired config but with custom label via wrapper
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
         <Clock className="h-3 w-3" />
-        Expires in {daysUntilExpiry} days
-      </Badge>
+        Expires in {daysUntil} days
+      </span>
     );
   }
 
   return (
-    <Badge variant="outline" className="flex items-center gap-1 text-green-600">
+    <span className="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
       <CheckCircle2 className="h-3 w-3" />
       Valid
-    </Badge>
+    </span>
   );
 });
 
 const StageBadge = memo(function StageBadge({ stage }: { stage: string }) {
-  const stageColors: Record<string, string> = {
-    new: 'bg-blue-100 text-blue-800',
-    qualified: 'bg-purple-100 text-purple-800',
-    proposal: 'bg-amber-100 text-amber-800',
-    negotiation: 'bg-orange-100 text-orange-800',
-    won: 'bg-green-100 text-green-800',
-    lost: 'bg-red-100 text-red-800',
-  };
+  // Cast to OpportunityStage - fallback to 'new' if invalid
+  const validStages = ['new', 'qualified', 'proposal', 'negotiation', 'won', 'lost'] as const;
+  const validStage = validStages.includes(stage as typeof validStages[number])
+    ? (stage as typeof validStages[number])
+    : 'new';
 
   return (
-    <Badge variant="outline" className={stageColors[stage] || ''}>
-      {stage.charAt(0).toUpperCase() + stage.slice(1)}
-    </Badge>
+    <StatusCell
+      status={validStage}
+      statusConfig={OPPORTUNITY_STAGE_CONFIG}
+      showIcon
+    />
   );
 });
 
@@ -294,7 +304,7 @@ export const QuoteDetail = memo(function QuoteDetail({
                     </TableCell>
                     <TableCell className="text-right">{item.quantity}</TableCell>
                     <TableCell className="text-right">
-                      <FormatAmount amount={item.unitPriceCents} currency="AUD" />
+                      <FormatAmount amount={item.unitPrice} currency="AUD" />
                     </TableCell>
                     {items.some((i) => i.discountPercent) && (
                       <TableCell className="text-right">
@@ -302,7 +312,7 @@ export const QuoteDetail = memo(function QuoteDetail({
                       </TableCell>
                     )}
                     <TableCell className="text-right font-medium">
-                      <FormatAmount amount={item.totalCents} currency="AUD" />
+                      <FormatAmount amount={item.total} currency="AUD" />
                     </TableCell>
                   </TableRow>
                 ))}

@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatCurrency } from '@/lib/formatters';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import type { PriceComparisonItem } from '@/lib/schemas/pricing';
 
 // ============================================================================
@@ -97,6 +97,9 @@ function SupplierPriceCard({
   isPreferred,
   onSetPreferred,
 }: SupplierPriceCardProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
   return (
     <div
       className={`relative rounded-lg border p-4 ${
@@ -131,11 +134,11 @@ function SupplierPriceCard({
       {/* Price */}
       <div className="mt-2">
         <p className="text-2xl font-bold">
-          {formatCurrency(supplier.effectivePrice, { cents: false })}
+          {formatCurrencyDisplay(supplier.effectivePrice)}
         </p>
         {supplier.effectivePrice !== supplier.price && (
           <p className="text-muted-foreground text-sm line-through">
-            {formatCurrency(supplier.price, { cents: false })}
+            {formatCurrencyDisplay(supplier.price)}
           </p>
         )}
         {supplier.discountPercent && (

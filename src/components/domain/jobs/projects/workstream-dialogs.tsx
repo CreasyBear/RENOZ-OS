@@ -4,11 +4,10 @@
  * Create and Edit dialogs for project workstreams.
  *
  * SPRINT-03: New components for project-centric jobs model
+ * SPRINT-05: Migrated to TanStack Form
  */
 
 import { useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Layers, Plus } from 'lucide-react';
 import {
@@ -20,23 +19,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
+import { TextField, TextareaField, SelectField } from '@/components/shared/forms';
 import { useCreateWorkstream, useUpdateWorkstream } from '@/hooks/jobs';
 import { toast } from '@/lib/toast';
 import type { ProjectWorkstream } from 'drizzle/schema/jobs/workstreams-notes';
@@ -61,6 +46,16 @@ const workstreamFormSchema = z.object({
 
 type WorkstreamFormData = z.infer<typeof workstreamFormSchema>;
 
+const visitTypeOptions = [
+  { value: 'assessment', label: 'Assessment' },
+  { value: 'installation', label: 'Installation' },
+  { value: 'commissioning', label: 'Commissioning' },
+  { value: 'service', label: 'Service' },
+  { value: 'warranty', label: 'Warranty' },
+  { value: 'inspection', label: 'Inspection' },
+  { value: 'maintenance', label: 'Maintenance' },
+];
+
 // ============================================================================
 // CREATE DIALOG
 // ============================================================================
@@ -80,31 +75,42 @@ export function WorkstreamCreateDialog({
 }: WorkstreamCreateDialogProps) {
   const createWorkstream = useCreateWorkstream(projectId);
 
-  const form = useForm<WorkstreamFormData>({
-    resolver: zodResolver(workstreamFormSchema),
+  const form = useTanStackForm({
+    schema: workstreamFormSchema,
     defaultValues: {
       name: '',
       description: '',
     },
+    onSubmit: async (data) => {
+      try {
+        await createWorkstream.mutateAsync({
+          name: data.name,
+          description: data.description,
+          position: 0,
+          defaultVisitType: data.defaultVisitType,
+        });
+
+        toast.success('Workstream created');
+        onOpenChange(false);
+        form.reset();
+        onSuccess?.();
+      } catch {
+        toast.error('Failed to create workstream');
+      }
+    },
   });
 
-  const onSubmit = async (data: WorkstreamFormData) => {
-    try {
-      await createWorkstream.mutateAsync({
-        name: data.name,
-        description: data.description,
-        position: 0,
-        defaultVisitType: data.defaultVisitType,
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        name: '',
+        description: '',
+        defaultVisitType: undefined,
       });
-
-      toast.success('Workstream created');
-      onOpenChange(false);
-      form.reset();
-      onSuccess?.();
-    } catch (error) {
-      toast.error('Failed to create workstream');
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- form.reset is stable
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -119,77 +125,55 @@ export function WorkstreamCreateDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., Site Assessment" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="space-y-4"
+        >
+          <form.Field name="name">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Name"
+                placeholder="e.g., Site Assessment"
+                required
+              />
+            )}
+          </form.Field>
 
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Describe this workstream..."
-                      className="min-h-[80px]"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form.Field name="description">
+            {(field) => (
+              <TextareaField
+                field={field}
+                label="Description"
+                placeholder="Describe this workstream..."
+                rows={3}
+              />
+            )}
+          </form.Field>
 
-            <FormField
-              control={form.control}
-              name="defaultVisitType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Default Visit Type</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select type (optional)" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="assessment">Assessment</SelectItem>
-                      <SelectItem value="installation">Installation</SelectItem>
-                      <SelectItem value="commissioning">Commissioning</SelectItem>
-                      <SelectItem value="service">Service</SelectItem>
-                      <SelectItem value="warranty">Warranty</SelectItem>
-                      <SelectItem value="inspection">Inspection</SelectItem>
-                      <SelectItem value="maintenance">Maintenance</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form.Field name="defaultVisitType">
+            {(field) => (
+              <SelectField
+                field={field}
+                label="Default Visit Type"
+                placeholder="Select type (optional)"
+                options={visitTypeOptions}
+              />
+            )}
+          </form.Field>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={createWorkstream.isPending}>
-                {createWorkstream.isPending ? 'Creating...' : 'Create'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={createWorkstream.isPending}>
+              {createWorkstream.isPending ? 'Creating...' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );
@@ -216,12 +200,30 @@ export function WorkstreamEditDialog({
 }: WorkstreamEditDialogProps) {
   const updateWorkstream = useUpdateWorkstream(projectId);
 
-  const form = useForm<WorkstreamFormData>({
-    resolver: zodResolver(workstreamFormSchema),
+  const form = useTanStackForm({
+    schema: workstreamFormSchema,
     defaultValues: {
       name: workstream?.name || '',
       description: workstream?.description || '',
       defaultVisitType: (workstream?.defaultVisitType as WorkstreamFormData['defaultVisitType']) || undefined,
+    },
+    onSubmit: async (data) => {
+      if (!workstream) return;
+
+      try {
+        await updateWorkstream.mutateAsync({
+          id: workstream.id,
+          name: data.name,
+          description: data.description,
+          defaultVisitType: data.defaultVisitType,
+        });
+
+        toast.success('Workstream updated');
+        onOpenChange(false);
+        onSuccess?.();
+      } catch {
+        toast.error('Failed to update workstream');
+      }
     },
   });
 
@@ -234,26 +236,8 @@ export function WorkstreamEditDialog({
         defaultVisitType: (workstream.defaultVisitType as WorkstreamFormData['defaultVisitType']) || undefined,
       });
     }
-  }, [workstream, open, form]);
-
-  const onSubmit = async (data: WorkstreamFormData) => {
-    if (!workstream) return;
-
-    try {
-      await updateWorkstream.mutateAsync({
-        id: workstream.id,
-        name: data.name,
-        description: data.description,
-        defaultVisitType: data.defaultVisitType,
-      });
-
-      toast.success('Workstream updated');
-      onOpenChange(false);
-      onSuccess?.();
-    } catch (error) {
-      toast.error('Failed to update workstream');
-    }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- form.reset is stable
+  }, [workstream, open]);
 
   if (!workstream) return null;
 
@@ -268,73 +252,53 @@ export function WorkstreamEditDialog({
           <DialogDescription>Update workstream details</DialogDescription>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name *</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="space-y-4"
+        >
+          <form.Field name="name">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Name"
+                required
+              />
+            )}
+          </form.Field>
 
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea className="min-h-[80px]" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form.Field name="description">
+            {(field) => (
+              <TextareaField
+                field={field}
+                label="Description"
+                rows={3}
+              />
+            )}
+          </form.Field>
 
-            <FormField
-              control={form.control}
-              name="defaultVisitType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Default Visit Type</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select type (optional)" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="assessment">Assessment</SelectItem>
-                      <SelectItem value="installation">Installation</SelectItem>
-                      <SelectItem value="commissioning">Commissioning</SelectItem>
-                      <SelectItem value="service">Service</SelectItem>
-                      <SelectItem value="warranty">Warranty</SelectItem>
-                      <SelectItem value="inspection">Inspection</SelectItem>
-                      <SelectItem value="maintenance">Maintenance</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form.Field name="defaultVisitType">
+            {(field) => (
+              <SelectField
+                field={field}
+                label="Default Visit Type"
+                placeholder="Select type (optional)"
+                options={visitTypeOptions}
+              />
+            )}
+          </form.Field>
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={updateWorkstream.isPending}>
-                {updateWorkstream.isPending ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={updateWorkstream.isPending}>
+              {updateWorkstream.isPending ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

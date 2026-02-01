@@ -20,11 +20,11 @@
  */
 import { Input } from "~/components/ui/input"
 import { FormField } from "./form-field"
-import type { FormFieldApi } from "./types"
+import type { AnyFieldApi } from "./types"
 
 export interface TextFieldProps {
   /** TanStack Form field instance */
-  field: FormFieldApi
+  field: AnyFieldApi<string>
   /** Field label */
   label: string
   /** Placeholder text */
@@ -39,6 +39,8 @@ export interface TextFieldProps {
   className?: string
   /** Disabled state */
   disabled?: boolean
+  /** Optional additional blur handler (called after field.handleBlur) */
+  onBlur?: () => void
 }
 
 export function TextField({
@@ -50,6 +52,7 @@ export function TextField({
   type = "text",
   className,
   disabled,
+  onBlur,
 }: TextFieldProps) {
   const rawError = field.state.meta.isTouched && field.state.meta.errors.length > 0
     ? field.state.meta.errors[0]
@@ -73,7 +76,10 @@ export function TextField({
         placeholder={placeholder}
         value={field.state.value ?? ""}
         onChange={(e) => field.handleChange(e.target.value)}
-        onBlur={field.handleBlur}
+        onBlur={() => {
+          field.handleBlur()
+          onBlur?.()
+        }}
         disabled={disabled}
       />
     </FormField>

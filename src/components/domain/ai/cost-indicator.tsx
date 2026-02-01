@@ -233,7 +233,7 @@ const FullIndicator = memo(function FullIndicator({
         <div className="flex items-center gap-1 text-xs text-muted-foreground pt-2 border-t">
           <TrendingUp className="h-3 w-3" />
           <span>
-            {budget.dailyRemainingCents > 0
+            {budget.dailyRemaining > 0
               ? `${budget.formatted.dailyLimit} remaining today`
               : 'Daily budget exhausted'}
           </span>

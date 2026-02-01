@@ -8,42 +8,26 @@
  * - Credit management section
  * - Tag assignment
  *
- * Uses react-hook-form with Zod validation.
+ * Uses TanStack Form with Zod validation.
  */
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import {
   Building2,
   CreditCard,
-  Globe,
   Mail,
-  Phone,
   Tag,
   User,
-  AlertCircle,
 } from 'lucide-react'
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form'
+import {
+  TextField,
+  SelectField,
+  NumberField,
+  CheckboxField,
+  FormActions,
+} from '@/components/shared/forms'
 import {
   customerStatusValues,
   customerTypeValues,
@@ -54,23 +38,22 @@ import {
 // TYPES
 // ============================================================================
 
-// Form schema without .default() to avoid react-hook-form type issues
 const customerFormSchema = z.object({
   name: z.string().min(1, 'Name is required').max(255),
-  legalName: z.string().max(255).optional(),
+  legalName: z.string().max(255).optional().or(z.literal('')),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
-  phone: z.string().max(30).optional(),
+  phone: z.string().max(30).optional().or(z.literal('')),
   website: z.string().url('Invalid URL').optional().or(z.literal('')),
   status: z.enum(['prospect', 'active', 'inactive', 'suspended', 'blacklisted']),
   type: z.enum(['individual', 'business', 'government', 'non_profit']),
   size: z.enum(['micro', 'small', 'medium', 'large', 'enterprise']).optional(),
-  industry: z.string().max(100).optional(),
-  taxId: z.string().max(20).optional(),
-  registrationNumber: z.string().max(50).optional(),
+  industry: z.string().max(100).optional().or(z.literal('')),
+  taxId: z.string().max(20).optional().or(z.literal('')),
+  registrationNumber: z.string().max(50).optional().or(z.literal('')),
   parentId: z.string().uuid().optional(),
   creditLimit: z.number().nonnegative().optional(),
   creditHold: z.boolean(),
-  creditHoldReason: z.string().max(500).optional(),
+  creditHoldReason: z.string().max(500).optional().or(z.literal('')),
   tags: z.array(z.string().max(50)),
 })
 
@@ -89,34 +72,54 @@ interface CustomerFormProps {
 // HELPERS
 // ============================================================================
 
-const statusLabels: Record<string, { label: string; description: string }> = {
-  prospect: { label: 'Prospect', description: 'Potential customer being evaluated' },
-  active: { label: 'Active', description: 'Current customer with ongoing relationship' },
-  inactive: { label: 'Inactive', description: 'No recent activity or engagement' },
-  suspended: { label: 'Suspended', description: 'Temporarily restricted access' },
-  blacklisted: { label: 'Blacklisted', description: 'Permanently blocked from services' },
-}
+const statusOptions = customerStatusValues.map((status) => ({
+  value: status,
+  label: {
+    prospect: 'Prospect',
+    active: 'Active',
+    inactive: 'Inactive',
+    suspended: 'Suspended',
+    blacklisted: 'Blacklisted',
+  }[status],
+  description: {
+    prospect: 'Potential customer being evaluated',
+    active: 'Current customer with ongoing relationship',
+    inactive: 'No recent activity or engagement',
+    suspended: 'Temporarily restricted access',
+    blacklisted: 'Permanently blocked from services',
+  }[status],
+}))
 
-const typeLabels: Record<string, string> = {
-  individual: 'Individual',
-  business: 'Business',
-  government: 'Government',
-  non_profit: 'Non-Profit',
-}
+const typeOptions = customerTypeValues.map((type) => ({
+  value: type,
+  label: {
+    individual: 'Individual',
+    business: 'Business',
+    government: 'Government',
+    non_profit: 'Non-Profit',
+  }[type],
+}))
 
-const sizeLabels: Record<string, string> = {
-  micro: 'Micro (1-9)',
-  small: 'Small (10-49)',
-  medium: 'Medium (50-249)',
-  large: 'Large (250-999)',
-  enterprise: 'Enterprise (1000+)',
-}
+const sizeOptions = customerSizeValues.map((size) => ({
+  value: size,
+  label: {
+    micro: 'Micro (1-9)',
+    small: 'Small (10-49)',
+    medium: 'Medium (50-249)',
+    large: 'Large (250-999)',
+    enterprise: 'Enterprise (1000+)',
+  }[size],
+}))
 
 // ============================================================================
 // FORM SECTIONS
 // ============================================================================
 
-function BasicInfoSection() {
+interface SectionProps {
+  form: ReturnType<typeof useTanStackForm<CustomerFormValues>>
+}
+
+function BasicInfoSection({ form }: SectionProps) {
   return (
     <Card>
       <CardHeader>
@@ -127,103 +130,58 @@ function BasicInfoSection() {
         <CardDescription>Customer name and classification</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <FormField
-          name="name"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Customer Name *</FormLabel>
-              <FormControl>
-                <Input placeholder="e.g., Acme Corporation" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+        <form.Field name="name">
+          {(field) => (
+            <TextField
+              field={field}
+              label="Customer Name"
+              placeholder="e.g., Acme Corporation"
+              required
+            />
           )}
-        />
+        </form.Field>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <FormField
-            name="type"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Customer Type</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {customerTypeValues.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {typeLabels[type]}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormMessage />
-              </FormItem>
+          <form.Field name="type">
+            {(field) => (
+              <SelectField
+                field={field}
+                label="Customer Type"
+                options={typeOptions}
+                placeholder="Select type"
+              />
             )}
-          />
+          </form.Field>
 
-          <FormField
-            name="status"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Status</FormLabel>
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select status" />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {customerStatusValues.map((status) => (
-                      <SelectItem key={status} value={status}>
-                        <div>
-                          <span>{statusLabels[status].label}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <FormDescription>
-                  {field.value && statusLabels[field.value]?.description}
-                </FormDescription>
-                <FormMessage />
-              </FormItem>
+          <form.Field name="status">
+            {(field) => (
+              <SelectField
+                field={field}
+                label="Status"
+                options={statusOptions}
+                placeholder="Select status"
+                description={statusOptions.find(o => o.value === field.state.value)?.description}
+              />
             )}
-          />
+          </form.Field>
         </div>
 
-        <FormField
-          name="size"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Company Size</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select size (optional)" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {customerSizeValues.map((size) => (
-                    <SelectItem key={size} value={size}>
-                      {sizeLabels[size]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
+        <form.Field name="size">
+          {(field) => (
+            <SelectField
+              field={field}
+              label="Company Size"
+              options={sizeOptions}
+              placeholder="Select size (optional)"
+            />
           )}
-        />
+        </form.Field>
       </CardContent>
     </Card>
   )
 }
 
-function BusinessDetailsSection() {
+function BusinessDetailsSection({ form }: SectionProps) {
   return (
     <Card>
       <CardHeader>
@@ -234,68 +192,54 @@ function BusinessDetailsSection() {
         <CardDescription>Legal and industry information</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <FormField
-          name="legalName"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Legal Name</FormLabel>
-              <FormControl>
-                <Input placeholder="e.g., Acme Corporation Pty Ltd" {...field} />
-              </FormControl>
-              <FormDescription>
-                Full legal entity name if different from display name
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
+        <form.Field name="legalName">
+          {(field) => (
+            <TextField
+              field={field}
+              label="Legal Name"
+              placeholder="e.g., Acme Corporation Pty Ltd"
+              description="Full legal entity name if different from display name"
+            />
           )}
-        />
+        </form.Field>
 
         <div className="grid gap-4 md:grid-cols-2">
-          <FormField
-            name="taxId"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>ABN / Tax ID</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g., 12 345 678 901" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+          <form.Field name="taxId">
+            {(field) => (
+              <TextField
+                field={field}
+                label="ABN / Tax ID"
+                placeholder="e.g., 12 345 678 901"
+              />
             )}
-          />
+          </form.Field>
 
-          <FormField
-            name="registrationNumber"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Registration Number</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g., ACN 123 456 789" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
+          <form.Field name="registrationNumber">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Registration Number"
+                placeholder="e.g., ACN 123 456 789"
+              />
             )}
-          />
+          </form.Field>
         </div>
 
-        <FormField
-          name="industry"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Industry</FormLabel>
-              <FormControl>
-                <Input placeholder="e.g., Construction, Healthcare, Retail" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+        <form.Field name="industry">
+          {(field) => (
+            <TextField
+              field={field}
+              label="Industry"
+              placeholder="e.g., Construction, Healthcare, Retail"
+            />
           )}
-        />
+        </form.Field>
       </CardContent>
     </Card>
   )
 }
 
-function ContactInfoSection() {
+function ContactInfoSection({ form }: SectionProps) {
   return (
     <Card>
       <CardHeader>
@@ -306,59 +250,41 @@ function ContactInfoSection() {
         <CardDescription>Primary contact details for the customer</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <FormField
-          name="email"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Email</FormLabel>
-              <FormControl>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-10" placeholder="info@company.com" {...field} />
-                </div>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+        <form.Field name="email">
+          {(field) => (
+            <TextField
+              field={field}
+              label="Email"
+              placeholder="info@company.com"
+            />
           )}
-        />
+        </form.Field>
 
-        <FormField
-          name="phone"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Phone</FormLabel>
-              <FormControl>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-10" placeholder="+61 2 1234 5678" {...field} />
-                </div>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+        <form.Field name="phone">
+          {(field) => (
+            <TextField
+              field={field}
+              label="Phone"
+              placeholder="+61 2 1234 5678"
+            />
           )}
-        />
+        </form.Field>
 
-        <FormField
-          name="website"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Website</FormLabel>
-              <FormControl>
-                <div className="relative">
-                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-10" placeholder="https://www.company.com" {...field} />
-                </div>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+        <form.Field name="website">
+          {(field) => (
+            <TextField
+              field={field}
+              label="Website"
+              placeholder="https://www.company.com"
+            />
           )}
-        />
+        </form.Field>
       </CardContent>
     </Card>
   )
 }
 
-function CreditManagementSection() {
+function CreditManagementSection({ form }: SectionProps) {
   return (
     <Card>
       <CardHeader>
@@ -369,70 +295,47 @@ function CreditManagementSection() {
         <CardDescription>Credit limits and holds</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <FormField
-          name="creditLimit"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Credit Limit (AUD)</FormLabel>
-              <FormControl>
-                <Input
-                  type="number"
-                  min={0}
-                  placeholder="e.g., 10000"
-                  {...field}
-                  onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
-                  value={field.value ?? ''}
-                />
-              </FormControl>
-              <FormDescription>
-                Maximum credit amount for this customer
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
+        <form.Field name="creditLimit">
+          {(field) => (
+            <NumberField
+              field={field}
+              label="Credit Limit (AUD)"
+              placeholder="e.g., 10000"
+              min={0}
+              description="Maximum credit amount for this customer"
+            />
           )}
-        />
+        </form.Field>
 
-        <FormField
-          name="creditHold"
-          render={({ field }) => (
-            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-              <FormControl>
-                <Checkbox
-                  checked={field.value}
-                  onCheckedChange={field.onChange}
-                />
-              </FormControl>
-              <div className="space-y-1 leading-none">
-                <FormLabel className="flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-destructive" />
-                  Credit Hold
-                </FormLabel>
-                <FormDescription>
-                  Prevent new orders until credit issues are resolved
-                </FormDescription>
-              </div>
-            </FormItem>
+        <form.Field name="creditHold">
+          {(field) => (
+            <CheckboxField
+              field={field}
+              label="Credit Hold"
+              description="Prevent new orders until credit issues are resolved"
+            />
           )}
-        />
+        </form.Field>
 
-        <FormField
-          name="creditHoldReason"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Credit Hold Reason</FormLabel>
-              <FormControl>
-                <Input placeholder="Reason for credit hold" {...field} />
-              </FormControl>
-              <FormMessage />
-            </FormItem>
+        <form.Field name="creditHoldReason">
+          {(field) => (
+            <TextField
+              field={field}
+              label="Credit Hold Reason"
+              placeholder="Reason for credit hold"
+            />
           )}
-        />
+        </form.Field>
       </CardContent>
     </Card>
   )
 }
 
-function TagsSection({ availableTags }: { availableTags?: Array<{ id: string; name: string; color: string }> }) {
+interface TagsSectionProps extends SectionProps {
+  availableTags?: Array<{ id: string; name: string; color: string }>
+}
+
+function TagsSection({ form, availableTags }: TagsSectionProps) {
   return (
     <Card>
       <CardHeader>
@@ -443,15 +346,26 @@ function TagsSection({ availableTags }: { availableTags?: Array<{ id: string; na
         <CardDescription>Categorize and organize this customer</CardDescription>
       </CardHeader>
       <CardContent>
-        <FormField
-          name="tags"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Assigned Tags</FormLabel>
-              <FormControl>
+        <form.Field name="tags">
+          {(field) => {
+            const tags = field.state.value ?? []
+
+            const handleAddTag = (tagName: string) => {
+              if (!tags.includes(tagName)) {
+                field.handleChange([...tags, tagName])
+              }
+            }
+
+            const handleRemoveTag = (tagName: string) => {
+              field.handleChange(tags.filter((t) => t !== tagName))
+            }
+
+            return (
+              <div className="space-y-3">
+                <label className="text-sm font-medium">Assigned Tags</label>
                 <div className="flex flex-wrap gap-2 min-h-[40px] p-2 border rounded-md">
-                  {field.value?.length > 0 ? (
-                    field.value.map((tag: string) => {
+                  {tags.length > 0 ? (
+                    tags.map((tag) => {
                       const tagInfo = availableTags?.find((t) => t.name === tag)
                       return (
                         <Badge
@@ -459,9 +373,7 @@ function TagsSection({ availableTags }: { availableTags?: Array<{ id: string; na
                           variant="secondary"
                           className="cursor-pointer"
                           style={tagInfo ? { backgroundColor: tagInfo.color + '20', color: tagInfo.color } : undefined}
-                          onClick={() => {
-                            field.onChange(field.value.filter((t: string) => t !== tag))
-                          }}
+                          onClick={() => handleRemoveTag(tag)}
                         >
                           {tag} ×
                         </Badge>
@@ -471,31 +383,28 @@ function TagsSection({ availableTags }: { availableTags?: Array<{ id: string; na
                     <span className="text-muted-foreground text-sm">No tags assigned</span>
                   )}
                 </div>
-              </FormControl>
-              {availableTags && availableTags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  <span className="text-xs text-muted-foreground mr-2">Available:</span>
-                  {availableTags
-                    .filter((t) => !field.value?.includes(t.name))
-                    .map((tag) => (
-                      <Badge
-                        key={tag.id}
-                        variant="outline"
-                        className="cursor-pointer text-xs"
-                        style={{ borderColor: tag.color, color: tag.color }}
-                        onClick={() => {
-                          field.onChange([...(field.value || []), tag.name])
-                        }}
-                      >
-                        + {tag.name}
-                      </Badge>
-                    ))}
-                </div>
-              )}
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+                {availableTags && availableTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    <span className="text-xs text-muted-foreground mr-2">Available:</span>
+                    {availableTags
+                      .filter((t) => !tags.includes(t.name))
+                      .map((tag) => (
+                        <Badge
+                          key={tag.id}
+                          variant="outline"
+                          className="cursor-pointer text-xs"
+                          style={{ borderColor: tag.color, color: tag.color }}
+                          onClick={() => handleAddTag(tag.name)}
+                        >
+                          + {tag.name}
+                        </Badge>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )
+          }}
+        </form.Field>
       </CardContent>
     </Card>
   )
@@ -509,52 +418,60 @@ export function CustomerForm({
   defaultValues,
   onSubmit,
   onCancel,
-  isLoading = false,
   mode = 'create',
   availableTags = [],
 }: CustomerFormProps) {
-  const form = useForm<CustomerFormValues>({
-    resolver: zodResolver(customerFormSchema),
+  const form = useTanStackForm({
+    schema: customerFormSchema,
     defaultValues: {
       name: '',
+      legalName: '',
+      email: '',
+      phone: '',
+      website: '',
       status: 'prospect',
       type: 'business',
+      size: undefined,
+      industry: '',
+      taxId: '',
+      registrationNumber: '',
+      creditLimit: undefined,
       creditHold: false,
+      creditHoldReason: '',
       tags: [],
       ...defaultValues,
     },
+    onSubmit: async (values) => {
+      await onSubmit(values)
+    },
   })
 
-  const handleSubmit = async (data: CustomerFormValues) => {
-    await onSubmit(data)
-  }
-
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-        <div className="grid gap-6 lg:grid-cols-2">
-          <div className="space-y-6">
-            <BasicInfoSection />
-            <BusinessDetailsSection />
-          </div>
-          <div className="space-y-6">
-            <ContactInfoSection />
-            <CreditManagementSection />
-            <TagsSection availableTags={availableTags} />
-          </div>
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        form.handleSubmit()
+      }}
+      className="space-y-6"
+    >
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="space-y-6">
+          <BasicInfoSection form={form} />
+          <BusinessDetailsSection form={form} />
         </div>
+        <div className="space-y-6">
+          <ContactInfoSection form={form} />
+          <CreditManagementSection form={form} />
+          <TagsSection form={form} availableTags={availableTags} />
+        </div>
+      </div>
 
-        <div className="flex justify-end gap-4 pt-4 border-t">
-          {onCancel && (
-            <Button type="button" variant="outline" onClick={onCancel}>
-              Cancel
-            </Button>
-          )}
-          <Button type="submit" disabled={isLoading}>
-            {isLoading ? 'Saving...' : mode === 'create' ? 'Create Customer' : 'Save Changes'}
-          </Button>
-        </div>
-      </form>
-    </Form>
+      <FormActions
+        form={form}
+        submitLabel={mode === 'create' ? 'Create Customer' : 'Save Changes'}
+        onCancel={onCancel}
+        align="right"
+      />
+    </form>
   )
 }

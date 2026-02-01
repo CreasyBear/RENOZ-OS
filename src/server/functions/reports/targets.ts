@@ -12,13 +12,12 @@
  */
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, ilike, desc, asc, gte, lte, sql, count, inArray } from 'drizzle-orm';
+import { eq, and, ilike, desc, asc, gte, lte, sql, inArray } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { containsPattern } from '@/lib/db/utils';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { targets } from 'drizzle/schema/reports';
-import { orders, customers, opportunities } from 'drizzle/schema';
 import {
   createTargetSchema,
   updateTargetSchema,
@@ -34,6 +33,8 @@ import {
   type TargetMetric,
 } from '@/lib/schemas/reports/targets';
 import { NotFoundError } from '@/lib/server/errors';
+import { calculateMetric } from '@/server/functions/metrics/aggregator';
+import { type MetricId } from '@/lib/metrics/registry';
 
 // ============================================================================
 // HELPERS
@@ -41,6 +42,7 @@ import { NotFoundError } from '@/lib/server/errors';
 
 /**
  * Calculate actual value for a given metric type and date range.
+ * Uses centralized metric aggregator for consistent calculations.
  */
 async function calculateMetricValue(
   metric: TargetMetric,
@@ -48,92 +50,18 @@ async function calculateMetricValue(
   startDate: string,
   endDate: string
 ): Promise<number> {
-  switch (metric) {
-    case 'revenue': {
-      const [result] = await db
-        .select({ total: sql<number>`COALESCE(SUM(${orders.total}), 0)` })
-        .from(orders)
-        .where(
-          and(
-            eq(orders.organizationId, organizationId),
-            gte(orders.orderDate, startDate),
-            lte(orders.orderDate, endDate)
-          )
-        );
-      return Number(result?.total ?? 0);
-    }
-
-    case 'orders_count': {
-      const [result] = await db
-        .select({ count: count() })
-        .from(orders)
-        .where(
-          and(
-            eq(orders.organizationId, organizationId),
-            gte(orders.orderDate, startDate),
-            lte(orders.orderDate, endDate)
-          )
-        );
-      return Number(result?.count ?? 0);
-    }
-
-    case 'customer_count': {
-      const [result] = await db
-        .select({ count: count() })
-        .from(customers)
-        .where(
-          and(
-            eq(customers.organizationId, organizationId),
-            sql`${customers.deletedAt} IS NULL`,
-            gte(customers.createdAt, new Date(startDate)),
-            lte(customers.createdAt, new Date(endDate))
-          )
-        );
-      return Number(result?.count ?? 0);
-    }
-
-    case 'pipeline_value': {
-      const [result] = await db
-        .select({ total: sql<number>`COALESCE(SUM(${opportunities.value}), 0)` })
-        .from(opportunities)
-        .where(
-          and(
-            eq(opportunities.organizationId, organizationId),
-            sql`${opportunities.stage} NOT IN ('won', 'lost')`,
-            gte(opportunities.createdAt, new Date(startDate)),
-            lte(opportunities.createdAt, new Date(endDate))
-          )
-        );
-      return Number(result?.total ?? 0);
-    }
-
-    case 'average_order_value': {
-      const [result] = await db
-        .select({
-          total: sql<number>`COALESCE(SUM(${orders.total}), 0)`,
-          count: count(),
-        })
-        .from(orders)
-        .where(
-          and(
-            eq(orders.organizationId, organizationId),
-            gte(orders.orderDate, startDate),
-            lte(orders.orderDate, endDate)
-          )
-        );
-      const total = Number(result?.total ?? 0);
-      const orderCount = Number(result?.count ?? 0);
-      return orderCount > 0 ? total / orderCount : 0;
-    }
-
-    // Placeholder for metrics that require additional schema/tables
-    case 'kwh_deployed':
-    case 'quote_win_rate':
-    case 'active_installations':
-    case 'warranty_claims':
-    default:
-      // Return 0 for metrics that don't have backing data yet
-      return 0;
+  // Use centralized aggregator - consistent with all other reports
+  try {
+    const result = await calculateMetric({
+      organizationId,
+      metricId: metric as MetricId,
+      dateFrom: startDate,
+      dateTo: endDate,
+    });
+    return result.value;
+  } catch {
+    // Return 0 for metrics that don't have backing data yet (legacy support)
+    return 0;
   }
 }
 
@@ -366,13 +294,16 @@ export const getTargetProgress = createServerFn({ method: 'GET' })
       conditions.push(eq(targets.period, data.period));
     }
 
-    // Get active targets
+    // Get active targets (limit to reasonable number for dashboard)
     const activeTargets = await db
       .select()
       .from(targets)
-      .where(and(...conditions));
+      .where(and(...conditions))
+      .limit(100); // Reasonable limit for dashboard display
 
-    // Calculate progress for each target
+    // Calculate progress for each target in parallel
+    // Each target may have different metrics/date ranges, so we can't batch the queries
+    // but Promise.all ensures they run concurrently for better performance
     const progressItems: TargetProgress[] = await Promise.all(
       activeTargets.map(async (target) => {
         const targetValue = Number(target.targetValue);
@@ -380,12 +311,20 @@ export const getTargetProgress = createServerFn({ method: 'GET' })
         const startDate = target.startDate;
 
         // Calculate actual metric value for the target period
-        const currentValue = await calculateMetricValue(
-          target.metric as TargetMetric,
-          ctx.organizationId,
-          startDate,
-          today // Use today as end date since target is still active
-        );
+        // Errors are handled in calculateMetricValue wrapper
+        let currentValue = 0;
+        try {
+          currentValue = await calculateMetricValue(
+            target.metric as TargetMetric,
+            ctx.organizationId,
+            startDate,
+            today // Use today as end date since target is still active
+          );
+        } catch (error) {
+          // Log error but don't fail entire request - show 0 progress for failed metric
+          console.error(`Failed to calculate progress for target ${target.id} (${target.metric}):`, error);
+          currentValue = 0;
+        }
 
         const percentage = targetValue > 0 ? (currentValue / targetValue) * 100 : 0;
 

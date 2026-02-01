@@ -191,6 +191,14 @@ export const organizationSettingsSchema = z.object({
   dateFormat: z.string().default('DD/MM/YYYY'),
   fiscalYearStart: z.number().int().min(1).max(12).optional(),
   defaultPaymentTerms: z.number().int().nonnegative().optional(),
+  /** Time format (12h or 24h) */
+  timeFormat: z.enum(['12h', '24h']).default('12h'),
+  /** Week start day (0=Sunday, 1=Monday, etc.) */
+  weekStartDay: z.number().int().min(0).max(6).default(1),
+  /** Default tax rate percentage */
+  defaultTaxRate: z.number().nonnegative().default(10),
+  /** Number format (comma/period for thousands/decimal) */
+  numberFormat: z.enum(['1,234.56', '1.234,56', '1 234,56']).default('1,234.56'),
   portalBranding: z
     .object({
       logoUrl: urlSchema,

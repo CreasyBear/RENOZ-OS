@@ -23,44 +23,44 @@ export async function GET() {
 
     return new Response(
       JSON.stringify({
-        // Daily limits
-        dailyLimitCents: status.dailyLimitCents,
-        dailyUsedCents: status.dailyUsedCents,
-        dailyRemainingCents: Math.max(0, status.dailyLimitCents - status.dailyUsedCents),
+        // Daily limits (in dollars)
+        dailyLimit: status.dailyLimit,
+        dailyUsed: status.dailyUsed,
+        dailyRemaining: Math.max(0, status.dailyLimit - status.dailyUsed),
         dailyPercentUsed: status.dailyPercentUsed,
 
-        // Monthly limits (org)
-        monthlyLimitCents: status.monthlyLimitCents,
-        monthlyUsedCents: status.monthlyUsedCents,
-        monthlyRemainingCents: Math.max(0, status.monthlyLimitCents - status.monthlyUsedCents),
+        // Monthly limits (org) (in dollars)
+        monthlyLimit: status.monthlyLimit,
+        monthlyUsed: status.monthlyUsed,
+        monthlyRemaining: Math.max(0, status.monthlyLimit - status.monthlyUsed),
         monthlyPercentUsed: status.monthlyPercentUsed,
 
-        // User limits
-        userDailyLimitCents: status.userDailyLimitCents,
-        userDailyUsedCents: status.userDailyUsedCents,
-        userDailyRemainingCents: Math.max(0, status.userDailyLimitCents - status.userDailyUsedCents),
-        userDailyPercentUsed: status.userDailyLimitCents > 0
-          ? Math.round((status.userDailyUsedCents / status.userDailyLimitCents) * 100)
+        // User limits (in dollars)
+        userDailyLimit: status.userDailyLimit,
+        userDailyUsed: status.userDailyUsed,
+        userDailyRemaining: Math.max(0, status.userDailyLimit - status.userDailyUsed),
+        userDailyPercentUsed: status.userDailyLimit > 0
+          ? Math.round((status.userDailyUsed / status.userDailyLimit) * 100)
           : 0,
 
         // Formatted values for display
         formatted: {
-          dailyLimit: formatCost(status.dailyLimitCents),
-          dailyUsed: formatCost(status.dailyUsedCents),
-          monthlyLimit: formatCost(status.monthlyLimitCents),
-          monthlyUsed: formatCost(status.monthlyUsedCents),
-          userDailyLimit: formatCost(status.userDailyLimitCents),
-          userDailyUsed: formatCost(status.userDailyUsedCents),
+          dailyLimit: formatCost(status.dailyLimit),
+          dailyUsed: formatCost(status.dailyUsed),
+          monthlyLimit: formatCost(status.monthlyLimit),
+          monthlyUsed: formatCost(status.monthlyUsed),
+          userDailyLimit: formatCost(status.userDailyLimit),
+          userDailyUsed: formatCost(status.userDailyUsed),
         },
 
         // Warning thresholds
         warnings: {
           dailyWarning: status.dailyPercentUsed >= 80,
           dailyCritical: status.dailyPercentUsed >= 95,
-          userWarning: status.userDailyLimitCents > 0 &&
-            (status.userDailyUsedCents / status.userDailyLimitCents) >= 0.8,
-          userCritical: status.userDailyLimitCents > 0 &&
-            (status.userDailyUsedCents / status.userDailyLimitCents) >= 0.95,
+          userWarning: status.userDailyLimit > 0 &&
+            (status.userDailyUsed / status.userDailyLimit) >= 0.8,
+          userCritical: status.userDailyLimit > 0 &&
+            (status.userDailyUsed / status.userDailyLimit) >= 0.95,
         },
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }

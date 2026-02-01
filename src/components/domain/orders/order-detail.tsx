@@ -23,7 +23,6 @@ import {
   XCircle,
   Clock,
   AlertCircle,
-  Activity,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -73,8 +72,8 @@ import {
   deleteOrder,
 } from "@/server/functions/orders/orders";
 import type { OrderStatus } from "@/lib/schemas/orders";
-import { UnifiedActivityTimeline } from "@/components/shared/unified-activity-timeline";
-import { useUnifiedActivities } from "@/hooks/use-unified-activities";
+import { UnifiedActivityTimeline } from "@/components/shared/activity";
+import { useUnifiedActivities } from "@/hooks/activities";
 
 // ============================================================================
 // TYPES
@@ -421,38 +420,38 @@ export const OrderDetail = memo(function OrderDetail({
               <CardContent className="space-y-3">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Subtotal</span>
-                  <span><FormatAmount amount={Number(order.subtotal)} cents={false} /></span>
+                  <span><FormatAmount amount={Number(order.subtotal)} /></span>
                 </div>
                 {Number(order.discountAmount) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Discount</span>
                     <span className="text-red-600">
-                      -<FormatAmount amount={Number(order.discountAmount)} cents={false} />
+                      -<FormatAmount amount={Number(order.discountAmount)} />
                     </span>
                   </div>
                 )}
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Tax (GST)</span>
-                  <span><FormatAmount amount={Number(order.taxAmount)} cents={false} /></span>
+                  <span><FormatAmount amount={Number(order.taxAmount)} /></span>
                 </div>
                 {Number(order.shippingAmount) > 0 && (
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Shipping</span>
-                    <span><FormatAmount amount={Number(order.shippingAmount)} cents={false} /></span>
+                    <span><FormatAmount amount={Number(order.shippingAmount)} /></span>
                   </div>
                 )}
                 <Separator />
                 <div className="flex justify-between font-medium">
                   <span>Total</span>
-                  <span><FormatAmount amount={Number(order.total)} cents={false} /></span>
+                  <span><FormatAmount amount={Number(order.total)} /></span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Paid</span>
-                  <span><FormatAmount amount={Number(order.paidAmount)} cents={false} /></span>
+                  <span><FormatAmount amount={Number(order.paidAmount)} /></span>
                 </div>
                 <div className="flex justify-between text-sm font-medium">
                   <span>Balance Due</span>
-                  <span><FormatAmount amount={Number(order.balanceDue)} cents={false} /></span>
+                  <span><FormatAmount amount={Number(order.balanceDue)} /></span>
                 </div>
               </CardContent>
             </Card>
@@ -571,13 +570,13 @@ export const OrderDetail = memo(function OrderDetail({
                         {item.quantity}
                       </TableCell>
                       <TableCell className="text-right">
-                        <FormatAmount amount={Number(item.unitPrice)} cents={false} />
+                        <FormatAmount amount={Number(item.unitPrice)} />
                       </TableCell>
                       <TableCell className="text-right">
-                        <FormatAmount amount={Number(item.taxAmount)} cents={false} />
+                        <FormatAmount amount={Number(item.taxAmount)} />
                       </TableCell>
                       <TableCell className="text-right font-medium">
-                        <FormatAmount amount={Number(item.lineTotal)} cents={false} />
+                        <FormatAmount amount={Number(item.lineTotal)} />
                       </TableCell>
                     </TableRow>
                   ))}

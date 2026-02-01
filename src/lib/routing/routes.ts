@@ -44,7 +44,7 @@ import { PERMISSIONS, type PermissionAction } from '@/lib/auth/permissions'
 // TYPES
 // ============================================================================
 
-export type NavGroup = 'core' | 'operations' | 'support' | 'financial' | 'administration'
+export type NavGroup = 'daily' | 'sales' | 'delivery' | 'footer'
 
 export interface RouteMetadata {
   /** Display title for the route */
@@ -99,11 +99,16 @@ export function isPublicRoute(path: string): boolean {
 /**
  * Metadata for all application routes.
  * Used as single source of truth for navigation, breadcrumbs, and permissions.
+ *
+ * Navigation Groups:
+ * - daily: Dashboard, My Tasks, Schedule (always visible)
+ * - sales: Customers, Pipeline, Orders (sales workflow)
+ * - delivery: Projects, Installers (field operations)
+ * - footer: Inventory, Support, Settings (icon-only in footer)
  */
 export const ROUTE_METADATA: Record<string, RouteMetadata> = {
-  // Main navigation routes
   // ============================================================================
-  // CORE - Daily Use (Always Expanded)
+  // DAILY - Always visible, personal workspace
   // ============================================================================
   '/dashboard': {
     title: 'Dashboard',
@@ -111,52 +116,7 @@ export const ROUTE_METADATA: Record<string, RouteMetadata> = {
     description: 'Overview and key metrics',
     showInNav: true,
     navOrder: 1,
-    navGroup: 'core',
-  },
-  '/customers': {
-    title: 'Customers',
-    icon: Users,
-    description: 'Manage customer relationships',
-    requiredPermission: 'customer.read',
-    showInNav: true,
-    navOrder: 2,
-    navGroup: 'core',
-  },
-  '/pipeline': {
-    title: 'Pipeline',
-    icon: Kanban,
-    description: 'Sales pipeline and opportunities',
-    requiredPermission: 'quote.read',
-    showInNav: true,
-    navOrder: 3,
-    navGroup: 'core',
-  },
-  '/orders': {
-    title: 'Orders',
-    icon: ShoppingCart,
-    description: 'Order management',
-    requiredPermission: 'order.read',
-    showInNav: true,
-    navOrder: 4,
-    navGroup: 'core',
-  },
-  '/orders/fulfillment': {
-    title: 'Fulfillment',
-    icon: Truck,
-    description: 'Order picking, shipping, and delivery tracking',
-    requiredPermission: 'order.read',
-    showInNav: true,
-    navOrder: 4.5,
-    navGroup: 'operations',
-  },
-  '/projects': {
-    title: 'Projects',
-    icon: FolderKanban,
-    description: 'Project tracking and delivery',
-    requiredPermission: PERMISSIONS.job.read,
-    showInNav: true,
-    navOrder: 5,
-    navGroup: 'core',
+    navGroup: 'daily',
   },
   '/my-tasks': {
     title: 'My Tasks',
@@ -164,8 +124,8 @@ export const ROUTE_METADATA: Record<string, RouteMetadata> = {
     description: 'Your assigned tasks and visits',
     requiredPermission: PERMISSIONS.job.read,
     showInNav: true,
-    navOrder: 6,
-    navGroup: 'core',
+    navOrder: 2,
+    navGroup: 'daily',
   },
   '/schedule': {
     title: 'Schedule',
@@ -173,66 +133,52 @@ export const ROUTE_METADATA: Record<string, RouteMetadata> = {
     description: 'Cross-project site visit schedule',
     requiredPermission: PERMISSIONS.job.read,
     showInNav: true,
-    navOrder: 7,
-    navGroup: 'core',
+    navOrder: 3,
+    navGroup: 'daily',
   },
 
   // ============================================================================
-  // OPERATIONS - Product & Inventory Management
+  // SALES - Customer & revenue focused
   // ============================================================================
-  '/products': {
-    title: 'Products',
-    icon: Package,
-    description: 'Product catalog',
-    requiredPermission: 'product.read',
-    showInNav: true,
-    navOrder: 8,
-    navGroup: 'operations',
-  },
-  '/inventory': {
-    title: 'Inventory',
-    icon: Warehouse,
-    description: 'Stock and warehouse management',
-    requiredPermission: 'inventory.read',
-    showInNav: true,
-    navOrder: 9,
-    navGroup: 'operations',
-  },
-  '/jobs': {
-    title: 'Jobs',
-    icon: Wrench,
-    description: 'Legacy jobs entrypoint (redirects to projects)',
-    requiredPermission: 'job.read',
-    showInNav: false,
-    navOrder: 999,
-    navGroup: 'operations',
-  },
-  '/suppliers': {
-    title: 'Suppliers',
-    icon: Truck,
-    description: 'Supplier management and purchase orders',
-    requiredPermission: 'suppliers.read',
+  '/customers': {
+    title: 'Customers',
+    icon: Users,
+    description: 'Manage customer relationships',
+    requiredPermission: 'customer.read',
     showInNav: true,
     navOrder: 10,
-    navGroup: 'operations',
+    navGroup: 'sales',
   },
-  '/procurement': {
-    title: 'Procurement',
-    icon: FileText,
-    description: 'Purchase orders and procurement dashboard',
-    requiredPermission: PERMISSIONS.suppliers.read,
+  '/pipeline': {
+    title: 'Pipeline',
+    icon: Kanban,
+    description: 'Sales pipeline and opportunities',
+    requiredPermission: 'quote.read',
     showInNav: true,
     navOrder: 11,
-    navGroup: 'operations',
+    navGroup: 'sales',
   },
-  '/purchase-orders': {
-    title: 'Purchase Orders',
-    icon: Truck,
-    description: 'Manage purchase orders',
-    requiredPermission: PERMISSIONS.suppliers.read,
+  '/orders': {
+    title: 'Orders',
+    icon: ShoppingCart,
+    description: 'Order management and fulfillment',
+    requiredPermission: 'order.read',
     showInNav: true,
-    navOrder: 11.5,
-    navGroup: 'operations',
+    navOrder: 12,
+    navGroup: 'sales',
+  },
+
+  // ============================================================================
+  // DELIVERY - Field operations & project execution
+  // ============================================================================
+  '/projects': {
+    title: 'Projects',
+    icon: FolderKanban,
+    description: 'Project tracking and delivery',
+    requiredPermission: PERMISSIONS.job.read,
+    showInNav: true,
+    navOrder: 20,
+    navGroup: 'delivery',
   },
   '/installers': {
     title: 'Installers',
@@ -240,44 +186,30 @@ export const ROUTE_METADATA: Record<string, RouteMetadata> = {
     description: 'Manage installers and their assignments',
     requiredPermission: PERMISSIONS.job.read,
     showInNav: true,
-    navOrder: 12,
-    navGroup: 'operations',
+    navOrder: 21,
+    navGroup: 'delivery',
   },
 
   // ============================================================================
-  // SUPPORT - Customer Service
+  // FOOTER - Icon-only quick access
   // ============================================================================
+  '/inventory': {
+    title: 'Inventory',
+    icon: Warehouse,
+    description: 'Stock, products, and procurement',
+    requiredPermission: 'inventory.read',
+    showInNav: true,
+    navOrder: 30,
+    navGroup: 'footer',
+  },
   '/support': {
     title: 'Support',
     icon: Headphones,
-    description: 'Customer support, warranties, and claims',
+    description: 'Warranties, claims, and customer support',
     requiredPermission: 'support.read',
     showInNav: true,
-    navOrder: 13,
-    navGroup: 'support',
-  },
-  '/communications': {
-    title: 'Communications',
-    icon: Mail,
-    description: 'Email campaigns and communication logs',
-    requiredPermission: PERMISSIONS.support.read,
-    showInNav: true,
-    navOrder: 14,
-    navGroup: 'support',
-    badge: 'New',
-  },
-
-  // ============================================================================
-  // FINANCIAL - Money & Reporting
-  // ============================================================================
-  '/financial': {
-    title: 'Financial',
-    icon: DollarSign,
-    description: 'AR aging, revenue, and payment management',
-    requiredPermission: 'financial.read',
-    showInNav: true,
-    navOrder: 15,
-    navGroup: 'financial',
+    navOrder: 31,
+    navGroup: 'footer',
   },
   '/reports': {
     title: 'Reports',
@@ -289,39 +221,95 @@ export const ROUTE_METADATA: Record<string, RouteMetadata> = {
       PERMISSIONS.report.viewFinancial,
     ],
     showInNav: true,
-    navOrder: 16,
-    navGroup: 'financial',
+    navOrder: 32,
+    navGroup: 'footer',
   },
 
   // ============================================================================
-  // ADMINISTRATION - System Management
+  // HIDDEN FROM NAV - Accessible via search, settings, or direct link
   // ============================================================================
+  '/orders/fulfillment': {
+    title: 'Fulfillment',
+    icon: Truck,
+    description: 'Order picking, shipping, and delivery tracking',
+    requiredPermission: 'order.read',
+    showInNav: false, // Accessible from Orders page
+    parent: '/orders',
+  },
+  '/products': {
+    title: 'Products',
+    icon: Package,
+    description: 'Product catalog',
+    requiredPermission: 'product.read',
+    showInNav: false, // Accessible from Inventory
+    parent: '/inventory',
+  },
+  '/jobs': {
+    title: 'Jobs',
+    icon: Wrench,
+    description: 'Legacy jobs entrypoint (redirects to projects)',
+    requiredPermission: 'job.read',
+    showInNav: false,
+  },
+  '/suppliers': {
+    title: 'Suppliers',
+    icon: Truck,
+    description: 'Supplier management and purchase orders',
+    requiredPermission: 'suppliers.read',
+    showInNav: false, // Accessible from Inventory
+    parent: '/inventory',
+  },
+  '/procurement': {
+    title: 'Procurement',
+    icon: FileText,
+    description: 'Purchase orders and procurement dashboard',
+    requiredPermission: PERMISSIONS.suppliers.read,
+    showInNav: false, // Accessible from Inventory
+    parent: '/inventory',
+  },
+  '/purchase-orders': {
+    title: 'Purchase Orders',
+    icon: Truck,
+    description: 'Manage purchase orders',
+    requiredPermission: PERMISSIONS.suppliers.read,
+    showInNav: false, // Accessible from Inventory
+    parent: '/inventory',
+  },
+  '/communications': {
+    title: 'Communications',
+    icon: Mail,
+    description: 'Email campaigns and communication logs',
+    requiredPermission: PERMISSIONS.support.read,
+    showInNav: false, // Accessible from Support
+    parent: '/support',
+  },
+  '/financial': {
+    title: 'Financial',
+    icon: DollarSign,
+    description: 'AR aging, revenue, and payment management',
+    requiredPermission: 'financial.read',
+    showInNav: false, // Accessible from Reports or Settings
+  },
   '/activities': {
     title: 'Activities',
     icon: Activity,
     description: 'Activity feed and logs',
     requiredPermission: 'activity.read',
-    showInNav: true,
-    navOrder: 17,
-    navGroup: 'administration',
+    showInNav: false, // Admin function
   },
   '/approvals': {
     title: 'Approvals',
     icon: CheckSquare,
     description: 'Pending approvals and delegations',
     requiredPermission: PERMISSIONS.suppliers.approve,
-    showInNav: true,
-    navOrder: 18,
-    navGroup: 'administration',
+    showInNav: false, // Admin function
   },
   '/admin': {
     title: 'Admin',
     icon: Shield,
     description: 'User management, groups, and audit logs',
     requiredPermission: 'user.read',
-    showInNav: true,
-    navOrder: 19,
-    navGroup: 'administration',
+    showInNav: false, // Settings submenu
   },
 
   // User routes (not in main nav)
@@ -401,33 +389,27 @@ export interface NavGroupConfig {
 
 export const NAV_GROUPS: NavGroupConfig[] = [
   {
-    key: 'core',
-    title: 'Core',
-    description: 'Daily use features',
+    key: 'daily',
+    title: 'Daily',
+    description: 'Your personal workspace',
     defaultExpanded: true,
   },
   {
-    key: 'operations',
-    title: 'Operations',
-    description: 'Product & inventory management',
-    defaultExpanded: false,
+    key: 'sales',
+    title: 'Sales',
+    description: 'Customers, pipeline, and orders',
+    defaultExpanded: true,
   },
   {
-    key: 'support',
-    title: 'Support',
-    description: 'Customer service & communications',
-    defaultExpanded: false,
+    key: 'delivery',
+    title: 'Delivery',
+    description: 'Projects and field operations',
+    defaultExpanded: true,
   },
   {
-    key: 'financial',
-    title: 'Financial',
-    description: 'Money & reporting',
-    defaultExpanded: false,
-  },
-  {
-    key: 'administration',
-    title: 'Administration',
-    description: 'System management',
+    key: 'footer',
+    title: 'More',
+    description: 'Inventory, support, and reports',
     defaultExpanded: false,
   },
 ]
@@ -438,15 +420,14 @@ export const NAV_GROUPS: NavGroupConfig[] = [
 export function getNavRoutesByGroup(): Record<NavGroup, Array<{ path: string } & RouteMetadata>> {
   const routes = getNavRoutes()
   const grouped: Record<NavGroup, Array<{ path: string } & RouteMetadata>> = {
-    core: [],
-    operations: [],
-    support: [],
-    financial: [],
-    administration: [],
+    daily: [],
+    sales: [],
+    delivery: [],
+    footer: [],
   }
 
   for (const route of routes) {
-    const group = route.navGroup ?? 'core'
+    const group = route.navGroup ?? 'daily'
     grouped[group].push(route)
   }
 

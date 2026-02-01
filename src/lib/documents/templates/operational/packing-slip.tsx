@@ -1,276 +1,27 @@
 /**
- * Packing Slip PDF Template
+ * Packing Slip PDF Template - Accounting Style
  *
- * Generates compact packing slip documents for warehouse use.
- * Features QR/barcode for order lookup, checkbox list for items (no prices),
- * and space-efficient layout for printing.
+ * Practical, dense layout focused on warehouse efficiency.
+ * Clear item list with checkboxes for picking verification.
  */
 
 import { Document, Page, StyleSheet, View, Text } from "@react-pdf/renderer";
 import {
-  DocumentHeader,
-  AddressColumns,
   PageNumber,
   QRCode,
-  pageMargins,
-  colors,
-  spacing,
   fontSize,
-  formatDateForPdf,
+  spacing,
+  colors,
+  FONT_FAMILY,
+  FONT_WEIGHTS,
 } from "../../components";
-import { FONT_FAMILY, FONT_WEIGHTS } from "../../fonts";
 import { OrgDocumentProvider, useOrgDocument } from "../../context";
 import type { DocumentOrganization } from "../../types";
-
-// ============================================================================
-// STYLES
-// ============================================================================
-
-const styles = StyleSheet.create({
-  page: {
-    paddingTop: pageMargins.top - 10, // Slightly tighter margins for packing slip
-    paddingBottom: pageMargins.bottom - 10,
-    paddingLeft: pageMargins.left,
-    paddingRight: pageMargins.right,
-    backgroundColor: colors.background.white,
-  },
-  content: {
-    flex: 1,
-  },
-  // Order info bar (compact horizontal layout)
-  orderInfoBar: {
-    flexDirection: "row",
-    backgroundColor: colors.background.light,
-    padding: spacing.sm,
-    marginBottom: spacing.md,
-    borderRadius: 4,
-    gap: spacing.xl,
-  },
-  orderInfoItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  orderInfoLabel: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.secondary,
-  },
-  orderInfoValue: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: colors.text.primary,
-  },
-  // QR code section (prominent for scanning)
-  qrSection: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    alignItems: "center",
-    padding: spacing.sm,
-    backgroundColor: colors.background.white,
-    borderWidth: 1,
-    borderColor: colors.border.light,
-    borderRadius: 4,
-  },
-  qrLabel: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.secondary,
-    marginTop: spacing.xs,
-    textAlign: "center",
-  },
-  // Items table
-  tableContainer: {
-    marginTop: spacing.lg,
-  },
-  headerRow: {
-    flexDirection: "row",
-    borderBottomWidth: 2,
-    borderBottomColor: colors.border.dark,
-    paddingBottom: spacing.xs,
-    marginBottom: spacing.xs,
-    backgroundColor: colors.background.light,
-    padding: spacing.xs,
-  },
-  row: {
-    flexDirection: "row",
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.border.light,
-    alignItems: "flex-start",
-  },
-  rowAlternate: {
-    backgroundColor: colors.background.light,
-  },
-  // Column widths for packing slip (checkbox, qty, sku, description)
-  colCheck: {
-    width: 30,
-    textAlign: "center",
-  },
-  colQty: {
-    width: 50,
-    textAlign: "center",
-  },
-  colSku: {
-    width: 100,
-    paddingRight: spacing.xs,
-  },
-  colDescription: {
-    flex: 1,
-    paddingRight: spacing.md,
-  },
-  colLocation: {
-    width: 80,
-    textAlign: "center",
-  },
-  // Text styles
-  headerText: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: colors.text.primary,
-  },
-  cellText: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.regular,
-    color: colors.text.primary,
-  },
-  skuText: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.secondary,
-  },
-  notesText: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.regular,
-    color: colors.text.muted,
-    fontStyle: "italic",
-    marginTop: 2,
-  },
-  locationText: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.secondary,
-    textAlign: "center",
-  },
-  // Checkbox
-  checkbox: {
-    width: 14,
-    height: 14,
-    borderWidth: 1.5,
-    borderColor: colors.border.dark,
-    marginLeft: "auto",
-    marginRight: "auto",
-  },
-  // Summary section
-  summarySection: {
-    marginTop: spacing.xl,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  summaryBox: {
-    backgroundColor: colors.background.light,
-    padding: spacing.md,
-    minWidth: 180,
-    borderRadius: 4,
-  },
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: spacing.xs,
-  },
-  summaryLabel: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.secondary,
-  },
-  summaryValue: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: colors.text.primary,
-    marginLeft: spacing.md,
-  },
-  // Packed by section
-  packedBySection: {
-    marginTop: spacing.xl,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border.medium,
-    borderRadius: 4,
-  },
-  packedByTitle: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: colors.text.primary,
-    marginBottom: spacing.md,
-  },
-  packedByRow: {
-    flexDirection: "row",
-    gap: spacing.xl,
-  },
-  packedByField: {
-    flex: 1,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border.medium,
-    paddingBottom: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  packedByLabel: {
-    fontSize: fontSize.xs,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.medium,
-    color: colors.text.secondary,
-    marginBottom: spacing.xs,
-  },
-  packedByValue: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.regular,
-    color: colors.text.primary,
-    minHeight: 16,
-  },
-  // Special instructions
-  specialInstructions: {
-    marginTop: spacing.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.status.warning,
-    backgroundColor: "#FFFBEB",
-    borderRadius: 4,
-  },
-  specialInstructionsTitle: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.semibold,
-    color: colors.status.warning,
-    marginBottom: spacing.xs,
-  },
-  specialInstructionsText: {
-    fontSize: fontSize.sm,
-    fontFamily: FONT_FAMILY,
-    fontWeight: FONT_WEIGHTS.regular,
-    color: colors.text.primary,
-  },
-});
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-/**
- * Line item for packing slip (no pricing)
- */
 export interface PackingSlipLineItem {
   id: string;
   lineNumber?: string | null;
@@ -278,34 +29,22 @@ export interface PackingSlipLineItem {
   description: string;
   quantity: number;
   notes?: string | null;
-  /** Warehouse location/bin for picking */
   location?: string | null;
-  /** Whether item is fragile/special handling */
   isFragile?: boolean;
-  /** Weight in kg */
   weight?: number | null;
 }
 
-/**
- * Packing slip document data
- */
 export interface PackingSlipDocumentData {
-  /** Document number (e.g., PS-2024-001) */
   documentNumber: string;
-  /** Reference order number */
   orderNumber: string;
-  /** Issue date */
   issueDate: Date;
-  /** Expected ship date */
   shipDate?: Date | null;
-  /** Customer information */
   customer: {
     id: string;
     name: string;
     email?: string | null;
     phone?: string | null;
   };
-  /** Shipping address */
   shippingAddress?: {
     name?: string | null;
     addressLine1?: string | null;
@@ -317,313 +56,434 @@ export interface PackingSlipDocumentData {
     contactName?: string | null;
     contactPhone?: string | null;
   } | null;
-  /** Line items to pack */
   lineItems: PackingSlipLineItem[];
-  /** Shipping method */
-  shippingMethod?: string | null;
-  /** Carrier/shipping provider */
   carrier?: string | null;
-  /** Special packing instructions */
-  specialInstructions?: string | null;
-  /** General notes */
-  notes?: string | null;
-  /** Number of packages/boxes */
+  shippingMethod?: string | null;
   packageCount?: number | null;
-  /** Total weight */
   totalWeight?: number | null;
+  specialInstructions?: string | null;
+  notes?: string | null;
 }
 
 export interface PackingSlipPdfTemplateProps {
-  /** Packing slip document data */
   data: PackingSlipDocumentData;
-  /** QR code data URL for order lookup */
   qrCodeDataUrl?: string;
-  /** Show location/bin column */
-  showLocation?: boolean;
 }
 
 export interface PackingSlipPdfDocumentProps extends PackingSlipPdfTemplateProps {
-  /** Organization data for branding */
   organization: DocumentOrganization;
 }
 
 // ============================================================================
-// INTERNAL COMPONENTS
+// STYLES - Dense, Practical
 // ============================================================================
 
-function PackingItems({
-  lineItems,
-  showLocation = false,
-}: {
-  lineItems: PackingSlipLineItem[];
-  showLocation?: boolean;
-}) {
-  return (
-    <View style={styles.tableContainer}>
-      {/* Header Row */}
-      <View style={styles.headerRow}>
-        <View style={styles.colCheck}>
-          <Text style={[styles.headerText, { textAlign: "center" }]}>✓</Text>
-        </View>
-        <View style={styles.colQty}>
-          <Text style={[styles.headerText, { textAlign: "center" }]}>Qty</Text>
-        </View>
-        <View style={styles.colSku}>
-          <Text style={styles.headerText}>SKU</Text>
-        </View>
-        <View style={styles.colDescription}>
-          <Text style={styles.headerText}>Description</Text>
-        </View>
-        {showLocation && (
-          <View style={styles.colLocation}>
-            <Text style={[styles.headerText, { textAlign: "center" }]}>Location</Text>
-          </View>
-        )}
-      </View>
+const styles = StyleSheet.create({
+  page: {
+    paddingTop: 32,
+    paddingBottom: 32,
+    paddingLeft: 40,
+    paddingRight: 40,
+    backgroundColor: colors.background.white,
+  },
+  content: {
+    flex: 1,
+  },
 
-      {/* Data Rows */}
-      {lineItems.map((item, index) => (
-        <View
-          key={item.id}
-          wrap={false}
-          style={
-            index % 2 === 1
-              ? [styles.row, styles.rowAlternate]
-              : styles.row
-          }
-        >
-          <View style={styles.colCheck}>
-            <View style={styles.checkbox} />
-          </View>
-          <View style={styles.colQty}>
-            <Text style={[styles.cellText, { textAlign: "center", fontWeight: FONT_WEIGHTS.semibold }]}>
-              {item.quantity}
-            </Text>
-          </View>
-          <View style={styles.colSku}>
-            <Text style={styles.skuText}>{item.sku || "-"}</Text>
-          </View>
-          <View style={styles.colDescription}>
-            <Text style={styles.cellText}>{item.description}</Text>
-            {item.notes && <Text style={styles.notesText}>{item.notes}</Text>}
-            {item.isFragile && (
-              <Text style={[styles.notesText, { color: colors.status.warning }]}>
-                ⚠ FRAGILE - Handle with care
-              </Text>
-            )}
-            {item.weight && (
-              <Text style={styles.notesText}>Weight: {item.weight}kg</Text>
-            )}
-          </View>
-          {showLocation && (
-            <View style={styles.colLocation}>
-              <Text style={styles.locationText}>{item.location || "-"}</Text>
-            </View>
-          )}
-        </View>
-      ))}
-    </View>
-  );
-}
+  // Header
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: spacing.lg,
+  },
+  companySection: {
+    flex: 1,
+  },
+  companyName: {
+    fontSize: fontSize.lg,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  companyDetail: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.secondary,
+    lineHeight: 1.4,
+  },
+  slipInfo: {
+    alignItems: "flex-end",
+  },
+  slipTitle: {
+    fontSize: fontSize["2xl"],
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: colors.text.primary,
+    textTransform: "uppercase",
+    letterSpacing: 1,
+    marginBottom: spacing.sm,
+  },
+  infoRow: {
+    flexDirection: "row",
+    marginBottom: spacing.xs,
+  },
+  infoLabel: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.secondary,
+    width: 80,
+    textAlign: "right",
+    marginRight: spacing.sm,
+  },
+  infoValue: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.semibold,
+    color: colors.text.primary,
+    width: 120,
+  },
+
+  // Ship To
+  shipToSection: {
+    marginTop: spacing.md,
+    marginBottom: spacing.md,
+  },
+  shipToLabel: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: colors.text.muted,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: spacing.xs,
+  },
+  shipToName: {
+    fontSize: fontSize.md,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.semibold,
+    color: colors.text.primary,
+    marginBottom: spacing.xs,
+  },
+  shipToDetail: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.secondary,
+    lineHeight: 1.4,
+  },
+
+  // Shipping Details
+  shippingDetails: {
+    flexDirection: "row",
+    gap: spacing.xl,
+    marginBottom: spacing.md,
+    padding: spacing.sm,
+    backgroundColor: colors.background.subtle,
+    borderRadius: 4,
+  },
+  shippingItem: {
+    minWidth: 80,
+  },
+  shippingLabel: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.muted,
+    marginBottom: 2,
+  },
+  shippingValue: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.semibold,
+    color: colors.text.primary,
+  },
+
+  // Table - With checkboxes
+  table: {
+    marginTop: spacing.md,
+  },
+  tableHeader: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border.medium,
+    paddingBottom: spacing.xs,
+    marginBottom: spacing.xs,
+  },
+  tableHeaderCell: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: colors.text.secondary,
+    textTransform: "uppercase",
+  },
+  tableRow: {
+    flexDirection: "row",
+    paddingVertical: spacing.xs,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.border.light,
+    alignItems: "center",
+  },
+  checkbox: {
+    width: 14,
+    height: 14,
+    borderWidth: 1,
+    borderColor: colors.border.medium,
+    marginRight: spacing.sm,
+  },
+  tableCell: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.primary,
+  },
+  tableCellMuted: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.muted,
+  },
+  colCheckbox: { width: 30 },
+  colSku: { flex: 1.5 },
+  colDescription: { flex: 3 },
+  colQty: { width: 50, textAlign: "center" },
+  colLocation: { width: 80, textAlign: "center" },
+
+  // Summary
+  summarySection: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border.light,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: spacing.lg,
+  },
+  summaryItem: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  summaryLabel: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.medium,
+    color: colors.text.secondary,
+  },
+  summaryValue: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: colors.text.primary,
+  },
+
+  // Instructions
+  instructionsSection: {
+    marginTop: spacing.md,
+  },
+  instructionsLabel: {
+    fontSize: fontSize.xs,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.bold,
+    color: colors.text.muted,
+    textTransform: "uppercase",
+    marginBottom: spacing.xs,
+  },
+  instructionsText: {
+    fontSize: fontSize.sm,
+    fontFamily: FONT_FAMILY,
+    fontWeight: FONT_WEIGHTS.regular,
+    color: colors.text.secondary,
+    lineHeight: 1.4,
+  },
+
+  // QR Code
+  qrSection: {
+    position: "absolute",
+    top: 32,
+    right: 40,
+  },
+});
 
 // ============================================================================
-// INTERNAL COMPONENT (uses context)
+// COMPONENT
 // ============================================================================
 
-function PackingSlipContent({
-  data,
-  qrCodeDataUrl,
-  showLocation = false,
-}: PackingSlipPdfTemplateProps) {
+function PackingSlipContent({ data, qrCodeDataUrl }: PackingSlipPdfTemplateProps) {
   const { organization, locale } = useOrgDocument();
-
-  // Build "from" address from organization (Ship From)
-  const fromAddress = {
-    name: organization.name,
-    street1: organization.address?.addressLine1,
-    street2: organization.address?.addressLine2,
-    city: organization.address?.city,
-    state: organization.address?.state,
-    postalCode: organization.address?.postalCode,
-    country: organization.address?.country,
-    phone: organization.phone,
-  };
-
-  // Build "to" address from shipping address (Ship To)
-  const toAddress = {
-    name: data.shippingAddress?.name || data.customer.name,
-    street1: data.shippingAddress?.addressLine1,
-    street2: data.shippingAddress?.addressLine2,
-    city: data.shippingAddress?.city,
-    state: data.shippingAddress?.state,
-    postalCode: data.shippingAddress?.postalCode,
-    country: data.shippingAddress?.country,
-    phone: data.shippingAddress?.contactPhone || data.customer.phone,
-  };
-
-  // Calculate totals
-  const totalItems = data.lineItems.reduce((sum, item) => sum + item.quantity, 0);
-  const totalLines = data.lineItems.length;
-  const hasLocations = data.lineItems.some((item) => item.location);
 
   return (
     <Page size="A4" style={styles.page}>
       <View style={styles.content}>
-        {/* Header with logo and document info - compact for packing slip */}
-        <View style={{ position: "relative" }}>
-          <DocumentHeader
-            title="PACKING SLIP"
-            documentNumber={data.documentNumber}
-            date={data.issueDate}
-            labels={{
-              documentNumber: "Slip #:",
-              date: "Date:",
-            }}
-          />
-
-          {/* QR Code for scanning (prominent position) */}
-          {qrCodeDataUrl && (
-            <View style={styles.qrSection}>
-              <QRCode dataUrl={qrCodeDataUrl} size={70} />
-              <Text style={styles.qrLabel}>Scan for Order Details</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Order info bar */}
-        <View style={styles.orderInfoBar}>
-          <View style={styles.orderInfoItem}>
-            <Text style={styles.orderInfoLabel}>Order #:</Text>
-            <Text style={styles.orderInfoValue}>{data.orderNumber}</Text>
-          </View>
-          {data.shipDate && (
-            <View style={styles.orderInfoItem}>
-              <Text style={styles.orderInfoLabel}>Ship Date:</Text>
-              <Text style={styles.orderInfoValue}>
-                {formatDateForPdf(data.shipDate, locale)}
-              </Text>
-            </View>
-          )}
-          {data.shippingMethod && (
-            <View style={styles.orderInfoItem}>
-              <Text style={styles.orderInfoLabel}>Method:</Text>
-              <Text style={styles.orderInfoValue}>{data.shippingMethod}</Text>
-            </View>
-          )}
-          {data.carrier && (
-            <View style={styles.orderInfoItem}>
-              <Text style={styles.orderInfoLabel}>Carrier:</Text>
-              <Text style={styles.orderInfoValue}>{data.carrier}</Text>
-            </View>
-          )}
-        </View>
-
-        {/* From/To addresses */}
-        <AddressColumns
-          from={fromAddress}
-          to={toAddress}
-          labels={{ from: "Ship From", to: "Ship To" }}
-        />
-
-        {/* Special Instructions */}
-        {data.specialInstructions && (
-          <View style={styles.specialInstructions}>
-            <Text style={styles.specialInstructionsTitle}>
-              SPECIAL PACKING INSTRUCTIONS
-            </Text>
-            <Text style={styles.specialInstructionsText}>
-              {data.specialInstructions}
-            </Text>
+        {/* QR Code */}
+        {qrCodeDataUrl && (
+          <View style={styles.qrSection}>
+            <QRCode dataUrl={qrCodeDataUrl} size={80} />
           </View>
         )}
 
-        {/* Items Table with checkboxes */}
-        <PackingItems
-          lineItems={data.lineItems}
-          showLocation={showLocation || hasLocations}
-        />
+        {/* Header */}
+        <View style={styles.headerRow}>
+          <View style={styles.companySection}>
+            <Text style={styles.companyName}>{organization.name}</Text>
+            {organization.address && (
+              <>
+                <Text style={styles.companyDetail}>
+                  {organization.address.addressLine1}
+                  {organization.address.addressLine2 ? `, ${organization.address.addressLine2}` : ""}
+                </Text>
+                <Text style={styles.companyDetail}>
+                  {organization.address.city}, {organization.address.state} {organization.address.postalCode}
+                </Text>
+              </>
+            )}
+          </View>
 
-        {/* Summary and Packed By section */}
+          <View style={styles.slipInfo}>
+            <Text style={styles.slipTitle}>Packing Slip</Text>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Slip #</Text>
+              <Text style={styles.infoValue}>{data.documentNumber}</Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Order #</Text>
+              <Text style={styles.infoValue}>{data.orderNumber}</Text>
+            </View>
+            
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Date</Text>
+              <Text style={styles.infoValue}>
+                {new Intl.DateTimeFormat(locale, { year: "numeric", month: "short", day: "numeric" }).format(data.issueDate)}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Ship To */}
+        <View style={styles.shipToSection}>
+          <Text style={styles.shipToLabel}>Ship To</Text>
+          <Text style={styles.shipToName}>{data.customer.name}</Text>
+          {data.shippingAddress && (
+            <>
+              {data.shippingAddress.contactName && (
+                <Text style={styles.shipToDetail}>Attn: {data.shippingAddress.contactName}</Text>
+              )}
+              <Text style={styles.shipToDetail}>
+                {data.shippingAddress.addressLine1}
+                {data.shippingAddress.addressLine2 ? `, ${data.shippingAddress.addressLine2}` : ""}
+              </Text>
+              <Text style={styles.shipToDetail}>
+                {data.shippingAddress.city}, {data.shippingAddress.state} {data.shippingAddress.postalCode}
+              </Text>
+              {data.shippingAddress.contactPhone && (
+                <Text style={styles.shipToDetail}>{data.shippingAddress.contactPhone}</Text>
+              )}
+            </>
+          )}
+        </View>
+
+        {/* Shipping Details */}
+        <View style={styles.shippingDetails}>
+          {data.carrier && (
+            <View style={styles.shippingItem}>
+              <Text style={styles.shippingLabel}>Carrier</Text>
+              <Text style={styles.shippingValue}>{data.carrier}</Text>
+            </View>
+          )}
+          {data.shippingMethod && (
+            <View style={styles.shippingItem}>
+              <Text style={styles.shippingLabel}>Method</Text>
+              <Text style={styles.shippingValue}>{data.shippingMethod}</Text>
+            </View>
+          )}
+          {data.shipDate && (
+            <View style={styles.shippingItem}>
+              <Text style={styles.shippingLabel}>Ship Date</Text>
+              <Text style={styles.shippingValue}>
+                {new Intl.DateTimeFormat(locale, { year: "numeric", month: "short", day: "numeric" }).format(data.shipDate)}
+              </Text>
+            </View>
+          )}
+          {data.packageCount && (
+            <View style={styles.shippingItem}>
+              <Text style={styles.shippingLabel}>Packages</Text>
+              <Text style={styles.shippingValue}>{data.packageCount}</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Line Items */}
+        <View style={styles.table}>
+          <View style={styles.tableHeader}>
+            <View style={styles.colCheckbox} />
+            <Text style={[styles.tableHeaderCell, styles.colSku]}>SKU</Text>
+            <Text style={[styles.tableHeaderCell, styles.colDescription]}>Description</Text>
+            <Text style={[styles.tableHeaderCell, styles.colQty]}>Qty</Text>
+            <Text style={[styles.tableHeaderCell, styles.colLocation]}>Location</Text>
+          </View>
+
+          {data.lineItems.map((item) => (
+            <View key={item.id} style={styles.tableRow} wrap={true}>
+              <View style={styles.colCheckbox}>
+                <View style={styles.checkbox} />
+              </View>
+              <Text style={[styles.tableCell, styles.colSku]}>{item.sku || "-"}</Text>
+              <View style={styles.colDescription}>
+                <Text style={styles.tableCell}>{item.description}</Text>
+                {item.notes && <Text style={styles.tableCellMuted}>{item.notes}</Text>}
+              </View>
+              <Text style={[styles.tableCell, styles.colQty]}>{item.quantity}</Text>
+              <Text style={[styles.tableCell, styles.colLocation]}>{item.location || "-"}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Summary */}
         <View style={styles.summarySection}>
-          {/* Summary box */}
-          <View style={styles.summaryBox}>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Total Lines:</Text>
-              <Text style={styles.summaryValue}>{totalLines}</Text>
-            </View>
-            <View style={styles.summaryRow}>
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryItem}>
               <Text style={styles.summaryLabel}>Total Items:</Text>
-              <Text style={styles.summaryValue}>{totalItems}</Text>
+              <Text style={styles.summaryValue}>
+                {data.lineItems.reduce((sum, item) => sum + item.quantity, 0)}
+              </Text>
             </View>
-            {data.packageCount && (
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Packages:</Text>
-                <Text style={styles.summaryValue}>{data.packageCount}</Text>
-              </View>
-            )}
             {data.totalWeight && (
-              <View style={styles.summaryRow}>
+              <View style={styles.summaryItem}>
                 <Text style={styles.summaryLabel}>Total Weight:</Text>
-                <Text style={styles.summaryValue}>{data.totalWeight}kg</Text>
+                <Text style={styles.summaryValue}>{data.totalWeight} kg</Text>
               </View>
             )}
           </View>
         </View>
 
-        {/* Packed By section */}
-        <View style={styles.packedBySection}>
-          <Text style={styles.packedByTitle}>Verification</Text>
-          <View style={styles.packedByRow}>
-            <View style={styles.packedByField}>
-              <Text style={styles.packedByLabel}>Packed By:</Text>
-              <Text style={styles.packedByValue}> </Text>
-            </View>
-            <View style={styles.packedByField}>
-              <Text style={styles.packedByLabel}>Date/Time:</Text>
-              <Text style={styles.packedByValue}> </Text>
-            </View>
-            <View style={styles.packedByField}>
-              <Text style={styles.packedByLabel}>Verified By:</Text>
-              <Text style={styles.packedByValue}> </Text>
-            </View>
+        {/* Instructions */}
+        {data.specialInstructions && (
+          <View style={styles.instructionsSection}>
+            <Text style={styles.instructionsLabel}>Special Instructions</Text>
+            <Text style={styles.instructionsText}>{data.specialInstructions}</Text>
           </View>
-        </View>
+        )}
       </View>
 
-      {/* Page numbers */}
-      <PageNumber />
+      <PageNumber documentNumber={data.documentNumber} />
     </Page>
   );
 }
 
 // ============================================================================
-// EXPORTED COMPONENTS
+// EXPORTED
 // ============================================================================
 
-/**
- * Packing Slip PDF Document
- *
- * Renders a compact packing slip for warehouse use with:
- * - QR code for quick order lookup
- * - Checkbox list for item verification
- * - No pricing information
- * - Packed by/verified by section
- *
- * @example
- * const qrCode = await generateQRCode(`https://app.example.com/orders/${orderId}`);
- * const { buffer } = await renderPdfToBuffer(
- *   <PackingSlipPdfDocument
- *     organization={org}
- *     data={packingSlipData}
- *     qrCodeDataUrl={qrCode}
- *   />
- * );
- */
 export function PackingSlipPdfDocument({
   organization,
   data,
   qrCodeDataUrl,
-  showLocation = false,
 }: PackingSlipPdfDocumentProps) {
   return (
     <OrgDocumentProvider organization={organization}>
@@ -631,31 +491,17 @@ export function PackingSlipPdfDocument({
         title={`Packing Slip ${data.documentNumber}`}
         author={organization.name}
         subject={`Packing Slip for Order ${data.orderNumber}`}
-        creator="Renoz CRM"
+        creator="Renoz"
       >
-        <PackingSlipContent
-          data={data}
-          qrCodeDataUrl={qrCodeDataUrl}
-          showLocation={showLocation}
-        />
+        <PackingSlipContent data={data} qrCodeDataUrl={qrCodeDataUrl} />
       </Document>
     </OrgDocumentProvider>
   );
 }
 
-/**
- * Packing Slip PDF Template (for use within existing Document/Provider)
- */
 export function PackingSlipPdfTemplate({
   data,
   qrCodeDataUrl,
-  showLocation = false,
 }: PackingSlipPdfTemplateProps) {
-  return (
-    <PackingSlipContent
-      data={data}
-      qrCodeDataUrl={qrCodeDataUrl}
-      showLocation={showLocation}
-    />
-  );
+  return <PackingSlipContent data={data} qrCodeDataUrl={qrCodeDataUrl} />;
 }

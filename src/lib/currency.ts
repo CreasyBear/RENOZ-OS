@@ -65,29 +65,99 @@ type FormatAmountParams = {
   currency: string;
   amount: number;
   locale?: string | null;
+  numberFormat?: string | null; // Organization numberFormat: "1,234.56" | "1.234,56" | "1 234,56"
   maximumFractionDigits?: number;
   minimumFractionDigits?: number;
+  notation?: 'standard' | 'compact';
+  signDisplay?: Intl.NumberFormatOptions['signDisplay'];
 };
+
+/**
+ * Apply organization numberFormat to a formatted currency string
+ */
+function applyNumberFormat(
+  formatted: string,
+  numberFormat: string,
+  hasDecimal: boolean
+): string {
+  // Extract the currency symbol and numeric part
+  const symbolMatch = formatted.match(/^([^\d\s,.-]+)/) || formatted.match(/([^\d\s,.-]+)$/);
+  const symbol = symbolMatch ? symbolMatch[1] : "";
+  const numericPart = formatted.replace(/[^\d,.-]/g, "");
+
+  // Parse numberFormat pattern
+  let thousandsSep: string;
+  let decimalSep: string;
+
+  if (numberFormat === "1.234,56") {
+    thousandsSep = ".";
+    decimalSep = ",";
+  } else if (numberFormat === "1 234,56") {
+    thousandsSep = " ";
+    decimalSep = ",";
+  } else {
+    // Default: "1,234.56"
+    thousandsSep = ",";
+    decimalSep = ".";
+  }
+
+  // Split into integer and decimal parts using last separator
+  const lastComma = numericPart.lastIndexOf(",");
+  const lastDot = numericPart.lastIndexOf(".");
+  const decimalIndex = Math.max(lastComma, lastDot);
+  const integerRaw = decimalIndex >= 0 ? numericPart.slice(0, decimalIndex) : numericPart;
+  const decimalRaw = decimalIndex >= 0 ? numericPart.slice(decimalIndex + 1) : "";
+  const integerPart = integerRaw.replace(/[.,\s]/g, "");
+  const decimalPart = decimalRaw;
+
+  // Apply thousands separator
+  const formattedInteger = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, thousandsSep);
+
+  // Reconstruct with proper separators
+  const formattedNumeric =
+    hasDecimal && decimalPart
+      ? `${formattedInteger}${decimalSep}${decimalPart.padEnd(2, "0").slice(0, 2)}`
+      : formattedInteger;
+
+  // Reconstruct with currency symbol
+  if (formatted.startsWith(symbol)) {
+    return `${symbol}${formattedNumeric}`;
+  } else {
+    return `${formattedNumeric}${symbol}`;
+  }
+}
 
 /**
  * Format currency amounts with proper error handling and fallbacks
  * Based on Midday's gold standard approach
+ * Always shows cents (2 decimal places) unless explicitly overridden
  */
 export function formatAmount({
   currency,
   amount,
   locale = 'en-AU',
-  minimumFractionDigits,
-  maximumFractionDigits,
+  numberFormat,
+  minimumFractionDigits = 2, // Always show cents by default
+  maximumFractionDigits = 2,
+  notation = 'standard',
+  signDisplay = 'auto',
 }: FormatAmountParams): string {
   if (!currency) {
     // Fallback to AUD formatting
-    return Intl.NumberFormat('en-AU', {
+    const formatted = Intl.NumberFormat('en-AU', {
       style: 'currency',
       currency: 'AUD',
       minimumFractionDigits,
       maximumFractionDigits,
+      notation,
+      signDisplay,
     }).format(amount);
+
+    // Apply numberFormat if provided
+    if (numberFormat && minimumFractionDigits > 0 && notation === 'standard') {
+      return applyNumberFormat(formatted, numberFormat, true);
+    }
+    return formatted;
   }
 
   // Normalize currency code to ISO 4217 format
@@ -99,24 +169,39 @@ export function formatAmount({
   const safeLocale = currencyInfo?.locale ?? locale ?? 'en-AU';
 
   try {
-    return Intl.NumberFormat(safeLocale, {
+    const formatted = Intl.NumberFormat(safeLocale, {
       style: 'currency',
       currency: normalizedCurrency,
       minimumFractionDigits,
       maximumFractionDigits,
+      notation,
+      signDisplay,
     }).format(amount);
+
+    // Apply organization numberFormat if provided
+    if (numberFormat && minimumFractionDigits > 0 && notation === 'standard') {
+      return applyNumberFormat(formatted, numberFormat, true);
+    }
+    return formatted;
   } catch (error) {
     // Fallback to AUD if currency is invalid
     console.warn(
       `Invalid currency code: ${currency} (normalized to ${normalizedCurrency}), falling back to AUD`,
       error
     );
-    return Intl.NumberFormat('en-AU', {
+    const formatted = Intl.NumberFormat('en-AU', {
       style: 'currency',
       currency: 'AUD',
       minimumFractionDigits,
       maximumFractionDigits,
+      notation,
+      signDisplay,
     }).format(amount);
+
+    if (numberFormat && minimumFractionDigits > 0 && notation === 'standard') {
+      return applyNumberFormat(formatted, numberFormat, true);
+    }
+    return formatted;
   }
 }
 

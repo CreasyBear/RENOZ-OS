@@ -25,6 +25,26 @@ import {
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError } from '@/lib/server/errors';
 import { PERMISSIONS } from '@/lib/auth/permissions';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { computeChanges } from '@/lib/activity-logger';
+
+// ============================================================================
+// ACTIVITY LOGGING HELPERS
+// ============================================================================
+
+/**
+ * Fields to exclude from activity change tracking (system-managed)
+ */
+const TASK_EXCLUDED_FIELDS: string[] = [
+  'updatedAt',
+  'updatedBy',
+  'createdAt',
+  'createdBy',
+  'deletedAt',
+  'version',
+  'organizationId',
+  'position',
+];
 
 // ============================================================================
 // HELPERS
@@ -32,11 +52,11 @@ import { PERMISSIONS } from '@/lib/auth/permissions';
 
 /**
  * Verify job belongs to the user's organization.
- * Returns the job if found, throws NotFoundError otherwise.
+ * Returns the job with customerId if found, throws NotFoundError otherwise.
  */
 async function verifyJobAccess(jobId: string, organizationId: string) {
   const [job] = await db
-    .select({ id: jobAssignments.id })
+    .select({ id: jobAssignments.id, customerId: jobAssignments.customerId })
     .from(jobAssignments)
     .where(and(eq(jobAssignments.id, jobId), eq(jobAssignments.organizationId, organizationId)))
     .limit(1);
@@ -46,24 +66,6 @@ async function verifyJobAccess(jobId: string, organizationId: string) {
   }
 
   return job;
-}
-
-/**
- * Verify task belongs to the user's organization.
- * Returns the task if found, throws NotFoundError otherwise.
- */
-async function verifyTaskAccess(taskId: string, organizationId: string) {
-  const [task] = await db
-    .select({ id: jobTasks.id, jobId: jobTasks.jobId })
-    .from(jobTasks)
-    .where(and(eq(jobTasks.id, taskId), eq(jobTasks.organizationId, organizationId)))
-    .limit(1);
-
-  if (!task) {
-    throw new NotFoundError('Task not found');
-  }
-
-  return task;
 }
 
 /**
@@ -163,9 +165,10 @@ export const createTask = createServerFn({ method: 'POST' })
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.create ?? 'customer.create',
     });
+    const logger = createActivityLoggerWithContext(ctx);
 
-    // Verify job access
-    await verifyJobAccess(data.jobId, ctx.organizationId);
+    // Verify job access and get customerId for activity logging
+    const job = await verifyJobAccess(data.jobId, ctx.organizationId);
 
     // Get next position
     const position = await getNextPosition(data.jobId);
@@ -189,6 +192,28 @@ export const createTask = createServerFn({ method: 'POST' })
       })
       .returning();
 
+    // Log task creation
+    logger.logAsync({
+      entityType: 'task',
+      entityId: task.id,
+      action: 'created',
+      description: `Created task: ${task.title}`,
+      changes: computeChanges({
+        before: null,
+        after: task,
+        excludeFields: TASK_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        customerId: job.customerId ?? undefined,
+        taskId: task.id,
+        taskTitle: task.title,
+        jobAssignmentId: task.jobId,
+        status: task.status,
+        priority: task.priority ?? undefined,
+        assignedTo: task.assigneeId ?? undefined,
+      },
+    });
+
     return { task };
   });
 
@@ -205,9 +230,23 @@ export const updateTask = createServerFn({ method: 'POST' })
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.update ?? 'customer.update',
     });
+    const logger = createActivityLoggerWithContext(ctx);
 
-    // Verify task access
-    await verifyTaskAccess(data.taskId, ctx.organizationId);
+    // Get existing task for change tracking
+    const [existingTask] = await db
+      .select()
+      .from(jobTasks)
+      .where(and(eq(jobTasks.id, data.taskId), eq(jobTasks.organizationId, ctx.organizationId)))
+      .limit(1);
+
+    if (!existingTask) {
+      throw new NotFoundError('Task not found');
+    }
+
+    const before = existingTask;
+
+    // Get customerId from job for activity logging
+    const job = await verifyJobAccess(existingTask.jobId, ctx.organizationId);
 
     // Build update values (only include provided fields)
     const updateValues: Record<string, unknown> = {
@@ -228,6 +267,37 @@ export const updateTask = createServerFn({ method: 'POST' })
       .where(and(eq(jobTasks.id, data.taskId), eq(jobTasks.organizationId, ctx.organizationId)))
       .returning();
 
+    // Log task update
+    const changes = computeChanges({
+      before,
+      after: task,
+      excludeFields: TASK_EXCLUDED_FIELDS as never[],
+    });
+
+    if (changes.fields && changes.fields.length > 0) {
+      logger.logAsync({
+        entityType: 'task',
+        entityId: task.id,
+        action: 'updated',
+        description: `Updated task: ${task.title}`,
+        changes,
+        metadata: {
+          customerId: job.customerId ?? undefined,
+          taskId: task.id,
+          taskTitle: task.title,
+          jobAssignmentId: task.jobId,
+          changedFields: changes.fields,
+          ...(before.status !== task.status && {
+            previousStatus: before.status,
+            newStatus: task.status,
+          }),
+          ...(before.assigneeId !== task.assigneeId && {
+            assignedTo: task.assigneeId ?? undefined,
+          }),
+        },
+      });
+    }
+
     return { task };
   });
 
@@ -244,14 +314,46 @@ export const deleteTask = createServerFn({ method: 'POST' })
     const ctx = await withAuth({
       permission: PERMISSIONS.job?.delete ?? 'customer.delete',
     });
+    const logger = createActivityLoggerWithContext(ctx);
 
-    // Verify task access
-    await verifyTaskAccess(data.taskId, ctx.organizationId);
+    // Get existing task for activity logging
+    const [existingTask] = await db
+      .select()
+      .from(jobTasks)
+      .where(and(eq(jobTasks.id, data.taskId), eq(jobTasks.organizationId, ctx.organizationId)))
+      .limit(1);
+
+    if (!existingTask) {
+      throw new NotFoundError('Task not found');
+    }
+
+    // Get customerId from job for activity logging
+    const job = await verifyJobAccess(existingTask.jobId, ctx.organizationId);
 
     // Delete task
     await db
       .delete(jobTasks)
       .where(and(eq(jobTasks.id, data.taskId), eq(jobTasks.organizationId, ctx.organizationId)));
+
+    // Log task deletion
+    logger.logAsync({
+      entityType: 'task',
+      entityId: existingTask.id,
+      action: 'deleted',
+      description: `Deleted task: ${existingTask.title}`,
+      changes: computeChanges({
+        before: existingTask,
+        after: null,
+        excludeFields: TASK_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        customerId: job.customerId ?? undefined,
+        taskId: existingTask.id,
+        taskTitle: existingTask.title,
+        jobAssignmentId: existingTask.jobId,
+        status: existingTask.status,
+      },
+    });
 
     return { success: true };
   });

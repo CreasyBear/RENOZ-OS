@@ -104,7 +104,8 @@ export interface ProjectMetadata {
     batteryCapacityKwh?: number;
     inverterCapacityKw?: number;
   };
-  [key: string]: unknown;
+  /** Additional custom fields - use explicit types, not unknown */
+  customFields?: Record<string, string | number | boolean | null>;
 }
 
 // ============================================================================

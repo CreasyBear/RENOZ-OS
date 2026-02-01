@@ -65,6 +65,7 @@ import {
   Area,
 } from 'recharts';
 import { cn } from '@/lib/utils';
+import { useOrgFormat } from '@/hooks/use-org-format';
 
 // ============================================================================
 // TYPES
@@ -221,6 +222,7 @@ export const ProcurementReports = memo(function ProcurementReports({
   const [exportDialog, setExportDialog] = useState(false);
   const [customReportName, setCustomReportName] = useState('');
   const [customReportDescription, setCustomReportDescription] = useState('');
+  const { formatCurrency } = useOrgFormat();
 
   // Handle export
   const handleExport = useCallback((format: 'pdf' | 'excel' | 'csv') => {
@@ -241,13 +243,10 @@ export const ProcurementReports = memo(function ProcurementReports({
     setCustomReportDescription('');
   }, [customReportName, customReportDescription, onCreateCustomReport, selectedReportType]);
 
-  // Format currency
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: 'AUD',
-    }).format(amount);
-  };
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
+  const formatCurrencyCompact = (amount: number) =>
+    formatCurrency(amount, { cents: false, compact: true, showCents: false });
 
   // Handle error state
   if (error) {
@@ -319,7 +318,7 @@ export const ProcurementReports = memo(function ProcurementReports({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {formatCurrency(
+              {formatCurrencyDisplay(
                 analytics.spendAnalysis.bySupplier.reduce((sum, s) => sum + s.totalSpend, 0)
               )}
             </div>
@@ -336,7 +335,7 @@ export const ProcurementReports = memo(function ProcurementReports({
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-green-600">
-              {formatCurrency(analytics.costSavings.totalSavings)}
+              {formatCurrencyDisplay(analytics.costSavings.totalSavings)}
             </div>
             <p className="text-muted-foreground text-xs">
               {analytics.efficiencyMetrics.costSavingsRate.toFixed(1)}% of spend
@@ -400,8 +399,10 @@ export const ProcurementReports = memo(function ProcurementReports({
                   <AreaChart data={analytics.spendAnalysis.trends}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="date" />
-                    <YAxis tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(value: number) => [formatCurrency(value), 'Spend']} />
+                    <YAxis tickFormatter={(value) => formatCurrencyCompact(value)} />
+                    <Tooltip
+                      formatter={(value: number) => [formatCurrencyDisplay(value), 'Spend']}
+                    />
                     <Area
                       type="monotone"
                       dataKey="spend"
@@ -438,7 +439,7 @@ export const ProcurementReports = memo(function ProcurementReports({
                         />
                       ))}
                     </Pie>
-                    <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                    <Tooltip formatter={(value: number) => formatCurrencyDisplay(value)} />
                   </PieChart>
                 </ResponsiveContainer>
               </CardContent>
@@ -507,7 +508,7 @@ export const ProcurementReports = memo(function ProcurementReports({
                       </TableCell>
                       <TableCell className="text-center">{supplier.totalOrders}</TableCell>
                       <TableCell className="text-right">
-                        {formatCurrency(supplier.totalSpend)}
+                        {formatCurrencyDisplay(supplier.totalSpend)}
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-2">
@@ -535,7 +536,7 @@ export const ProcurementReports = memo(function ProcurementReports({
                         </span>
                       </TableCell>
                       <TableCell className="text-right text-green-600">
-                        {formatCurrency(supplier.costSavings)}
+                        {formatCurrencyDisplay(supplier.costSavings)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -557,8 +558,8 @@ export const ProcurementReports = memo(function ProcurementReports({
                   <BarChart data={analytics.spendAnalysis.bySupplier}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="supplierName" angle={-45} textAnchor="end" height={80} />
-                    <YAxis tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                    <YAxis tickFormatter={(value) => formatCurrencyCompact(value)} />
+                    <Tooltip formatter={(value: number) => formatCurrencyDisplay(value)} />
                     <Bar dataKey="totalSpend" fill="#3b82f6" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -594,7 +595,7 @@ export const ProcurementReports = memo(function ProcurementReports({
                       </div>
                       <Progress value={category.percentage} className="h-2" />
                       <div className="text-muted-foreground text-xs">
-                        {formatCurrency(category.totalSpend)}
+                        {formatCurrencyDisplay(category.totalSpend)}
                       </div>
                     </div>
                   ))}
@@ -741,8 +742,10 @@ export const ProcurementReports = memo(function ProcurementReports({
                   <AreaChart data={analytics.costSavings.monthlySavings}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" />
-                    <YAxis tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
-                    <Tooltip formatter={(value: number) => [formatCurrency(value), 'Savings']} />
+                    <YAxis tickFormatter={(value) => formatCurrencyCompact(value)} />
+                    <Tooltip
+                      formatter={(value: number) => [formatCurrencyDisplay(value), 'Savings']}
+                    />
                     <Area
                       type="monotone"
                       dataKey="total"

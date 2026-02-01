@@ -11,9 +11,14 @@ import { useMemo } from 'react';
 import { Plus, Download, Upload, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { DomainFilterBar } from '@/components/shared/filters';
 import { PricingTable } from './pricing-table';
-import { PricingFilters } from './pricing-filters';
-import type { PriceListFilters, PriceListRow } from '@/lib/schemas/pricing';
+import {
+  createPricingFilterConfig,
+  DEFAULT_PRICING_FILTERS,
+  type PricingFiltersState,
+} from './pricing-filter-config';
+import type { PriceListRow } from '@/lib/schemas/pricing';
 
 // ============================================================================
 // TYPES
@@ -31,12 +36,18 @@ interface PaginationInfo {
   totalPages: number;
 }
 
+interface Product {
+  id: string;
+  name: string;
+}
+
 interface PricingManagementProps {
   items: PriceListRow[];
   pagination: PaginationInfo;
-  filters: PriceListFilters;
-  onFiltersChange: (filters: Partial<PriceListFilters>) => void;
+  filters: PricingFiltersState;
+  onFiltersChange: (filters: PricingFiltersState) => void;
   suppliers?: Supplier[];
+  products?: Product[];
   isLoading?: boolean;
   onAddPrice?: () => void;
   onEditPrice?: (id: string) => void;
@@ -44,6 +55,7 @@ interface PricingManagementProps {
   onSetPreferred?: (id: string, preferred: boolean) => void;
   onImport?: () => void;
   onExport?: () => void;
+  onPageChange?: (page: number) => void;
 }
 
 // ============================================================================
@@ -109,6 +121,7 @@ function PricingManagement({
   filters,
   onFiltersChange,
   suppliers = [],
+  products = [],
   isLoading = false,
   onAddPrice,
   onEditPrice,
@@ -116,10 +129,17 @@ function PricingManagement({
   onSetPreferred,
   onImport,
   onExport,
+  onPageChange,
 }: PricingManagementProps) {
   const handlePageChange = (page: number) => {
-    onFiltersChange({ page });
+    onPageChange?.(page);
   };
+
+  // Build dynamic filter config with supplier/product options
+  const filterConfig = useMemo(
+    () => createPricingFilterConfig(suppliers, products),
+    [suppliers, products]
+  );
 
   // Calculate summary stats
   const stats = useMemo(() => {
@@ -190,7 +210,12 @@ function PricingManagement({
       </div>
 
       {/* Filters */}
-      <PricingFilters filters={filters} onFiltersChange={onFiltersChange} suppliers={suppliers} />
+      <DomainFilterBar
+        config={filterConfig}
+        filters={filters}
+        onFiltersChange={onFiltersChange}
+        defaultFilters={DEFAULT_PRICING_FILTERS}
+      />
 
       {/* Table */}
       <PricingTable

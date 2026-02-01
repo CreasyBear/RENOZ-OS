@@ -8,6 +8,7 @@
  *
  * Features:
  * - Authentication check with redirect to login
+ * - Organization settings provider for global settings access
  * - Global QuickLogDialog with Cmd+L keyboard shortcut
  *
  * @example
@@ -25,6 +26,8 @@ import {
   QuickLogDialog,
   useQuickLogShortcut,
 } from '../components/domain/communications/quick-log-dialog'
+import { OrganizationSettingsProvider } from '../contexts/organization-settings-context'
+import { useOrganizationSettingsQuery } from '../hooks/organizations/use-organization'
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: async ({ location }) => {
@@ -108,15 +111,28 @@ function AuthenticatedLayout() {
   }, [])
   useQuickLogShortcut(handleOpenQuickLog)
 
-  return (
-    <AppShell>
-      <Outlet />
+  // Fetch organization settings for global context
+  const {
+    data: settings,
+    isLoading: isSettingsLoading,
+    error: settingsError,
+  } = useOrganizationSettingsQuery()
 
-      {/* Global Quick Log Dialog - accessible from anywhere via Cmd+L */}
-      <QuickLogDialog
-        open={quickLogOpen}
-        onOpenChange={setQuickLogOpen}
-      />
-    </AppShell>
+  return (
+    <OrganizationSettingsProvider
+      settings={settings}
+      isLoading={isSettingsLoading}
+      error={settingsError}
+    >
+      <AppShell>
+        <Outlet />
+
+        {/* Global Quick Log Dialog - accessible from anywhere via Cmd+L */}
+        <QuickLogDialog
+          open={quickLogOpen}
+          onOpenChange={setQuickLogOpen}
+        />
+      </AppShell>
+    </OrganizationSettingsProvider>
   )
 }

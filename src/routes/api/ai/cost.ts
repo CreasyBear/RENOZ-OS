@@ -13,7 +13,7 @@ import { withAuth } from '@/lib/server/protected';
 import { db } from '@/lib/db';
 import { aiCostTracking } from 'drizzle/schema/_ai';
 import { eq, and, gte, lte, sql, desc } from 'drizzle-orm';
-import { getOrgDailyLimitCents } from '@/server/functions/ai/utils/budget';
+import { getOrgDailyLimit } from '@/server/functions/ai/utils/budget';
 
 export async function GET({ request }: { request: Request }) {
   try {
@@ -46,7 +46,7 @@ export async function GET({ request }: { request: Request }) {
       feature?: string | null;
       inputTokens: number;
       outputTokens: number;
-      costCents: number;
+      cost: number;
     }>;
 
     if (groupBy === 'model') {
@@ -55,24 +55,24 @@ export async function GET({ request }: { request: Request }) {
           model: aiCostTracking.model,
           inputTokens: sql<number>`SUM(${aiCostTracking.inputTokens})::integer`,
           outputTokens: sql<number>`SUM(${aiCostTracking.outputTokens})::integer`,
-          costCents: sql<number>`SUM(${aiCostTracking.costCents})::integer`,
+          cost: sql<number>`SUM(${aiCostTracking.cost})::numeric`,
         })
         .from(aiCostTracking)
         .where(and(...conditions))
         .groupBy(aiCostTracking.model)
-        .orderBy(desc(sql`SUM(${aiCostTracking.costCents})`));
+        .orderBy(desc(sql`SUM(${aiCostTracking.cost})`));
     } else if (groupBy === 'feature') {
       usage = await db
         .select({
           feature: aiCostTracking.feature,
           inputTokens: sql<number>`SUM(${aiCostTracking.inputTokens})::integer`,
           outputTokens: sql<number>`SUM(${aiCostTracking.outputTokens})::integer`,
-          costCents: sql<number>`SUM(${aiCostTracking.costCents})::integer`,
+          cost: sql<number>`SUM(${aiCostTracking.cost})::numeric`,
         })
         .from(aiCostTracking)
         .where(and(...conditions))
         .groupBy(aiCostTracking.feature)
-        .orderBy(desc(sql`SUM(${aiCostTracking.costCents})`));
+        .orderBy(desc(sql`SUM(${aiCostTracking.cost})`));
     } else {
       // Default: group by day
       usage = await db
@@ -80,7 +80,7 @@ export async function GET({ request }: { request: Request }) {
           date: aiCostTracking.date,
           inputTokens: sql<number>`SUM(${aiCostTracking.inputTokens})::integer`,
           outputTokens: sql<number>`SUM(${aiCostTracking.outputTokens})::integer`,
-          costCents: sql<number>`SUM(${aiCostTracking.costCents})::integer`,
+          cost: sql<number>`SUM(${aiCostTracking.cost})::numeric`,
         })
         .from(aiCostTracking)
         .where(and(...conditions))
@@ -91,7 +91,7 @@ export async function GET({ request }: { request: Request }) {
     // Calculate totals
     const [totals] = await db
       .select({
-        totalCents: sql<number>`COALESCE(SUM(${aiCostTracking.costCents}), 0)::integer`,
+        totalCost: sql<number>`COALESCE(SUM(${aiCostTracking.cost}), 0)::numeric`,
         totalInputTokens: sql<number>`COALESCE(SUM(${aiCostTracking.inputTokens}), 0)::integer`,
         totalOutputTokens: sql<number>`COALESCE(SUM(${aiCostTracking.outputTokens}), 0)::integer`,
       })
@@ -99,13 +99,14 @@ export async function GET({ request }: { request: Request }) {
       .where(and(...conditions));
 
     // Get budget info
-    const budgetLimit = getOrgDailyLimitCents() * 30; // Monthly limit
-    const budgetRemaining = Math.max(0, budgetLimit - (totals?.totalCents ?? 0));
+    const budgetLimit = getOrgDailyLimit() * 30; // Monthly limit
+    const totalCost = Number(totals?.totalCost ?? 0);
+    const budgetRemaining = Math.max(0, budgetLimit - totalCost);
 
     return new Response(
       JSON.stringify({
-        usage,
-        totalCents: totals?.totalCents ?? 0,
+        usage: usage.map((u) => ({ ...u, cost: Number(u.cost) })),
+        totalCost,
         totalInputTokens: totals?.totalInputTokens ?? 0,
         totalOutputTokens: totals?.totalOutputTokens ?? 0,
         budgetRemaining,

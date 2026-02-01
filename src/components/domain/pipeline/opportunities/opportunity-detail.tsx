@@ -30,6 +30,8 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { formatDate, formatRelativeTime } from "@/lib/formatters";
 import { FormatAmount } from "@/components/shared/format";
+import { QuoteBuilderContainer } from "@/components/domain/pipeline/quotes/quote-builder-container";
+import type { QuoteVersion } from "@/lib/schemas/pipeline";
 // OpportunityStage type only needed if using stage-based styling
 
 // ============================================================================
@@ -97,9 +99,11 @@ interface QuoteVersionData {
   items: Array<{
     description: string;
     quantity: number;
-    unitPriceCents: number;
+    unitPrice?: number;
+    unitPriceCents?: number;
     discountPercent?: number;
-    totalCents: number;
+    total?: number;
+    totalCents?: number;
   }>;
 }
 
@@ -151,10 +155,29 @@ export const OpportunityDetail = memo(function OpportunityDetail({
   activities,
   versions,
   winLossReason,
+  onRefresh,
 }: OpportunityDetailProps) {
   const isClosedStage = opportunity.stage === "won" || opportunity.stage === "lost";
   const hasQuoteExpiring = opportunity.quoteExpiresAt && new Date(opportunity.quoteExpiresAt) > new Date();
   const isQuoteExpired = opportunity.quoteExpiresAt && new Date(opportunity.quoteExpiresAt) <= new Date();
+  const latestVersion = versions[0] ?? null;
+  const normalizedLatestVersion = latestVersion
+    ? ({
+        ...latestVersion,
+        items: latestVersion.items.map((item) => {
+          const unitPrice = item.unitPrice ?? (item.unitPriceCents ?? 0) / 100;
+          const total = item.total ?? (item.totalCents ?? unitPrice * item.quantity);
+
+          return {
+            description: item.description,
+            quantity: item.quantity,
+            unitPrice,
+            discountPercent: item.discountPercent,
+            total,
+          };
+        }),
+      } as QuoteVersion)
+    : null;
 
   return (
     <Tabs defaultValue="overview" className="space-y-6">
@@ -417,86 +440,11 @@ export const OpportunityDetail = memo(function OpportunityDetail({
 
       {/* Quote Tab */}
       <TabsContent value="quote" className="space-y-6">
-        {versions.length > 0 ? (
-          <Card>
-            <CardHeader>
-              <CardTitle>Current Quote (v{versions[0].versionNumber})</CardTitle>
-              <CardDescription>
-                Created {formatDate(versions[0].createdAt)}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {/* Line Items */}
-              <div className="border rounded-lg overflow-hidden">
-                <table className="w-full">
-                  <thead className="bg-muted">
-                    <tr>
-                      <th className="text-left p-3 text-sm font-medium">Description</th>
-                      <th className="text-right p-3 text-sm font-medium">Qty</th>
-                      <th className="text-right p-3 text-sm font-medium">Unit Price</th>
-                      <th className="text-right p-3 text-sm font-medium">Discount</th>
-                      <th className="text-right p-3 text-sm font-medium">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {versions[0].items.map((item, index) => (
-                      <tr key={index} className="border-t">
-                        <td className="p-3">{item.description}</td>
-                        <td className="p-3 text-right">{item.quantity}</td>
-                        <td className="p-3 text-right">
-                          <FormatAmount amount={item.unitPriceCents} cents={true} />
-                        </td>
-                        <td className="p-3 text-right">
-                          {item.discountPercent ? `${item.discountPercent}%` : "-"}
-                        </td>
-                        <td className="p-3 text-right font-medium">
-                          <FormatAmount amount={item.totalCents} cents={true} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Totals */}
-              <div className="mt-4 space-y-2 text-right">
-                <div className="flex justify-end gap-8">
-                  <span className="text-muted-foreground">Subtotal</span>
-                  <span className="w-32"><FormatAmount amount={versions[0].subtotal} cents={true} /></span>
-                </div>
-                <div className="flex justify-end gap-8">
-                  <span className="text-muted-foreground">GST (10%)</span>
-                  <span className="w-32"><FormatAmount amount={versions[0].taxAmount} cents={true} /></span>
-                </div>
-                <Separator className="my-2" />
-                <div className="flex justify-end gap-8 font-bold text-lg">
-                  <span>Total</span>
-                  <span className="w-32"><FormatAmount amount={versions[0].total} cents={true} /></span>
-                </div>
-              </div>
-
-              {/* Notes */}
-              {versions[0].notes && (
-                <div className="mt-4 pt-4 border-t">
-                  <p className="text-sm font-medium mb-2">Notes</p>
-                  <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                    {versions[0].notes}
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ) : (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No quotes created yet</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Create a quote to send to the customer
-              </p>
-            </CardContent>
-          </Card>
-        )}
+        <QuoteBuilderContainer
+          opportunityId={opportunity.id}
+          currentVersion={normalizedLatestVersion}
+          onSave={() => onRefresh?.()}
+        />
       </TabsContent>
 
       {/* Activities Tab */}
@@ -604,7 +552,7 @@ export const OpportunityDetail = memo(function OpportunityDetail({
                       </CardDescription>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold"><FormatAmount amount={version.total} cents={true} /></p>
+                      <p className="text-lg font-bold"><FormatAmount amount={version.total} /></p>
                       <p className="text-sm text-muted-foreground">
                         {version.items.length} item{version.items.length !== 1 ? "s" : ""}
                       </p>

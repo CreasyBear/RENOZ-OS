@@ -3,11 +3,10 @@
  *
  * Comprehensive product creation/editing form with multi-section layout,
  * validation, and support for dynamic attributes.
+ *
+ * SPRINT-05: Migrated to TanStack Form
  */
 import { useState } from "react";
-import { useForm, Controller } from "react-hook-form";
-import type { Control, FieldErrors, UseFormWatch } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import {
   Package,
@@ -22,25 +21,23 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+
+import { useTanStackForm, type TanStackFormApi } from "@/hooks/_shared/use-tanstack-form";
+import {
+  TextField,
+  TextareaField,
+  SelectField,
+  NumberField,
+  SwitchField,
+} from "@/components/shared/forms";
 
 // Form validation schema
 const productFormSchema = z.object({
@@ -86,6 +83,9 @@ const productFormSchema = z.object({
 
 export type ProductFormValues = z.infer<typeof productFormSchema>;
 
+// Type for passing form to section sub-components
+type ProductFormApi = TanStackFormApi<ProductFormValues>;
+
 interface Category {
   id: string;
   name: string;
@@ -100,6 +100,20 @@ interface ProductFormProps {
   onCancel: () => void;
   isEdit?: boolean;
 }
+
+// Options for select fields
+const productTypeOptions = [
+  { value: "physical", label: "Physical" },
+  { value: "service", label: "Service" },
+  { value: "digital", label: "Digital" },
+  { value: "bundle", label: "Bundle" },
+];
+
+const statusOptions = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+  { value: "discontinued", label: "Discontinued" },
+];
 
 // Section component for collapsible form sections
 function FormSection({
@@ -150,14 +164,17 @@ function FormSection({
 
 // Basic Info Section
 function BasicInfoSection({
-  control,
-  errors,
+  form,
   categories,
 }: {
-  control: Control<ProductFormValues>;
-  errors: FieldErrors<ProductFormValues>;
+  form: ProductFormApi;
   categories?: Category[];
 }) {
+  const categoryOptions = [
+    { value: "__NONE__", label: "No Category" },
+    ...(categories?.map((cat) => ({ value: cat.id, label: cat.name })) || []),
+  ];
+
   return (
     <FormSection
       title="Basic Information"
@@ -167,136 +184,81 @@ function BasicInfoSection({
       <div className="grid gap-6">
         {/* SKU and Name row */}
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="sku">
-              SKU <span className="text-destructive">*</span>
-            </Label>
-            <Controller
-              name="sku"
-              control={control}
-              render={({ field }) => (
-                <Input
-                  id="sku"
-                  placeholder="e.g., PROD-001"
-                  {...field}
-                  className={errors.sku ? "border-destructive" : ""}
-                />
-              )}
-            />
-            {errors.sku && (
-              <p className="text-sm text-destructive">{errors.sku.message}</p>
+          <form.Field name="sku">
+            {(field) => (
+              <TextField
+                field={field}
+                label="SKU"
+                placeholder="e.g., PROD-001"
+                required
+              />
             )}
-          </div>
+          </form.Field>
 
-          <div className="space-y-2">
-            <Label htmlFor="name">
-              Product Name <span className="text-destructive">*</span>
-            </Label>
-            <Controller
-              name="name"
-              control={control}
-              render={({ field }) => (
-                <Input
-                  id="name"
-                  placeholder="Enter product name"
-                  {...field}
-                  className={errors.name ? "border-destructive" : ""}
-                />
-              )}
-            />
-            {errors.name && (
-              <p className="text-sm text-destructive">{errors.name.message}</p>
+          <form.Field name="name">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Product Name"
+                placeholder="Enter product name"
+                required
+              />
             )}
-          </div>
+          </form.Field>
         </div>
 
         {/* Type and Status row */}
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="type">Product Type</Label>
-            <Controller
-              name="type"
-              control={control}
-              render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="physical">Physical</SelectItem>
-                    <SelectItem value="service">Service</SelectItem>
-                    <SelectItem value="digital">Digital</SelectItem>
-                    <SelectItem value="bundle">Bundle</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </div>
+          <form.Field name="type">
+            {(field) => (
+              <SelectField
+                field={field}
+                label="Product Type"
+                options={productTypeOptions}
+              />
+            )}
+          </form.Field>
 
-          <div className="space-y-2">
-            <Label htmlFor="status">Status</Label>
-            <Controller
-              name="status"
-              control={control}
-              render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="discontinued">Discontinued</SelectItem>
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </div>
+          <form.Field name="status">
+            {(field) => (
+              <SelectField
+                field={field}
+                label="Status"
+                options={statusOptions}
+              />
+            )}
+          </form.Field>
         </div>
 
         {/* Category */}
-        <div className="space-y-2">
-          <Label htmlFor="categoryId">Category</Label>
-          <Controller
-            name="categoryId"
-            control={control}
-            render={({ field }) => (
-              <Select
-                value={field.value ?? "__NONE__"}
-                onValueChange={(v) => field.onChange(v !== "__NONE__" ? v : null)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__NONE__">No Category</SelectItem>
-                  {categories?.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </div>
+        <form.Field name="categoryId">
+          {(field) => (
+            <SelectField
+              field={{
+                ...field,
+                state: {
+                  ...field.state,
+                  value: field.state.value ?? "__NONE__",
+                },
+                handleChange: (v: string) => field.handleChange(v !== "__NONE__" ? v : null),
+              }}
+              label="Category"
+              options={categoryOptions}
+            />
+          )}
+        </form.Field>
 
         {/* Description */}
-        <div className="space-y-2">
-          <Label htmlFor="description">Description</Label>
-          <Controller
-            name="description"
-            control={control}
-            render={({ field }) => (
-              <Textarea
-                id="description"
-                placeholder="Enter product description"
-                rows={4}
-                {...field}
-              />
-            )}
-          />
-        </div>
+        <form.Field name="description">
+          {(field) => (
+            <TextareaField
+              field={field}
+              label="Description"
+              placeholder="Enter product description"
+              rows={4}
+            />
+          )}
+        </form.Field>
       </div>
     </FormSection>
   );
@@ -304,20 +266,10 @@ function BasicInfoSection({
 
 // Pricing Section
 function PricingSection({
-  control,
-  errors,
-  watch,
+  form,
 }: {
-  control: Control<ProductFormValues>;
-  errors: FieldErrors<ProductFormValues>;
-  watch: UseFormWatch<ProductFormValues>;
+  form: ProductFormApi;
 }) {
-  const basePrice = watch("basePrice");
-  const costPrice = watch("costPrice");
-  const margin = costPrice && basePrice > 0
-    ? ((basePrice - costPrice) / basePrice * 100).toFixed(1)
-    : null;
-
   return (
     <FormSection
       title="Pricing"
@@ -326,73 +278,60 @@ function PricingSection({
     >
       <div className="grid gap-6">
         <div className="grid gap-4 sm:grid-cols-3">
-          <div className="space-y-2">
-            <Label htmlFor="basePrice">
-              Base Price <span className="text-destructive">*</span>
-            </Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                $
-              </span>
-              <Controller
-                name="basePrice"
-                control={control}
-                render={({ field }) => (
-                  <Input
-                    id="basePrice"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0.00"
-                    className={`pl-7 ${errors.basePrice ? "border-destructive" : ""}`}
-                    {...field}
-                  />
-                )}
+          <form.Field name="basePrice">
+            {(field) => (
+              <NumberField
+                field={field}
+                label="Base Price"
+                min={0}
+                step={0.01}
+                placeholder="0.00"
+                prefix="$"
+                required
               />
-            </div>
-            {errors.basePrice && (
-              <p className="text-sm text-destructive">{errors.basePrice.message}</p>
             )}
-          </div>
+          </form.Field>
 
-          <div className="space-y-2">
-            <Label htmlFor="costPrice">Cost Price</Label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                $
-              </span>
-              <Controller
-                name="costPrice"
-                control={control}
-                render={({ field }) => (
-                  <Input
-                    id="costPrice"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0.00"
-                    className="pl-7"
-                    {...field}
-                    value={field.value ?? ""}
-                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
-                  />
-                )}
+          <form.Field name="costPrice">
+            {(field) => (
+              <NumberField
+                field={field}
+                label="Cost Price"
+                min={0}
+                step={0.01}
+                placeholder="0.00"
+                prefix="$"
               />
-            </div>
-          </div>
+            )}
+          </form.Field>
 
-          <div className="space-y-2">
-            <Label>Margin</Label>
-            <div className="h-10 flex items-center">
-              {margin !== null ? (
-                <Badge variant={Number(margin) > 0 ? "default" : "destructive"}>
-                  {margin}%
-                </Badge>
-              ) : (
-                <span className="text-muted-foreground">-</span>
-              )}
-            </div>
-          </div>
+          <form.Subscribe
+            selector={(state) => ({
+              basePrice: state.values.basePrice,
+              costPrice: state.values.costPrice,
+            })}
+          >
+            {({ basePrice, costPrice }) => {
+              const margin = costPrice && basePrice > 0
+                ? ((basePrice - costPrice) / basePrice * 100).toFixed(1)
+                : null;
+
+              return (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Margin</label>
+                  <div className="h-10 flex items-center">
+                    {margin !== null ? (
+                      <Badge variant={Number(margin) > 0 ? "default" : "destructive"}>
+                        {margin}%
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </div>
+                </div>
+              );
+            }}
+          </form.Subscribe>
         </div>
       </div>
     </FormSection>
@@ -401,15 +340,10 @@ function PricingSection({
 
 // Settings Section
 function SettingsSection({
-  control,
-  watch,
+  form,
 }: {
-  control: Control<ProductFormValues>;
-  watch: UseFormWatch<ProductFormValues>;
+  form: ProductFormApi;
 }) {
-  const productType = watch("type");
-  const showInventorySettings = productType === "physical" || productType === "bundle";
-
   return (
     <FormSection
       title="Settings"
@@ -421,118 +355,101 @@ function SettingsSection({
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex items-center justify-between rounded-lg border p-4">
             <div className="space-y-0.5">
-              <Label>Sellable</Label>
+              <label className="text-sm font-medium">Sellable</label>
               <p className="text-sm text-muted-foreground">
                 Available for sale to customers
               </p>
             </div>
-            <Controller
-              name="isSellable"
-              control={control}
-              render={({ field }) => (
-                <Switch checked={field.value} onCheckedChange={field.onChange} />
+            <form.Field name="isSellable">
+              {(field) => (
+                <SwitchField field={field} label="" />
               )}
-            />
+            </form.Field>
           </div>
 
           <div className="flex items-center justify-between rounded-lg border p-4">
             <div className="space-y-0.5">
-              <Label>Purchasable</Label>
+              <label className="text-sm font-medium">Purchasable</label>
               <p className="text-sm text-muted-foreground">
                 Available to purchase from suppliers
               </p>
             </div>
-            <Controller
-              name="isPurchasable"
-              control={control}
-              render={({ field }) => (
-                <Switch checked={field.value} onCheckedChange={field.onChange} />
+            <form.Field name="isPurchasable">
+              {(field) => (
+                <SwitchField field={field} label="" />
               )}
-            />
+            </form.Field>
           </div>
         </div>
 
-        {/* Inventory settings */}
-        {showInventorySettings && (
-          <>
-            <Separator />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="flex items-center justify-between rounded-lg border p-4">
-                <div className="space-y-0.5">
-                  <Label>Track Inventory</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Monitor stock levels
-                  </p>
+        {/* Inventory settings - conditional on product type */}
+        <form.Subscribe selector={(state) => state.values.type}>
+          {(productType) => {
+            const showInventorySettings = productType === "physical" || productType === "bundle";
+            if (!showInventorySettings) return null;
+
+            return (
+              <>
+                <Separator />
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <label className="text-sm font-medium">Track Inventory</label>
+                      <p className="text-sm text-muted-foreground">
+                        Monitor stock levels
+                      </p>
+                    </div>
+                    <form.Field name="trackInventory">
+                      {(field) => (
+                        <SwitchField field={field} label="" />
+                      )}
+                    </form.Field>
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <label className="text-sm font-medium">Serialized</label>
+                      <p className="text-sm text-muted-foreground">
+                        Track individual units by serial number
+                      </p>
+                    </div>
+                    <form.Field name="isSerialized">
+                      {(field) => (
+                        <SwitchField field={field} label="" />
+                      )}
+                    </form.Field>
+                  </div>
                 </div>
-                <Controller
-                  name="trackInventory"
-                  control={control}
-                  render={({ field }) => (
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  )}
-                />
-              </div>
 
-              <div className="flex items-center justify-between rounded-lg border p-4">
-                <div className="space-y-0.5">
-                  <Label>Serialized</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Track individual units by serial number
-                  </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <form.Field name="reorderPoint">
+                    {(field) => (
+                      <NumberField
+                        field={field}
+                        label="Reorder Point"
+                        min={0}
+                        placeholder="0"
+                        description="Alert when stock falls below this level"
+                      />
+                    )}
+                  </form.Field>
+
+                  <form.Field name="reorderQty">
+                    {(field) => (
+                      <NumberField
+                        field={field}
+                        label="Reorder Quantity"
+                        min={0}
+                        placeholder="0"
+                        description="Suggested quantity when reordering"
+                      />
+                    )}
+                  </form.Field>
                 </div>
-                <Controller
-                  name="isSerialized"
-                  control={control}
-                  render={({ field }) => (
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  )}
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="reorderPoint">Reorder Point</Label>
-                <Controller
-                  name="reorderPoint"
-                  control={control}
-                  render={({ field }) => (
-                    <Input
-                      id="reorderPoint"
-                      type="number"
-                      min="0"
-                      placeholder="0"
-                      {...field}
-                    />
-                  )}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Alert when stock falls below this level
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="reorderQty">Reorder Quantity</Label>
-                <Controller
-                  name="reorderQty"
-                  control={control}
-                  render={({ field }) => (
-                    <Input
-                      id="reorderQty"
-                      type="number"
-                      min="0"
-                      placeholder="0"
-                      {...field}
-                    />
-                  )}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Suggested quantity when reordering
-                </p>
-              </div>
-            </div>
-          </>
-        )}
+              </>
+            );
+          }}
+        </form.Subscribe>
       </div>
     </FormSection>
   );
@@ -540,15 +457,10 @@ function SettingsSection({
 
 // Specifications Section
 function SpecificationsSection({
-  control,
-  watch,
+  form,
 }: {
-  control: Control<ProductFormValues>;
-  watch: UseFormWatch<ProductFormValues>;
+  form: ProductFormApi;
 }) {
-  const productType = watch("type");
-  const showPhysical = productType === "physical" || productType === "bundle";
-
   return (
     <FormSection
       title="Specifications"
@@ -558,103 +470,77 @@ function SpecificationsSection({
     >
       <div className="grid gap-6">
         {/* Barcode */}
-        <div className="space-y-2">
-          <Label htmlFor="barcode">Barcode / UPC</Label>
-          <Controller
-            name="barcode"
-            control={control}
-            render={({ field }) => (
-              <Input
-                id="barcode"
-                placeholder="Enter barcode"
-                {...field}
-                value={field.value ?? ""}
-              />
-            )}
-          />
-        </div>
+        <form.Field name="barcode">
+          {(field) => (
+            <TextField
+              field={field}
+              label="Barcode / UPC"
+              placeholder="Enter barcode"
+            />
+          )}
+        </form.Field>
 
-        {/* Physical dimensions */}
-        {showPhysical && (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor="weight">Weight (kg)</Label>
-              <Controller
-                name="weight"
-                control={control}
-                render={({ field }) => (
-                  <Input
-                    id="weight"
-                    type="number"
-                    step="0.001"
-                    min="0"
-                    placeholder="0.000"
-                    {...field}
-                    value={field.value ?? ""}
-                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
-                  />
-                )}
-              />
-            </div>
+        {/* Physical dimensions - conditional on product type */}
+        <form.Subscribe selector={(state) => state.values.type}>
+          {(productType) => {
+            const showPhysical = productType === "physical" || productType === "bundle";
+            if (!showPhysical) return null;
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="space-y-2">
-                <Label>Length (cm)</Label>
-                <Controller
-                  name="dimensions.length"
-                  control={control}
-                  render={({ field }) => (
-                    <Input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      placeholder="0"
-                      {...field}
-                      value={field.value ?? ""}
-                      onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
+            return (
+              <>
+                <form.Field name="weight">
+                  {(field) => (
+                    <NumberField
+                      field={field}
+                      label="Weight (kg)"
+                      min={0}
+                      step={0.001}
+                      placeholder="0.000"
                     />
                   )}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Width (cm)</Label>
-                <Controller
-                  name="dimensions.width"
-                  control={control}
-                  render={({ field }) => (
-                    <Input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      placeholder="0"
-                      {...field}
-                      value={field.value ?? ""}
-                      onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
-                    />
-                  )}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Height (cm)</Label>
-                <Controller
-                  name="dimensions.height"
-                  control={control}
-                  render={({ field }) => (
-                    <Input
-                      type="number"
-                      step="0.1"
-                      min="0"
-                      placeholder="0"
-                      {...field}
-                      value={field.value ?? ""}
-                      onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)}
-                    />
-                  )}
-                />
-              </div>
-            </div>
-          </>
-        )}
+                </form.Field>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <form.Field name="dimensions.length">
+                    {(field) => (
+                      <NumberField
+                        field={field}
+                        label="Length (cm)"
+                        min={0}
+                        step={0.1}
+                        placeholder="0"
+                      />
+                    )}
+                  </form.Field>
+
+                  <form.Field name="dimensions.width">
+                    {(field) => (
+                      <NumberField
+                        field={field}
+                        label="Width (cm)"
+                        min={0}
+                        step={0.1}
+                        placeholder="0"
+                      />
+                    )}
+                  </form.Field>
+
+                  <form.Field name="dimensions.height">
+                    {(field) => (
+                      <NumberField
+                        field={field}
+                        label="Height (cm)"
+                        min={0}
+                        step={0.1}
+                        placeholder="0"
+                      />
+                    )}
+                  </form.Field>
+                </div>
+              </>
+            );
+          }}
+        </form.Subscribe>
       </div>
     </FormSection>
   );
@@ -662,9 +548,9 @@ function SpecificationsSection({
 
 // SEO Section
 function SEOSection({
-  control,
+  form,
 }: {
-  control: Control<ProductFormValues>;
+  form: ProductFormApi;
 }) {
   return (
     <FormSection
@@ -674,49 +560,32 @@ function SEOSection({
       defaultOpen={false}
     >
       <div className="grid gap-6">
-        <div className="space-y-2">
-          <Label htmlFor="seoTitle">SEO Title</Label>
-          <Controller
-            name="seoTitle"
-            control={control}
-            render={({ field }) => (
-              <Input
-                id="seoTitle"
-                placeholder="Page title for search engines"
-                maxLength={255}
-                {...field}
-                value={field.value ?? ""}
-              />
-            )}
-          />
-          <p className="text-xs text-muted-foreground">
-            Recommended: 50-60 characters
-          </p>
-        </div>
+        <form.Field name="seoTitle">
+          {(field) => (
+            <TextField
+              field={field}
+              label="SEO Title"
+              placeholder="Page title for search engines"
+              description="Recommended: 50-60 characters"
+            />
+          )}
+        </form.Field>
 
-        <div className="space-y-2">
-          <Label htmlFor="seoDescription">SEO Description</Label>
-          <Controller
-            name="seoDescription"
-            control={control}
-            render={({ field }) => (
-              <Textarea
-                id="seoDescription"
-                placeholder="Brief description for search results"
-                rows={3}
-                {...field}
-                value={field.value ?? ""}
-              />
-            )}
-          />
-          <p className="text-xs text-muted-foreground">
-            Recommended: 150-160 characters
-          </p>
-        </div>
+        <form.Field name="seoDescription">
+          {(field) => (
+            <TextareaField
+              field={field}
+              label="SEO Description"
+              placeholder="Brief description for search results"
+              rows={3}
+              description="Recommended: 150-160 characters"
+            />
+          )}
+        </form.Field>
 
         {/* Tags - simplified for now */}
         <div className="space-y-2">
-          <Label>Tags</Label>
+          <label className="text-sm font-medium">Tags</label>
           <p className="text-sm text-muted-foreground">
             Tag management will be available after saving
           </p>
@@ -736,19 +605,14 @@ export function ProductForm({
 }: ProductFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const {
-    control,
-    handleSubmit,
-    watch,
-    formState: { errors, isDirty },
-  } = useForm<ProductFormValues>({
-    resolver: zodResolver(productFormSchema) as never,
+  const form = useTanStackForm({
+    schema: productFormSchema,
     defaultValues: {
       sku: "",
       name: "",
       description: "",
-      type: "physical",
-      status: "active",
+      type: "physical" as const,
+      status: "active" as const,
       categoryId: null,
       basePrice: 0,
       costPrice: null,
@@ -757,7 +621,7 @@ export function ProductForm({
       isSellable: true,
       isPurchasable: true,
       weight: null,
-      dimensions: null,
+      dimensions: { length: undefined, width: undefined, height: undefined },
       seoTitle: null,
       seoDescription: null,
       barcode: null,
@@ -767,34 +631,43 @@ export function ProductForm({
       reorderQty: 0,
       ...defaultValues,
     },
+    onSubmit: async (data) => {
+      setIsSubmitting(true);
+      try {
+        await onSubmit(data);
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
   });
 
-  const onFormSubmit = async (data: ProductFormValues) => {
-    setIsSubmitting(true);
-    try {
-      await onSubmit(data);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
-    <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-6">
-      <BasicInfoSection control={control} errors={errors} categories={categories} />
-      <PricingSection control={control} errors={errors} watch={watch} />
-      <SettingsSection control={control} watch={watch} />
-      <SpecificationsSection control={control} watch={watch} />
-      <SEOSection control={control} />
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        form.handleSubmit();
+      }}
+      className="space-y-6"
+    >
+      <BasicInfoSection form={form} categories={categories} />
+      <PricingSection form={form} />
+      <SettingsSection form={form} />
+      <SpecificationsSection form={form} />
+      <SEOSection form={form} />
 
       {/* Form actions */}
       <div className="flex items-center justify-between pt-6 border-t">
-        <div>
-          {isDirty && (
-            <p className="text-sm text-muted-foreground">
-              You have unsaved changes
-            </p>
-          )}
-        </div>
+        <form.Subscribe selector={(state) => state.isDirty}>
+          {(isDirty) =>
+            isDirty ? (
+              <p className="text-sm text-muted-foreground">
+                You have unsaved changes
+              </p>
+            ) : (
+              <div />
+            )
+          }
+        </form.Subscribe>
         <div className="flex gap-3">
           <Button type="button" variant="outline" onClick={onCancel}>
             <X className="mr-2 h-4 w-4" />

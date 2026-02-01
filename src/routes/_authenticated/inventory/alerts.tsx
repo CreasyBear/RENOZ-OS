@@ -39,13 +39,17 @@ import {
   useToggleAlertActive,
   useAcknowledgeAlert,
   useLocations,
+  type WarehouseLocation,
 } from "@/hooks/inventory";
 import { useProducts } from "@/hooks/products";
+import type { TriggeredAlertResult, ListTriggeredAlertsResult, CreateAlert } from "@/lib/schemas/inventory";
+import type { InventoryAlert as AlertDb } from "drizzle/schema/inventory/inventory";
 
 // ============================================================================
 // ROUTE DEFINITION
 // ============================================================================
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const Route = createFileRoute("/_authenticated/inventory/alerts" as any)({
   component: AlertsPage,
   errorComponent: ({ error }) => (
@@ -84,63 +88,167 @@ function AlertsPage() {
   const acknowledgeMutation = useAcknowledgeAlert();
 
   // Transform data for components
-  const alertRules: AlertRule[] = (alertsData?.alerts ?? []).map((a: any) => ({
-    id: a.id,
-    alertType: a.alertType,
-    name: a.name,
-    productId: a.productId,
-    locationId: a.locationId,
-    thresholdValue: a.thresholdValue,
-    thresholdPercentage: a.thresholdPercentage,
-    isActive: a.isActive,
-    notifyEmail: a.notifyEmail ?? false,
-    notifyInApp: a.notifyInApp ?? true,
-    triggeredCount: a.triggeredCount ?? 0,
-    lastTriggeredAt: a.lastTriggeredAt ? new Date(a.lastTriggeredAt) : null,
-    createdAt: new Date(a.createdAt),
-  }));
-
-  const triggeredAlerts: InventoryAlert[] = (triggeredData?.alerts ?? []).map((a: any) => ({
-    id: a.alert?.id ?? a.id,
-    alertType: a.alert?.alertType ?? a.alertType ?? "low_stock",
-    severity: a.severity === "critical" ? "critical" : a.severity === "high" ? "warning" : "info",
-    productId: a.product?.id,
-    productName: a.product?.name,
-    locationId: a.location?.id,
-    locationName: a.location?.name,
-    message: a.message ?? `Alert triggered for ${a.product?.name ?? "unknown product"}`,
-    value: a.currentValue,
-    threshold: a.thresholdValue,
-    triggeredAt: a.triggeredAt ? new Date(a.triggeredAt) : new Date(),
-    acknowledgedAt: a.acknowledgedAt ? new Date(a.acknowledgedAt) : undefined,
-    acknowledgedBy: a.acknowledgedBy,
-  }));
-
-  const products = (productsData?.products ?? []).map((p: any) => ({
+  const products = (productsData?.products ?? []).map((p: { id: string; name: string; sku: string }) => ({
     id: p.id,
     name: p.name,
     sku: p.sku,
   }));
 
-  const locations = (locationsData ?? []).map((l: any) => ({
+  const locations = (locationsData ?? []).map((l: WarehouseLocation) => ({
     id: l.id,
     name: l.name,
-    code: l.locationCode ?? l.code ?? "",
+    code: l.code ?? "",
   }));
+
+  const alertRules: AlertRule[] = (alertsData?.alerts ?? []).map((a: AlertDb) => {
+    // Generate display name from alert type and scope (database doesn't store name)
+    const alertTypeLabels: Record<string, string> = {
+      low_stock: "Low Stock",
+      out_of_stock: "Out of Stock",
+      overstock: "Overstock",
+      expiry: "Expiry",
+      slow_moving: "Slow Moving",
+      forecast_deviation: "Forecast Deviation",
+    };
+    const productName = products.find((p) => p.id === a.productId)?.name;
+    const locationName = locations.find((l) => l.id === a.locationId)?.name;
+    const scope = productName
+      ? locationName
+        ? `${productName} @ ${locationName}`
+        : productName
+      : locationName
+        ? `All Products @ ${locationName}`
+        : "All Products";
+    const generatedName = `${alertTypeLabels[a.alertType] ?? a.alertType} - ${scope}`;
+
+    // Extract threshold value from threshold object
+    const thresholdValue =
+      typeof a.threshold === "object" && a.threshold !== null && "minQuantity" in a.threshold
+        ? (a.threshold as { minQuantity?: number }).minQuantity ?? 0
+        : 0;
+
+    return {
+      id: a.id,
+      alertType: a.alertType as AlertRule["alertType"],
+      name: generatedName,
+      productId: a.productId ?? null,
+      productName: productName,
+      locationId: a.locationId ?? null,
+      locationName: locationName,
+      thresholdValue,
+      thresholdPercentage: undefined,
+      isActive: a.isActive,
+      notifyEmail: a.notificationChannels?.includes("email") ?? false,
+      notifyInApp: a.notificationChannels?.includes("in_app") ?? true,
+      triggeredCount: 0, // Not tracked in current schema
+      lastTriggeredAt: a.lastTriggeredAt ? new Date(a.lastTriggeredAt) : null,
+      createdAt: new Date(a.createdAt),
+    };
+  });
+
+  const triggeredAlerts: InventoryAlert[] = ((triggeredData as ListTriggeredAlertsResult | undefined)?.alerts ?? []).map((a: TriggeredAlertResult) => {
+    // Map server severity ('critical' | 'high' | 'medium' | 'low') to component severity ('critical' | 'warning' | 'info')
+    let severity: InventoryAlert["severity"];
+    if (a.severity === "critical") {
+      severity = "critical";
+    } else if (a.severity === "high" || a.severity === "medium") {
+      severity = "warning";
+    } else {
+      severity = "info";
+    }
+
+    return {
+      id: a.alert.id,
+      alertType: a.alert.alertType as InventoryAlert["alertType"],
+      severity,
+      productId: a.product?.id,
+      productName: a.product?.name,
+      locationId: a.location?.id,
+      locationName: a.location?.name,
+      message: a.message,
+      value: a.currentValue,
+      threshold: a.thresholdValue,
+      // Use alert.lastTriggeredAt as triggeredAt (fallback to current date if not set)
+      triggeredAt: a.alert.lastTriggeredAt ? new Date(a.alert.lastTriggeredAt) : new Date(),
+      // Note: Acknowledgment tracking is not per-triggered-instance, using alert.updatedAt as proxy
+      // This is not ideal but matches current implementation where acknowledgeAlert updates the alert rule
+      acknowledgedAt: a.alert.updatedAt && a.alert.lastTriggeredAt && a.alert.updatedAt > a.alert.lastTriggeredAt
+        ? new Date(a.alert.updatedAt)
+        : undefined,
+      acknowledgedBy: a.alert.updatedBy ?? undefined,
+      // Flag to distinguish fallback alerts (cannot be acknowledged)
+      isFallback: a.isFallback ?? false,
+    };
+  });
 
   // Handlers
   const handleCreateAlert = useCallback(
-    async (data: any) => {
-      await createAlertMutation.mutateAsync(data);
+    async (formData: {
+      alertType: string;
+      name: string;
+      productId?: string | null;
+      locationId?: string | null;
+      thresholdValue: number;
+      thresholdPercentage?: number;
+      notifyEmail: boolean;
+      notifyInApp: boolean;
+      isActive: boolean;
+    }) => {
+      // Transform form data to server schema (name is not stored, threshold is an object)
+      const serverData: CreateAlert = {
+        alertType: formData.alertType as CreateAlert["alertType"],
+        productId: formData.productId ?? undefined,
+        locationId: formData.locationId ?? undefined,
+        threshold: {
+          minQuantity: formData.thresholdValue,
+        },
+        isActive: formData.isActive,
+        notificationChannels: [
+          ...(formData.notifyEmail ? ["email"] : []),
+          ...(formData.notifyInApp ? ["in_app"] : []),
+        ],
+        escalationUsers: [],
+      };
+      await createAlertMutation.mutateAsync(serverData);
       setShowCreateDialog(false);
     },
     [createAlertMutation]
   );
 
   const handleEditAlert = useCallback(
-    async (data: any) => {
+    async (formData: {
+      alertType?: string;
+      name?: string;
+      productId?: string | null;
+      locationId?: string | null;
+      thresholdValue?: number;
+      thresholdPercentage?: number;
+      notifyEmail?: boolean;
+      notifyInApp?: boolean;
+      isActive?: boolean;
+    }) => {
       if (!editingAlert) return;
-      await updateAlertMutation.mutateAsync({ id: editingAlert.id, data });
+      // Transform form data to server schema
+      const serverData: Partial<CreateAlert> = {};
+      if (formData.productId !== undefined) {
+        serverData.productId = formData.productId ?? undefined;
+      }
+      if (formData.locationId !== undefined) {
+        serverData.locationId = formData.locationId ?? undefined;
+      }
+      if (formData.thresholdValue !== undefined) {
+        serverData.threshold = { minQuantity: formData.thresholdValue };
+      }
+      if (formData.isActive !== undefined) {
+        serverData.isActive = formData.isActive;
+      }
+      if (formData.notifyEmail !== undefined || formData.notifyInApp !== undefined) {
+        serverData.notificationChannels = [
+          ...(formData.notifyEmail ? ["email"] : []),
+          ...(formData.notifyInApp ? ["in_app"] : []),
+        ];
+      }
+      await updateAlertMutation.mutateAsync({ id: editingAlert.id, data: serverData });
       setEditingAlert(null);
     },
     [editingAlert, updateAlertMutation]
@@ -162,6 +270,13 @@ function AlertsPage() {
 
   const handleAcknowledgeAlert = useCallback(
     async (alertId: string) => {
+      // Check if this is a fallback alert (cannot be acknowledged)
+      if (alertId.startsWith('00000000-0000-4000-8000-')) {
+        // Fallback alerts cannot be acknowledged - show message to user
+        // In a real implementation, this would show a toast or modal
+        console.warn('Fallback alerts cannot be acknowledged. Please create an alert rule to track this item.');
+        return;
+      }
       await acknowledgeMutation.mutateAsync(alertId);
     },
     [acknowledgeMutation]
@@ -181,7 +296,7 @@ function AlertsPage() {
       />
 
       <PageLayout.Content>
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "active" | "rules" | "history")}>
           <TabsList className="mb-6">
             <TabsTrigger value="active">
               <Bell className="h-4 w-4 mr-2" aria-hidden="true" />
@@ -259,8 +374,8 @@ function AlertsPage() {
               initialValues={{
                 alertType: editingAlert.alertType,
                 name: editingAlert.name,
-                productId: editingAlert.productId,
-                locationId: editingAlert.locationId,
+                productId: editingAlert.productId ?? null,
+                locationId: editingAlert.locationId ?? null,
                 thresholdValue: editingAlert.thresholdValue,
                 thresholdPercentage: editingAlert.thresholdPercentage ?? undefined,
                 notifyEmail: editingAlert.notifyEmail,

@@ -13,7 +13,8 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, AlertTriangle } from 'lucide-react'
 import { PageLayout, RouteErrorFallback } from '@/components/layout'
 import { InventoryTabsSkeleton } from '@/components/skeletons/inventory'
-import { Button } from '@/components/ui/button'
+import { Button, buttonVariants } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import {
   Dialog,
   DialogContent,
@@ -101,12 +102,13 @@ function SegmentsPage() {
         title="Customer Segments"
         description="Create and manage customer segments for targeted actions"
         actions={
-          <Button variant="outline" asChild>
-            <Link to="/customers">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Link>
-          </Button>
+          <Link
+            to="/customers"
+            className={cn(buttonVariants({ variant: 'outline' }))}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Link>
         }
       />
       <PageLayout.Content>

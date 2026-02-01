@@ -18,13 +18,12 @@ import {
   Settings,
   User,
   WifiOff,
-  Wifi,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RouteErrorFallback } from "@/components/layout";
 import { InventoryDashboardSkeleton } from "@/components/skeletons/inventory";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/shared";
 import {
   MobileActionButton,
   MobileQuickActions,
@@ -90,15 +89,9 @@ function MobileHomePage() {
           </div>
           <div className="flex items-center gap-2">
             {isOnline ? (
-              <Badge variant="secondary" className="bg-green-500/20 text-green-100 border-0">
-                <Wifi className="h-3 w-3 mr-1" />
-                Online
-              </Badge>
+              <StatusBadge status="online" variant="success" className="border-0" />
             ) : (
-              <Badge variant="secondary" className="bg-red-500/20 text-red-100 border-0">
-                <WifiOff className="h-3 w-3 mr-1" />
-                Offline
-              </Badge>
+              <StatusBadge status="offline" variant="error" className="border-0" />
             )}
           </div>
         </div>

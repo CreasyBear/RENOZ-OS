@@ -43,6 +43,22 @@ import type {
   BusinessHoursConfig as BusinessHoursConfigType,
 } from '@/lib/sla/types';
 import { NotFoundError } from '@/lib/server/errors';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { computeChanges } from '@/lib/activity-logger';
+
+// ============================================================================
+// ACTIVITY LOGGING HELPERS
+// ============================================================================
+
+const ISSUE_EXCLUDED_FIELDS: string[] = [
+  'updatedAt',
+  'updatedBy',
+  'createdAt',
+  'createdBy',
+  'deletedAt',
+  'organizationId',
+  'slaTrackingId',
+];
 
 // ============================================================================
 // CREATE ISSUE
@@ -55,6 +71,7 @@ export const createIssue = createServerFn({ method: 'POST' })
   .inputValidator(createIssueSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
+    const logger = createActivityLoggerWithContext(ctx);
 
     // Create the issue first
     const [issue] = await db
@@ -119,6 +136,30 @@ export const createIssue = createServerFn({ method: 'POST' })
           .where(eq(issues.id, issue.id));
       }
     }
+
+    // Log issue creation
+    logger.logAsync({
+      entityType: 'issue',
+      entityId: issue.id,
+      action: 'created',
+      description: `Created issue: ${issue.issueNumber}`,
+      changes: computeChanges({
+        before: null,
+        after: issue,
+        excludeFields: ISSUE_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        customerId: data.customerId ?? undefined,
+        status: 'open',
+        priority: data.priority,
+        customFields: {
+          issueNumber: issue.issueNumber,
+          type: data.type,
+          title: data.title,
+          assignedTo: data.assignedToUserId ?? null,
+        },
+      },
+    });
 
     return {
       ...issue,
@@ -346,6 +387,7 @@ export const updateIssue = createServerFn({ method: 'POST' })
   )
   .handler(async ({ data }) => {
     const ctx = await withAuth();
+    const logger = createActivityLoggerWithContext(ctx);
     const { issueId, ...updates } = data;
 
     // Track resolvedAt separately (set programmatically on resolution)
@@ -446,6 +488,35 @@ export const updateIssue = createServerFn({ method: 'POST' })
       })
       .where(eq(issues.id, issueId))
       .returning();
+
+    // Log issue update
+    const changes = computeChanges({
+      before: existing,
+      after: issue,
+      excludeFields: ISSUE_EXCLUDED_FIELDS as never[],
+    });
+
+    if (changes.fields && changes.fields.length > 0) {
+      logger.logAsync({
+        entityType: 'issue',
+        entityId: issue.id,
+        action: 'updated',
+        description: `Updated issue: ${issue.issueNumber}`,
+        changes,
+        metadata: {
+          customerId: issue.customerId ?? undefined,
+          status: issue.status,
+          changedFields: changes.fields,
+          ...(existing.status !== issue.status && {
+            previousStatus: existing.status,
+            newStatus: issue.status,
+          }),
+          ...(updates.assignedToUserId && {
+            assignedTo: updates.assignedToUserId,
+          }),
+        },
+      });
+    }
 
     return issue;
   });

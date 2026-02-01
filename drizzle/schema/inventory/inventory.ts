@@ -69,8 +69,8 @@ export interface MovementMetadata {
   batchNumber?: string;
   /** Serial numbers if applicable */
   serialNumbers?: string[];
-  /** Cost per unit at time of movement */
-  unitCostCents?: number;
+  /** Cost per unit at time of movement (in dollars) */
+  unitCost?: number;
   /** Status change description (for adjustment movements) */
   statusChange?: string;
   /** Stock count code reference */

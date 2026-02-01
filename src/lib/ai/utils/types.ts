@@ -14,32 +14,32 @@ export interface BudgetCheckResult {
   reason?: string;
   /** Actionable suggestion for user */
   suggestion?: string;
-  /** Current org daily usage in cents */
-  orgDailyUsedCents?: number;
-  /** Current user daily usage in cents */
-  userDailyUsedCents?: number;
-  /** Org daily limit in cents */
-  orgDailyLimitCents?: number;
-  /** User daily limit in cents */
-  userDailyLimitCents?: number;
+  /** Current org daily usage in dollars */
+  orgDailyUsed?: number;
+  /** Current user daily usage in dollars */
+  userDailyUsed?: number;
+  /** Org daily limit in dollars */
+  orgDailyLimit?: number;
+  /** User daily limit in dollars */
+  userDailyLimit?: number;
 }
 
 /**
  * Current budget status for an organization/user.
  */
 export interface BudgetStatus {
-  /** Organization daily limit in cents */
-  dailyLimitCents: number;
-  /** Organization daily usage in cents */
-  dailyUsedCents: number;
-  /** Monthly limit in cents (org daily * 30) */
-  monthlyLimitCents: number;
-  /** Monthly usage in cents */
-  monthlyUsedCents: number;
-  /** User daily limit in cents */
-  userDailyLimitCents: number;
-  /** User daily usage in cents */
-  userDailyUsedCents: number;
+  /** Organization daily limit in dollars */
+  dailyLimit: number;
+  /** Organization daily usage in dollars */
+  dailyUsed: number;
+  /** Monthly limit in dollars (org daily * 30) */
+  monthlyLimit: number;
+  /** Monthly usage in dollars */
+  monthlyUsed: number;
+  /** User daily limit in dollars */
+  userDailyLimit: number;
+  /** User daily usage in dollars */
+  userDailyUsed: number;
   /** Percentage of daily budget used (0-100) */
   dailyPercentUsed: number;
   /** Percentage of monthly budget used (0-100) */
@@ -59,8 +59,8 @@ export interface CostBreakdown {
   inputTokens: number;
   /** Output tokens used */
   outputTokens: number;
-  /** Cost in cents */
-  costCents: number;
+  /** Cost in dollars */
+  cost: number;
   /** Model used */
   model: string;
   /** Cached tokens (if applicable) */
@@ -73,8 +73,8 @@ export interface CostBreakdown {
 export interface CostTrackingResult {
   /** Whether tracking succeeded */
   success: boolean;
-  /** Total cost for the operation */
-  totalCostCents: number;
+  /** Total cost for the operation in dollars */
+  totalCost: number;
   /** Error message if tracking failed */
   error?: string;
 }

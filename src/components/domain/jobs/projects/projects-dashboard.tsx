@@ -19,8 +19,6 @@ import {
   AlertTriangle,
   Clock,
   DollarSign,
-  TrendingUp,
-  CheckCircle2,
   Calendar,
   LayoutGrid,
   List,
@@ -36,8 +34,10 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { StatusCell } from '@/components/shared/data-table';
+import { StatusBadge } from '@/components/shared';
+import { PROJECT_STATUS_CONFIG } from './project-status-config';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -60,6 +60,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { useOrgFormat } from '@/hooks/use-org-format';
 
 // Types
 import type { Project } from 'drizzle/schema/jobs/projects';
@@ -82,99 +83,40 @@ type ViewMode = 'grid' | 'list';
 type DateFilter = 'all' | 'overdue' | 'today' | 'this-week' | 'this-month';
 
 // ============================================================================
-// STATUS CONFIG
+// STATUS CONFIG (extended with UI-specific properties)
 // ============================================================================
 
-const STATUS_CONFIG: Record<ProjectStatus, { 
-  label: string; 
-  color: string; 
-  bg: string;
-  icon: React.ElementType;
-}> = {
-  quoting: { 
-    label: 'Quoting', 
-    color: 'text-slate-600', 
-    bg: 'bg-slate-100',
-    icon: Briefcase,
-  },
-  approved: { 
-    label: 'Approved', 
-    color: 'text-blue-600', 
-    bg: 'bg-blue-100',
-    icon: CheckCircle2,
-  },
-  in_progress: { 
-    label: 'In Progress', 
-    color: 'text-teal-600', 
-    bg: 'bg-teal-100',
-    icon: TrendingUp,
-  },
-  completed: { 
-    label: 'Completed', 
-    color: 'text-green-600', 
-    bg: 'bg-green-100',
-    icon: CheckCircle2,
-  },
-  cancelled: { 
-    label: 'Cancelled', 
-    color: 'text-red-600', 
-    bg: 'bg-red-100',
-    icon: AlertCircle,
-  },
-  on_hold: { 
-    label: 'On Hold', 
-    color: 'text-orange-600', 
-    bg: 'bg-orange-100',
-    icon: Clock,
-  },
-};
-
-const PRIORITY_CONFIG: Record<ProjectPriority, { 
-  label: string; 
-  color: string; 
+const PRIORITY_CONFIG: Record<ProjectPriority, {
+  label: string;
+  color: string;
   bg: string;
   border: string;
 }> = {
-  urgent: { 
-    label: 'Urgent', 
-    color: 'text-red-600', 
+  urgent: {
+    label: 'Urgent',
+    color: 'text-red-600',
     bg: 'bg-red-50',
     border: 'border-red-200',
   },
-  high: { 
-    label: 'High', 
-    color: 'text-orange-600', 
+  high: {
+    label: 'High',
+    color: 'text-orange-600',
     bg: 'bg-orange-50',
     border: 'border-orange-200',
   },
-  medium: { 
-    label: 'Medium', 
-    color: 'text-yellow-600', 
+  medium: {
+    label: 'Medium',
+    color: 'text-yellow-600',
     bg: 'bg-yellow-50',
     border: 'border-yellow-200',
   },
-  low: { 
-    label: 'Low', 
-    color: 'text-green-600', 
+  low: {
+    label: 'Low',
+    color: 'text-green-600',
     bg: 'bg-green-50',
     border: 'border-green-200',
   },
 };
-
-// ============================================================================
-// UTILITY FUNCTIONS
-// ============================================================================
-
-function formatCurrency(value: string | number | null | undefined): string {
-  if (!value) return '$0';
-  const num = typeof value === 'string' ? parseFloat(value) : value;
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    notation: num >= 1000000 ? 'compact' : 'standard',
-    maximumFractionDigits: 0,
-  }).format(num);
-}
 
 function getDueDateStatus(date: string | null | undefined): {
   label: string;
@@ -182,7 +124,7 @@ function getDueDateStatus(date: string | null | undefined): {
   isUrgent: boolean;
 } {
   if (!date) return { label: 'No date', color: 'text-muted-foreground', isUrgent: false };
-  
+
   const d = new Date(date);
   if (isPast(d) && !isToday(d)) {
     return { label: `Overdue ${format(d, 'MMM d')}`, color: 'text-red-600', isUrgent: true };
@@ -201,11 +143,14 @@ function getDueDateStatus(date: string | null | undefined): {
 // ============================================================================
 
 function PortfolioStats({ projects }: { projects: Project[] }) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
   const stats = useMemo(() => {
     const active = projects.filter(p => !['completed', 'cancelled'].includes(p.status));
     const urgent = projects.filter(p => p.priority === 'urgent' && !['completed', 'cancelled'].includes(p.status));
     const high = projects.filter(p => p.priority === 'high' && !['completed', 'cancelled'].includes(p.status));
-    
+
     // Due this week (next 7 days)
     const now = new Date();
     const weekFromNow = addDays(now, 7);
@@ -214,24 +159,24 @@ function PortfolioStats({ projects }: { projects: Project[] }) {
       const due = new Date(p.targetCompletionDate);
       return isWithinInterval(due, { start: now, end: weekFromNow }) || isPast(due);
     });
-    
+
     // Overdue
     const overdue = projects.filter(p => {
       if (!p.targetCompletionDate || ['completed', 'cancelled'].includes(p.status)) return false;
       return isPast(new Date(p.targetCompletionDate)) && !isToday(new Date(p.targetCompletionDate));
     });
-    
+
     // Financial totals
     const estimatedTotal = projects.reduce((sum, p) => {
       const val = p.estimatedTotalValue ? parseFloat(String(p.estimatedTotalValue)) : 0;
       return sum + val;
     }, 0);
-    
+
     const actualTotal = projects.reduce((sum, p) => {
       const val = p.actualTotalCost ? parseFloat(String(p.actualTotalCost)) : 0;
       return sum + val;
     }, 0);
-    
+
     return {
       active: active.length,
       urgent: urgent.length,
@@ -240,7 +185,7 @@ function PortfolioStats({ projects }: { projects: Project[] }) {
       overdue: overdue.length,
       estimatedTotal,
       actualTotal,
-      completionRate: projects.length > 0 
+      completionRate: projects.length > 0
         ? Math.round((projects.filter(p => p.status === 'completed').length / projects.length) * 100)
         : 0,
     };
@@ -273,11 +218,11 @@ function PortfolioStats({ projects }: { projects: Project[] }) {
     },
     {
       title: 'Portfolio Value',
-      value: formatCurrency(stats.estimatedTotal),
+      value: formatCurrencyDisplay(stats.estimatedTotal),
       icon: DollarSign,
       color: 'text-green-600',
       bg: 'bg-green-100',
-      subtext: stats.actualTotal > 0 ? `${formatCurrency(stats.actualTotal)} actual` : undefined,
+      subtext: stats.actualTotal > 0 ? `${formatCurrencyDisplay(stats.actualTotal)} actual` : undefined,
     },
   ];
 
@@ -311,11 +256,11 @@ function PortfolioStats({ projects }: { projects: Project[] }) {
 // URGENT ITEMS BANNER
 // ============================================================================
 
-function UrgentItemsBanner({ 
-  projects, 
-  onProjectClick 
-}: { 
-  projects: Project[]; 
+function UrgentItemsBanner({
+  projects,
+  onProjectClick
+}: {
+  projects: Project[];
   onProjectClick: (project: Project) => void;
 }) {
   const urgentProjects = useMemo(() => {
@@ -347,7 +292,7 @@ function UrgentItemsBanner({
         {urgentProjects.map(project => {
           const dueStatus = getDueDateStatus(project.targetCompletionDate);
           const priorityCfg = PRIORITY_CONFIG[project.priority];
-          
+
           return (
             <button
               key={project.id}
@@ -362,9 +307,11 @@ function UrgentItemsBanner({
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <Badge variant="outline" className={cn('text-xs', dueStatus.color)}>
-                  {dueStatus.label}
-                </Badge>
+                <StatusBadge
+                  status={dueStatus.label}
+                  variant={dueStatus.color.includes('red') ? 'error' : dueStatus.color.includes('orange') ? 'warning' : 'neutral'}
+                  className="text-xs"
+                />
                 <ArrowRight className="h-4 w-4 text-muted-foreground" />
               </div>
             </button>
@@ -392,13 +339,14 @@ function ProjectCardEnhanced({
   onDelete: () => void;
   viewMode: ViewMode;
 }) {
-  const status = STATUS_CONFIG[project.status];
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: string | number | null | undefined) =>
+    formatCurrency(value == null ? 0 : Number(value), { cents: false, showCents: true });
   const priority = PRIORITY_CONFIG[project.priority];
   const dueStatus = getDueDateStatus(project.targetCompletionDate);
-  const StatusIcon = status.icon;
 
   // Format address
-  const addressLabel = project.siteAddress 
+  const addressLabel = project.siteAddress
     ? [project.siteAddress.city, project.siteAddress.state].filter(Boolean).join(', ')
     : null;
 
@@ -431,9 +379,11 @@ function ProjectCardEnhanced({
             <h3 className="font-semibold truncate">{project.title}</h3>
             <span className="text-xs text-muted-foreground shrink-0">{project.projectNumber}</span>
             {dueStatus.isUrgent && (
-              <Badge variant="destructive" className="text-[10px] h-5 shrink-0">
-                {dueStatus.label}
-              </Badge>
+              <StatusBadge
+                status={dueStatus.label}
+                variant={dueStatus.color.includes('red') ? 'error' : 'warning'}
+                className="text-[10px] h-5 shrink-0"
+              />
             )}
           </div>
           <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
@@ -452,10 +402,7 @@ function ProjectCardEnhanced({
 
         {/* Status */}
         <div className="hidden sm:flex items-center gap-2 shrink-0">
-          <div className={cn('flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium', status.bg, status.color)}>
-            <StatusIcon className="h-3 w-3" />
-            {status.label}
-          </div>
+          <StatusCell status={project.status} statusConfig={PROJECT_STATUS_CONFIG} showIcon />
         </div>
 
         {/* Due Date */}
@@ -472,10 +419,12 @@ function ProjectCardEnhanced({
 
         {/* Value */}
         <div className="hidden xl:block text-right shrink-0 w-28">
-          <p className="font-medium text-sm">{formatCurrency(project.estimatedTotalValue)}</p>
+          <p className="font-medium text-sm">
+            {formatCurrencyDisplay(project.estimatedTotalValue)}
+          </p>
           {project.actualTotalCost && (
             <p className="text-xs text-muted-foreground">
-              {formatCurrency(project.actualTotalCost)} actual
+              {formatCurrencyDisplay(project.actualTotalCost)} actual
             </p>
           )}
         </div>
@@ -513,14 +462,11 @@ function ProjectCardEnhanced({
     >
       {/* Header with priority stripe */}
       <div className={cn('h-1', priority.color.replace('text-', 'bg-'))} />
-      
+
       <div className="p-4">
         {/* Top Row: Status & Actions */}
         <div className="flex items-start justify-between mb-3">
-          <div className={cn('flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium', status.bg, status.color)}>
-            <StatusIcon className="h-3 w-3" />
-            {status.label}
-          </div>
+          <StatusCell status={project.status} statusConfig={PROJECT_STATUS_CONFIG} showIcon />
           <div className="opacity-0 group-hover:opacity-100 transition-opacity">
             <DropdownMenu>
               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
@@ -575,7 +521,9 @@ function ProjectCardEnhanced({
         {/* Footer: Value & Priority */}
         <div className="flex items-center justify-between pt-3 border-t">
           <div>
-            <p className="font-medium text-sm">{formatCurrency(project.estimatedTotalValue)}</p>
+            <p className="font-medium text-sm">
+              {formatCurrencyDisplay(project.estimatedTotalValue)}
+            </p>
             <p className={cn('text-xs', priority.color)}>{priority.label} Priority</p>
           </div>
           <Avatar className="h-7 w-7 border">
@@ -729,16 +677,16 @@ export function ProjectsDashboard({
   const filteredProjects = useMemo(() => {
     return projects.filter(project => {
       // Search filter
-      const searchMatch = !search || 
+      const searchMatch = !search ||
         project.title.toLowerCase().includes(search.toLowerCase()) ||
         project.projectNumber.toLowerCase().includes(search.toLowerCase());
-      
+
       // Status filter
       const statusMatch = statusFilter === 'all' || project.status === statusFilter;
-      
+
       // Priority filter
       const priorityMatch = priorityFilter === 'all' || project.priority === priorityFilter;
-      
+
       // Date filter
       let dateMatch = true;
       if (dateFilter !== 'all' && project.targetCompletionDate) {
@@ -759,7 +707,7 @@ export function ProjectsDashboard({
             break;
         }
       }
-      
+
       return searchMatch && statusMatch && priorityMatch && dateMatch;
     });
   }, [projects, search, statusFilter, priorityFilter, dateFilter]);
@@ -824,8 +772,8 @@ export function ProjectsDashboard({
               : 'Get started by creating a new project'}
           </p>
           {(search || statusFilter !== 'all' || priorityFilter !== 'all' || dateFilter !== 'all') && (
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => {
                 setSearch('');
                 setStatusFilter('all');

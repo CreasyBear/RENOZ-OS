@@ -10,7 +10,7 @@
  *
  * @source files from useFiles hook
  * @source users from useUserLookup hook
- * @source mutations from useDeleteFile hook
+ * @source mutations from useDeleteProjectFile hook
  *
  * SPRINT-03: Enhanced files tab maximizing schema potential
  */
@@ -65,7 +65,7 @@ import {
 import { toast } from '@/lib/toast';
 
 // Hooks
-import { useFiles, useDeleteFile } from '@/hooks/jobs';
+import { useFiles, useDeleteProjectFile } from '@/hooks/jobs';
 import { useUserLookup } from '@/hooks/users';
 
 // Types
@@ -107,7 +107,7 @@ interface FileTypeInfo {
 function getFileTypeInfo(mimeType: string | null, fileName: string): FileTypeInfo {
   const safeMimeType = mimeType ?? '';
   const ext = fileName.split('.').pop()?.toLowerCase() || '';
-  
+
   // Images
   if (safeMimeType.startsWith('image/') || ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext)) {
     return {
@@ -118,7 +118,7 @@ function getFileTypeInfo(mimeType: string | null, fileName: string): FileTypeInf
       label: 'Image',
     };
   }
-  
+
   // Spreadsheets
   if (
     safeMimeType.includes('excel') ||
@@ -133,7 +133,7 @@ function getFileTypeInfo(mimeType: string | null, fileName: string): FileTypeInf
       label: 'Spreadsheet',
     };
   }
-  
+
   // Documents
   if (
     safeMimeType.includes('pdf') ||
@@ -149,7 +149,7 @@ function getFileTypeInfo(mimeType: string | null, fileName: string): FileTypeInf
       label: 'Document',
     };
   }
-  
+
   // Code
   if (
     safeMimeType.includes('json') ||
@@ -165,7 +165,7 @@ function getFileTypeInfo(mimeType: string | null, fileName: string): FileTypeInf
       label: 'Code',
     };
   }
-  
+
   // Archives
   if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) {
     return {
@@ -176,7 +176,7 @@ function getFileTypeInfo(mimeType: string | null, fileName: string): FileTypeInf
       label: 'Archive',
     };
   }
-  
+
   // Default
   return {
     category: 'other',
@@ -192,12 +192,12 @@ function formatFileSize(bytes: number | null): string {
   const units = ['B', 'KB', 'MB', 'GB'];
   let size = bytes;
   let unitIndex = 0;
-  
+
   while (size >= 1024 && unitIndex < units.length - 1) {
     size /= 1024;
     unitIndex++;
   }
-  
+
   return `${size.toFixed(1)} ${units[unitIndex]}`;
 }
 
@@ -215,7 +215,7 @@ function FilePreviewDialog({
   onClose: () => void;
 }) {
   if (!file) return null;
-  
+
   const typeInfo = getFileTypeInfo(file.mimeType, file.fileName);
   const isImage = typeInfo.category === 'image';
 
@@ -228,14 +228,14 @@ function FilePreviewDialog({
             {file.fileName}
           </DialogTitle>
         </DialogHeader>
-        
+
         <div className="space-y-4">
           {/* Preview */}
           {isImage ? (
             <div className="flex items-center justify-center bg-muted rounded-lg p-4 min-h-[300px]">
               {file.fileUrl ? (
-                <img 
-                  src={file.fileUrl} 
+                <img
+                  src={file.fileUrl}
                   alt={file.fileName}
                   className="max-w-full max-h-[60vh] object-contain rounded-lg"
                 />
@@ -287,8 +287,8 @@ function FilePreviewDialog({
 
           {/* Actions */}
           <div className="flex gap-2 pt-4 border-t">
-            <Button 
-              className="flex-1" 
+            <Button
+              className="flex-1"
               onClick={() => file.fileUrl && window.open(file.fileUrl, '_blank')}
               disabled={!file.fileUrl}
             >
@@ -296,7 +296,7 @@ function FilePreviewDialog({
               Download
             </Button>
             {file.fileUrl && (
-              <Button 
+              <Button
                 variant="outline"
                 onClick={() => {
                   navigator.clipboard.writeText(file.fileUrl!);
@@ -328,7 +328,7 @@ function FileListRow({
 }) {
   const typeInfo = getFileTypeInfo(file.mimeType, file.fileName);
   const TypeIcon = typeInfo.icon;
-  
+
   const timeAgo = formatDistanceToNow(new Date(file.updatedAt), { addSuffix: true });
 
   return (
@@ -341,7 +341,7 @@ function FileListRow({
       {/* Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <h4 
+          <h4
             className="font-medium truncate cursor-pointer hover:text-primary"
             onClick={onPreview}
           >
@@ -435,7 +435,7 @@ function FileGridCard({
     <Card className="group overflow-hidden hover:shadow-md transition-shadow">
       <CardContent className="p-0">
         {/* Preview / Icon */}
-        <div 
+        <div
           className={cn(
             'h-32 flex items-center justify-center relative cursor-pointer',
             typeInfo.bg.replace('100', '50')
@@ -444,8 +444,8 @@ function FileGridCard({
         >
           {isImage ? (
             file.fileUrl ? (
-              <img 
-                src={file.fileUrl} 
+              <img
+                src={file.fileUrl}
                 alt={file.fileName}
                 className="w-full h-full object-cover"
               />
@@ -457,7 +457,7 @@ function FileGridCard({
           ) : (
             <TypeIcon className={cn('h-16 w-16 opacity-40', typeInfo.color)} />
           )}
-          
+
           {/* Hover overlay */}
           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
             <Button variant="secondary" size="icon" className="h-10 w-10 rounded-full">
@@ -514,14 +514,14 @@ function FilesSummaryCards({ files }: { files: FileWithUploader[] }) {
   const stats = useMemo(() => {
     const totalFiles = files.length;
     const totalSize = files.reduce((acc, f) => acc + (f.fileSize ?? 0), 0);
-    
+
     // By category
     const byCategory = files.reduce((acc, file) => {
       const cat = getFileTypeInfo(file.mimeType, file.fileName).category;
       acc[cat] = (acc[cat] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
-    
+
     // Recent uploads (last 7 days)
     const recent = files.filter(f => {
       const days = (Date.now() - new Date(f.createdAt).getTime()) / (1000 * 60 * 60 * 24);
@@ -712,7 +712,7 @@ function EmptyFilesState({ onUpload }: { onUpload: () => void }) {
 
 export function ProjectFilesTab({ projectId }: ProjectFilesTabProps) {
   const { data: filesData, isLoading, refetch } = useFiles(projectId);
-  const deleteFile = useDeleteFile(projectId);
+  const deleteFile = useDeleteProjectFile(projectId);
   const { getUser } = useUserLookup();
 
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
@@ -737,16 +737,16 @@ export function ProjectFilesTab({ projectId }: ProjectFilesTabProps) {
   const filteredFiles = useMemo(() => {
     return files.filter(file => {
       // Search filter
-      const searchMatch = !searchQuery || 
+      const searchMatch = !searchQuery ||
         file.fileName.toLowerCase().includes(searchQuery.toLowerCase());
-      
+
       // Type filter
       let typeMatch = true;
       if (typeFilter !== 'all') {
         const category = getFileTypeInfo(file.mimeType, file.fileName).category;
         typeMatch = category === typeFilter;
       }
-      
+
       return searchMatch && typeMatch;
     });
   }, [files, searchQuery, typeFilter]);
@@ -831,8 +831,8 @@ export function ProjectFilesTab({ projectId }: ProjectFilesTabProps) {
         <div className="text-center py-12">
           <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <p className="text-muted-foreground">No files match your filters</p>
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             onClick={() => { setSearchQuery(''); setTypeFilter('all'); }}
           >
             Clear Filters

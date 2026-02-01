@@ -9,8 +9,9 @@
 import { useEffect } from 'react';
 import { Link } from '@tanstack/react-router';
 import { AlertCircle, RefreshCw, ArrowLeft, Home } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 
 interface RouteErrorFallbackProps {
   error: Error;
@@ -67,18 +68,20 @@ export function RouteErrorFallback({
               <RefreshCw className="mr-2 h-4 w-4" />
               Try Again
             </Button>
-            <Button variant="outline" asChild>
-              <Link to={parentRoute}>
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Go Back
-              </Link>
-            </Button>
-            <Button variant="ghost" asChild>
-              <Link to="/">
-                <Home className="mr-2 h-4 w-4" />
-                Home
-              </Link>
-            </Button>
+            <Link
+              to={parentRoute}
+              className={cn(buttonVariants({ variant: 'outline' }))}
+            >
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Go Back
+            </Link>
+            <Link
+              to="/"
+              className={cn(buttonVariants({ variant: 'ghost' }))}
+            >
+              <Home className="mr-2 h-4 w-4" />
+              Home
+            </Link>
           </div>
         </CardContent>
       </Card>

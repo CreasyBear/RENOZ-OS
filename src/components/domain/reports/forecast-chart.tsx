@@ -20,7 +20,7 @@ import {
   ComposedChart,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/formatters";
+import { useOrgFormat } from "@/hooks/use-org-format";
 import type { ForecastPeriod } from "@/lib/schemas/pipeline";
 
 // ============================================================================
@@ -40,20 +40,6 @@ export interface ForecastChartProps {
 // HELPERS
 // ============================================================================
 
-function formatAxisValue(value: number): string {
-  if (value >= 1000000) {
-    return `$${(value / 1000000).toFixed(1)}M`;
-  }
-  if (value >= 1000) {
-    return `$${(value / 1000).toFixed(0)}K`;
-  }
-  return `$${value}`;
-}
-
-function formatTooltipValue(value: number): string {
-  return formatCurrency(value);
-}
-
 // ============================================================================
 // COMPONENT
 // ============================================================================
@@ -66,14 +52,19 @@ export const ForecastChart = memo(function ForecastChart({
   height = 400,
   className,
 }: ForecastChartProps) {
-  // Transform data for chart - convert cents to dollars for display
+  const { formatCurrency } = useOrgFormat();
+  const formatAxisValue = (value: number) =>
+    formatCurrency(value, { cents: false, compact: true, showCents: false });
+  const formatTooltipValue = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
+  // Transform data for chart
   const chartData = useMemo(() => {
     return data.map((period) => ({
       period: period.period,
-      totalValue: period.totalValue / 100,
-      weightedValue: period.weightedValue / 100,
-      wonValue: period.wonValue / 100,
-      lostValue: period.lostValue / 100,
+      totalValue: period.totalValue,
+      weightedValue: period.weightedValue,
+      wonValue: period.wonValue,
+      lostValue: period.lostValue,
       opportunityCount: period.opportunityCount,
       avgProbability: period.avgProbability,
     }));
@@ -125,7 +116,7 @@ export const ForecastChart = memo(function ForecastChart({
             />
             <Tooltip
               formatter={(value: number, name: string) => [
-                formatTooltipValue(value * 100), // Convert back to cents for formatting
+                formatTooltipValue(value),
                 name === "totalValue"
                   ? "Total Pipeline"
                   : name === "weightedValue"

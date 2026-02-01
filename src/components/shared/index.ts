@@ -198,18 +198,20 @@ export {
 export {
   StatusBadge,
   type StatusBadgeProps,
-  type StatusVariant,
   type StatusConfig,
   type StatusConfigItem,
-  // Pre-built configs
-  ORDER_STATUS_CONFIG,
-  QUOTE_STATUS_CONFIG,
-  INVENTORY_ALERT_CONFIG,
-  CUSTOMER_STATUS_CONFIG,
 } from "./status-badge"
 
+// Re-export semantic colors for convenience
+export {
+  type SemanticColor,
+  getStatusColorClasses,
+  getStatusHex,
+  STATUS_COLORS,
+} from "@/lib/status"
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Activity Timeline
+// Activity (Core Timeline)
 // ─────────────────────────────────────────────────────────────────────────────
 export {
   ActivityTimeline,
@@ -219,9 +221,63 @@ export {
 } from "./activity-timeline"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Metric Card
+// Activity (Consolidated Components)
+// ─────────────────────────────────────────────────────────────────────────────
+// Re-export from @/components/shared/activity for convenience
+// Full imports should use: import { ... } from '@/components/shared/activity'
+export {
+  ActivityFeed,
+  ActivityItem,
+  ActivityFilters,
+  ActivityDashboard,
+  UnifiedActivityTimeline,
+  StatusTimeline,
+  ChangeDiff,
+  InlineChangeDiff,
+  type ActivityFeedProps,
+  type ActivityItemProps,
+  type ActivityFiltersProps,
+  type ActivityFiltersValue,
+  type ActivityDashboardProps,
+  type StatusTimelineEvent,
+  type StatusTimelineProps,
+} from "./activity"
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Metric Card & Trend Indicator
 // ─────────────────────────────────────────────────────────────────────────────
 export {
   MetricCard,
   type MetricCardProps,
+  type MetricCardVariant,
 } from "./metric-card"
+
+export {
+  TrendIndicator,
+  type TrendIndicatorProps,
+  type TrendStyle,
+} from "./trend-indicator"
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Detail View Components
+// ─────────────────────────────────────────────────────────────────────────────
+export {
+  // Field grid for displaying entity properties
+  DetailGrid,
+  type DetailGridField,
+  type DetailGridProps,
+  // Collapsible sections
+  DetailSection,
+  DetailSections,
+  type DetailSectionProps,
+  type DetailSectionsProps,
+  // Entity header
+  EntityHeader,
+  type EntityHeaderProps,
+  type EntityHeaderAction,
+  // Sheet layout
+  SheetLayout,
+  SheetLayoutWithEntity,
+  type SheetLayoutProps,
+  type SheetLayoutWithEntityProps,
+} from "./detail-view"

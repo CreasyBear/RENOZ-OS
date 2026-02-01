@@ -1,23 +1,29 @@
 /**
- * FulfillmentDashboard Component
+ * FulfillmentDashboard Presenter
  *
- * Operations dashboard for order fulfillment workflow.
+ * Pure UI component for order fulfillment workflow dashboard.
  * Shows orders in various fulfillment stages with quick actions.
+ *
+ * Container/Presenter Pattern:
+ * - Use FulfillmentDashboardContainer in routes (handles data fetching)
+ * - Use FulfillmentDashboardPresenter for storybook/testing
  *
  * Features:
  * - Summary cards: Orders to pick, Ready to ship, In transit, Overdue
  * - Picking queue table: Orders in "confirmed" status
  * - Shipping queue table: Orders in "picked" status
  * - Delivery tracking section: Active shipments
- * - 30s polling for live updates
  *
+ * @see ./fulfillment-dashboard-container.tsx (container)
  * @see _Initiation/_prd/2-domains/orders/orders.prd.json (ORD-FULFILLMENT-DASHBOARD)
  */
 
 import { memo, useState, useCallback } from "react";
 import { Link } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
+import type { UseMutationResult } from "@tanstack/react-query";
+import type { UpdateOrderStatusInput } from "@/hooks/orders/use-order-status";
 import {
   Package,
   Truck,
@@ -56,21 +62,74 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { FormatAmount } from "@/components/shared/format";
+import { FormatAmount, MetricCard } from "@/components/shared";
 import { toastSuccess, toastError } from "@/hooks";
-import { listOrders, updateOrderStatus } from "@/server/functions/orders/orders";
-import { listShipments } from "@/server/functions/orders/order-shipments";
 import type { OrderStatus, ShipmentStatus } from "@/lib/schemas/orders";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export interface FulfillmentDashboardProps {
+/**
+ * Order list result type for presenter
+ */
+interface OrderListResult {
+  orders: Array<{
+    id: string;
+    orderNumber: string;
+    customerId: string;
+    total: number | null;
+    createdAt: Date;
+    status: string;
+  }>;
+  total: number;
+}
+
+/**
+ * Shipment list result type for presenter
+ */
+interface ShipmentListResult {
+  shipments: Array<{
+    id: string;
+    shipmentNumber: string;
+    orderId: string;
+    carrier: string | null;
+    trackingNumber: string | null;
+    trackingUrl: string | null;
+    status: ShipmentStatus;
+    shippedAt: Date | null;
+  }>;
+  total: number;
+}
+
+/**
+ * Container props - what parent components pass
+ */
+export interface FulfillmentDashboardContainerProps {
   onShipOrder?: (orderId: string) => void;
   onViewOrder?: (orderId: string) => void;
   onConfirmDelivery?: (shipmentId: string) => void;
   className?: string;
+}
+
+/**
+ * Presenter props - what the container passes to the presenter
+ */
+export interface FulfillmentDashboardPresenterProps extends FulfillmentDashboardContainerProps {
+  /** @source useOrders({ status: 'confirmed' }) hook */
+  confirmedOrders: OrderListResult | null;
+  /** @source useOrders({ status: 'picked' }) hook */
+  pickedOrders: OrderListResult | null;
+  /** @source useShipments({ status: 'in_transit' }) hook */
+  activeShipments: ShipmentListResult | null;
+  /** Loading state for confirmed orders */
+  loadingConfirmed: boolean;
+  /** Loading state for picked orders */
+  loadingPicked: boolean;
+  /** Loading state for shipments */
+  loadingShipments: boolean;
+  /** @source useUpdateOrderStatus hook */
+  updateOrderStatusMutation: UseMutationResult<unknown, Error, UpdateOrderStatusInput>;
 }
 
 interface FulfillmentStats {
@@ -83,8 +142,6 @@ interface FulfillmentStats {
 // ============================================================================
 // CONSTANTS
 // ============================================================================
-
-const POLLING_INTERVAL = 30000; // 30 seconds
 
 const ORDER_STATUS_CONFIG: Record<
   OrderStatus,
@@ -145,172 +202,59 @@ function isOverdue(orderDate: string | Date): boolean {
 }
 
 // ============================================================================
-// STAT CARD COMPONENT
+// STAT CARD VARIANT STYLES
 // ============================================================================
 
-interface StatCardProps {
-  title: string;
-  value: number;
-  subtitle: string;
-  icon: React.ReactNode;
-  variant?: "default" | "warning" | "success" | "info";
-  loading?: boolean;
-}
+// Variant styles for fulfillment stat cards
+const STAT_CARD_STYLES = {
+  default: { className: "border-gray-200", iconClassName: "text-gray-400" },
+  warning: { className: "border-orange-200 bg-orange-50", iconClassName: "text-orange-500" },
+  success: { className: "border-green-200 bg-green-50", iconClassName: "text-green-500" },
+  info: { className: "border-blue-200 bg-blue-50", iconClassName: "text-blue-500" },
+} as const;
 
-function StatCard({ title, value, subtitle, icon, variant = "default", loading }: StatCardProps) {
-  const variantStyles = {
-    default: "border-gray-200",
-    warning: "border-orange-200 bg-orange-50",
-    success: "border-green-200 bg-green-50",
-    info: "border-blue-200 bg-blue-50",
-  };
-
-  const iconStyles = {
-    default: "text-gray-400",
-    warning: "text-orange-500",
-    success: "text-green-500",
-    info: "text-blue-500",
-  };
-
-  if (loading) {
-    return (
-      <Card className={cn("transition-colors", variantStyles[variant])}>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-5 w-5 rounded" />
-          </div>
-          <Skeleton className="mt-2 h-8 w-16" />
-          <Skeleton className="mt-1 h-4 w-32" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className={cn("transition-colors", variantStyles[variant])}>
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-500">{title}</span>
-          <span className={iconStyles[variant]}>{icon}</span>
-        </div>
-        <div className="mt-2">
-          <span className="text-3xl font-semibold text-gray-900">{value}</span>
-        </div>
-        <p className="mt-1 text-sm text-gray-500">{subtitle}</p>
-      </CardContent>
-    </Card>
-  );
-}
+// Note: Using shared MetricCard from @/components/shared
 
 // ============================================================================
-// MAIN COMPONENT
+// MAIN COMPONENT (PRESENTER)
 // ============================================================================
 
-export const FulfillmentDashboard = memo(function FulfillmentDashboard({
+export const FulfillmentDashboardPresenter = memo(function FulfillmentDashboardPresenter({
+  confirmedOrders,
+  pickedOrders,
+  activeShipments,
+  loadingConfirmed,
+  loadingPicked,
+  loadingShipments,
+  updateOrderStatusMutation,
   onShipOrder,
   onViewOrder,
   onConfirmDelivery,
   className,
-}: FulfillmentDashboardProps) {
+}: FulfillmentDashboardPresenterProps) {
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Fetch orders in "confirmed" status (picking queue)
-  const { data: confirmedOrders, isLoading: loadingConfirmed } = useQuery({
-    queryKey: queryKeys.orders.fulfillment("confirmed"),
-    queryFn: async () => {
-      const result = await listOrders({
-        data: {
-          page: 1,
-          pageSize: 50,
-          status: "confirmed",
-          sortBy: "createdAt",
-          sortOrder: "asc",
-        },
-      });
-      return result;
-    },
-    refetchInterval: POLLING_INTERVAL,
-  });
+  // Mutation handlers with toast feedback
+  const handleStartPicking = useCallback((orderId: string) => {
+    updateOrderStatusMutation.mutate(
+      { id: orderId, status: 'picking' },
+      {
+        onSuccess: () => toastSuccess("Order moved to picking"),
+        onError: () => toastError("Failed to start picking"),
+      }
+    );
+  }, [updateOrderStatusMutation]);
 
-  // Fetch orders in "picked" status (shipping queue)
-  const { data: pickedOrders, isLoading: loadingPicked } = useQuery({
-    queryKey: queryKeys.orders.fulfillment("picked"),
-    queryFn: async () => {
-      const result = await listOrders({
-        data: {
-          page: 1,
-          pageSize: 50,
-          status: "picked",
-          sortBy: "createdAt",
-          sortOrder: "asc",
-        },
-      });
-      return result;
-    },
-    refetchInterval: POLLING_INTERVAL,
-  });
-
-  // Fetch active shipments (in_transit)
-  const { data: activeShipments, isLoading: loadingShipments } = useQuery({
-    queryKey: queryKeys.orders.shipments(),
-    queryFn: async () => {
-      const result = await listShipments({
-        data: {
-          page: 1,
-          pageSize: 50,
-          status: "in_transit",
-          sortBy: "createdAt",
-          sortOrder: "desc",
-        },
-      });
-      return result;
-    },
-    refetchInterval: POLLING_INTERVAL,
-  });
-
-  // Start picking mutation
-  const startPickingMutation = useMutation({
-    mutationFn: async (orderId: string) => {
-      return updateOrderStatus({
-        data: {
-          id: orderId,
-          data: {
-            status: "picking",
-          },
-        },
-      });
-    },
-    onSuccess: () => {
-      toastSuccess("Order moved to picking");
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillment() });
-    },
-    onError: () => {
-      toastError("Failed to start picking");
-    },
-  });
-
-  // Complete picking mutation
-  const completePickingMutation = useMutation({
-    mutationFn: async (orderId: string) => {
-      return updateOrderStatus({
-        data: {
-          id: orderId,
-          data: {
-            status: "picked",
-          },
-        },
-      });
-    },
-    onSuccess: () => {
-      toastSuccess("Order ready for shipping");
-      queryClient.invalidateQueries({ queryKey: queryKeys.orders.fulfillment() });
-    },
-    onError: () => {
-      toastError("Failed to complete picking");
-    },
-  });
+  const handleCompletePicking = useCallback((orderId: string) => {
+    updateOrderStatusMutation.mutate(
+      { id: orderId, status: 'picked' },
+      {
+        onSuccess: () => toastSuccess("Order ready for shipping"),
+        onError: () => toastError("Failed to complete picking"),
+      }
+    );
+  }, [updateOrderStatusMutation]);
 
   // Calculate stats
   const stats: FulfillmentStats = {
@@ -354,37 +298,41 @@ export const FulfillmentDashboard = memo(function FulfillmentDashboard({
 
       {/* Summary Stats */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard
+        <MetricCard
           title="Orders to Pick"
           value={stats.toPick}
           subtitle="Awaiting fulfillment"
-          icon={<Package className="h-5 w-5" />}
-          variant="info"
-          loading={isLoading}
+          icon={Package}
+          className={STAT_CARD_STYLES.info.className}
+          iconClassName={STAT_CARD_STYLES.info.iconClassName}
+          isLoading={isLoading}
         />
-        <StatCard
+        <MetricCard
           title="Ready to Ship"
           value={stats.readyToShip}
           subtitle="Packed and waiting"
-          icon={<Truck className="h-5 w-5" />}
-          variant="success"
-          loading={isLoading}
+          icon={Truck}
+          className={STAT_CARD_STYLES.success.className}
+          iconClassName={STAT_CARD_STYLES.success.iconClassName}
+          isLoading={isLoading}
         />
-        <StatCard
+        <MetricCard
           title="In Transit"
           value={stats.inTransit}
           subtitle="Active shipments"
-          icon={<MapPin className="h-5 w-5" />}
-          variant="default"
-          loading={isLoading}
+          icon={MapPin}
+          className={STAT_CARD_STYLES.default.className}
+          iconClassName={STAT_CARD_STYLES.default.iconClassName}
+          isLoading={isLoading}
         />
-        <StatCard
+        <MetricCard
           title="Overdue"
           value={stats.overdue}
           subtitle="Needs attention"
-          icon={<AlertTriangle className="h-5 w-5" />}
-          variant={stats.overdue > 0 ? "warning" : "default"}
-          loading={isLoading}
+          icon={AlertTriangle}
+          className={stats.overdue > 0 ? STAT_CARD_STYLES.warning.className : STAT_CARD_STYLES.default.className}
+          iconClassName={stats.overdue > 0 ? STAT_CARD_STYLES.warning.iconClassName : STAT_CARD_STYLES.default.iconClassName}
+          isLoading={isLoading}
         />
       </div>
 
@@ -415,8 +363,8 @@ export const FulfillmentDashboard = memo(function FulfillmentDashboard({
               status: order.status as "draft" | "confirmed" | "picking" | "picked" | "shipped" | "delivered" | "cancelled"
             }))}
             isLoading={loadingConfirmed}
-            onStartPicking={(id) => startPickingMutation.mutate(id)}
-            onCompletePicking={(id) => completePickingMutation.mutate(id)}
+            onStartPicking={handleStartPicking}
+            onCompletePicking={handleCompletePicking}
             onViewOrder={onViewOrder}
           />
         </CardContent>
@@ -575,7 +523,7 @@ function PickingQueueTable({
               </TableCell>
               <TableCell>{getOrderStatusBadge(order.status)}</TableCell>
               <TableCell className="text-right font-medium">
-                <FormatAmount amount={order.total} cents={false} />
+                <FormatAmount amount={order.total} />
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">
@@ -707,7 +655,7 @@ function ShippingQueueTable({
               </TableCell>
               <TableCell>{getOrderStatusBadge(order.status)}</TableCell>
               <TableCell className="text-right font-medium">
-                <FormatAmount amount={order.total} cents={false} />
+                <FormatAmount amount={order.total} />
               </TableCell>
               <TableCell>
                 <div className="flex items-center gap-2">
@@ -845,3 +793,13 @@ function DeliveryTrackingTable({
     </Table>
   );
 }
+
+// ============================================================================
+// BACKWARDS COMPATIBILITY
+// ============================================================================
+
+/** @deprecated Use FulfillmentDashboardContainer instead */
+export const FulfillmentDashboard = FulfillmentDashboardPresenter;
+
+/** @deprecated Use FulfillmentDashboardContainerProps instead */
+export type FulfillmentDashboardProps = FulfillmentDashboardContainerProps;

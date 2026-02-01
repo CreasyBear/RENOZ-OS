@@ -1,15 +1,17 @@
 /**
- * QuoteBuilder Component
+ * QuoteBuilder Presenter
  *
  * Full quote building interface with line item management,
  * automatic GST calculations, and version control.
  *
+ * Pure presenter - all data passed via props from container.
+ *
+ * @see ./quote-builder-container.tsx (container)
  * @see _Initiation/_prd/2-domains/pipeline/pipeline.prd.json (PIPE-QUOTE-BUILDER-UI)
  */
 
-import { memo, useState, useCallback } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/query-keys";
+import { memo, useState, useCallback, useMemo } from "react";
+import type { UseMutationResult } from "@tanstack/react-query";
 import {
   Plus,
   Trash2,
@@ -47,8 +49,12 @@ import {
 } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { toastSuccess, toastError } from "@/hooks";
-import { createQuoteVersion } from "@/server/functions/pipeline/quote-versions";
 import { FormatAmount } from "@/components/shared/format";
+import type { CreateQuoteVersionInput } from "@/hooks/pipeline";
+import {
+  ProductSelector,
+  type OrderLineItemDraft,
+} from "@/components/domain/orders/creation/product-selector";
 import type { QuoteLineItem, QuoteVersion } from "@/lib/schemas/pipeline";
 import { GST_RATE } from "@/lib/order-calculations";
 
@@ -56,9 +62,25 @@ import { GST_RATE } from "@/lib/order-calculations";
 // TYPES
 // ============================================================================
 
-export interface QuoteBuilderProps {
+/**
+ * Container props - used by parent components
+ */
+export interface QuoteBuilderContainerProps {
   opportunityId: string;
   currentVersion?: QuoteVersion | null;
+  onSave?: (version: QuoteVersion) => void;
+  onViewHistory?: () => void;
+  className?: string;
+}
+
+/**
+ * Presenter props - receives data from container
+ */
+export interface QuoteBuilderPresenterProps {
+  opportunityId: string;
+  currentVersion?: QuoteVersion | null;
+  /** @source useCreateQuoteVersion hook */
+  saveMutation: UseMutationResult<{ quoteVersion: QuoteVersion }, Error, CreateQuoteVersionInput>;
   onSave?: (version: QuoteVersion) => void;
   onViewHistory?: () => void;
   className?: string;
@@ -71,8 +93,8 @@ interface EditableLineItem extends QuoteLineItem {
 const EMPTY_LINE_ITEM: Omit<EditableLineItem, "tempId"> = {
   description: "",
   quantity: 1,
-  unitPriceCents: 0,
-  totalCents: 0,
+  unitPrice: 0,
+  total: 0,
 };
 
 // ============================================================================
@@ -83,10 +105,10 @@ function generateTempId(): string {
   return `temp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
 
-function calculateLineTotal(quantity: number, unitPriceCents: number, discountPercent?: number): number {
-  const subtotal = quantity * unitPriceCents;
+function calculateLineTotal(quantity: number, unitPrice: number, discountPercent?: number): number {
+  const subtotal = quantity * unitPrice;
   const discount = discountPercent ? subtotal * (discountPercent / 100) : 0;
-  return Math.round(subtotal - discount);
+  return Math.round((subtotal - discount) * 100) / 100; // Round to 2 decimal places
 }
 
 function calculateTotals(items: EditableLineItem[]): {
@@ -94,24 +116,24 @@ function calculateTotals(items: EditableLineItem[]): {
   taxAmount: number;
   total: number;
 } {
-  const subtotal = items.reduce((sum, item) => sum + item.totalCents, 0);
-  const taxAmount = Math.round(subtotal * GST_RATE);
-  const total = subtotal + taxAmount;
+  const subtotal = items.reduce((sum, item) => sum + (item.total ?? 0), 0);
+  const taxAmount = Math.round(subtotal * GST_RATE * 100) / 100; // Round to 2 decimal places
+  const total = Math.round((subtotal + taxAmount) * 100) / 100; // Round to 2 decimal places
   return { subtotal, taxAmount, total };
 }
 
 // ============================================================================
-// COMPONENT
+// PRESENTER COMPONENT
 // ============================================================================
 
-export const QuoteBuilder = memo(function QuoteBuilder({
+export const QuoteBuilderPresenter = memo(function QuoteBuilderPresenter({
   opportunityId,
   currentVersion,
+  saveMutation,
   onSave,
   onViewHistory,
   className,
-}: QuoteBuilderProps) {
-  const queryClient = useQueryClient();
+}: QuoteBuilderPresenterProps) {
 
   // Initialize line items from current version or empty
   const [lineItems, setLineItems] = useState<EditableLineItem[]>(() => {
@@ -130,42 +152,86 @@ export const QuoteBuilder = memo(function QuoteBuilder({
   // Calculate totals
   const { subtotal, taxAmount, total } = calculateTotals(lineItems);
 
-  // Save mutation
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      // Filter out empty line items
-      const validItems = lineItems.filter(
-        (item) => item.description.trim() && item.quantity > 0
-      );
+  const selectedProducts = useMemo<OrderLineItemDraft[]>(
+    () =>
+      lineItems
+        .filter((item) => !!item.productId)
+        .map((item, index) => ({
+          productId: item.productId!,
+          lineNumber: String(index + 1).padStart(2, "0"),
+          sku: item.sku ?? "",
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          discountPercent: item.discountPercent,
+          taxType: "gst",
+        })),
+    [lineItems]
+  );
 
-      if (validItems.length === 0) {
-        throw new Error("At least one line item is required");
-      }
+  const handleProductsChange = useCallback(
+    (products: OrderLineItemDraft[]) => {
+      const productItems: EditableLineItem[] = products.map((product) => {
+        const existing = lineItems.find((item) => item.productId === product.productId);
+        const totalValue = calculateLineTotal(
+          product.quantity,
+          product.unitPrice,
+          product.discountPercent
+        );
 
-      // Strip tempId before sending to server
-      const itemsToSave: QuoteLineItem[] = validItems.map(({ tempId, ...item }) => item);
-
-      const result = await createQuoteVersion({
-        data: {
-          opportunityId,
-          items: itemsToSave,
-          notes: notes || undefined,
-        },
+        return {
+          tempId: existing?.tempId ?? generateTempId(),
+          productId: product.productId,
+          sku: product.sku || undefined,
+          description: product.description,
+          quantity: product.quantity,
+          unitPrice: product.unitPrice,
+          discountPercent: product.discountPercent,
+          total: totalValue,
+        };
       });
 
-      return result;
+      const nonProductItems = lineItems.filter((item) => !item.productId);
+
+      setLineItems([...nonProductItems, ...productItems]);
+      setHasChanges(true);
     },
-    onSuccess: (data) => {
-      toastSuccess(`Quote v${data.quoteVersion.versionNumber} saved successfully.`);
-      setHasChanges(false);
-      queryClient.invalidateQueries({ queryKey: queryKeys.opportunities.detail(opportunityId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.pipeline.quoteVersions(opportunityId) });
-      onSave?.(data.quoteVersion);
-    },
-    onError: (error) => {
-      toastError(error instanceof Error ? error.message : "Failed to save quote");
-    },
-  });
+    [lineItems]
+  );
+
+  // Handle save using mutation from container
+  const handleSave = useCallback(() => {
+    // Filter out empty line items
+    const validItems = lineItems.filter(
+      (item) => item.description.trim() && item.quantity > 0
+    );
+
+    if (validItems.length === 0) {
+      toastError("At least one line item is required");
+      return;
+    }
+
+    // Strip tempId before sending to server
+    const itemsToSave: QuoteLineItem[] = validItems.map(({ tempId: _tempId, ...item }) => item);
+
+    saveMutation.mutate(
+      {
+        opportunityId,
+        items: itemsToSave,
+        notes: notes || undefined,
+      },
+      {
+        onSuccess: (data) => {
+          toastSuccess(`Quote v${data.quoteVersion.versionNumber} saved successfully.`);
+          setHasChanges(false);
+          onSave?.(data.quoteVersion);
+        },
+        onError: (error) => {
+          toastError(error instanceof Error ? error.message : "Failed to save quote");
+        },
+      }
+    );
+  }, [lineItems, notes, opportunityId, saveMutation, onSave]);
 
   // Add new line item
   const addLineItem = useCallback(() => {
@@ -198,10 +264,10 @@ export const QuoteBuilder = memo(function QuoteBuilder({
           const updated = { ...item, [field]: value };
 
           // Recalculate total when quantity, price, or discount changes
-          if (field === "quantity" || field === "unitPriceCents" || field === "discountPercent") {
-            updated.totalCents = calculateLineTotal(
+          if (field === "quantity" || field === "unitPrice" || field === "discountPercent") {
+            updated.total = calculateLineTotal(
               field === "quantity" ? (value as number) : updated.quantity,
-              field === "unitPriceCents" ? (value as number) : updated.unitPriceCents,
+              field === "unitPrice" ? (value as number) : updated.unitPrice,
               field === "discountPercent" ? (value as number) : updated.discountPercent
             );
           }
@@ -264,6 +330,12 @@ export const QuoteBuilder = memo(function QuoteBuilder({
           </Alert>
         )}
 
+        {/* Product Selector */}
+        <ProductSelector
+          selectedProducts={selectedProducts}
+          onProductsChange={handleProductsChange}
+        />
+
         {/* Line Items Table */}
         <div className="border rounded-lg overflow-hidden">
           <Table>
@@ -309,12 +381,12 @@ export const QuoteBuilder = memo(function QuoteBuilder({
                         type="number"
                         min="0"
                         step="0.01"
-                        value={(item.unitPriceCents / 100).toFixed(2)}
+                        value={item.unitPrice.toFixed(2)}
                         onChange={(e) =>
                           updateLineItem(
                             item.tempId,
-                            "unitPriceCents",
-                            Math.round(parseFloat(e.target.value) * 100) || 0
+                            "unitPrice",
+                            parseFloat(e.target.value) || 0
                           )
                         }
                         className="border-0 shadow-none focus-visible:ring-0 px-0 text-right w-24"
@@ -340,7 +412,7 @@ export const QuoteBuilder = memo(function QuoteBuilder({
                     />
                   </TableCell>
                   <TableCell className="text-right font-medium">
-                    <FormatAmount amount={item.totalCents} cents={true} />
+                    <FormatAmount amount={item.total} />
                   </TableCell>
                   <TableCell>
                     <Button
@@ -378,16 +450,16 @@ export const QuoteBuilder = memo(function QuoteBuilder({
           <div className="w-64 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
-              <span><FormatAmount amount={subtotal} cents={true} /></span>
+              <span><FormatAmount amount={subtotal} /></span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">GST (10%)</span>
-              <span><FormatAmount amount={taxAmount} cents={true} /></span>
+              <span><FormatAmount amount={taxAmount} /></span>
             </div>
             <Separator />
             <div className="flex justify-between font-semibold text-lg">
               <span>Total</span>
-              <span><FormatAmount amount={total} cents={true} /></span>
+              <span><FormatAmount amount={total} /></span>
             </div>
           </div>
         </div>
@@ -410,7 +482,7 @@ export const QuoteBuilder = memo(function QuoteBuilder({
           {lineItems.filter((i) => i.description.trim()).length} line item(s)
         </div>
         <Button
-          onClick={() => saveMutation.mutate()}
+          onClick={handleSave}
           disabled={!canSave}
         >
           <Save className="h-4 w-4 mr-2" />
@@ -425,4 +497,10 @@ export const QuoteBuilder = memo(function QuoteBuilder({
   );
 });
 
-export default QuoteBuilder;
+/**
+ * @deprecated Use QuoteBuilderContainer instead for new code.
+ * This export is kept for backwards compatibility.
+ */
+export const QuoteBuilder = QuoteBuilderPresenter;
+
+export default QuoteBuilderPresenter;

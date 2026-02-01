@@ -7,20 +7,22 @@ import type {
   WarrantyClaimTypeValue,
   WarrantyClaimResolutionTypeValue,
 } from '@/lib/schemas/warranty/claims';
+import type { SemanticColor } from '@/lib/status';
 
+/**
+ * Semantic status config for warranty claims.
+ * Uses the semantic color system for consistency across React, PDF, and Email.
+ * Compatible with StatusBadge component.
+ */
 export const claimStatusConfig: Record<
   WarrantyClaimStatusValue,
-  { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; color: string }
+  { label: string; variant: SemanticColor }
 > = {
-  submitted: { label: 'Submitted', variant: 'secondary', color: 'bg-blue-100 text-blue-700' },
-  under_review: {
-    label: 'Under Review',
-    variant: 'outline',
-    color: 'bg-yellow-100 text-yellow-700',
-  },
-  approved: { label: 'Approved', variant: 'default', color: 'bg-green-100 text-green-700' },
-  denied: { label: 'Denied', variant: 'destructive', color: 'bg-red-100 text-red-700' },
-  resolved: { label: 'Resolved', variant: 'default', color: 'bg-emerald-100 text-emerald-700' },
+  submitted: { label: 'Submitted', variant: 'info' },
+  under_review: { label: 'Under Review', variant: 'warning' },
+  approved: { label: 'Approved', variant: 'success' },
+  denied: { label: 'Denied', variant: 'error' },
+  resolved: { label: 'Resolved', variant: 'success' },
 };
 
 export const claimTypeConfig: Record<

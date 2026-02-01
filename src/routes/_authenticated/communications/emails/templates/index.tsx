@@ -222,4 +222,3 @@ function TemplatesContainer() {
   );
 }
 
-export default TemplatesContainer;

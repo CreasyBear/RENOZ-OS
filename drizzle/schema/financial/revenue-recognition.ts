@@ -73,7 +73,7 @@ export const revenueRecognition = pgTable(
     // Recognition details
     recognitionType: recognitionTypeEnum("recognition_type").notNull(),
     milestoneName: text("milestone_name"), // e.g., "Battery delivery", "Installation complete"
-    recognizedAmount: currencyColumn("recognized_amount"), // AUD cents
+    recognizedAmount: currencyColumn("recognized_amount"), // AUD dollars
     recognitionDate: date("recognition_date").notNull(),
 
     // Xero sync state machine
@@ -166,7 +166,7 @@ export const deferredRevenue = pgTable(
       .references(() => orders.id, { onDelete: "cascade" }),
 
     // Deferred amount tracking
-    originalAmount: currencyColumn("original_amount"), // Initial deferred amount (AUD cents)
+    originalAmount: currencyColumn("original_amount"), // Initial deferred amount (AUD dollars)
     remainingAmount: currencyColumn("remaining_amount"), // Current deferred balance
     recognizedAmount: currencyColumn("recognized_amount"), // Amount recognized so far
 

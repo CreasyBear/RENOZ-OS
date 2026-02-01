@@ -19,7 +19,8 @@ import {
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { FormatAmount } from '@/components/shared/format'
+import { FormatAmount, MetricCard } from '@/components/shared'
+import { useOrgFormat } from '@/hooks/use-org-format'
 
 // ============================================================================
 // TYPES
@@ -75,36 +76,7 @@ function getHealthScoreColor(score: number | null | undefined): {
   return { bg: 'bg-red-100', text: 'text-red-700', label: 'At Risk' }
 }
 
-// ============================================================================
-// METRIC CARD COMPONENT
-// ============================================================================
-
-interface MetricCardProps {
-  icon: React.ReactNode
-  label: string
-  value: React.ReactNode
-  subtext?: React.ReactNode
-  className?: string
-}
-
-function MetricCard({ icon, label, value, subtext, className }: MetricCardProps) {
-  return (
-    <Card className={cn('relative overflow-hidden', className)}>
-      <CardContent className="p-4">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <p className="text-sm text-muted-foreground">{label}</p>
-            <div className="text-2xl font-bold tracking-tight">{value}</div>
-            {subtext && (
-              <div className="text-xs text-muted-foreground">{subtext}</div>
-            )}
-          </div>
-          <div className="rounded-full bg-muted p-2">{icon}</div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
+// Note: Using shared MetricCard from @/components/shared
 
 // ============================================================================
 // HEALTH SCORE CARD
@@ -163,6 +135,13 @@ export function MetricsDashboard({
   creditLimit,
   priority,
 }: MetricsDashboardProps) {
+  const { formatCurrency } = useOrgFormat()
+
+  // Format contract value as string for subtitle
+  const contractSubtitle = priority?.contractValue
+    ? `Contract: ${formatCurrency(typeof priority.contractValue === 'string' ? parseFloat(priority.contractValue) : priority.contractValue, { cents: false })}`
+    : undefined
+
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       {/* Health Score - Featured */}
@@ -170,33 +149,37 @@ export function MetricsDashboard({
 
       {/* Lifetime Value */}
       <MetricCard
-        icon={<DollarSign className="h-5 w-5 text-green-600" />}
-        label="Lifetime Value"
+        icon={DollarSign}
+        iconClassName="text-green-600"
+        title="Lifetime Value"
         value={<FormatAmount amount={typeof lifetimeValue === 'string' ? parseFloat(lifetimeValue) : lifetimeValue} cents={false} showCents={false} />}
-        subtext={priority?.contractValue ? <>Contract: <FormatAmount amount={typeof priority.contractValue === 'string' ? parseFloat(priority.contractValue) : priority.contractValue} cents={false} showCents={false} /></> : undefined}
+        subtitle={contractSubtitle}
       />
 
       {/* Total Orders */}
       <MetricCard
-        icon={<ShoppingCart className="h-5 w-5 text-blue-600" />}
-        label="Total Orders"
+        icon={ShoppingCart}
+        iconClassName="text-blue-600"
+        title="Total Orders"
         value={totalOrders}
-        subtext={lastOrderDate ? `Last: ${formatDate(lastOrderDate)}` : undefined}
+        subtitle={lastOrderDate ? `Last: ${formatDate(lastOrderDate)}` : undefined}
       />
 
       {/* Average Order Value */}
       <MetricCard
-        icon={<TrendingUp className="h-5 w-5 text-purple-600" />}
-        label="Average Order"
+        icon={TrendingUp}
+        iconClassName="text-purple-600"
+        title="Average Order"
         value={<FormatAmount amount={typeof averageOrderValue === 'string' ? parseFloat(averageOrderValue) : averageOrderValue} cents={false} showCents={false} />}
-        subtext={firstOrderDate ? `Since ${formatDate(firstOrderDate)}` : undefined}
+        subtitle={firstOrderDate ? `Since ${formatDate(firstOrderDate)}` : undefined}
       />
 
       {/* Credit Limit (conditionally show) */}
       {creditLimit && (
         <MetricCard
-          icon={<CreditCard className="h-5 w-5 text-amber-600" />}
-          label="Credit Limit"
+          icon={CreditCard}
+          iconClassName="text-amber-600"
+          title="Credit Limit"
           value={<FormatAmount amount={typeof creditLimit === 'string' ? parseFloat(creditLimit) : creditLimit} cents={false} showCents={false} />}
         />
       )}
@@ -204,10 +187,11 @@ export function MetricsDashboard({
       {/* Priority/Service Level (conditionally show) */}
       {priority && (
         <MetricCard
-          icon={<Star className="h-5 w-5 text-yellow-600" />}
-          label="Service Level"
+          icon={Star}
+          iconClassName="text-yellow-600"
+          title="Service Level"
           value={priority.serviceLevel.charAt(0).toUpperCase() + priority.serviceLevel.slice(1)}
-          subtext={`${priority.priorityLevel.toUpperCase()} priority`}
+          subtitle={`${priority.priorityLevel.toUpperCase()} priority`}
         />
       )}
     </div>

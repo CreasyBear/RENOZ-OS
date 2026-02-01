@@ -32,6 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useOrgFormat } from "@/hooks/use-org-format";
 
 // ============================================================================
 // TYPES
@@ -120,13 +121,9 @@ export const AgingReport = memo(function AgingReport({
   showItems = true,
   className,
 }: AgingReportProps) {
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("en-AU", {
-      style: "currency",
-      currency: "AUD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
 
   const formatDate = (date: Date) =>
     new Intl.DateTimeFormat("en-AU", {
@@ -205,7 +202,7 @@ export const AgingReport = memo(function AgingReport({
               </span>
             </div>
             <div className="text-2xl font-bold mt-2 tabular-nums text-orange-600">
-              {formatCurrency(summary.valueAtRisk)}
+              {formatCurrencyDisplay(summary.valueAtRisk)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               {summary.riskPercentage.toFixed(1)}% of total value
@@ -222,7 +219,7 @@ export const AgingReport = memo(function AgingReport({
               </span>
             </div>
             <div className="text-2xl font-bold mt-2 tabular-nums">
-              {formatCurrency(summary.totalValue)}
+              {formatCurrencyDisplay(summary.totalValue)}
             </div>
           </CardContent>
         </Card>
@@ -257,7 +254,7 @@ export const AgingReport = memo(function AgingReport({
                     </div>
                     <div className="text-right">
                       <span className="font-medium tabular-nums">
-                        {formatCurrency(bucket.totalValue)}
+                        {formatCurrencyDisplay(bucket.totalValue)}
                       </span>
                       <span className="text-sm text-muted-foreground ml-2">
                         ({bucket.percentOfTotal.toFixed(1)}%)
@@ -323,7 +320,7 @@ export const AgingReport = memo(function AgingReport({
                           {item.quantity.toLocaleString()}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {formatCurrency(item.totalValue)}
+                          {formatCurrencyDisplay(item.totalValue)}
                         </TableCell>
                         <TableCell className="text-right">
                           <span

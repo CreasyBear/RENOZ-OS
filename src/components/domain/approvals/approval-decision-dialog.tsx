@@ -41,6 +41,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import type { ApprovalItem } from './approval-dashboard';
 
 // ============================================================================
@@ -77,6 +78,7 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
 }: ApprovalDecisionDialogProps) {
   const [comments, setComments] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { formatCurrency } = useOrgFormat();
 
   // Reset form when dialog opens
   const handleOpenChange = (newOpen: boolean) => {
@@ -100,14 +102,6 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  // Format currency
-  const formatCurrency = (amount: number, currency: string) => {
-    return new Intl.NumberFormat('en-AU', {
-      style: 'currency',
-      currency: currency,
-    }).format(amount);
   };
 
   // Render priority badge
@@ -150,7 +144,11 @@ export const ApprovalDecisionDialog = memo(function ApprovalDecisionDialog({
                 <div>
                   <span className="text-muted-foreground text-sm font-medium">Amount</span>
                   <p className="text-lg font-medium">
-                    {formatCurrency(item.amount, item.currency)}
+                    {formatCurrency(item.amount, {
+                      currency: item.currency,
+                      cents: false,
+                      showCents: true,
+                    })}
                   </p>
                 </div>
                 <div>

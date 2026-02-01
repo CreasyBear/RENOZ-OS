@@ -24,6 +24,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { MoreHorizontal, Star, Building2, Phone, Mail, ChevronUp, ChevronDown } from 'lucide-react';
+import { StatusCell } from '@/components/shared/data-table';
+import { SUPPLIER_STATUS_CONFIG } from './supplier-status-config';
 import type { SupplierStatus, SupplierType } from '@/lib/schemas/suppliers';
 
 // ============================================================================
@@ -57,21 +59,6 @@ interface SupplierTableProps {
 // ============================================================================
 // HELPERS
 // ============================================================================
-
-const statusVariants: Record<SupplierStatus, 'default' | 'secondary' | 'destructive' | 'outline'> =
-  {
-    active: 'default',
-    inactive: 'secondary',
-    suspended: 'destructive',
-    blacklisted: 'destructive',
-  };
-
-const statusLabels: Record<SupplierStatus, string> = {
-  active: 'Active',
-  inactive: 'Inactive',
-  suspended: 'Suspended',
-  blacklisted: 'Blacklisted',
-};
 
 const typeLabels: Record<SupplierType, string> = {
   manufacturer: 'Manufacturer',
@@ -285,9 +272,7 @@ export function SupplierTable({ suppliers, isLoading, onDelete, onEdit }: Suppli
                 )}
               </TableCell>
               <TableCell>
-                <Badge variant={statusVariants[supplier.status]}>
-                  {statusLabels[supplier.status]}
-                </Badge>
+                <StatusCell status={supplier.status} statusConfig={SUPPLIER_STATUS_CONFIG} />
               </TableCell>
               <TableCell>
                 <RatingStars rating={supplier.overallRating} />

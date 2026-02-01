@@ -4,7 +4,7 @@
  * Provides hooks for activity feeds, entity activities, and activity analytics.
  */
 
-// Activity feed and queries
+// --- Activity Feed Queries ---
 export {
   useActivityFeed,
   useEntityActivities,
@@ -17,7 +17,13 @@ export {
   useInvalidateActivities,
 } from './use-activities';
 
-// Re-export types
+// --- Unified Activities (Audit Trail + Planned) ---
+export {
+  useUnifiedActivities,
+  useMockUnifiedActivities,
+} from './use-unified-activities';
+
+// --- Re-export Types ---
 export type {
   Activity,
   ActivityWithUser,
@@ -29,3 +35,4 @@ export type {
 } from '@/lib/schemas/activities';
 
 export type { UseActivityFeedOptions } from './use-activities';
+export type { UseUnifiedActivitiesOptions } from './use-unified-activities';

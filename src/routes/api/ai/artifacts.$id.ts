@@ -150,7 +150,7 @@ async function fetchArtifactData(
         currentStep: task.currentStep,
         result: task.result,
         tokensUsed: task.tokensUsed,
-        costCents: task.costCents,
+        cost: task.cost,
       },
       metadata: {
         queuedAt: task.queuedAt?.toISOString(),

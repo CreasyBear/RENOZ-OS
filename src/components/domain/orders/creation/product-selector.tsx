@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { listProducts } from "@/server/functions/products/products";
+import { useOrgFormat } from "@/hooks/use-org-format";
 
 // ============================================================================
 // TYPES
@@ -77,17 +78,6 @@ interface Product {
 }
 
 // ============================================================================
-// HELPERS
-// ============================================================================
-
-const formatPrice = (price: number) => {
-  return new Intl.NumberFormat("en-AU", {
-    style: "currency",
-    currency: "AUD",
-  }).format(price / 100);
-};
-
-// ============================================================================
 // COMPONENT
 // ============================================================================
 
@@ -96,6 +86,8 @@ export const ProductSelector = memo(function ProductSelector({
   onProductsChange,
   className,
 }: ProductSelectorProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatPrice = (price: number) => formatCurrency(price, { cents: false, showCents: true });
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");

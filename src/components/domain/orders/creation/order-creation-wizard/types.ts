@@ -86,9 +86,3 @@ export type Step = {
 };
 
 export { GST_RATE } from '@/lib/order-calculations';
-
-export const formatPrice = (cents: number) =>
-  new Intl.NumberFormat('en-AU', {
-    style: 'currency',
-    currency: 'AUD',
-  }).format(cents / 100);

@@ -15,6 +15,25 @@ import { db } from '@/lib/db';
 import { jobAssignments, jobPhotos, users, customers } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, AuthError } from '@/lib/server/errors';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { computeChanges } from '@/lib/activity-logger';
+
+// ============================================================================
+// ACTIVITY LOGGING HELPERS
+// ============================================================================
+
+/**
+ * Fields to exclude from activity change tracking (system-managed)
+ */
+const JOB_ASSIGNMENT_EXCLUDED_FIELDS: string[] = [
+  'updatedAt',
+  'updatedBy',
+  'createdAt',
+  'createdBy',
+  'deletedAt',
+  'version',
+  'organizationId',
+];
 import {
   createJobAssignmentSchema,
   listJobAssignmentsSchema,
@@ -113,6 +132,7 @@ export const createJobAssignment = createServerFn({ method: 'POST' })
   .inputValidator(createJobAssignmentSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
+    const logger = createActivityLoggerWithContext(ctx);
 
     try {
       // Generate job number if not provided
@@ -159,6 +179,30 @@ export const createJobAssignment = createServerFn({ method: 'POST' })
         .innerJoin(users, eq(jobAssignments.installerId, users.id))
         .innerJoin(customers, eq(jobAssignments.customerId, customers.id))
         .limit(1);
+
+      // Log job assignment creation
+      logger.logAsync({
+        entityType: 'job_assignment',
+        entityId: newJob.id,
+        action: 'created',
+        description: `Created job assignment: ${jobNumber} - ${data.title}`,
+        changes: computeChanges({
+          before: null,
+          after: newJob,
+          excludeFields: JOB_ASSIGNMENT_EXCLUDED_FIELDS as never[],
+        }),
+        metadata: {
+          jobNumber,
+          jobTitle: data.title,
+          jobAssignmentId: newJob.id,
+          customerId: data.customerId,
+          customerName: jobWithRelations.customer.name,
+          installerId: data.installerId,
+          installerName: jobWithRelations.installer.name ?? undefined,
+          scheduledDate: data.scheduledDate ?? undefined,
+          status: newJob.status,
+        },
+      });
 
       const response: CreateJobAssignmentResponse = {
         success: true,
@@ -369,9 +413,23 @@ export const updateJobAssignment = createServerFn({ method: 'POST' })
       data: { id: string; organizationId: string } & UpdateJobAssignmentInput;
     }) => {
       const ctx = await withAuth();
+      const logger = createActivityLoggerWithContext(ctx);
       const { id, organizationId, ...updateData } = data;
 
       try {
+        // Get existing job assignment for change tracking
+        const [existingJob] = await db
+          .select()
+          .from(jobAssignments)
+          .where(and(eq(jobAssignments.id, id), eq(jobAssignments.organizationId, organizationId)))
+          .limit(1);
+
+        if (!existingJob) {
+          throw new NotFoundError('Job assignment not found', 'jobAssignment');
+        }
+
+        const before = existingJob;
+
         // Update job assignment
         const [updatedJob] = await db
           .update(jobAssignments)
@@ -382,10 +440,6 @@ export const updateJobAssignment = createServerFn({ method: 'POST' })
           })
           .where(and(eq(jobAssignments.id, id), eq(jobAssignments.organizationId, organizationId)))
           .returning();
-
-        if (!updatedJob) {
-          throw new NotFoundError('Job assignment not found', 'jobAssignment');
-        }
 
         // Fetch with related data for response
         const [jobWithRelations] = await db
@@ -406,6 +460,35 @@ export const updateJobAssignment = createServerFn({ method: 'POST' })
           .innerJoin(users, eq(jobAssignments.installerId, users.id))
           .innerJoin(customers, eq(jobAssignments.customerId, customers.id))
           .limit(1);
+
+        // Log job assignment update
+        const changes = computeChanges({
+          before,
+          after: updatedJob,
+          excludeFields: JOB_ASSIGNMENT_EXCLUDED_FIELDS as never[],
+        });
+
+        if (changes.fields && changes.fields.length > 0) {
+          logger.logAsync({
+            entityType: 'job_assignment',
+            entityId: updatedJob.id,
+            action: 'updated',
+            description: `Updated job assignment: ${updatedJob.jobNumber} - ${updatedJob.title}`,
+            changes,
+            metadata: {
+              jobNumber: updatedJob.jobNumber,
+              jobTitle: updatedJob.title,
+              jobAssignmentId: updatedJob.id,
+              customerId: updatedJob.customerId,
+              customerName: jobWithRelations.customer.name,
+              changedFields: changes.fields,
+              ...(before.status !== updatedJob.status && {
+                previousStatus: before.status,
+                newStatus: updatedJob.status,
+              }),
+            },
+          });
+        }
 
         const response: UpdateJobAssignmentResponse = {
           success: true,
@@ -435,10 +518,27 @@ export const deleteJobAssignment = createServerFn({ method: 'POST' })
   .inputValidator(deleteJobAssignmentSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
+    const logger = createActivityLoggerWithContext(ctx);
 
     try {
+      // Get existing job for activity logging
+      const [existingJob] = await db
+        .select()
+        .from(jobAssignments)
+        .where(
+          and(
+            eq(jobAssignments.id, data.id),
+            eq(jobAssignments.organizationId, data.organizationId)
+          )
+        )
+        .limit(1);
+
+      if (!existingJob) {
+        throw new NotFoundError('Job assignment not found', 'jobAssignment');
+      }
+
       // Soft delete by setting status to cancelled
-      const [deletedJob] = await db
+      await db
         .update(jobAssignments)
         .set({
           status: 'cancelled',
@@ -450,12 +550,28 @@ export const deleteJobAssignment = createServerFn({ method: 'POST' })
             eq(jobAssignments.id, data.id),
             eq(jobAssignments.organizationId, data.organizationId)
           )
-        )
-        .returning();
+        );
 
-      if (!deletedJob) {
-        throw new NotFoundError('Job assignment not found', 'jobAssignment');
-      }
+      // Log job assignment deletion (cancellation)
+      logger.logAsync({
+        entityType: 'job_assignment',
+        entityId: existingJob.id,
+        action: 'deleted',
+        description: `Cancelled job assignment: ${existingJob.jobNumber} - ${existingJob.title}`,
+        changes: computeChanges({
+          before: existingJob,
+          after: null,
+          excludeFields: JOB_ASSIGNMENT_EXCLUDED_FIELDS as never[],
+        }),
+        metadata: {
+          jobNumber: existingJob.jobNumber,
+          jobTitle: existingJob.title,
+          jobAssignmentId: existingJob.id,
+          customerId: existingJob.customerId,
+          previousStatus: existingJob.status,
+          newStatus: 'cancelled',
+        },
+      });
 
       const response: DeleteJobAssignmentResponse = {
         success: true,
@@ -479,8 +595,25 @@ export const startJobAssignment = createServerFn({ method: 'POST' })
   .inputValidator(startJobAssignmentSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
+    const logger = createActivityLoggerWithContext(ctx);
 
     try {
+      // Get existing job for activity logging
+      const [existingJob] = await db
+        .select()
+        .from(jobAssignments)
+        .where(
+          and(
+            eq(jobAssignments.id, data.id),
+            eq(jobAssignments.organizationId, data.organizationId)
+          )
+        )
+        .limit(1);
+
+      if (!existingJob) {
+        throw new NotFoundError('Job assignment not found', 'jobAssignment');
+      }
+
       const now = new Date().toISOString();
 
       const [startedJob] = await db
@@ -500,9 +633,27 @@ export const startJobAssignment = createServerFn({ method: 'POST' })
         )
         .returning();
 
-      if (!startedJob) {
-        throw new NotFoundError('Job assignment not found', 'jobAssignment');
-      }
+      // Log job start
+      logger.logAsync({
+        entityType: 'job_assignment',
+        entityId: startedJob.id,
+        action: 'updated',
+        description: `Started job assignment: ${startedJob.jobNumber} - ${startedJob.title}`,
+        changes: {
+          before: { status: existingJob.status },
+          after: { status: 'in_progress' },
+          fields: ['status', 'startedAt', 'startLocation'],
+        },
+        metadata: {
+          jobNumber: startedJob.jobNumber,
+          jobTitle: startedJob.title,
+          jobAssignmentId: startedJob.id,
+          customerId: startedJob.customerId,
+          previousStatus: existingJob.status,
+          newStatus: 'in_progress',
+          installerId: startedJob.installerId,
+        },
+      });
 
       return { success: true };
     } catch (error) {
@@ -522,8 +673,25 @@ export const completeJobAssignment = createServerFn({ method: 'POST' })
   .inputValidator(completeJobAssignmentSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
+    const logger = createActivityLoggerWithContext(ctx);
 
     try {
+      // Get existing job for activity logging
+      const [existingJob] = await db
+        .select()
+        .from(jobAssignments)
+        .where(
+          and(
+            eq(jobAssignments.id, data.id),
+            eq(jobAssignments.organizationId, data.organizationId)
+          )
+        )
+        .limit(1);
+
+      if (!existingJob) {
+        throw new NotFoundError('Job assignment not found', 'jobAssignment');
+      }
+
       const now = new Date().toISOString();
 
       const [completedJob] = await db
@@ -543,9 +711,27 @@ export const completeJobAssignment = createServerFn({ method: 'POST' })
         )
         .returning();
 
-      if (!completedJob) {
-        throw new NotFoundError('Job assignment not found', 'jobAssignment');
-      }
+      // Log job completion
+      logger.logAsync({
+        entityType: 'job_assignment',
+        entityId: completedJob.id,
+        action: 'updated',
+        description: `Completed job assignment: ${completedJob.jobNumber} - ${completedJob.title}`,
+        changes: {
+          before: { status: existingJob.status },
+          after: { status: 'completed' },
+          fields: ['status', 'completedAt', 'completeLocation'],
+        },
+        metadata: {
+          jobNumber: completedJob.jobNumber,
+          jobTitle: completedJob.title,
+          jobAssignmentId: completedJob.id,
+          customerId: completedJob.customerId,
+          previousStatus: existingJob.status,
+          newStatus: 'completed',
+          installerId: completedJob.installerId,
+        },
+      });
 
       return { success: true };
     } catch (error) {
@@ -565,8 +751,16 @@ export const createJobPhoto = createServerFn({ method: 'POST' })
   .inputValidator(createJobPhotoSchema)
   .handler(async ({ data }) => {
     const ctx = await withAuth();
+    const logger = createActivityLoggerWithContext(ctx);
 
     try {
+      // Get job assignment for activity logging context
+      const [jobAssignment] = await db
+        .select({ jobNumber: jobAssignments.jobNumber, title: jobAssignments.title })
+        .from(jobAssignments)
+        .where(eq(jobAssignments.id, data.jobAssignmentId))
+        .limit(1);
+
       const [newPhoto] = await db
         .insert(jobPhotos)
         .values({
@@ -580,6 +774,23 @@ export const createJobPhoto = createServerFn({ method: 'POST' })
           updatedBy: ctx.user.id,
         })
         .returning();
+
+      // Log photo creation
+      logger.logAsync({
+        entityType: 'job_photo',
+        entityId: newPhoto.id,
+        action: 'created',
+        description: `Added ${data.type} photo to job: ${jobAssignment?.jobNumber ?? 'Unknown'}`,
+        metadata: {
+          jobAssignmentId: data.jobAssignmentId,
+          jobNumber: jobAssignment?.jobNumber ?? undefined,
+          jobTitle: jobAssignment?.title ?? undefined,
+          customFields: {
+            photoType: data.type,
+            caption: data.caption ?? null,
+          },
+        },
+      });
 
       const response: CreateJobPhotoResponse = {
         success: true,

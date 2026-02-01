@@ -14,17 +14,17 @@ import {
   DollarSign,
   TrendingUp,
   Activity,
-  ArrowUpRight,
-  ArrowDownRight,
   BarChart3,
   PieChart,
   Calendar,
   Target,
   Loader2,
+  type LucideIcon,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { MetricCard } from '@/components/shared'
 import {
   Select,
   SelectContent,
@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { FormatAmount } from '@/components/shared/format'
+import { useOrgFormat } from '@/hooks/use-org-format'
 
 // ============================================================================
 // TYPES
@@ -104,91 +105,22 @@ function formatPercentage(value: number): string {
   return `${sign}${value.toFixed(1)}%`
 }
 
-// Helper for chart formatValue callback
-function formatCurrencyCompact(value: number): string {
-  if (value >= 1000000) {
-    return `$${(value / 1000000).toFixed(1)}M`
-  }
-  if (value >= 1000) {
-    return `$${(value / 1000).toFixed(0)}K`
-  }
-  return `$${value.toFixed(0)}`
-}
-
-function getIconForKpi(iconName?: string): React.ElementType {
+function getKpiIcon(iconName?: string): LucideIcon {
   switch (iconName) {
-    case 'users': return Users
-    case 'dollar': return DollarSign
-    case 'trending': return TrendingUp
-    case 'activity': return Activity
-    case 'check': return TrendingUp
-    default: return Activity
+    case 'users':
+      return Users
+    case 'dollar':
+      return DollarSign
+    case 'trending':
+    case 'check':
+      return TrendingUp
+    case 'activity':
+    default:
+      return Activity
   }
 }
 
-// ============================================================================
-// KPI CARD
-// ============================================================================
-
-interface KpiCardProps {
-  metric: KpiMetric
-}
-
-function KpiCard({ metric }: KpiCardProps) {
-  const Icon = getIconForKpi(metric.icon)
-  const trend = metric.change !== undefined
-    ? metric.change > 0 ? 'up' : metric.change < 0 ? 'down' : 'neutral'
-    : 'neutral'
-
-  return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <p className="text-sm text-muted-foreground">{metric.label}</p>
-            <p className="text-2xl font-bold">{metric.value}</p>
-            {metric.change !== undefined && (
-              <div className="flex items-center gap-1">
-                {trend === 'up' ? (
-                  <ArrowUpRight className="h-4 w-4 text-green-600" />
-                ) : trend === 'down' ? (
-                  <ArrowDownRight className="h-4 w-4 text-red-600" />
-                ) : null}
-                <span className={cn(
-                  'text-sm',
-                  trend === 'up' ? 'text-green-600' :
-                  trend === 'down' ? 'text-red-600' : 'text-muted-foreground'
-                )}>
-                  {formatPercentage(metric.change)} {metric.changeLabel}
-                </span>
-              </div>
-            )}
-          </div>
-          <div className="rounded-full bg-muted p-3">
-            <Icon className="h-5 w-5 text-muted-foreground" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function KpiCardSkeleton() {
-  return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="flex items-start justify-between">
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-8 w-16" />
-            <Skeleton className="h-4 w-32" />
-          </div>
-          <Skeleton className="h-11 w-11 rounded-full" />
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
+// Note: Using shared MetricCard from @/components/shared
 
 // ============================================================================
 // TREND CHART
@@ -342,7 +274,9 @@ function SegmentPerformanceTable({ segments, isLoading }: SegmentPerformanceTabl
               </div>
               <div className="flex items-center gap-6 text-right">
                 <div>
-                  <p className="font-medium"><FormatAmount amount={segment.revenue} cents={false} compact showCents={false} /></p>
+                  <p className="font-medium">
+                    <FormatAmount amount={segment.revenue} compact showCents={false} />
+                  </p>
                   {segment.growth !== undefined && (
                     <p className={cn(
                       'text-xs',
@@ -488,7 +422,7 @@ function QuickStats({ data, dateRange, isLoading }: { data?: QuickStatsData; dat
     { label: 'Churned', value: data ? data.churnedCustomers.toLocaleString() : '-' },
     {
       label: 'Avg Order Value',
-      value: data ? <FormatAmount amount={data.avgOrderValue} cents={false} compact showCents={false} /> : '-',
+      value: data ? <FormatAmount amount={data.avgOrderValue} compact showCents={false} /> : '-',
     },
     { label: 'Repeat Rate', value: data ? `${data.repeatRate.toFixed(1)}%` : '-' },
   ]
@@ -533,6 +467,9 @@ export function AnalyticsDashboard({
   isLoading = false,
   className,
 }: AnalyticsDashboardProps) {
+  const { formatCurrency } = useOrgFormat()
+  const formatCurrencyCompact = (amount: number) =>
+    formatCurrency(amount, { cents: false, compact: true, showCents: false })
   return (
     <div className={cn('space-y-6', className)}>
       {/* Header */}
@@ -561,14 +498,21 @@ export function AnalyticsDashboard({
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {isLoading ? (
           <>
-            <KpiCardSkeleton />
-            <KpiCardSkeleton />
-            <KpiCardSkeleton />
-            <KpiCardSkeleton />
+            <MetricCard title="" value="" isLoading />
+            <MetricCard title="" value="" isLoading />
+            <MetricCard title="" value="" isLoading />
+            <MetricCard title="" value="" isLoading />
           </>
         ) : kpis?.length ? (
           kpis.map(metric => (
-            <KpiCard key={metric.label} metric={metric} />
+            <MetricCard
+              key={metric.label}
+              title={metric.label}
+              value={metric.value}
+              delta={metric.change}
+              subtitle={metric.changeLabel}
+              icon={getKpiIcon(metric.icon)}
+            />
           ))
         ) : (
           <div className="col-span-4 text-center py-8 text-muted-foreground">

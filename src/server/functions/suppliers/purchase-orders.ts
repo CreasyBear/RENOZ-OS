@@ -18,6 +18,19 @@ import { purchaseOrders, purchaseOrderItems, suppliers } from 'drizzle/schema/su
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { computeChanges } from '@/lib/activity-logger';
+
+// Excluded fields for activity logging (system-managed fields)
+const PO_EXCLUDED_FIELDS: string[] = [
+  'updatedAt',
+  'updatedBy',
+  'createdAt',
+  'createdBy',
+  'deletedAt',
+  'organizationId',
+  'version',
+];
 
 // ============================================================================
 // INPUT SCHEMAS
@@ -306,6 +319,13 @@ export const createPurchaseOrder = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.create });
 
+    // Get supplier name for logging
+    const [supplier] = await db
+      .select({ name: suppliers.name })
+      .from(suppliers)
+      .where(eq(suppliers.id, data.supplierId))
+      .limit(1);
+
     // Calculate totals from items
     let subtotal = 0;
     let taxAmount = 0;
@@ -377,6 +397,28 @@ export const createPurchaseOrder = createServerFn({ method: 'POST' })
       }))
     );
 
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'purchase_order',
+      entityId: po.id,
+      action: 'created',
+      description: `Created purchase order: ${po.poNumber}`,
+      changes: computeChanges({
+        before: null,
+        after: po,
+        excludeFields: PO_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        poNumber: po.poNumber ?? undefined,
+        supplierId: po.supplierId,
+        supplierName: supplier?.name,
+        total: Number(po.totalAmount),
+        lineItemCount: data.items.length,
+        status: po.status,
+      },
+    });
+
     return po;
   });
 
@@ -390,10 +432,14 @@ export const updatePurchaseOrder = createServerFn({ method: 'POST' })
 
     const { id, ...updateData } = data;
 
-    // Check if PO is in draft status
-    const existing = await db
-      .select({ status: purchaseOrders.status })
+    // Check if PO is in draft status and get full record for logging
+    const [existing] = await db
+      .select({
+        po: purchaseOrders,
+        supplierName: suppliers.name,
+      })
       .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
       .where(
         and(
           eq(purchaseOrders.id, id),
@@ -403,11 +449,11 @@ export const updatePurchaseOrder = createServerFn({ method: 'POST' })
       )
       .limit(1);
 
-    if (!existing[0]) {
+    if (!existing) {
       throw new NotFoundError('Purchase order not found', 'purchaseOrder');
     }
 
-    if (existing[0].status !== 'draft') {
+    if (existing.po.status !== 'draft') {
       throw new ValidationError('Can only update draft purchase orders');
     }
 
@@ -432,7 +478,29 @@ export const updatePurchaseOrder = createServerFn({ method: 'POST' })
       .where(and(eq(purchaseOrders.id, id), eq(purchaseOrders.organizationId, ctx.organizationId)))
       .returning();
 
-    return result[0];
+    const updatedPo = result[0];
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'purchase_order',
+      entityId: updatedPo.id,
+      action: 'updated',
+      description: `Updated purchase order: ${updatedPo.poNumber}`,
+      changes: computeChanges({
+        before: existing.po,
+        after: updatedPo,
+        excludeFields: PO_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        poNumber: updatedPo.poNumber ?? undefined,
+        supplierId: updatedPo.supplierId,
+        supplierName: existing.supplierName ?? undefined,
+        changedFields: Object.keys(updateData),
+      },
+    });
+
+    return updatedPo;
   });
 
 /**
@@ -443,10 +511,14 @@ export const deletePurchaseOrder = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.delete });
 
-    // Check if PO is in draft status
-    const existing = await db
-      .select({ status: purchaseOrders.status })
+    // Check if PO is in draft status and get full record for logging
+    const [existing] = await db
+      .select({
+        po: purchaseOrders,
+        supplierName: suppliers.name,
+      })
       .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
       .where(
         and(
           eq(purchaseOrders.id, data.id),
@@ -456,11 +528,11 @@ export const deletePurchaseOrder = createServerFn({ method: 'POST' })
       )
       .limit(1);
 
-    if (!existing[0]) {
+    if (!existing) {
       throw new NotFoundError('Purchase order not found', 'purchaseOrder');
     }
 
-    if (existing[0].status !== 'draft') {
+    if (existing.po.status !== 'draft') {
       throw new ValidationError('Can only delete draft purchase orders');
     }
 
@@ -473,6 +545,25 @@ export const deletePurchaseOrder = createServerFn({ method: 'POST' })
       })
       .where(eq(purchaseOrders.id, data.id))
       .returning({ id: purchaseOrders.id });
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'purchase_order',
+      entityId: existing.po.id,
+      action: 'deleted',
+      description: `Deleted purchase order: ${existing.po.poNumber}`,
+      changes: computeChanges({
+        before: existing.po,
+        after: null,
+        excludeFields: PO_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        poNumber: existing.po.poNumber ?? undefined,
+        supplierId: existing.po.supplierId,
+        supplierName: existing.supplierName ?? undefined,
+      },
+    });
 
     return { success: true, id: result[0].id };
   });
@@ -489,12 +580,14 @@ export const submitForApproval = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
-    const result = await db
-      .update(purchaseOrders)
-      .set({
-        status: 'pending_approval',
-        updatedBy: ctx.user.id,
+    // Get existing PO for logging
+    const [existing] = await db
+      .select({
+        po: purchaseOrders,
+        supplierName: suppliers.name,
       })
+      .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
       .where(
         and(
           eq(purchaseOrders.id, data.id),
@@ -503,13 +596,46 @@ export const submitForApproval = createServerFn({ method: 'POST' })
           isNull(purchaseOrders.deletedAt)
         )
       )
-      .returning();
+      .limit(1);
 
-    if (!result[0]) {
+    if (!existing) {
       throw new NotFoundError('Purchase order not found or not in draft status', 'purchaseOrder');
     }
 
-    return result[0];
+    const result = await db
+      .update(purchaseOrders)
+      .set({
+        status: 'pending_approval',
+        updatedBy: ctx.user.id,
+      })
+      .where(eq(purchaseOrders.id, data.id))
+      .returning();
+
+    const updatedPo = result[0];
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'purchase_order',
+      entityId: updatedPo.id,
+      action: 'updated',
+      description: `Submitted purchase order for approval: ${updatedPo.poNumber}`,
+      changes: computeChanges({
+        before: existing.po,
+        after: updatedPo,
+        excludeFields: PO_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        poNumber: updatedPo.poNumber ?? undefined,
+        supplierId: updatedPo.supplierId,
+        supplierName: existing.supplierName ?? undefined,
+        previousStatus: existing.po.status,
+        newStatus: updatedPo.status,
+        total: Number(updatedPo.totalAmount),
+      },
+    });
+
+    return updatedPo;
   });
 
 /**
@@ -525,6 +651,28 @@ export const approvePurchaseOrder = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.approve });
 
+    // Get existing PO for logging
+    const [existing] = await db
+      .select({
+        po: purchaseOrders,
+        supplierName: suppliers.name,
+      })
+      .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+      .where(
+        and(
+          eq(purchaseOrders.id, data.id),
+          eq(purchaseOrders.organizationId, ctx.organizationId),
+          eq(purchaseOrders.status, 'pending_approval'),
+          isNull(purchaseOrders.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError('Purchase order not found or not pending approval', 'purchaseOrder');
+    }
+
     const result = await db
       .update(purchaseOrders)
       .set({
@@ -534,21 +682,34 @@ export const approvePurchaseOrder = createServerFn({ method: 'POST' })
         approvalNotes: data.notes,
         updatedBy: ctx.user.id,
       })
-      .where(
-        and(
-          eq(purchaseOrders.id, data.id),
-          eq(purchaseOrders.organizationId, ctx.organizationId),
-          eq(purchaseOrders.status, 'pending_approval'),
-          isNull(purchaseOrders.deletedAt)
-        )
-      )
+      .where(eq(purchaseOrders.id, data.id))
       .returning();
 
-    if (!result[0]) {
-      throw new NotFoundError('Purchase order not found or not pending approval', 'purchaseOrder');
-    }
+    const updatedPo = result[0];
 
-    return result[0];
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'purchase_order',
+      entityId: updatedPo.id,
+      action: 'updated',
+      description: `Approved purchase order: ${updatedPo.poNumber}`,
+      changes: computeChanges({
+        before: existing.po,
+        after: updatedPo,
+        excludeFields: PO_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        poNumber: updatedPo.poNumber ?? undefined,
+        supplierId: updatedPo.supplierId,
+        supplierName: existing.supplierName ?? undefined,
+        previousStatus: existing.po.status,
+        newStatus: updatedPo.status,
+        total: Number(updatedPo.totalAmount),
+      },
+    });
+
+    return updatedPo;
   });
 
 /**
@@ -564,13 +725,14 @@ export const rejectPurchaseOrder = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.approve });
 
-    const result = await db
-      .update(purchaseOrders)
-      .set({
-        status: 'draft', // Return to draft for revision
-        approvalNotes: `Rejected: ${data.reason}`,
-        updatedBy: ctx.user.id,
+    // Get existing PO for logging
+    const [existing] = await db
+      .select({
+        po: purchaseOrders,
+        supplierName: suppliers.name,
       })
+      .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
       .where(
         and(
           eq(purchaseOrders.id, data.id),
@@ -579,13 +741,47 @@ export const rejectPurchaseOrder = createServerFn({ method: 'POST' })
           isNull(purchaseOrders.deletedAt)
         )
       )
-      .returning();
+      .limit(1);
 
-    if (!result[0]) {
+    if (!existing) {
       throw new NotFoundError('Purchase order not found or not pending approval', 'purchaseOrder');
     }
 
-    return result[0];
+    const result = await db
+      .update(purchaseOrders)
+      .set({
+        status: 'draft', // Return to draft for revision
+        approvalNotes: `Rejected: ${data.reason}`,
+        updatedBy: ctx.user.id,
+      })
+      .where(eq(purchaseOrders.id, data.id))
+      .returning();
+
+    const updatedPo = result[0];
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'purchase_order',
+      entityId: updatedPo.id,
+      action: 'updated',
+      description: `Rejected purchase order: ${updatedPo.poNumber}`,
+      changes: computeChanges({
+        before: existing.po,
+        after: updatedPo,
+        excludeFields: PO_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        poNumber: updatedPo.poNumber ?? undefined,
+        supplierId: updatedPo.supplierId,
+        supplierName: existing.supplierName ?? undefined,
+        previousStatus: existing.po.status,
+        newStatus: updatedPo.status,
+        reason: data.reason,
+      },
+    });
+
+    return updatedPo;
   });
 
 /**
@@ -601,6 +797,28 @@ export const markAsOrdered = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
+    // Get existing PO for logging
+    const [existing] = await db
+      .select({
+        po: purchaseOrders,
+        supplierName: suppliers.name,
+      })
+      .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+      .where(
+        and(
+          eq(purchaseOrders.id, data.id),
+          eq(purchaseOrders.organizationId, ctx.organizationId),
+          eq(purchaseOrders.status, 'approved'),
+          isNull(purchaseOrders.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new NotFoundError('Purchase order not found or not approved', 'purchaseOrder');
+    }
+
     const result = await db
       .update(purchaseOrders)
       .set({
@@ -610,21 +828,34 @@ export const markAsOrdered = createServerFn({ method: 'POST' })
         supplierReference: data.supplierReference,
         updatedBy: ctx.user.id,
       })
-      .where(
-        and(
-          eq(purchaseOrders.id, data.id),
-          eq(purchaseOrders.organizationId, ctx.organizationId),
-          eq(purchaseOrders.status, 'approved'),
-          isNull(purchaseOrders.deletedAt)
-        )
-      )
+      .where(eq(purchaseOrders.id, data.id))
       .returning();
 
-    if (!result[0]) {
-      throw new NotFoundError('Purchase order not found or not approved', 'purchaseOrder');
-    }
+    const updatedPo = result[0];
 
-    return result[0];
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'purchase_order',
+      entityId: updatedPo.id,
+      action: 'updated',
+      description: `Marked purchase order as ordered: ${updatedPo.poNumber}`,
+      changes: computeChanges({
+        before: existing.po,
+        after: updatedPo,
+        excludeFields: PO_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        poNumber: updatedPo.poNumber ?? undefined,
+        supplierId: updatedPo.supplierId,
+        supplierName: existing.supplierName ?? undefined,
+        previousStatus: existing.po.status,
+        newStatus: updatedPo.status,
+        supplierReference: data.supplierReference,
+      },
+    });
+
+    return updatedPo;
   });
 
 /**
@@ -640,6 +871,28 @@ export const cancelPurchaseOrder = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
+    // Get existing PO for logging
+    const [existing] = await db
+      .select({
+        po: purchaseOrders,
+        supplierName: suppliers.name,
+      })
+      .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+      .where(
+        and(
+          eq(purchaseOrders.id, data.id),
+          eq(purchaseOrders.organizationId, ctx.organizationId),
+          sql`${purchaseOrders.status} NOT IN ('received', 'closed', 'cancelled')`,
+          isNull(purchaseOrders.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new ValidationError('Purchase order not found or cannot be cancelled');
+    }
+
     const result = await db
       .update(purchaseOrders)
       .set({
@@ -649,21 +902,34 @@ export const cancelPurchaseOrder = createServerFn({ method: 'POST' })
         closedReason: data.reason,
         updatedBy: ctx.user.id,
       })
-      .where(
-        and(
-          eq(purchaseOrders.id, data.id),
-          eq(purchaseOrders.organizationId, ctx.organizationId),
-          sql`${purchaseOrders.status} NOT IN ('received', 'closed', 'cancelled')`,
-          isNull(purchaseOrders.deletedAt)
-        )
-      )
+      .where(eq(purchaseOrders.id, data.id))
       .returning();
 
-    if (!result[0]) {
-      throw new ValidationError('Purchase order not found or cannot be cancelled');
-    }
+    const updatedPo = result[0];
 
-    return result[0];
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'purchase_order',
+      entityId: updatedPo.id,
+      action: 'updated',
+      description: `Cancelled purchase order: ${updatedPo.poNumber}`,
+      changes: computeChanges({
+        before: existing.po,
+        after: updatedPo,
+        excludeFields: PO_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        poNumber: updatedPo.poNumber ?? undefined,
+        supplierId: updatedPo.supplierId,
+        supplierName: existing.supplierName ?? undefined,
+        previousStatus: existing.po.status,
+        newStatus: updatedPo.status,
+        reason: data.reason,
+      },
+    });
+
+    return updatedPo;
   });
 
 /**
@@ -679,6 +945,28 @@ export const closePurchaseOrder = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
+    // Get existing PO for logging
+    const [existing] = await db
+      .select({
+        po: purchaseOrders,
+        supplierName: suppliers.name,
+      })
+      .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
+      .where(
+        and(
+          eq(purchaseOrders.id, data.id),
+          eq(purchaseOrders.organizationId, ctx.organizationId),
+          sql`${purchaseOrders.status} IN ('received', 'partial_received', 'ordered')`,
+          isNull(purchaseOrders.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!existing) {
+      throw new ValidationError('Purchase order not found or cannot be closed');
+    }
+
     const result = await db
       .update(purchaseOrders)
       .set({
@@ -688,21 +976,34 @@ export const closePurchaseOrder = createServerFn({ method: 'POST' })
         closedReason: data.reason,
         updatedBy: ctx.user.id,
       })
-      .where(
-        and(
-          eq(purchaseOrders.id, data.id),
-          eq(purchaseOrders.organizationId, ctx.organizationId),
-          sql`${purchaseOrders.status} IN ('received', 'partial_received', 'ordered')`,
-          isNull(purchaseOrders.deletedAt)
-        )
-      )
+      .where(eq(purchaseOrders.id, data.id))
       .returning();
 
-    if (!result[0]) {
-      throw new ValidationError('Purchase order not found or cannot be closed');
-    }
+    const updatedPo = result[0];
 
-    return result[0];
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'purchase_order',
+      entityId: updatedPo.id,
+      action: 'updated',
+      description: `Closed purchase order: ${updatedPo.poNumber}`,
+      changes: computeChanges({
+        before: existing.po,
+        after: updatedPo,
+        excludeFields: PO_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        poNumber: updatedPo.poNumber ?? undefined,
+        supplierId: updatedPo.supplierId,
+        supplierName: existing.supplierName ?? undefined,
+        previousStatus: existing.po.status,
+        newStatus: updatedPo.status,
+        reason: data.reason,
+      },
+    });
+
+    return updatedPo;
   });
 
 // ============================================================================
@@ -722,10 +1023,14 @@ export const addPurchaseOrderItem = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
-    // Check if PO is in draft status
-    const po = await db
-      .select({ status: purchaseOrders.status })
+    // Check if PO is in draft status and get full record for logging
+    const [poResult] = await db
+      .select({
+        po: purchaseOrders,
+        supplierName: suppliers.name,
+      })
       .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
       .where(
         and(
           eq(purchaseOrders.id, data.purchaseOrderId),
@@ -735,11 +1040,11 @@ export const addPurchaseOrderItem = createServerFn({ method: 'POST' })
       )
       .limit(1);
 
-    if (!po[0]) {
+    if (!poResult) {
       throw new NotFoundError('Purchase order not found', 'purchaseOrder');
     }
 
-    if (po[0].status !== 'draft') {
+    if (poResult.po.status !== 'draft') {
       throw new ValidationError('Can only add items to draft purchase orders');
     }
 
@@ -785,6 +1090,24 @@ export const addPurchaseOrderItem = createServerFn({ method: 'POST' })
     // Update PO totals
     await recalculatePurchaseOrderTotals(data.purchaseOrderId, ctx.user.id);
 
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'purchase_order',
+      entityId: data.purchaseOrderId,
+      action: 'updated',
+      description: `Added item to purchase order: ${poResult.po.poNumber}`,
+      metadata: {
+        poNumber: poResult.po.poNumber ?? undefined,
+        supplierId: poResult.po.supplierId,
+        supplierName: poResult.supplierName ?? undefined,
+        productId: data.item.productId,
+        productName: data.item.productName,
+        quantity: data.item.quantity,
+        lineTotal: Number(lineTotal),
+      },
+    });
+
     return newItem;
   });
 
@@ -800,32 +1123,34 @@ export const removePurchaseOrderItem = createServerFn({ method: 'POST' })
   .handler(async ({ data }) => {
     const ctx = await withAuth({ permission: PERMISSIONS.suppliers.update });
 
-    // Get the item and PO
-    const item = await db
-      .select({
-        purchaseOrderId: purchaseOrderItems.purchaseOrderId,
-      })
+    // Get the item with full details for logging
+    const [item] = await db
+      .select()
       .from(purchaseOrderItems)
       .where(eq(purchaseOrderItems.id, data.itemId))
       .limit(1);
 
-    if (!item[0]) {
+    if (!item) {
       throw new NotFoundError('Item not found', 'purchaseOrderItem');
     }
 
-    // Check if PO is in draft status
-    const po = await db
-      .select({ status: purchaseOrders.status })
+    // Check if PO is in draft status and get full record for logging
+    const [poResult] = await db
+      .select({
+        po: purchaseOrders,
+        supplierName: suppliers.name,
+      })
       .from(purchaseOrders)
+      .leftJoin(suppliers, eq(purchaseOrders.supplierId, suppliers.id))
       .where(
         and(
-          eq(purchaseOrders.id, item[0].purchaseOrderId),
+          eq(purchaseOrders.id, item.purchaseOrderId),
           eq(purchaseOrders.organizationId, ctx.organizationId)
         )
       )
       .limit(1);
 
-    if (!po[0] || po[0].status !== 'draft') {
+    if (!poResult || poResult.po.status !== 'draft') {
       throw new ValidationError('Can only remove items from draft purchase orders');
     }
 
@@ -833,7 +1158,25 @@ export const removePurchaseOrderItem = createServerFn({ method: 'POST' })
     await db.delete(purchaseOrderItems).where(eq(purchaseOrderItems.id, data.itemId));
 
     // Update PO totals
-    await recalculatePurchaseOrderTotals(item[0].purchaseOrderId, ctx.user.id);
+    await recalculatePurchaseOrderTotals(item.purchaseOrderId, ctx.user.id);
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'purchase_order',
+      entityId: item.purchaseOrderId,
+      action: 'updated',
+      description: `Removed item from purchase order: ${poResult.po.poNumber}`,
+      metadata: {
+        poNumber: poResult.po.poNumber ?? undefined,
+        supplierId: poResult.po.supplierId,
+        supplierName: poResult.supplierName ?? undefined,
+        productId: item.productId ?? undefined,
+        productName: item.productName,
+        quantity: item.quantity,
+        lineTotal: Number(item.lineTotal),
+      },
+    });
 
     return { success: true };
   });

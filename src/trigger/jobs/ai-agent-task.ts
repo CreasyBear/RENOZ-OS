@@ -75,7 +75,7 @@ export interface AiAgentTaskResult {
     stack?: string;
   };
   tokensUsed: number;
-  costCents: number;
+  cost: number; // Cost in dollars
 }
 
 // ============================================================================
@@ -103,7 +103,7 @@ export const aiAgentTaskJob = client.defineJob({
     const { taskId, taskType, agent, input, context, userId, organizationId } = payload;
 
     let totalTokensUsed = 0;
-    let totalCostCents = 0;
+    let totalCost = 0; // Cost in dollars
 
     try {
       // Step 1: Update task status to running
@@ -208,11 +208,23 @@ export const aiAgentTaskJob = client.defineJob({
           );
 
           totalTokensUsed = (usage.promptTokens ?? 0) + (usage.completionTokens ?? 0);
-          totalCostCents = agentResult.costCents ?? 0;
+          // Cost is tracked via trackCostFromSDK, calculate from usage if needed
+          // For now, we'll get it from the database after tracking
+          const { calculateCost } = await import('@/server/functions/ai/utils/cost');
+          // ExecuteAgentTaskResult.usage only has promptTokens/completionTokens/totalTokens
+          // TokenUsage interface supports optional cacheReadTokens/cacheWriteTokens
+          const usageObj = {
+            inputTokens: usage.promptTokens ?? 0,
+            outputTokens: usage.completionTokens ?? 0,
+            // Cache tokens not available in ExecuteAgentTaskResult.usage type
+            cacheReadTokens: undefined,
+            cacheWriteTokens: undefined,
+          };
+          totalCost = calculateCost(usageObj, model);
 
           await io.logger.info('Cost tracked', {
             tokensUsed: totalTokensUsed,
-            costCents: totalCostCents,
+            cost: totalCost,
             model,
           });
 
@@ -233,7 +245,7 @@ export const aiAgentTaskJob = client.defineJob({
               data: agentResult?.result,
             },
             tokensUsed: totalTokensUsed,
-            costCents: totalCostCents,
+            cost: totalCost,
             completedAt: new Date(),
           })
           .where(eq(aiAgentTasks.id, taskId));
@@ -241,7 +253,7 @@ export const aiAgentTaskJob = client.defineJob({
         await io.logger.info('Task completed successfully', {
           taskId,
           tokensUsed: totalTokensUsed,
-          costCents: totalCostCents,
+          cost: totalCost,
         });
 
         return { completed: true };
@@ -252,7 +264,7 @@ export const aiAgentTaskJob = client.defineJob({
         taskId,
         result: agentResult?.result,
         tokensUsed: totalTokensUsed,
-        costCents: totalCostCents,
+        cost: totalCost,
       };
     } catch (error) {
       // Handle failure
@@ -271,7 +283,7 @@ export const aiAgentTaskJob = client.defineJob({
             currentStep: 'Failed',
             error: taskError,
             tokensUsed: totalTokensUsed,
-            costCents: totalCostCents,
+            cost: totalCost,
             completedAt: new Date(),
           })
           .where(eq(aiAgentTasks.id, taskId));

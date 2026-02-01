@@ -36,6 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useOrgFormat } from "@/hooks/use-org-format";
 import type { LocationType, WarehouseLocation } from "./location-tree";
 
 // ============================================================================
@@ -138,11 +139,9 @@ export const LocationDetail = memo(function LocationDetail({
       ? location.utilization
       : null;
 
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("en-AU", {
-      style: "currency",
-      currency: "AUD",
-    }).format(value);
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
 
   return (
     <Card className={className}>
@@ -219,7 +218,7 @@ export const LocationDetail = memo(function LocationDetail({
           </div>
           <div className="bg-muted/50 rounded-lg p-3 text-center">
             <div className="text-lg font-bold tabular-nums">
-              {formatCurrency(metrics?.totalValue ?? 0)}
+              {formatCurrencyDisplay(metrics?.totalValue ?? 0)}
             </div>
             <div className="text-xs text-muted-foreground">Value</div>
           </div>
@@ -300,7 +299,7 @@ export const LocationDetail = memo(function LocationDetail({
                         )}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {formatCurrency(item.totalValue)}
+                        {formatCurrencyDisplay(item.totalValue)}
                       </TableCell>
                     </TableRow>
                   ))}

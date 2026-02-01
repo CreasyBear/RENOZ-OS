@@ -107,6 +107,17 @@ export const locationListQuerySchema = paginationSchema.merge(locationFilterSche
 export type LocationListQuery = z.infer<typeof locationListQuerySchema>;
 
 // ============================================================================
+// INVENTORY CONSTANTS
+// ============================================================================
+
+/**
+ * Default low stock threshold used across inventory functions.
+ * Products with total available quantity below this threshold are considered low stock.
+ * This matches the threshold used in the inventory index page.
+ */
+export const DEFAULT_LOW_STOCK_THRESHOLD = 10;
+
+// ============================================================================
 // INVENTORY (Stock Level)
 // ============================================================================
 
@@ -390,6 +401,23 @@ export const stockCountItemSchema = z.object({
 
 export type StockCountItem = z.infer<typeof stockCountItemSchema>;
 
+/**
+ * Extended stock count item with inventory, product, and location relations
+ * as returned from getStockCount server function
+ */
+export interface StockCountItemWithRelations extends StockCountItem {
+  inventory?: {
+    product?: {
+      name?: string;
+      sku?: string;
+    };
+    location?: {
+      name?: string;
+    };
+    productId?: string;
+  } | null;
+}
+
 // ============================================================================
 // INVENTORY COST LAYERS
 // ============================================================================
@@ -530,6 +558,46 @@ export const alertListQuerySchema = paginationSchema.merge(alertFilterSchema);
 export type AlertListQuery = z.infer<typeof alertListQuerySchema>;
 
 // ============================================================================
+// TRIGGERED ALERTS
+// ============================================================================
+
+/**
+ * Triggered alert as returned from getTriggeredAlerts server function
+ * Note: This represents a real-time computed alert, not a stored record
+ */
+export interface TriggeredAlertResult {
+  alert: Alert;
+  product?: {
+    id: string;
+    name: string;
+    sku: string;
+  } | null;
+  location?: {
+    id: string;
+    name: string;
+    locationCode?: string;
+  } | null;
+  currentValue: number;
+  thresholdValue: number;
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  message: string;
+  affectedItems: Array<{
+    inventoryId: string;
+    productName: string;
+    quantity: number;
+  }>;
+  isFallback?: boolean; // Flag to distinguish fallback alerts from real alert rules
+}
+
+/**
+ * List triggered alerts result
+ */
+export interface ListTriggeredAlertsResult {
+  alerts: TriggeredAlertResult[];
+  count: number;
+}
+
+// ============================================================================
 // PARAMS
 // ============================================================================
 
@@ -584,6 +652,208 @@ export const inventoryTurnoverQuerySchema = z.object({
 });
 
 export type InventoryTurnoverQuery = z.infer<typeof inventoryTurnoverQuerySchema>;
+
+// ============================================================================
+// VALUATION RESPONSE TYPES
+// ============================================================================
+
+/**
+ * Category valuation breakdown
+ */
+export interface CategoryValuation {
+  categoryId: string;
+  categoryName: string;
+  totalValue: number;
+  totalUnits: number;
+  percentOfTotal: number;
+  skuCount: number;
+}
+
+/**
+ * Location valuation breakdown
+ */
+export interface LocationValuation {
+  locationId: string;
+  locationCode: string;
+  locationName: string;
+  itemCount: number;
+  totalQuantity: number;
+  totalValue: number;
+  percentOfTotal: number;
+  utilization: number;
+}
+
+/**
+ * Product valuation breakdown
+ */
+export interface ProductValuation {
+  productId: string;
+  productSku: string;
+  productName: string;
+  totalQuantity: number;
+  weightedAverageCost: number;
+  totalValue: number;
+  costLayers: number;
+}
+
+/**
+ * Complete inventory valuation result
+ */
+export interface InventoryValuationResult {
+  totalValue: number;
+  totalSkus: number;
+  totalUnits: number;
+  averageUnitCost: number;
+  byCategory: CategoryValuation[];
+  byLocation: LocationValuation[];
+  byProduct: ProductValuation[];
+  valuationMethod: string;
+  asOf: string;
+}
+
+// ============================================================================
+// TURNOVER RESPONSE TYPES
+// ============================================================================
+
+/**
+ * Product turnover metrics
+ */
+export interface ProductTurnover {
+  productId: string;
+  productSku: string;
+  productName: string;
+  inventoryValue: number;
+  periodCOGS: number;
+  turnoverRate: number;
+  trend?: 'up' | 'down' | 'stable';
+  trendPercentage?: number;
+}
+
+/**
+ * Turnover trend data point
+ */
+export interface TurnoverTrendData {
+  period: string;
+  turnoverRate: number;
+  daysOnHand: number;
+}
+
+/**
+ * Turnover metrics result
+ */
+export interface InventoryTurnoverResult {
+  turnover: {
+    period: '30d' | '90d' | '365d';
+    periodDays: number;
+    cogsForPeriod: number;
+    averageInventoryValue: number;
+    annualizedCOGS: number;
+    turnoverRate: number;
+    daysOnHand: number;
+  };
+  byProduct: ProductTurnover[];
+  trends: TurnoverTrendData[];
+  benchmarks: {
+    excellent: number;
+    good: number;
+    average: number;
+    poor: number;
+  };
+}
+
+// ============================================================================
+// MOVEMENT RESPONSE TYPES
+// ============================================================================
+
+/**
+ * Movement record with product and location info
+ */
+export interface MovementWithRelations {
+  id: string;
+  organizationId: string;
+  inventoryId: string;
+  productId: string;
+  locationId: string;
+  movementType: string;
+  quantity: number;
+  previousQuantity: number | null;
+  newQuantity: number | null;
+  unitCost: number | null;
+  totalCost: number | null;
+  referenceType: string | null;
+  referenceId: string | null;
+  metadata: Record<string, unknown> | null;
+  notes: string | null;
+  createdAt: Date;
+  createdBy: string | null;
+  productName: string | null;
+  productSku: string | null;
+  locationName: string | null;
+  locationCode: string | null;
+}
+
+/**
+ * Movement list result
+ */
+export interface ListMovementsResult {
+  movements: MovementWithRelations[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+  summary: {
+    totalInbound: number;
+    totalOutbound: number;
+    netChange: number;
+  };
+}
+
+/**
+ * Movement type counts for aggregation
+ */
+export interface MovementTypeCount {
+  count: number;
+  units: number;
+  value: number;
+}
+
+/**
+ * Product movement aggregation for top movers calculation
+ */
+export interface ProductMovementAggregation {
+  productId: string;
+  productName: string;
+  productSku: string;
+  unitsIn: number;
+  unitsOut: number;
+  count: number;
+}
+
+/**
+ * Date group aggregation for movement trends
+ */
+export interface DateGroupAggregation {
+  unitsIn: number;
+  unitsOut: number;
+  count: number;
+}
+
+/**
+ * Aggregated aging item for product+location grouping
+ */
+export interface AggregatedAgingItem {
+  productId: string;
+  productSku: string;
+  productName: string;
+  locationId: string;
+  locationName: string;
+  totalQuantity: number;
+  totalValue: number;
+  weightedAverageCost: number;
+  oldestReceivedAt: Date;
+  highestRisk: 'low' | 'medium' | 'high' | 'critical';
+  ageInDays: number;
+}
 
 // ============================================================================
 // HOOK FILTER TYPES
@@ -726,3 +996,156 @@ export const warehouseLocationSchema = createWarehouseLocationSchema.extend({
 });
 
 export type WarehouseLocation = z.infer<typeof warehouseLocationSchema>;
+
+// ============================================================================
+// LOCATION API RESPONSE TYPES
+// ============================================================================
+
+/**
+ * Simple location record from database (warehouse_locations table)
+ * Used by listLocations, getLocation server functions
+ */
+export interface LocationApiRecord {
+  id: string;
+  organizationId: string;
+  locationCode: string;
+  name: string;
+  locationType: LocationType;
+  parentId: string | null;
+  capacity: number | null;
+  isActive: boolean;
+  isPickable: boolean;
+  isReceivable: boolean;
+  attributes: Record<string, unknown> | null;
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy: string | null;
+  updatedBy: string | null;
+}
+
+/**
+ * Result from listLocations server function
+ */
+export interface ListLocationsApiResult {
+  locations: LocationApiRecord[];
+  total: number;
+  page: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+/**
+ * Location with inventory contents from getLocation server function
+ */
+export interface LocationDetailApiResult {
+  location: LocationApiRecord;
+  contents: Array<{
+    id: string;
+    organizationId: string;
+    productId: string;
+    locationId: string;
+    quantityOnHand: number;
+    quantityAllocated: number;
+    quantityAvailable: number;
+    unitCost: number;
+    totalValue: number;
+    lotNumber: string | null;
+    serialNumber: string | null;
+    expiryDate: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    product?: {
+      id: string;
+      name: string;
+      sku: string;
+    } | null;
+  }>;
+  metrics: {
+    itemCount: number;
+    totalQuantity: number;
+    totalValue: number;
+  };
+}
+
+// ============================================================================
+// HOOK LOCATION TYPES
+// ============================================================================
+
+/**
+ * Transformed warehouse location used by useLocations hook
+ * This is the API response mapped through mapLocationFromApi helper
+ */
+export interface HookWarehouseLocation {
+  id: string;
+  code: string;
+  name: string;
+  locationType: LocationType;
+  parentId: string | null;
+  parentPath: string[];
+  capacity: number | null;
+  currentOccupancy: number;
+  utilization: number;
+  isActive: boolean;
+  attributes: Record<string, unknown>;
+  childCount: number;
+  itemCount: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Location hierarchy node with children
+ */
+export interface HookLocationHierarchy extends HookWarehouseLocation {
+  children: HookLocationHierarchy[];
+}
+
+/**
+ * Location contents from inventory query
+ */
+export interface HookLocationContents {
+  items: Array<{
+    inventoryId: string;
+    productId: string;
+    productName: string;
+    productSku: string;
+    quantity: number;
+    totalValue: number;
+  }>;
+  totalItems: number;
+  totalValue: number;
+  utilization: number;
+}
+
+/**
+ * Filters for location queries in hooks
+ */
+export interface HookLocationFilters extends Record<string, unknown> {
+  parentId?: string;
+  type?: LocationType;
+  active?: boolean;
+  search?: string;
+}
+
+/**
+ * Create location input for hooks
+ */
+export interface CreateLocationInput {
+  code: string;
+  name: string;
+  locationType: LocationType;
+  parentId?: string;
+  capacity?: number;
+  attributes?: Record<string, unknown>;
+}
+
+/**
+ * Update location input for hooks
+ */
+export interface UpdateLocationInput {
+  code?: string;
+  name?: string;
+  capacity?: number;
+  isActive?: boolean;
+  attributes?: Record<string, unknown>;
+}

@@ -9,8 +9,8 @@ import { createFileRoute, useNavigate, useParams } from '@tanstack/react-router'
 import { useCallback, useState } from 'react';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatusBadge } from '@/components/shared';
 import {
   ArrowLeft,
   Clock,
@@ -23,7 +23,6 @@ import {
   useSiteVisit,
   useCheckIn,
   useCheckOut,
-  useCustomerSignOff,
   useProjectTasks,
 } from '@/hooks/jobs';
 import { CustomerSignOffDialog } from '@/components/domain/jobs/projects/customer-sign-off-dialog';
@@ -46,7 +45,7 @@ function SiteVisitDetailPage() {
   const navigate = useNavigate();
 
   const { data: rawVisit, isLoading, error } = useSiteVisit({ siteVisitId: visitId });
-  
+
   interface VisitData {
     id: string;
     projectId: string;
@@ -62,22 +61,22 @@ function SiteVisitDetailPage() {
     customerSignOffConfirmed: boolean;
     customerSignOffName: string | null;
     customerRating: number | null;
+    customerFeedback: string | null;
   }
-  
+
   const visit = rawVisit as VisitData | undefined;
-  
+
   // Fetch tasks for this site visit (via project tasks)
   const { data: projectTasks = [], isLoading: isLoadingTasks } = useProjectTasks({
     projectId,
     enabled: !!projectId,
   });
-  
+
   // Filter tasks for current site visit
   const siteVisitTasks = projectTasks.filter((task: any) => task.siteVisitId === visitId);
-  
+
   const checkIn = useCheckIn();
   const checkOut = useCheckOut();
-  const signOff = useCustomerSignOff();
   const [signOffDialogOpen, setSignOffDialogOpen] = useState(false);
 
   const handleBack = useCallback(() => {
@@ -107,13 +106,14 @@ function SiteVisitDetailPage() {
     window.location.reload();
   }, []);
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'in_progress': return 'bg-blue-100 text-blue-800';
-      case 'cancelled': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+  // Visit status config for StatusBadge
+  const VISIT_STATUS_CONFIG: Record<string, { variant: 'success' | 'progress' | 'error' | 'neutral' | 'info' | 'warning'; label?: string }> = {
+    completed: { variant: 'success', label: 'Completed' },
+    in_progress: { variant: 'progress', label: 'In Progress' },
+    scheduled: { variant: 'info', label: 'Scheduled' },
+    cancelled: { variant: 'error', label: 'Cancelled' },
+    no_show: { variant: 'warning', label: 'No Show' },
+    rescheduled: { variant: 'info', label: 'Rescheduled' },
   };
 
   if (isLoading || error || !visit) {
@@ -155,7 +155,7 @@ function SiteVisitDetailPage() {
             <div>
               <div className="flex items-center gap-2">
                 <span>Site Visit {visit.visitNumber}</span>
-                <Badge className={getStatusColor(visit.status)}>{visit.status}</Badge>
+                <StatusBadge status={visit.status} statusConfig={VISIT_STATUS_CONFIG} />
               </div>
               <p className="text-sm text-muted-foreground font-normal capitalize">
                 {visit.visitType}
@@ -199,7 +199,7 @@ function SiteVisitDetailPage() {
             <Card>
               <CardHeader><CardTitle>Tasks</CardTitle></CardHeader>
               <CardContent>
-                <TaskList 
+                <TaskList
                   tasks={siteVisitTasks}
                   isLoading={isLoadingTasks}
                   emptyMessage="No tasks for this site visit"
@@ -225,9 +225,9 @@ function SiteVisitDetailPage() {
                   </Button>
                 )}
                 {canSignOff && (
-                  <Button 
-                    className="w-full" 
-                    variant="default" 
+                  <Button
+                    className="w-full"
+                    variant="default"
                     onClick={() => setSignOffDialogOpen(true)}
                   >
                     <PenLine className="mr-2 h-4 w-4" />

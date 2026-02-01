@@ -15,9 +15,11 @@ import {
   inventory,
   inventoryMovements,
   warehouseLocations as locations,
+  activities,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import {
   createLocationSchema,
   updateLocationSchema,
@@ -617,6 +619,91 @@ export const recordMovement = createServerFn({ method: 'POST' })
           createdBy: ctx.user.id,
         })
         .returning();
+
+      // Log activity for significant movements (customer-facing, supplier-facing, significant)
+      const logger = createActivityLoggerWithContext(ctx);
+      const movementType = data.movementType;
+      
+      // Only log significant movements
+      if (['ship', 'receive', 'return', 'adjust'].includes(movementType)) {
+        let entityType: string;
+        let entityId: string | null = null;
+        let description: string;
+
+        // Shipments linked to orders
+        if (movementType === 'ship' && data.referenceType === 'order' && data.referenceId) {
+          entityType = 'order';
+          entityId = data.referenceId;
+          description = `Inventory shipped for order`;
+        }
+        // Returns linked to orders
+        else if (movementType === 'return' && data.referenceType === 'order' && data.referenceId) {
+          entityType = 'order';
+          entityId = data.referenceId;
+          description = `Inventory returned for order`;
+        }
+        // Receipts linked to purchase orders
+        else if (movementType === 'receive' && data.referenceType === 'purchase_order' && data.referenceId) {
+          entityType = 'purchase_order';
+          entityId = data.referenceId;
+          description = `Inventory received for purchase order`;
+        }
+        // Receipts not linked to purchase orders (still supplier-facing)
+        else if (movementType === 'receive') {
+          entityType = 'product';
+          entityId = data.productId;
+          description = `Inventory received`;
+        }
+        // Returns not linked to orders
+        else if (movementType === 'return') {
+          entityType = 'product';
+          entityId = data.productId;
+          description = `Inventory returned`;
+        }
+        // Adjustments
+        else if (movementType === 'adjust') {
+          entityType = 'product';
+          entityId = data.productId;
+          description = `Inventory adjusted`;
+        }
+        // Fallback (shouldn't happen)
+        else {
+          entityType = 'product';
+          entityId = data.productId;
+          description = `Inventory movement: ${movementType}`;
+        }
+
+        if (entityId) {
+          // Check if activity already exists (prevent duplicates from backfill)
+          const [existingActivity] = await db
+            .select({ id: activities.id })
+            .from(activities)
+            .where(
+              and(
+                eq(activities.organizationId, ctx.organizationId),
+                sql`${activities.metadata}->>'movementId' = ${movement.id}`
+              )
+            )
+            .limit(1);
+
+          if (!existingActivity) {
+            logger.logAsync({
+              entityType: entityType as any,
+              entityId,
+              action: 'updated',
+              description: `${description} (movement: ${movementType})`,
+              metadata: {
+                movementId: movement.id,
+                movementType: movementType,
+                referenceType: data.referenceType,
+                referenceId: data.referenceId,
+                productId: data.productId,
+                quantity: data.quantity,
+              },
+            });
+          }
+        }
+      }
 
       return {
         inventory: inv as Inventory,

@@ -35,6 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useOrgFormat } from "@/hooks/use-org-format";
 
 // ============================================================================
 // TYPES
@@ -104,13 +105,9 @@ export const TurnoverReport = memo(function TurnoverReport({
   isLoading,
   className,
 }: TurnoverReportProps) {
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("en-AU", {
-      style: "currency",
-      currency: "AUD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
 
   const formatRatio = (value: number) => (Number.isFinite(value) ? value : 0).toFixed(2);
 
@@ -334,10 +331,10 @@ export const TurnoverReport = memo(function TurnoverReport({
                           {Math.round(cat.daysOnHand)}d
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {formatCurrency(cat.cogs)}
+                          {formatCurrencyDisplay(cat.cogs)}
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {formatCurrency(cat.averageInventory)}
+                          {formatCurrencyDisplay(cat.averageInventory)}
                         </TableCell>
                         <TableCell>
                           <div

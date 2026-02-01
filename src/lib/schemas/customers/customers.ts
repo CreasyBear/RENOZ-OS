@@ -156,6 +156,19 @@ export const customerSchema = createCustomerSchema.extend({
 
 export type Customer = z.infer<typeof customerSchema>;
 
+/**
+ * Customer with aggregated order metrics (from database aggregation)
+ * These fields are computed from orders table, not stored values
+ */
+export interface CustomerWithOrderMetrics extends Customer {
+  lifetimeValue: number; // Always 0 if no orders (not null)
+  totalOrderValue: number; // Always 0 if no orders (not null)
+  averageOrderValue: number; // Always 0 if no orders (not null)
+  totalOrders: number; // Always 0 if no orders (not null)
+  lastOrderDate: Date | null;
+  firstOrderDate: Date | null;
+}
+
 // ============================================================================
 // CUSTOMER FILTERS & QUERIES
 // ============================================================================

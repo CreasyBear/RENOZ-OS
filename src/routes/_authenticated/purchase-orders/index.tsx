@@ -5,21 +5,45 @@
  * Implements SUPP-PO-MANAGEMENT story.
  */
 
-import { createFileRoute } from '@tanstack/react-router';
-import { useState, useCallback } from 'react';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
+import { useCallback } from 'react';
 import { Plus } from 'lucide-react';
+import { z } from 'zod';
 import { RouteErrorFallback, PageLayout } from '@/components/layout';
 import { AdminTableSkeleton } from '@/components/skeletons/admin';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/toast';
-import { PODirectory } from '@/components/domain/purchase-orders';
+import {
+  PODirectory,
+  DEFAULT_PO_FILTERS,
+  type POFiltersState,
+} from '@/components/domain/purchase-orders';
 import { usePurchaseOrders, useDeletePurchaseOrder } from '@/hooks/suppliers';
-import type {
-  PurchaseOrderFiltersState,
-  PurchaseOrderTableData,
-} from '@/lib/schemas/purchase-orders';
-import { defaultPurchaseOrderFilters } from '@/lib/schemas/purchase-orders';
+import type { PurchaseOrderTableData } from '@/lib/schemas/purchase-orders';
 import { useConfirmation } from '@/hooks';
+import {
+  useTransformedFilterUrlState,
+  parseDateFromUrl,
+  serializeDateForUrl,
+} from '@/hooks/filters/use-filter-url-state';
+
+// ============================================================================
+// URL SEARCH SCHEMA
+// ============================================================================
+
+const poSearchSchema = z.object({
+  page: z.coerce.number().int().positive().optional().default(1),
+  pageSize: z.coerce.number().int().min(10).max(100).optional().default(20),
+  search: z.string().optional().default(''),
+  status: z.string().optional(),
+  supplierId: z.string().uuid().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  sortBy: z.enum(['poNumber', 'orderDate', 'requiredDate', 'totalAmount', 'status', 'createdAt']).optional().default('createdAt'),
+  sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
+});
+
+type POSearchParams = z.infer<typeof poSearchSchema>;
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -27,6 +51,7 @@ import { useConfirmation } from '@/hooks';
 
 export const Route = createFileRoute('/_authenticated/purchase-orders/')({
   component: PurchaseOrdersPage,
+  validateSearch: poSearchSchema,
   errorComponent: ({ error }) => (
     <RouteErrorFallback error={error} parentRoute="/purchase-orders" />
   ),
@@ -34,23 +59,56 @@ export const Route = createFileRoute('/_authenticated/purchase-orders/')({
 });
 
 // ============================================================================
+// URL FILTER TRANSFORMERS
+// ============================================================================
+
+/** Transform URL search params to POFiltersState */
+const fromUrlParams = (search: POSearchParams): POFiltersState => ({
+  search: search.search ?? '',
+  status: search.status ? [search.status] as POFiltersState['status'] : [],
+  supplierId: search.supplierId ?? null,
+  dateRange: search.dateFrom || search.dateTo
+    ? {
+        from: parseDateFromUrl(search.dateFrom),
+        to: parseDateFromUrl(search.dateTo),
+      }
+    : null,
+  totalRange: null, // Not yet in URL schema
+});
+
+/** Transform POFiltersState to URL search params */
+const toUrlParams = (filters: POFiltersState): Record<string, unknown> => ({
+  search: filters.search || undefined,
+  status: filters.status.length > 0 ? filters.status[0] : undefined,
+  supplierId: filters.supplierId ?? undefined,
+  dateFrom: filters.dateRange?.from ? serializeDateForUrl(filters.dateRange.from) : undefined,
+  dateTo: filters.dateRange?.to ? serializeDateForUrl(filters.dateRange.to) : undefined,
+});
+
+// ============================================================================
 // MAIN COMPONENT
 // ============================================================================
 
 function PurchaseOrdersPage() {
-  const navigate = Route.useNavigate();
+  const navigate = useNavigate();
   const confirm = useConfirmation();
+  const search = Route.useSearch();
 
-  // Pagination state
-  const [page, setPage] = useState(1);
-  const [pageSize] = useState(20);
-  const [sortBy] = useState<
-    'poNumber' | 'orderDate' | 'requiredDate' | 'totalAmount' | 'status' | 'createdAt'
-  >('createdAt');
-  const [sortOrder] = useState<'asc' | 'desc'>('desc');
+  // URL-synced filter state with transformations
+  const { filters, setFilters } = useTransformedFilterUrlState({
+    currentSearch: search,
+    navigate,
+    defaults: DEFAULT_PO_FILTERS,
+    fromUrlParams,
+    toUrlParams,
+    resetPageOnChange: ['search', 'status', 'supplierId', 'dateRange'],
+  });
 
-  // Filter state
-  const [filters, setFilters] = useState<PurchaseOrderFiltersState>(defaultPurchaseOrderFilters);
+  // Pagination from URL
+  const page = search.page;
+  const pageSize = search.pageSize;
+  const sortBy = search.sortBy;
+  const sortOrder = search.sortOrder;
 
   // Fetch purchase orders using centralized hook
   const { data: ordersData, isLoading: isLoadingOrders } = usePurchaseOrders({
@@ -61,27 +119,24 @@ function PurchaseOrdersPage() {
     search: filters.search || undefined,
     status: filters.status.length > 0 ? filters.status[0] : undefined,
     supplierId: filters.supplierId || undefined,
-    startDate: filters.dateFrom?.toISOString(),
-    endDate: filters.dateTo?.toISOString(),
+    startDate: filters.dateRange?.from?.toISOString(),
+    endDate: filters.dateRange?.to?.toISOString(),
   });
 
   // Delete mutation using centralized hook
   const deleteMutation = useDeletePurchaseOrder();
 
   // Handlers
-  const handleFiltersChange = useCallback((newFilters: PurchaseOrderFiltersState) => {
+  const handleFiltersChange = useCallback((newFilters: POFiltersState) => {
     setFilters(newFilters);
-    setPage(1);
-  }, []);
-
-  const handleSearch = useCallback((search: string) => {
-    setFilters((prev) => ({ ...prev, search }));
-    setPage(1);
-  }, []);
+  }, [setFilters]);
 
   const handlePageChange = useCallback((newPage: number) => {
-    setPage(newPage);
-  }, []);
+    navigate({
+      to: '.',
+      search: { ...search, page: newPage },
+    });
+  }, [navigate, search]);
 
   const handleView = useCallback(
     (id: string) => {
@@ -177,7 +232,6 @@ function PurchaseOrdersPage() {
           isLoading={isLoadingOrders}
           filters={filters}
           onFiltersChange={handleFiltersChange}
-          onSearch={handleSearch}
           pagination={pagination}
           onPageChange={handlePageChange}
           onView={handleView}

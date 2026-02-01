@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { FormatAmount } from '@/components/shared/format';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import { format } from 'date-fns';
 import type {
   KPIMetric,
@@ -147,6 +148,7 @@ interface RevenueChartProps {
 }
 
 function RevenueChart({ periods }: RevenueChartProps) {
+  const { formatCurrency } = useOrgFormat();
   const maxRevenue = Math.max(...periods.map((p) => p.totalRevenue));
 
   return (
@@ -167,12 +169,12 @@ function RevenueChart({ periods }: RevenueChartProps) {
               <div
                 className="bg-blue-500 transition-all"
                 style={{ width: `${resPercent}%` }}
-                title={`Residential: $${(period.residentialRevenue / 100).toFixed(0)}`}
+                title={`Residential: ${formatCurrency(period.residentialRevenue, { cents: false, showCents: true })}`}
               />
               <div
                 className="bg-green-500 transition-all"
                 style={{ width: `${comPercent}%` }}
-                title={`Commercial: $${(period.commercialRevenue / 100).toFixed(0)}`}
+                title={`Commercial: ${formatCurrency(period.commercialRevenue, { cents: false, showCents: true })}`}
               />
             </div>
           </div>

@@ -185,6 +185,10 @@ export {
   usePrefetchProject,
 } from './use-projects';
 
+// Active Projects (for sidebar contextual display)
+export { useActiveProjects } from './use-active-projects';
+export type { ActiveProject } from './use-active-projects';
+
 // Site Visits
 export {
   useSiteVisits,
@@ -200,6 +204,8 @@ export {
   useCustomerSignOff,
   usePrefetchSiteVisit,
 } from './use-site-visits';
+
+export type { SiteVisitListResult, SiteVisitItem } from '@/lib/schemas/jobs/site-visits';
 
 export type {
   ProjectListQuery,
@@ -247,6 +253,15 @@ export {
 
 export type {
   UseInstallersOptions,
+  InstallerListItem,
+  InstallerDetail,
+  Certification,
+  Skill,
+  Territory,
+  Blockout,
+  AvailabilityResult,
+  WorkloadResult,
+  Suggestion,
 } from './use-installers';
 
 // ============================================================================
@@ -281,7 +296,7 @@ export {
   useFile,
   useCreateFile,
   useUpdateFile,
-  useDeleteFile,
+  useDeleteFile as useDeleteProjectFile,
 } from './use-files';
 
 export type {

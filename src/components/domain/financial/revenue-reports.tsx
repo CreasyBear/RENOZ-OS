@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { FormatAmount } from '@/components/shared/format';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import { format } from 'date-fns';
 import type {
   DeferredRevenueBalance,
@@ -114,6 +115,7 @@ interface SummaryChartProps {
 }
 
 function SummaryChart({ periods }: SummaryChartProps) {
+  const { formatCurrency } = useOrgFormat();
   const maxTotal = Math.max(...periods.map((p) => p.totalRecognized), 1);
 
   return (
@@ -135,17 +137,26 @@ function SummaryChart({ periods }: SummaryChartProps) {
               <div
                 className="bg-green-500 transition-all"
                 style={{ width: `${onDeliveryPercent}%` }}
-                title={`On Delivery: $${(period.onDeliveryAmount / 100).toFixed(0)}`}
+                title={`On Delivery: ${formatCurrency(period.onDeliveryAmount, {
+                  cents: false,
+                  showCents: true,
+                })}`}
               />
               <div
                 className="bg-blue-500 transition-all"
                 style={{ width: `${milestonePercent}%` }}
-                title={`Milestone: $${(period.milestoneAmount / 100).toFixed(0)}`}
+                title={`Milestone: ${formatCurrency(period.milestoneAmount, {
+                  cents: false,
+                  showCents: true,
+                })}`}
               />
               <div
                 className="bg-purple-500 transition-all"
                 style={{ width: `${timeBasedPercent}%` }}
-                title={`Time-based: $${(period.timeBasedAmount / 100).toFixed(0)}`}
+                title={`Time-based: ${formatCurrency(period.timeBasedAmount, {
+                  cents: false,
+                  showCents: true,
+                })}`}
               />
             </div>
           </div>

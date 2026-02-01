@@ -4,7 +4,7 @@
  * Main customer directory interface with search, filtering, table, and bulk operations.
  * Coordinates state between CustomerFilters and CustomerTable components.
  */
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import {
   Download,
   Plus,
@@ -29,7 +29,12 @@ import {
 } from '@/components/ui/alert-dialog'
 import { CustomerTable, type CustomerTableData } from './customer-table'
 import { CustomerCard, CustomerCardSkeleton } from './customer-card'
-import { CustomerFilters, ActiveFilterChips, type CustomerFiltersState } from './customer-filters'
+import {
+  type CustomerFiltersState,
+  DEFAULT_CUSTOMER_FILTERS,
+  createCustomerFilterConfig,
+} from './customer-filter-config'
+import { DomainFilterBar } from '@/components/shared/filters'
 import { EmptyState } from '@/components/shared/empty-state'
 import { cn } from '@/lib/utils'
 
@@ -259,13 +264,13 @@ export function CustomerDirectory({
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table')
 
   // Filter state
-  const [filters, setFilters] = useState<CustomerFiltersState>({
-    search: '',
-    status: [],
-    type: [],
-    size: [],
-    tags: [],
-  })
+  const [filters, setFilters] = useState<CustomerFiltersState>(DEFAULT_CUSTOMER_FILTERS)
+
+  // Build dynamic filter config with tag options
+  const filterConfig = useMemo(
+    () => createCustomerFilterConfig(tags),
+    [tags]
+  )
 
   // Bulk operation state
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
@@ -391,18 +396,12 @@ export function CustomerDirectory({
       </div>
 
       {/* Filters */}
-      <CustomerFilters
+      <DomainFilterBar<CustomerFiltersState>
+        config={filterConfig}
         filters={filters}
-        onChange={handleFiltersChange}
-        availableTags={tags}
+        onFiltersChange={handleFiltersChange}
+        defaultFilters={DEFAULT_CUSTOMER_FILTERS}
         resultCount={totalCount}
-      />
-
-      {/* Active Filter Chips */}
-      <ActiveFilterChips
-        filters={filters}
-        availableTags={tags}
-        onChange={handleFiltersChange}
       />
 
       {/* Bulk Actions Bar */}

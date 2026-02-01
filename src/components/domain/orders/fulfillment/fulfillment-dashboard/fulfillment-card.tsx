@@ -38,6 +38,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { FormatAmount } from '@/components/shared/format';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import { OrderCardInlineEdit } from '../../cards/order-card-inline-edit';
 import type { InlineEditFormData } from '../../cards/order-card-inline-edit.schema';
 import { OrderCardContextMenu } from '../../cards/order-card-context-menu';
@@ -154,6 +155,9 @@ const FulfillmentCardComponent = ({
   onStartEdit,
   onCancelEdit,
 }: FulfillmentCardProps) => {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
 
   useEffect(() => {
@@ -191,7 +195,7 @@ const FulfillmentCardComponent = ({
   const isCurrentlyDragging = isDragging || dndIsDragging;
 
   // ARIA label for accessibility (WCAG 2.1 AA compliant)
-  const ariaLabel = `Order ${order.orderNumber}, customer ${order.customerName}, ${order.itemCount} items, ${FormatAmount({ amount: order.total })}, ship by ${dateText}, ${order.priority} priority${order.assignedTo ? `, assigned to ${order.assignedTo.name}` : ', unassigned'}`;
+  const ariaLabel = `Order ${order.orderNumber}, customer ${order.customerName}, ${order.itemCount} items, ${formatCurrencyDisplay(order.total)}, ship by ${dateText}, ${order.priority} priority${order.assignedTo ? `, assigned to ${order.assignedTo.name}` : ', unassigned'}`;
 
   // Inline edit mode
   if (isEditing && onSaveEdit && onCancelEdit && inlineEditForm) {

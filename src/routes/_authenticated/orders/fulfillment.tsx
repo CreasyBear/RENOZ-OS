@@ -10,7 +10,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useCallback } from "react";
 import { PageLayout, RouteErrorFallback } from "@/components/layout";
 import { OrdersTableSkeleton } from "@/components/skeletons/orders";
-import { FulfillmentDashboard } from "@/components/domain/orders";
+import { FulfillmentDashboardContainer } from "@/components/domain/orders";
 import { ShipOrderDialog, ConfirmDeliveryDialog } from "@/components/domain/orders";
 
 // ============================================================================
@@ -86,7 +86,7 @@ function FulfillmentPage() {
         description="Manage order picking, shipping, and delivery tracking"
       />
       <PageLayout.Content>
-        <FulfillmentDashboard
+        <FulfillmentDashboardContainer
           onViewOrder={handleViewOrder}
           onShipOrder={handleShipOrder}
           onConfirmDelivery={handleConfirmDelivery}

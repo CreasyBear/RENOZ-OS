@@ -449,6 +449,15 @@ export const activityEntityTypeEnum = pgEnum("activity_entity_type", [
   "purchase_order",
   "shipment",
   "quote",
+  // Jobs/Projects domain
+  "site_visit",
+  "job_assignment",
+  "job_material",
+  "job_photo",
+  // Warranty domain
+  "warranty_claim",
+  "warranty_policy",
+  "warranty_extension",
 ]);
 
 export const activitySourceEnum = pgEnum("activity_source", [

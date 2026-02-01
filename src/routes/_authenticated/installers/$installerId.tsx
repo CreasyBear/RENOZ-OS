@@ -16,6 +16,7 @@ import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { StatusBadge, type StatusConfig } from '@/components/shared';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -29,13 +30,11 @@ import {
   MapPin,
   Star,
   Clock,
-  CheckCircle,
-  AlertCircle,
   Phone,
   Mail,
   Car,
 } from 'lucide-react';
-import { useInstaller, useInstallerWorkload, useSiteVisitsByInstaller } from '@/hooks/jobs';
+import { useInstaller, useInstallerWorkload, useSiteVisitsByInstaller, type SiteVisitItem } from '@/hooks/jobs';
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -62,12 +61,21 @@ export const Route = createFileRoute('/_authenticated/installers/$installerId')(
 // STATUS CONFIG
 // ============================================================================
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; dot: string }> = {
-  active: { label: 'Active', color: 'text-green-700', bg: 'bg-green-100', dot: 'bg-green-500' },
-  busy: { label: 'Busy', color: 'text-orange-700', bg: 'bg-orange-100', dot: 'bg-orange-500' },
-  away: { label: 'Away', color: 'text-blue-700', bg: 'bg-blue-100', dot: 'bg-blue-500' },
-  suspended: { label: 'Suspended', color: 'text-red-700', bg: 'bg-red-100', dot: 'bg-red-500' },
-  inactive: { label: 'Inactive', color: 'text-gray-700', bg: 'bg-gray-100', dot: 'bg-gray-500' },
+/**
+ * Installer status configuration for StatusBadge
+ * Maps installer status values to semantic colors
+ */
+const INSTALLER_STATUS_CONFIG: StatusConfig = {
+  active: { label: 'Active', variant: 'success' },
+  available: { label: 'Available', variant: 'success' },
+  busy: { label: 'Busy', variant: 'warning' },
+  assigned: { label: 'Assigned', variant: 'warning' },
+  on_job: { label: 'On Job', variant: 'progress' },
+  away: { label: 'Away', variant: 'info' },
+  suspended: { label: 'Suspended', variant: 'error' },
+  unavailable: { label: 'Unavailable', variant: 'inactive' },
+  off: { label: 'Off', variant: 'inactive' },
+  inactive: { label: 'Inactive', variant: 'inactive' },
 };
 
 // ============================================================================
@@ -183,15 +191,9 @@ function ProfileTab({ installer }: { installer: InstallerDetail }) {
                     )}
                   </div>
                   {cert.isVerified ? (
-                    <Badge className="bg-green-100 text-green-700">
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Verified
-                    </Badge>
+                    <StatusBadge status="verified" variant="success" />
                   ) : (
-                    <Badge variant="outline" className="text-amber-600">
-                      <AlertCircle className="h-3 w-3 mr-1" />
-                      Pending
-                    </Badge>
+                    <StatusBadge status="pending" variant="warning" />
                   )}
                 </div>
               ))}
@@ -343,38 +345,39 @@ function ScheduleTab({ installer }: { installer: InstallerDetail }) {
 
 function PerformanceTab({ installerId }: { installerId: string }) {
   const { data: siteVisitsData, isLoading } = useSiteVisitsByInstaller(installerId);
-  const siteVisits = siteVisitsData?.items ?? [];
-  
+  const siteVisits: SiteVisitItem[] = siteVisitsData?.items ?? [];
+
   // Calculate metrics from real data
-  const completedVisits = siteVisits.filter((v: any) => v.status === 'completed');
+  const completedVisits = siteVisits.filter((v) => v.status === 'completed');
   const totalCompleted = completedVisits.length;
-  
+
   // Calculate on-time rate (visits completed on or before scheduled date)
-  const onTimeVisits = completedVisits.filter((v: any) => {
+  const onTimeVisits = completedVisits.filter((v) => {
     if (!v.actualEndTime || !v.scheduledDate) return false;
     const scheduled = new Date(v.scheduledDate);
     const actual = new Date(v.actualEndTime);
     return actual <= scheduled;
   });
   const onTimeRate = totalCompleted > 0 ? Math.round((onTimeVisits.length / totalCompleted) * 100) : 0;
-  
+
   // Calculate average rating from completed visits with ratings
-  const visitsWithRatings = completedVisits.filter((v: any) => v.customerRating);
+  const visitsWithRatings = completedVisits.filter((v) => v.customerRating);
   const avgRating = visitsWithRatings.length > 0
-    ? (visitsWithRatings.reduce((sum: number, v: any) => sum + (v.customerRating || 0), 0) / visitsWithRatings.length).toFixed(1)
+    ? (visitsWithRatings.reduce((sum, v) => sum + (v.customerRating || 0), 0) / visitsWithRatings.length).toFixed(1)
     : 'N/A';
 
   // Group completed visits by month for trend
-  const visitsByMonth = completedVisits.reduce((acc: Record<string, number>, v: any) => {
+  const visitsByMonth = completedVisits.reduce<Record<string, number>>((acc, v) => {
     const date = new Date(v.scheduledDate);
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     acc[monthKey] = (acc[monthKey] || 0) + 1;
     return acc;
   }, {});
-  
-  const sortedMonths = Object.entries(visitsByMonth)
+
+  const sortedMonths: [string, number][] = Object.entries(visitsByMonth)
     .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-6); // Last 6 months
+    .slice(-6) // Last 6 months
+    .map(([month, count]) => [month, count] as [string, number]);
 
   return (
     <div className="space-y-6">
@@ -433,7 +436,7 @@ function PerformanceTab({ installerId }: { installerId: string }) {
                 const height = maxCount > 0 ? (count / maxCount) * 100 : 0;
                 const [year, monthNum] = month.split('-');
                 const monthLabel = new Date(Number(year), Number(monthNum) - 1).toLocaleDateString('en-US', { month: 'short' });
-                
+
                 return (
                   <div key={month} className="flex-1 flex flex-col items-center gap-2">
                     <div className="w-full relative" style={{ height: '160px' }}>
@@ -468,14 +471,12 @@ function PerformanceTab({ installerId }: { installerId: string }) {
 function WorkloadTab({ installerId }: { installerId: string }) {
   const { data: workload, isLoading: isLoadingWorkload } = useInstallerWorkload(installerId);
   const { data: siteVisitsData, isLoading: isLoadingVisits } = useSiteVisitsByInstaller(installerId);
-  
-  const siteVisits = siteVisitsData?.items ?? [];
-  const upcomingVisits = siteVisits
-    .filter((v: any) => v.status === 'scheduled' || v.status === 'in_progress')
-    .sort((a: any, b: any) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime())
-    .slice(0, 5);
 
-  const isLoading = isLoadingWorkload || isLoadingVisits;
+  const siteVisits: SiteVisitItem[] = siteVisitsData?.items ?? [];
+  const upcomingVisits = siteVisits
+    .filter((v) => v.status === 'scheduled' || v.status === 'in_progress')
+    .sort((a, b) => new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime())
+    .slice(0, 5);
 
   return (
     <div className="space-y-6">
@@ -518,7 +519,7 @@ function WorkloadTab({ installerId }: { installerId: string }) {
             <div className="h-32 animate-pulse bg-muted rounded" />
           ) : upcomingVisits.length > 0 ? (
             <div className="space-y-3">
-              {upcomingVisits.map((visit: any) => (
+              {upcomingVisits.map((visit) => (
                 <div key={visit.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                   <div>
                     <p className="font-medium">{visit.project?.name ?? 'Unknown Project'}</p>
@@ -526,9 +527,10 @@ function WorkloadTab({ installerId }: { installerId: string }) {
                       {visit.visitType} • {visit.scheduledDate}
                     </p>
                   </div>
-                  <Badge variant={visit.status === 'in_progress' ? 'default' : 'secondary'}>
-                    {visit.status}
-                  </Badge>
+                  <StatusBadge
+                    status={visit.status}
+                    variant={visit.status === 'in_progress' ? 'progress' : visit.status === 'scheduled' ? 'info' : 'neutral'}
+                  />
                 </div>
               ))}
             </div>
@@ -622,7 +624,6 @@ function InstallerDetailPage() {
     );
   }
 
-  const status = STATUS_CONFIG[installer.status] || STATUS_CONFIG.inactive;
   const initials = (installer.user?.name || installer.user?.email || '?')
     .split(' ')
     .map((n) => n[0])
@@ -650,10 +651,10 @@ function InstallerDetailPage() {
                   <span className="text-xl font-semibold">
                     {installer.user?.name || installer.user?.email}
                   </span>
-                  <Badge className={status.bg}>
-                    <span className={`w-1.5 h-1.5 rounded-full mr-1.5 ${status.dot}`} />
-                    {status.label}
-                  </Badge>
+                  <StatusBadge
+                    status={installer.status}
+                    statusConfig={INSTALLER_STATUS_CONFIG}
+                  />
                 </div>
                 <p className="text-sm text-muted-foreground">
                   {installer.yearsExperience} years experience • {installer.maxJobsPerDay} jobs/day max

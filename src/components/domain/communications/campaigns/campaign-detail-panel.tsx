@@ -49,6 +49,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { MetricCard } from "@/components/shared";
 
 // ============================================================================
 // TYPES
@@ -168,50 +169,31 @@ export function CampaignDetailSkeleton() {
 }
 
 // ============================================================================
-// STAT CARD COMPONENT
+// STAT CARD HELPERS
 // ============================================================================
 
-function StatCard({
-  title,
-  value,
-  total,
-  icon: Icon,
-  variant = "default",
-}: {
-  title: string;
-  value: number;
-  total?: number;
-  icon: typeof Mail;
-  variant?: "default" | "success" | "warning" | "error";
-}) {
+// Variant styles for campaign stat cards
+const CAMPAIGN_STAT_STYLES = {
+  default: { iconClassName: "text-muted-foreground" },
+  success: { iconClassName: "text-green-600 dark:text-green-400" },
+  warning: { iconClassName: "text-amber-600 dark:text-amber-400" },
+  error: { iconClassName: "text-red-600 dark:text-red-400" },
+} as const;
+
+// Format value with percentage for campaign stats
+function formatCampaignStatValue(value: number, total?: number): React.ReactNode {
   const percentage = total && total > 0 ? Math.round((value / total) * 100) : 0;
-
-  const variantColors = {
-    default: "text-muted-foreground",
-    success: "text-green-600 dark:text-green-400",
-    warning: "text-amber-600 dark:text-amber-400",
-    error: "text-red-600 dark:text-red-400",
-  };
-
   return (
-    <Card>
-      <CardContent className="pt-4">
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-          <Icon className={cn("h-4 w-4", variantColors[variant])} />
-          {title}
-        </div>
-        <div className="flex items-baseline gap-2">
-          <span className={cn("text-2xl font-bold", variantColors[variant])}>
-            {value.toLocaleString()}
-          </span>
-          {total !== undefined && total > 0 && (
-            <span className="text-sm text-muted-foreground">({percentage}%)</span>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+    <span className="flex items-baseline gap-2">
+      <span>{value.toLocaleString()}</span>
+      {total !== undefined && total > 0 && (
+        <span className="text-sm font-normal text-muted-foreground">({percentage}%)</span>
+      )}
+    </span>
   );
 }
+
+// Note: Using shared MetricCard from @/components/shared
 
 // ============================================================================
 // RECIPIENT STATUS BADGE
@@ -370,30 +352,29 @@ export function CampaignDetailPanel({
         className="grid grid-cols-2 md:grid-cols-4 gap-4"
         aria-label="Campaign statistics"
       >
-        <StatCard
+        <MetricCard
           title="Recipients"
-          value={campaign.recipientCount}
+          value={campaign.recipientCount.toLocaleString()}
           icon={Users}
+          iconClassName={CAMPAIGN_STAT_STYLES.default.iconClassName}
         />
-        <StatCard
+        <MetricCard
           title="Sent"
-          value={campaign.sentCount}
-          total={campaign.recipientCount}
+          value={formatCampaignStatValue(campaign.sentCount, campaign.recipientCount)}
           icon={Mail}
+          iconClassName={CAMPAIGN_STAT_STYLES.default.iconClassName}
         />
-        <StatCard
+        <MetricCard
           title="Opened"
-          value={campaign.openCount}
-          total={campaign.sentCount}
+          value={formatCampaignStatValue(campaign.openCount, campaign.sentCount)}
           icon={Eye}
-          variant={campaign.openCount > 0 ? "success" : "default"}
+          iconClassName={campaign.openCount > 0 ? CAMPAIGN_STAT_STYLES.success.iconClassName : CAMPAIGN_STAT_STYLES.default.iconClassName}
         />
-        <StatCard
+        <MetricCard
           title="Clicked"
-          value={campaign.clickCount}
-          total={campaign.sentCount}
+          value={formatCampaignStatValue(campaign.clickCount, campaign.sentCount)}
           icon={MousePointerClick}
-          variant={campaign.clickCount > 0 ? "success" : "default"}
+          iconClassName={campaign.clickCount > 0 ? CAMPAIGN_STAT_STYLES.success.iconClassName : CAMPAIGN_STAT_STYLES.default.iconClassName}
         />
       </div>
 
@@ -401,21 +382,19 @@ export function CampaignDetailPanel({
       {(campaign.bounceCount > 0 || campaign.failedCount > 0) && (
         <div className="grid grid-cols-2 gap-4">
           {campaign.bounceCount > 0 && (
-            <StatCard
+            <MetricCard
               title="Bounced"
-              value={campaign.bounceCount}
-              total={campaign.sentCount}
+              value={formatCampaignStatValue(campaign.bounceCount, campaign.sentCount)}
               icon={XCircle}
-              variant="warning"
+              iconClassName={CAMPAIGN_STAT_STYLES.warning.iconClassName}
             />
           )}
           {campaign.failedCount > 0 && (
-            <StatCard
+            <MetricCard
               title="Failed"
-              value={campaign.failedCount}
-              total={campaign.recipientCount}
+              value={formatCampaignStatValue(campaign.failedCount, campaign.recipientCount)}
               icon={AlertTriangle}
-              variant="error"
+              iconClassName={CAMPAIGN_STAT_STYLES.error.iconClassName}
             />
           )}
         </div>

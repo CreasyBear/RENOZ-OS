@@ -140,7 +140,10 @@ export function CommandPalette({ open: controlledOpen, onOpenChange }: CommandPa
     const filteredRoutes = user?.role
       ? navRoutes.filter((route) => {
           if (!route.requiredPermission) return true
-          return hasPermission(user.role as Role, route.requiredPermission)
+          const permission = Array.isArray(route.requiredPermission)
+            ? route.requiredPermission[0]
+            : route.requiredPermission
+          return hasPermission(user.role as Role, permission)
         })
       : navRoutes
 
@@ -160,7 +163,10 @@ export function CommandPalette({ open: controlledOpen, onOpenChange }: CommandPa
     const filteredActions = user?.role
       ? QUICK_ACTIONS.filter((action) => {
           if (!action.requiredPermission) return true
-          return hasPermission(user.role as Role, action.requiredPermission)
+          const permission = Array.isArray(action.requiredPermission)
+            ? action.requiredPermission[0]
+            : action.requiredPermission
+          return hasPermission(user.role as Role, permission)
         })
       : QUICK_ACTIONS
 

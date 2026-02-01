@@ -15,7 +15,7 @@ import {
   DialogContent,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { QuickQuoteForm } from "./quick-quote-form";
+import { QuickQuoteFormContainer } from "./quick-quote-form-container";
 
 // ============================================================================
 // TYPES
@@ -58,7 +58,7 @@ export const QuickQuoteDialog = memo(function QuickQuoteDialog({
         )}
       </DialogTrigger>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <QuickQuoteForm
+        <QuickQuoteFormContainer
           opportunityId={opportunityId}
           customerId={customerId}
           onSuccess={handleSuccess}

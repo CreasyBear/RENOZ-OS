@@ -18,16 +18,20 @@ import {
   products,
   inventoryCostLayers,
   purchaseOrders,
+  activities,
 } from 'drizzle/schema';
 import { withAuth } from '@/lib/server/protected';
 import { PERMISSIONS } from '@/lib/auth/permissions';
 import { NotFoundError, ValidationError } from '@/lib/server/errors';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
 import {
   inventoryListQuerySchema,
   movementListQuerySchema,
   stockAdjustmentSchema,
   stockTransferSchema,
   inventoryStatusSchema,
+  DEFAULT_LOW_STOCK_THRESHOLD,
+  type ListMovementsResult,
 } from '@/lib/schemas/inventory';
 
 // ============================================================================
@@ -56,25 +60,7 @@ interface InventoryWithRelations extends InventoryRecord {
   location: typeof locations.$inferSelect | null;
 }
 
-interface InventoryMovementWithRelations extends InventoryMovementRecord {
-  productName?: string | null;
-  productSku?: string | null;
-  locationName?: string | null;
-  locationCode?: string | null;
-}
-
-interface ListMovementsResult {
-  movements: InventoryMovementWithRelations[];
-  total: number;
-  page: number;
-  limit: number;
-  hasMore: boolean;
-  summary: {
-    totalInbound: number;
-    totalOutbound: number;
-    netChange: number;
-  };
-}
+// Types moved to schemas - import from there
 
 // ============================================================================
 // INVENTORY CRUD
@@ -120,8 +106,9 @@ const _listInventory = cache(
       conditions.push(eq(inventory.status, filters.status));
     }
     if (filters.lowStock) {
-      // Low stock means available quantity is below a threshold (e.g., 10)
-      conditions.push(sql`${inventory.quantityAvailable} < 10`);
+      // Low stock means available quantity is below default threshold
+      // Note: This checks individual items. For aggregated by SKU, use SUM() with GROUP BY
+      conditions.push(sql`${inventory.quantityAvailable} < ${DEFAULT_LOW_STOCK_THRESHOLD}`);
     }
 
     // Get total count
@@ -139,7 +126,7 @@ const _listInventory = cache(
         totalItems: sql<number>`COUNT(*)::int`,
         totalSkus: sql<number>`COUNT(DISTINCT ${inventory.productId})::int`,
         lowStockCount: sql<number>`
-          COUNT(DISTINCT CASE WHEN ${inventory.quantityAvailable} < 10 THEN ${inventory.productId} END)::int
+          COUNT(DISTINCT CASE WHEN ${inventory.quantityAvailable} < ${DEFAULT_LOW_STOCK_THRESHOLD} THEN ${inventory.productId} END)::int
         `,
       })
       .from(inventory)
@@ -377,6 +364,38 @@ export const adjustInventory = createServerFn({ method: 'POST' })
           createdBy: ctx.user.id,
         })
         .returning();
+
+      // Log activity for adjustment (significant movement)
+      // Check if activity already exists (prevent duplicates from backfill)
+      // Note: Check outside transaction since ActivityLogger uses its own connection
+      const [existingActivity] = await db
+        .select({ id: activities.id })
+        .from(activities)
+        .where(
+          and(
+            eq(activities.organizationId, ctx.organizationId),
+            sql`${activities.metadata}->>'movementId' = ${movement.id}`
+          )
+        )
+        .limit(1);
+
+      if (!existingActivity) {
+        const logger = createActivityLoggerWithContext(ctx);
+        logger.logAsync({
+          entityType: 'product',
+          entityId: data.productId,
+          action: 'updated',
+          description: `Inventory adjusted (movement: adjust)`,
+          metadata: {
+            movementId: movement.id,
+            movementType: 'adjust',
+            referenceType: 'adjustment',
+            productId: data.productId,
+            quantity: data.adjustmentQty,
+            reason: data.reason,
+          },
+        });
+      }
 
       return {
         item: inventoryRecord,
@@ -958,9 +977,9 @@ export const getInventoryDashboard = createServerFn({ method: 'GET' }).handler(a
       totalUnits: sql<number>`COALESCE(SUM(${inventory.quantityOnHand}), 0)::numeric`,
       totalValue: sql<number>`COALESCE(SUM(${inventory.totalValue}), 0)::numeric`,
       locationsCount: sql<number>`COUNT(DISTINCT ${inventory.locationId})::int`,
-      lowStockCount: sql<number>`
-        COUNT(DISTINCT CASE WHEN ${inventory.quantityAvailable} < 10 THEN ${inventory.productId} END)::int
-      `,
+        lowStockCount: sql<number>`
+          COUNT(DISTINCT CASE WHEN ${inventory.quantityAvailable} < ${DEFAULT_LOW_STOCK_THRESHOLD} THEN ${inventory.productId} END)::int
+        `,
       outOfStockCount: sql<number>`
         COUNT(DISTINCT CASE WHEN ${inventory.quantityAvailable} <= 0 THEN ${inventory.productId} END)::int
       `,

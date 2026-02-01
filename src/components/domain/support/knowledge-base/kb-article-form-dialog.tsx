@@ -7,8 +7,7 @@
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-007b
  */
 
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
+import { useEffect, useState } from 'react';
 import { z } from 'zod';
 import { toast } from 'sonner';
 import { X } from 'lucide-react';
@@ -19,28 +18,17 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { useTanStackForm } from '@/hooks/_shared/use-tanstack-form';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+  TextField,
+  TextareaField,
+  SelectField,
+} from '@/components/shared/forms';
 import type { KbArticleResponse, KbCategoryResponse } from '@/lib/schemas/support/knowledge-base';
-import { useState } from 'react';
 
 // ============================================================================
 // FORM SCHEMA
@@ -91,8 +79,8 @@ export function KbArticleFormDialog({
   const isEditing = !!article;
   const [tagInput, setTagInput] = useState('');
 
-  const form = useForm<ArticleFormValues>({
-    resolver: zodResolver(articleFormSchema),
+  const form = useTanStackForm({
+    schema: articleFormSchema,
     defaultValues: {
       title: article?.title ?? '',
       slug: article?.slug ?? '',
@@ -104,18 +92,45 @@ export function KbArticleFormDialog({
       metaTitle: article?.metaTitle ?? '',
       metaDescription: article?.metaDescription ?? '',
     },
+    onSubmit: async (values) => {
+      try {
+        await onSubmit(values);
+        onOpenChange(false);
+        form.reset();
+      } catch {
+        // errors handled by container
+      }
+    },
   });
 
+  // Reset form when article changes or dialog opens
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        title: article?.title ?? '',
+        slug: article?.slug ?? '',
+        summary: article?.summary ?? '',
+        content: article?.content ?? '',
+        categoryId: article?.categoryId ?? null,
+        tags: article?.tags ?? [],
+        status: article?.status ?? 'draft',
+        metaTitle: article?.metaTitle ?? '',
+        metaDescription: article?.metaDescription ?? '',
+      });
+      setTagInput('');
+    }
+  }, [open, article, form]);
+
   // Auto-generate slug from title
-  const watchTitle = form.watch('title');
   const handleTitleBlur = () => {
-    const currentSlug = form.getValues('slug');
-    if (!currentSlug && watchTitle) {
-      const generatedSlug = watchTitle
+    const currentSlug = form.getFieldValue('slug');
+    const currentTitle = form.getFieldValue('title');
+    if (!currentSlug && currentTitle) {
+      const generatedSlug = currentTitle
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-|-$/g, '');
-      form.setValue('slug', generatedSlug);
+      form.setFieldValue('slug', generatedSlug);
     }
   };
 
@@ -123,7 +138,7 @@ export function KbArticleFormDialog({
     const tag = tagInput.trim().toLowerCase();
     if (!tag) return;
 
-    const currentTags = form.getValues('tags') ?? [];
+    const currentTags = form.getFieldValue('tags') ?? [];
     if (currentTags.includes(tag)) {
       setTagInput('');
       return;
@@ -133,30 +148,33 @@ export function KbArticleFormDialog({
       return;
     }
 
-    form.setValue('tags', [...currentTags, tag]);
+    form.setFieldValue('tags', [...currentTags, tag]);
     setTagInput('');
   };
 
   const handleRemoveTag = (tagToRemove: string) => {
-    const currentTags = form.getValues('tags') ?? [];
-    form.setValue(
+    const currentTags = form.getFieldValue('tags') ?? [];
+    form.setFieldValue(
       'tags',
       currentTags.filter((t) => t !== tagToRemove)
     );
   };
 
-  const handleSubmit = async (values: ArticleFormValues) => {
-    try {
-      await onSubmit(values);
-      onOpenChange(false);
-      form.reset();
-    } catch {
-      // errors handled by container
-    }
-  };
+  const isPending = isSubmitting ?? form.state.isSubmitting;
 
-  const isPending = isSubmitting ?? false;
-  const watchTags = form.watch('tags') ?? [];
+  const categoryOptions = [
+    { value: '', label: 'Uncategorized' },
+    ...(categories ?? []).map((cat) => ({
+      value: cat.id,
+      label: cat.name,
+    })),
+  ];
+
+  const statusOptions = [
+    { value: 'draft', label: 'Draft' },
+    { value: 'published', label: 'Published' },
+    { value: 'archived', label: 'Archived' },
+  ];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -165,243 +183,169 @@ export function KbArticleFormDialog({
           <DialogTitle>{isEditing ? 'Edit Article' : 'Create Article'}</DialogTitle>
         </DialogHeader>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="title"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Title</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="How to Install Your Battery System"
-                      {...field}
-                      onBlur={() => {
-                        field.onBlur();
-                        handleTitleBlur();
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="slug"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Slug</FormLabel>
-                    <FormControl>
-                      <Input placeholder="how-to-install-battery" {...field} />
-                    </FormControl>
-                    <FormDescription>URL-friendly identifier</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            form.handleSubmit();
+          }}
+          className="space-y-4"
+        >
+          <form.Field name="title">
+            {(field) => (
+              <TextField
+                field={field}
+                label="Title"
+                placeholder="How to Install Your Battery System"
+                required
+                onBlur={handleTitleBlur}
               />
+            )}
+          </form.Field>
 
-              <FormField
-                control={form.control}
-                name="status"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select status" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value="draft">Draft</SelectItem>
-                        <SelectItem value="published">Published</SelectItem>
-                        <SelectItem value="archived">Archived</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
+          <div className="grid grid-cols-2 gap-4">
+            <form.Field name="slug">
+              {(field) => (
+                <TextField
+                  field={field}
+                  label="Slug"
+                  placeholder="how-to-install-battery"
+                  description="URL-friendly identifier"
+                  required
+                />
+              )}
+            </form.Field>
+
+            <form.Field name="status">
+              {(field) => (
+                <SelectField
+                  field={field}
+                  label="Status"
+                  placeholder="Select status"
+                  options={statusOptions}
+                  required
+                />
+              )}
+            </form.Field>
+          </div>
+
+          <form.Field name="categoryId">
+            {(field) => (
+              <SelectField
+                field={field}
+                label="Category"
+                placeholder="Select category"
+                options={categoryOptions}
               />
-            </div>
+            )}
+          </form.Field>
 
-            <FormField
-              control={form.control}
-              name="categoryId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Category</FormLabel>
-                  <Select
-                    onValueChange={(value) => field.onChange(value === 'none' ? null : value)}
-                    value={field.value ?? 'none'}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select category" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="none">Uncategorized</SelectItem>
-                      {(categories ?? []).map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form.Field name="summary">
+            {(field) => (
+              <TextareaField
+                field={field}
+                label="Summary"
+                placeholder="Brief summary for article listings..."
+                description="Short description shown in search results"
+                rows={2}
+              />
+            )}
+          </form.Field>
 
-            <FormField
-              control={form.control}
-              name="summary"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Summary</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Brief summary for article listings..."
-                      className="resize-none"
-                      rows={2}
-                      {...field}
-                      value={field.value ?? ''}
-                    />
-                  </FormControl>
-                  <FormDescription>Short description shown in search results</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <form.Field name="content">
+            {(field) => (
+              <TextareaField
+                field={field}
+                label="Content"
+                placeholder="Article content (supports Markdown)..."
+                description="Full article content. Markdown formatting is supported."
+                rows={10}
+                required
+                className="[&_textarea]:font-mono [&_textarea]:text-sm"
+              />
+            )}
+          </form.Field>
 
-            <FormField
-              control={form.control}
-              name="content"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Content</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      placeholder="Article content (supports Markdown)..."
-                      className="resize-none font-mono text-sm"
-                      rows={10}
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Full article content. Markdown formatting is supported.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Tags */}
-            <FormField
-              control={form.control}
-              name="tags"
-              render={() => (
-                <FormItem>
-                  <FormLabel>Tags</FormLabel>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Add a tag..."
-                      value={tagInput}
-                      onChange={(e) => setTagInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleAddTag();
-                        }
-                      }}
-                    />
-                    <Button type="button" variant="outline" onClick={handleAddTag}>
-                      Add
-                    </Button>
+          {/* Tags - Custom implementation with form.Subscribe for reactivity */}
+          <form.Subscribe selector={(state) => state.values.tags}>
+            {(tags) => (
+              <div className="space-y-2">
+                <Label>Tags</Label>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Add a tag..."
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddTag();
+                      }
+                    }}
+                  />
+                  <Button type="button" variant="outline" onClick={handleAddTag}>
+                    Add
+                  </Button>
+                </div>
+                {tags && tags.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {tags.map((tag: string) => (
+                      <Badge key={tag} variant="secondary" className="gap-1">
+                        {tag}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveTag(tag)}
+                          className="hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
+                    ))}
                   </div>
-                  {watchTags.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {watchTags.map((tag) => (
-                        <Badge key={tag} variant="secondary" className="gap-1">
-                          {tag}
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveTag(tag)}
-                            className="hover:text-destructive"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-                  <FormDescription>Press Enter or click Add to add tags</FormDescription>
-                  <FormMessage />
-                </FormItem>
+                )}
+                <p className="text-sm text-muted-foreground">Press Enter or click Add to add tags</p>
+              </div>
+            )}
+          </form.Subscribe>
+
+          {/* SEO Fields */}
+          <div className="space-y-4 border-t pt-4">
+            <h4 className="text-muted-foreground text-sm font-medium">SEO (Optional)</h4>
+            <form.Field name="metaTitle">
+              {(field) => (
+                <TextField
+                  field={field}
+                  label="Meta Title"
+                  placeholder="Custom title for search engines"
+                />
               )}
-            />
+            </form.Field>
 
-            {/* SEO Fields */}
-            <div className="space-y-4 border-t pt-4">
-              <h4 className="text-muted-foreground text-sm font-medium">SEO (Optional)</h4>
-              <FormField
-                control={form.control}
-                name="metaTitle"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Meta Title</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="Custom title for search engines"
-                        {...field}
-                        value={field.value ?? ''}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <form.Field name="metaDescription">
+              {(field) => (
+                <TextareaField
+                  field={field}
+                  label="Meta Description"
+                  placeholder="Custom description for search engines"
+                  rows={2}
+                />
+              )}
+            </form.Field>
+          </div>
 
-              <FormField
-                control={form.control}
-                name="metaDescription"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Meta Description</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        placeholder="Custom description for search engines"
-                        className="resize-none"
-                        rows={2}
-                        {...field}
-                        value={field.value ?? ''}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={isPending}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isPending}>
-                {isPending ? 'Saving...' : isEditing ? 'Update' : 'Create'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isPending}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isPending}>
+              {isPending ? 'Saving...' : isEditing ? 'Update' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

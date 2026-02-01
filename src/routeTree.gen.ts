@@ -30,6 +30,7 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedProfileRouteImport } from './routes/_authenticated/profile'
 import { Route as AuthenticatedSupportIndexRouteImport } from './routes/_authenticated/support/index'
 import { Route as AuthenticatedSuppliersIndexRouteImport } from './routes/_authenticated/suppliers/index'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedScheduleIndexRouteImport } from './routes/_authenticated/schedule/index'
 import { Route as AuthenticatedReportsIndexRouteImport } from './routes/_authenticated/reports/index'
 import { Route as AuthenticatedPurchaseOrdersIndexRouteImport } from './routes/_authenticated/purchase-orders/index'
@@ -256,6 +257,12 @@ const AuthenticatedSuppliersIndexRoute =
     id: '/suppliers/',
     path: '/suppliers/',
     getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSettingsIndexRoute =
+  AuthenticatedSettingsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
 const AuthenticatedScheduleIndexRoute =
   AuthenticatedScheduleIndexRouteImport.update({
@@ -1085,6 +1092,7 @@ export interface FileRoutesByFullPath {
   '/purchase-orders/': typeof AuthenticatedPurchaseOrdersIndexRoute
   '/reports/': typeof AuthenticatedReportsIndexRoute
   '/schedule/': typeof AuthenticatedScheduleIndexRoute
+  '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/suppliers/': typeof AuthenticatedSuppliersIndexRoute
   '/support/': typeof AuthenticatedSupportIndexRoute
   '/admin/groups/$groupId': typeof AuthenticatedAdminGroupsGroupIdRoute
@@ -1134,7 +1142,6 @@ export interface FileRoutesByTo {
   '/sign-up-success': typeof SignUpSuccessRoute
   '/update-password': typeof UpdatePasswordRoute
   '/profile': typeof AuthenticatedProfileRoute
-  '/settings': typeof AuthenticatedSettingsRouteWithChildren
   '/protected': typeof ProtectedProtectedRoute
   '/auth/confirm': typeof AuthConfirmRoute
   '/auth/error': typeof AuthErrorRoute
@@ -1227,6 +1234,7 @@ export interface FileRoutesByTo {
   '/purchase-orders': typeof AuthenticatedPurchaseOrdersIndexRoute
   '/reports': typeof AuthenticatedReportsIndexRoute
   '/schedule': typeof AuthenticatedScheduleIndexRoute
+  '/settings': typeof AuthenticatedSettingsIndexRoute
   '/suppliers': typeof AuthenticatedSuppliersIndexRoute
   '/support': typeof AuthenticatedSupportIndexRoute
   '/admin/groups/$groupId': typeof AuthenticatedAdminGroupsGroupIdRoute
@@ -1372,6 +1380,7 @@ export interface FileRoutesById {
   '/_authenticated/purchase-orders/': typeof AuthenticatedPurchaseOrdersIndexRoute
   '/_authenticated/reports/': typeof AuthenticatedReportsIndexRoute
   '/_authenticated/schedule/': typeof AuthenticatedScheduleIndexRoute
+  '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/_authenticated/suppliers/': typeof AuthenticatedSuppliersIndexRoute
   '/_authenticated/support/': typeof AuthenticatedSupportIndexRoute
   '/_authenticated/admin/groups/$groupId': typeof AuthenticatedAdminGroupsGroupIdRoute
@@ -1516,6 +1525,7 @@ export interface FileRouteTypes {
     | '/purchase-orders/'
     | '/reports/'
     | '/schedule/'
+    | '/settings/'
     | '/suppliers/'
     | '/support/'
     | '/admin/groups/$groupId'
@@ -1565,7 +1575,6 @@ export interface FileRouteTypes {
     | '/sign-up-success'
     | '/update-password'
     | '/profile'
-    | '/settings'
     | '/protected'
     | '/auth/confirm'
     | '/auth/error'
@@ -1658,6 +1667,7 @@ export interface FileRouteTypes {
     | '/purchase-orders'
     | '/reports'
     | '/schedule'
+    | '/settings'
     | '/suppliers'
     | '/support'
     | '/admin/groups/$groupId'
@@ -1802,6 +1812,7 @@ export interface FileRouteTypes {
     | '/_authenticated/purchase-orders/'
     | '/_authenticated/reports/'
     | '/_authenticated/schedule/'
+    | '/_authenticated/settings/'
     | '/_authenticated/suppliers/'
     | '/_authenticated/support/'
     | '/_authenticated/admin/groups/$groupId'
@@ -2008,6 +2019,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/suppliers/'
       preLoaderRoute: typeof AuthenticatedSuppliersIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
     }
     '/_authenticated/schedule/': {
       id: '/_authenticated/schedule/'
@@ -2875,6 +2893,7 @@ interface AuthenticatedSettingsRouteChildren {
   AuthenticatedSettingsWarrantyImportRoute: typeof AuthenticatedSettingsWarrantyImportRoute
   AuthenticatedSettingsWarrantyPoliciesRoute: typeof AuthenticatedSettingsWarrantyPoliciesRoute
   AuthenticatedSettingsWinLossReasonsRoute: typeof AuthenticatedSettingsWinLossReasonsRoute
+  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
 }
 
 const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
@@ -2901,6 +2920,7 @@ const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
     AuthenticatedSettingsWarrantyPoliciesRoute,
   AuthenticatedSettingsWinLossReasonsRoute:
     AuthenticatedSettingsWinLossReasonsRoute,
+  AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
 }
 
 const AuthenticatedSettingsRouteWithChildren =

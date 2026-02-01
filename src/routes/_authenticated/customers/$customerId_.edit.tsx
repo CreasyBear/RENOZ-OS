@@ -9,7 +9,6 @@
  * @see UI_UX_STANDARDIZATION_PRD.md
  */
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useMutation } from '@tanstack/react-query'
 import { ArrowLeft } from 'lucide-react'
 import { PageLayout, RouteErrorFallback } from '@/components/layout'
 import { FormSkeleton } from '@/components/skeletons/shared/form-skeleton'
@@ -17,15 +16,17 @@ import { Button } from '@/components/ui/button'
 import { CustomerForm } from '@/components/domain/customers/customer-form'
 import { ContactManager, type ManagedContact } from '@/components/domain/customers/contact-manager'
 import { AddressManager, type ManagedAddress } from '@/components/domain/customers/address-manager'
-import { useCustomer, useCustomerTags, useUpdateCustomer } from '@/hooks/customers'
 import {
-  createContact,
-  updateContact,
-  deleteContact,
-  createAddress,
-  updateAddress,
-  deleteAddress,
-} from '@/server/customers'
+  useCustomer,
+  useCustomerTags,
+  useUpdateCustomer,
+  useCreateContact,
+  useUpdateContact,
+  useDeleteContact,
+  useCreateAddress,
+  useUpdateAddress,
+  useDeleteAddress,
+} from '@/hooks/customers'
 import { toast } from 'sonner'
 import { useState, useEffect } from 'react'
 
@@ -111,27 +112,15 @@ function EditCustomerPage() {
   // Update customer using centralized hook (handles cache invalidation)
   const updateCustomerMutation = useUpdateCustomer()
 
-  // Contact mutations
-  const createContactMutation = useMutation({
-    mutationFn: (data: Parameters<typeof createContact>[0]['data']) => createContact({ data }),
-  })
-  const updateContactMutation = useMutation({
-    mutationFn: (data: Parameters<typeof updateContact>[0]['data']) => updateContact({ data }),
-  })
-  const deleteContactMutation = useMutation({
-    mutationFn: (data: Parameters<typeof deleteContact>[0]['data']) => deleteContact({ data }),
-  })
+  // Contact mutations using centralized hooks
+  const createContactMutation = useCreateContact()
+  const updateContactMutation = useUpdateContact()
+  const deleteContactMutation = useDeleteContact()
 
-  // Address mutations
-  const createAddressMutation = useMutation({
-    mutationFn: (data: Parameters<typeof createAddress>[0]['data']) => createAddress({ data }),
-  })
-  const updateAddressMutation = useMutation({
-    mutationFn: (data: Parameters<typeof updateAddress>[0]['data']) => updateAddress({ data }),
-  })
-  const deleteAddressMutation = useMutation({
-    mutationFn: (data: Parameters<typeof deleteAddress>[0]['data']) => deleteAddress({ data }),
-  })
+  // Address mutations using centralized hooks
+  const createAddressMutation = useCreateAddress()
+  const updateAddressMutation = useUpdateAddress()
+  const deleteAddressMutation = useDeleteAddress()
 
   const handleSubmit = async (formData: {
     name: string
@@ -180,7 +169,7 @@ function EditCustomerPage() {
       // Delete removed contacts
       for (const id of existingContactIds) {
         if (!currentContactIds.includes(id)) {
-          await deleteContactMutation.mutateAsync({ id })
+          await deleteContactMutation.mutateAsync(id)
         }
       }
 
@@ -224,7 +213,7 @@ function EditCustomerPage() {
       // Delete removed addresses
       for (const id of existingAddressIds) {
         if (!currentAddressIds.includes(id)) {
-          await deleteAddressMutation.mutateAsync({ id })
+          await deleteAddressMutation.mutateAsync(id)
         }
       }
 

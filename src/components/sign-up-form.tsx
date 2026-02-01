@@ -9,6 +9,8 @@ import { Label } from '~/components/ui/label';
 import { Link, useNavigate } from '@tanstack/react-router';
 
 export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutRef<'div'>) {
+  const [name, setName] = useState('');
+  const [organizationName, setOrganizationName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [repeatPassword, setRepeatPassword] = useState('');
@@ -24,6 +26,12 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
       setError('Passwords do not match');
       return;
     }
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -32,6 +40,10 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/confirm`,
+          data: {
+            name: name || email.split('@')[0],
+            organization_name: organizationName || `${name || email.split('@')[0]}'s Organization`,
+          },
         },
       });
       if (error) throw error;
@@ -54,6 +66,28 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
           <form onSubmit={handleSignUp}>
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">
+                <Label htmlFor="name">Full Name</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="John Doe"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="organization">Organization Name</Label>
+                <Input
+                  id="organization"
+                  type="text"
+                  placeholder="Acme Inc"
+                  required
+                  value={organizationName}
+                  onChange={(e) => setOrganizationName(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
@@ -71,6 +105,7 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
                 <Input
                   id="password"
                   type="password"
+                  minLength={8}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -83,6 +118,7 @@ export function SignUpForm({ className, ...props }: React.ComponentPropsWithoutR
                 <Input
                   id="repeat-password"
                   type="password"
+                  minLength={8}
                   required
                   value={repeatPassword}
                   onChange={(e) => setRepeatPassword(e.target.value)}

@@ -10,80 +10,14 @@
  * - Quick actions per row (edit, duplicate, delete)
  * - Responsive: cards on mobile, table on desktop
  */
-import { useMemo } from "react";
-import { type ColumnDef } from "@tanstack/react-table";
-import {
-  MoreHorizontal,
-  Edit,
-  Copy,
-  Trash2,
-  Eye,
-  Package,
-  Wrench,
-  FileDigit,
-  Layers,
-} from "lucide-react";
+import { useMemo, useCallback, useState } from "react";
 
 import { DataTable } from "@/components/shared/data-table/data-table";
-import {
-  PriceCell,
-  StatusCell,
-  TypeCell,
-  SkuCell,
-  NameCell,
-  type StatusConfigItem,
-  type TypeConfigItem,
-} from "@/components/shared/data-table/cells";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-
-// Type inferred from products table - using broader types for compatibility
-// with server function return types
-interface Product {
-  id: string;
-  sku: string;
-  barcode?: string | null;
-  name: string;
-  description: string | null;
-  categoryId: string | null;
-  categoryName?: string | null;
-  type: string;
-  status: string;
-  basePrice: number;
-  costPrice: number | null;
-  isActive: boolean;
-  trackInventory?: boolean;
-  totalQuantity?: number;
-  stockStatus?: 'in_stock' | 'low_stock' | 'out_of_stock' | 'not_tracked';
-  createdAt: Date | string;
-  updatedAt: Date | string;
-}
-
-// Calculate margin percentage
-function calculateMargin(basePrice: number, costPrice: number | null): number | null {
-  if (!costPrice || costPrice <= 0 || basePrice <= 0) return null;
-  return ((basePrice - costPrice) / basePrice) * 100;
-}
-
-// Format margin with color coding
-function formatMargin(margin: number | null): { text: string; color: string } {
-  if (margin === null) return { text: '-', color: 'text-muted-foreground' };
-  if (margin < 0) return { text: `${margin.toFixed(1)}%`, color: 'text-red-600' };
-  if (margin < 20) return { text: `${margin.toFixed(1)}%`, color: 'text-amber-600' };
-  return { text: `${margin.toFixed(1)}%`, color: 'text-green-600' };
-}
+import { createProductColumns, type ProductTableItem } from "./product-columns";
 
 interface ProductTableProps {
-  products: Product[];
+  products: ProductTableItem[];
   total: number;
   page: number;
   pageSize: number;
@@ -94,23 +28,11 @@ interface ProductTableProps {
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onSortChange: (sortBy: string, sortOrder: "asc" | "desc") => void;
-  onRowClick: (product: Product) => void;
+  onRowClick: (product: ProductTableItem) => void;
+  onEditProduct?: (id: string) => void;
+  onDuplicateProduct?: (id: string) => void;
+  onDeleteProduct?: (id: string) => void;
 }
-
-// Status configuration for StatusCell
-const PRODUCT_STATUS_CONFIG: Record<string, StatusConfigItem> = {
-  active: { variant: "default", label: "Active" },
-  inactive: { variant: "secondary", label: "Inactive" },
-  discontinued: { variant: "destructive", label: "Discontinued" },
-};
-
-// Type configuration for TypeCell
-const PRODUCT_TYPE_CONFIG: Record<string, TypeConfigItem> = {
-  physical: { icon: Package, label: "Physical" },
-  service: { icon: Wrench, label: "Service" },
-  digital: { icon: FileDigit, label: "Digital" },
-  bundle: { icon: Layers, label: "Bundle" },
-};
 
 export function ProductTable({
   products,
@@ -119,248 +41,157 @@ export function ProductTable({
   pageSize,
   sortBy: _sortBy,
   sortOrder: _sortOrder,
-  selectedRows: _selectedRows,
+  selectedRows,
   onSelectionChange,
   onPageChange,
   onPageSizeChange: _onPageSizeChange,
   onSortChange: _onSortChange,
   onRowClick,
+  onEditProduct,
+  onDuplicateProduct,
+  onDeleteProduct,
 }: ProductTableProps) {
-  // Note: sortBy, sortOrder, selectedRows, onPageSizeChange, onSortChange
-  // are available for future server-side sorting/filtering implementation
-  // Build column definitions
-  const columns = useMemo<ColumnDef<Product>[]>(
-    () => [
-      // Selection checkbox
-      {
-        id: "select",
-        header: ({ table }) => (
-          <Checkbox
-            checked={
-              table.getIsAllPageRowsSelected() ||
-              (table.getIsSomePageRowsSelected() && "indeterminate")
-            }
-            onCheckedChange={(value) =>
-              table.toggleAllPageRowsSelected(!!value)
-            }
-            aria-label="Select all"
-          />
-        ),
-        cell: ({ row }) => (
-          <Checkbox
-            checked={row.getIsSelected()}
-            onCheckedChange={(value) => row.toggleSelected(!!value)}
-            onClick={(e) => e.stopPropagation()}
-            aria-label="Select row"
-          />
-        ),
-        enableSorting: false,
-        enableHiding: false,
-        size: 40,
-      },
-      // SKU
-      {
-        accessorKey: "sku",
-        header: "SKU",
-        cell: ({ row }) => (
-          <SkuCell value={row.getValue("sku")} copyable />
-        ),
-        size: 120,
-      },
-      // Barcode
-      {
-        accessorKey: "barcode",
-        header: "Barcode",
-        cell: ({ row }) => {
-          const barcode = row.original.barcode;
-          return (
-            <span className="text-sm text-muted-foreground font-mono">
-              {barcode || "-"}
-            </span>
-          );
-        },
-        size: 140,
-      },
-      // Name
-      {
-        accessorKey: "name",
-        header: "Product Name",
-        cell: ({ row }) => (
-          <NameCell
-            name={row.getValue("name")}
-            subtitle={row.original.description}
-            maxWidth={250}
-          />
-        ),
-        size: 250,
-      },
-      // Category
-      {
-        accessorKey: "categoryName",
-        header: "Category",
-        cell: ({ row }) => {
-          const categoryName = row.original.categoryName;
-          return (
-            <span className="text-sm text-muted-foreground">
-              {categoryName || "-"}
-            </span>
-          );
-        },
-        size: 120,
-      },
-      // Type
-      {
-        accessorKey: "type",
-        header: "Type",
-        cell: ({ row }) => (
-          <TypeCell
-            type={row.getValue("type")}
-            typeConfig={PRODUCT_TYPE_CONFIG}
-          />
-        ),
-        size: 100,
-      },
-      // Status
-      {
-        accessorKey: "status",
-        header: "Status",
-        cell: ({ row }) => (
-          <StatusCell
-            status={row.getValue("status")}
-            statusConfig={PRODUCT_STATUS_CONFIG}
-          />
-        ),
-        size: 100,
-      },
-      // Stock Status
-      {
-        accessorKey: "stockStatus",
-        header: "Stock",
-        cell: ({ row }) => {
-          const stockStatus = row.original.stockStatus;
-          const totalQty = row.original.totalQuantity;
-          
-          if (stockStatus === 'not_tracked') {
-            return <span className="text-muted-foreground text-sm">—</span>;
-          }
-          
-          const config = {
-            in_stock: { label: 'In Stock', variant: 'default', color: 'text-green-600 bg-green-50' },
-            low_stock: { label: 'Low', variant: 'secondary', color: 'text-amber-600 bg-amber-50' },
-            out_of_stock: { label: 'Out', variant: 'destructive', color: 'text-red-600 bg-red-50' },
-          }[stockStatus ?? 'in_stock'];
-          
-          return (
-            <div className="flex items-center gap-2">
-              <Badge variant={config.variant as any} className={config.color}>
-                {config.label}
-              </Badge>
-              {totalQty !== undefined && (
-                <span className="text-sm text-muted-foreground">{totalQty}</span>
-              )}
-            </div>
-          );
-        },
-        size: 120,
-      },
-      // Base Price
-      {
-        accessorKey: "basePrice",
-        header: () => <div className="text-right">Price</div>,
-        cell: ({ row }) => (
-          <PriceCell
-            value={row.getValue("basePrice")}
-            centsInput={false}
-            showCents={true}
-            align="right"
-          />
-        ),
-        size: 100,
-      },
-      // Cost Price
-      {
-        accessorKey: "costPrice",
-        header: () => <div className="text-right">Cost</div>,
-        cell: ({ row }) => (
-          <PriceCell
-            value={row.getValue("costPrice")}
-            centsInput={false}
-            showCents={true}
-            align="right"
-            className="text-muted-foreground"
-          />
-        ),
-        size: 100,
-      },
-      // Margin %
-      {
-        id: "margin",
-        header: () => <div className="text-right">Margin</div>,
-        cell: ({ row }) => {
-          const basePrice = row.original.basePrice;
-          const costPrice = row.original.costPrice;
-          const margin = calculateMargin(basePrice, costPrice);
-          const { text, color } = formatMargin(margin);
-          
-          return (
-            <div className={`text-right font-medium ${color}`}>
-              {text}
-            </div>
-          );
-        },
-        size: 100,
-      },
-      // Actions
-      {
-        id: "actions",
-        enableHiding: false,
-        cell: ({ row }) => {
-          const product = row.original;
-          return (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="h-8 w-8 p-0"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <span className="sr-only">Open menu</span>
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                <DropdownMenuItem onClick={() => onRowClick(product)}>
-                  <Eye className="mr-2 h-4 w-4" />
-                  View Details
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Edit className="mr-2 h-4 w-4" />
-                  Edit
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <Copy className="mr-2 h-4 w-4" />
-                  Duplicate
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-destructive">
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          );
-        },
-        size: 50,
-      },
-    ],
-    [onRowClick]
+  // Track last selected index for shift-click range selection
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+
+  // Selection state derived from selectedRows prop
+  const selectedSet = useMemo(() => new Set(selectedRows), [selectedRows]);
+
+  const isSelected = useCallback(
+    (id: string) => selectedSet.has(id),
+    [selectedSet]
   );
 
-  // Handle selection change
-  const handleSelectionChange = (selectedProducts: Product[]) => {
-    onSelectionChange(selectedProducts.map((p) => p.id));
-  };
+  const isAllSelected = useMemo(
+    () => products.length > 0 && selectedRows.length === products.length,
+    [products.length, selectedRows.length]
+  );
+
+  const isPartiallySelected = useMemo(
+    () => selectedRows.length > 0 && selectedRows.length < products.length,
+    [products.length, selectedRows.length]
+  );
+
+  // Selection handlers
+  const handleSelect = useCallback(
+    (id: string, checked: boolean) => {
+      const index = products.findIndex((p) => p.id === id);
+      if (index !== -1) {
+        setLastSelectedIndex(index);
+      }
+
+      if (checked) {
+        onSelectionChange([...selectedRows, id]);
+      } else {
+        onSelectionChange(selectedRows.filter((rowId) => rowId !== id));
+      }
+    },
+    [products, selectedRows, onSelectionChange]
+  );
+
+  const handleSelectAll = useCallback(
+    (checked: boolean) => {
+      if (checked) {
+        onSelectionChange(products.map((p) => p.id));
+      } else {
+        onSelectionChange([]);
+      }
+    },
+    [products, onSelectionChange]
+  );
+
+  const handleShiftClickRange = useCallback(
+    (rowIndex: number) => {
+      if (lastSelectedIndex === null) {
+        // No previous selection, just select this row
+        const id = products[rowIndex]?.id;
+        if (id) {
+          handleSelect(id, true);
+        }
+        return;
+      }
+
+      // Select range between lastSelectedIndex and rowIndex
+      const start = Math.min(lastSelectedIndex, rowIndex);
+      const end = Math.max(lastSelectedIndex, rowIndex);
+      const rangeIds = products.slice(start, end + 1).map((p) => p.id);
+
+      // Merge with existing selection
+      const newSelection = [...new Set([...selectedRows, ...rangeIds])];
+      onSelectionChange(newSelection);
+      setLastSelectedIndex(rowIndex);
+    },
+    [lastSelectedIndex, products, selectedRows, onSelectionChange, handleSelect]
+  );
+
+  // Action handlers
+  const handleViewProduct = useCallback(
+    (id: string) => {
+      const product = products.find((p) => p.id === id);
+      if (product) {
+        onRowClick(product);
+      }
+    },
+    [products, onRowClick]
+  );
+
+  const handleEditProduct = useCallback(
+    (id: string) => {
+      onEditProduct?.(id);
+    },
+    [onEditProduct]
+  );
+
+  const handleDuplicateProduct = useCallback(
+    (id: string) => {
+      onDuplicateProduct?.(id);
+    },
+    [onDuplicateProduct]
+  );
+
+  const handleDeleteProduct = useCallback(
+    (id: string) => {
+      onDeleteProduct?.(id);
+    },
+    [onDeleteProduct]
+  );
+
+  // Build column definitions using the column factory
+  const columns = useMemo(
+    () =>
+      createProductColumns({
+        onSelect: handleSelect,
+        onShiftClickRange: handleShiftClickRange,
+        isAllSelected,
+        isPartiallySelected,
+        onSelectAll: handleSelectAll,
+        isSelected,
+        onViewProduct: handleViewProduct,
+        onEditProduct: handleEditProduct,
+        onDuplicateProduct: handleDuplicateProduct,
+        onDeleteProduct: handleDeleteProduct,
+      }),
+    [
+      handleSelect,
+      handleShiftClickRange,
+      isAllSelected,
+      isPartiallySelected,
+      handleSelectAll,
+      isSelected,
+      handleViewProduct,
+      handleEditProduct,
+      handleDuplicateProduct,
+      handleDeleteProduct,
+    ]
+  );
+
+  // Handle selection change from DataTable
+  const handleDataTableSelectionChange = useCallback(
+    (selectedProducts: ProductTableItem[]) => {
+      onSelectionChange(selectedProducts.map((p) => p.id));
+    },
+    [onSelectionChange]
+  );
 
   return (
     <div className="space-y-4">
@@ -370,7 +201,7 @@ export function ProductTable({
         enableRowSelection
         enableSorting
         onRowClick={onRowClick}
-        onSelectionChange={handleSelectionChange}
+        onSelectionChange={handleDataTableSelectionChange}
         className="border rounded-lg"
       />
 

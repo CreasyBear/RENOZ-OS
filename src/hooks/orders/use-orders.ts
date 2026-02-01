@@ -8,13 +8,20 @@
  * - Order detail view
  * - Order mutations (create, update, delete)
  * - Order line item management
- * 
+ *
  * Uses dynamic imports to prevent server-only code from being bundled to client.
  */
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import type { OrderListQuery, CreateOrder, UpdateOrder } from '@/lib/schemas/orders';
+import type {
+  OrderListQuery,
+  CreateOrder,
+  UpdateOrder,
+  AddOrderLineItemInput,
+  UpdateOrderLineItemInput,
+  DeleteOrderLineItemInput,
+} from '@/lib/schemas/orders';
 import { queryKeys } from '@/lib/query-keys';
 
 // Dynamic imports to prevent server-only code from being bundled to client
@@ -105,7 +112,7 @@ export function useOrder({ orderId, enabled = true }: UseOrderOptions) {
 
 export function useCreateOrder() {
   const queryClient = useQueryClient();
-  
+
   const createFn = useServerFn(async ({ data }: { data: CreateOrder }) => {
     const { createOrder } = await loadOrdersModule();
     return createOrder({ data });
@@ -129,7 +136,7 @@ export function useCreateOrder() {
 
 export function useUpdateOrder() {
   const queryClient = useQueryClient();
-  
+
   const updateFn = useServerFn(async ({ data }: { data: { id: string; data: UpdateOrder } }) => {
     const { updateOrder } = await loadOrdersModule();
     return updateOrder({ data });
@@ -208,7 +215,7 @@ export function useUpdateOrder() {
 
 export function useDeleteOrder() {
   const queryClient = useQueryClient();
-  
+
   const deleteFn = useServerFn(async ({ data }: { data: { id: string } }) => {
     const { deleteOrder } = await loadOrdersModule();
     return deleteOrder({ data });
@@ -227,7 +234,7 @@ export function useDeleteOrder() {
 
 export function useDuplicateOrder() {
   const queryClient = useQueryClient();
-  
+
   const duplicateFn = useServerFn(async ({ data }: { data: { id: string } }) => {
     const { duplicateOrder } = await loadOrdersModule();
     return duplicateOrder({ data });
@@ -254,7 +261,7 @@ export function useOrderStats() {
 
   return useQuery({
     queryKey: queryKeys.orders.stats(),
-    queryFn: () => statsFn({ data: undefined }),
+    queryFn: () => statsFn(),
     staleTime: 60 * 1000, // 1 minute
   });
 }
@@ -265,18 +272,16 @@ export function useOrderStats() {
 
 export function useAddOrderLineItem() {
   const queryClient = useQueryClient();
-  
-  const addFn = useServerFn(async ({ data }: { data: any }) => {
+
+  const addFn = useServerFn(async ({ data }: { data: AddOrderLineItemInput }) => {
     const { addOrderLineItem } = await loadOrdersModule();
     return addOrderLineItem({ data });
   });
 
   return useMutation({
-    mutationFn: (input: any) => addFn({ data: input }),
+    mutationFn: (input: AddOrderLineItemInput) => addFn({ data: input }),
     onSuccess: (_result, variables) => {
-      // Invalidate the order
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
-      // Invalidate order lists
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
     },
   });
@@ -284,18 +289,18 @@ export function useAddOrderLineItem() {
 
 export function useUpdateOrderLineItem() {
   const queryClient = useQueryClient();
-  
-  const updateLineItemFn = useServerFn(async ({ data }: { data: any }) => {
-    const { updateOrderLineItem } = await loadOrdersModule();
-    return updateOrderLineItem({ data });
-  });
+
+  const updateLineItemFn = useServerFn(
+    async ({ data }: { data: UpdateOrderLineItemInput }) => {
+      const { updateOrderLineItem } = await loadOrdersModule();
+      return updateOrderLineItem({ data });
+    }
+  );
 
   return useMutation({
-    mutationFn: (input: any) => updateLineItemFn({ data: input }),
+    mutationFn: (input: UpdateOrderLineItemInput) => updateLineItemFn({ data: input }),
     onSuccess: (_result, variables) => {
-      // Invalidate the order
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
-      // Invalidate order lists
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
     },
   });
@@ -303,18 +308,18 @@ export function useUpdateOrderLineItem() {
 
 export function useDeleteOrderLineItem() {
   const queryClient = useQueryClient();
-  
-  const deleteLineItemFn = useServerFn(async ({ data }: { data: any }) => {
-    const { deleteOrderLineItem } = await loadOrdersModule();
-    return deleteOrderLineItem({ data });
-  });
+
+  const deleteLineItemFn = useServerFn(
+    async ({ data }: { data: DeleteOrderLineItemInput }) => {
+      const { deleteOrderLineItem } = await loadOrdersModule();
+      return deleteOrderLineItem({ data });
+    }
+  );
 
   return useMutation({
-    mutationFn: (input: any) => deleteLineItemFn({ data: input }),
+    mutationFn: (input: DeleteOrderLineItemInput) => deleteLineItemFn({ data: input }),
     onSuccess: (_, variables) => {
-      // Invalidate the order
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.detail(variables.orderId) });
-      // Invalidate order lists
       queryClient.invalidateQueries({ queryKey: queryKeys.orders.lists() });
     },
   });

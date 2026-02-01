@@ -161,23 +161,24 @@ export function buildCursorCondition(
   cursor: CursorPosition,
   direction: "asc" | "desc" = "desc"
 ): SQL {
-  const cursorDate = new Date(cursor.createdAt);
+  // Keep as ISO string - postgres driver expects strings, not Date objects
+  const cursorDateStr = cursor.createdAt;
 
   if (direction === "desc") {
     // For descending: get items BEFORE the cursor (older)
     return or(
-      sql`${createdAtColumn} < ${cursorDate}`,
+      sql`${createdAtColumn} < ${cursorDateStr}`,
       and(
-        sql`${createdAtColumn} = ${cursorDate}`,
+        sql`${createdAtColumn} = ${cursorDateStr}`,
         sql`${idColumn} < ${cursor.id}`
       )
     )!;
   } else {
     // For ascending: get items AFTER the cursor (newer)
     return or(
-      sql`${createdAtColumn} > ${cursorDate}`,
+      sql`${createdAtColumn} > ${cursorDateStr}`,
       and(
-        sql`${createdAtColumn} = ${cursorDate}`,
+        sql`${createdAtColumn} = ${cursorDateStr}`,
         sql`${idColumn} > ${cursor.id}`
       )
     )!;

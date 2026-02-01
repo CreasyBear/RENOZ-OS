@@ -35,6 +35,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { StatusBadge } from '@/components/shared';
 import {
   Select,
   SelectContent,
@@ -51,10 +52,12 @@ import type { SiteVisit } from 'drizzle/schema';
 // TYPES
 // ============================================================================
 
-interface ScheduleVisit extends SiteVisit {
+export interface ScheduleVisit extends SiteVisit {
   projectTitle: string;
   projectNumber: string;
 }
+
+export type ScheduleDay = ScheduleVisit[];
 
 interface ScheduleDashboardProps {
   weekStart: Date;
@@ -78,52 +81,52 @@ type InstallerFilter = 'all' | string;
 // STATUS CONFIG
 // ============================================================================
 
-const STATUS_CONFIG: Record<ScheduleVisit['status'], { 
-  label: string; 
-  color: string; 
+const STATUS_CONFIG: Record<ScheduleVisit['status'], {
+  label: string;
+  color: string;
   bg: string;
   icon: React.ElementType;
 }> = {
-  scheduled: { 
-    label: 'Scheduled', 
-    color: 'text-slate-600', 
+  scheduled: {
+    label: 'Scheduled',
+    color: 'text-slate-600',
     bg: 'bg-slate-100',
     icon: Calendar,
   },
-  in_progress: { 
-    label: 'In Progress', 
-    color: 'text-blue-600', 
+  in_progress: {
+    label: 'In Progress',
+    color: 'text-blue-600',
     bg: 'bg-blue-100',
     icon: Clock,
   },
-  completed: { 
-    label: 'Completed', 
-    color: 'text-green-600', 
+  completed: {
+    label: 'Completed',
+    color: 'text-green-600',
     bg: 'bg-green-100',
     icon: CheckCircle2,
   },
-  cancelled: { 
-    label: 'Cancelled', 
-    color: 'text-red-600', 
+  cancelled: {
+    label: 'Cancelled',
+    color: 'text-red-600',
     bg: 'bg-red-100',
     icon: AlertCircle,
   },
-  no_show: { 
-    label: 'No Show', 
-    color: 'text-orange-600', 
+  no_show: {
+    label: 'No Show',
+    color: 'text-orange-600',
     bg: 'bg-orange-100',
     icon: AlertTriangle,
   },
-  rescheduled: { 
-    label: 'Rescheduled', 
-    color: 'text-purple-600', 
+  rescheduled: {
+    label: 'Rescheduled',
+    color: 'text-purple-600',
     bg: 'bg-purple-100',
     icon: Calendar,
   },
 };
 
-const VISIT_TYPE_CONFIG: Record<ScheduleVisit['visitType'], { 
-  label: string; 
+const VISIT_TYPE_CONFIG: Record<ScheduleVisit['visitType'], {
+  label: string;
   color: string;
 }> = {
   assessment: { label: 'Assessment', color: 'text-blue-600' },
@@ -139,8 +142,8 @@ const VISIT_TYPE_CONFIG: Record<ScheduleVisit['visitType'], {
 // WEEKLY STATS
 // ============================================================================
 
-function WeeklyStats({ visits }: { 
-  visits: ScheduleVisit[]; 
+function WeeklyStats({ visits }: {
+  visits: ScheduleVisit[];
 }) {
   const stats = useMemo(() => {
     const total = visits.length;
@@ -149,10 +152,10 @@ function WeeklyStats({ visits }: {
     const scheduled = visits.filter(v => v.status === 'scheduled').length;
     const unassigned = visits.filter(v => !v.installerId && v.status === 'scheduled').length;
     const issues = visits.filter(v => ['cancelled', 'no_show'].includes(v.status)).length;
-    
+
     // Completion rate
     const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-    
+
     // Utilization (visits with installers assigned)
     const withInstaller = visits.filter(v => v.installerId).length;
     const utilization = total > 0 ? Math.round((withInstaller / total) * 100) : 0;
@@ -233,11 +236,11 @@ function WeeklyStats({ visits }: {
 // NEEDS ATTENTION BANNER
 // ============================================================================
 
-function NeedsAttentionBanner({ 
-  visits, 
-  onVisitClick 
-}: { 
-  visits: ScheduleVisit[]; 
+function NeedsAttentionBanner({
+  visits,
+  onVisitClick
+}: {
+  visits: ScheduleVisit[];
   onVisitClick: (projectId: string, visitId: string) => void;
 }) {
   const attentionVisits = useMemo(() => {
@@ -269,14 +272,14 @@ function NeedsAttentionBanner({
       <div className="space-y-2">
         {attentionVisits.map(visit => {
           const statusCfg = STATUS_CONFIG[visit.status];
-          const issue = !visit.installerId 
-            ? 'Unassigned' 
-            : visit.status === 'no_show' 
-            ? 'No Show' 
+          const issue = !visit.installerId
+            ? 'Unassigned'
+            : visit.status === 'no_show'
+            ? 'No Show'
             : visit.status === 'cancelled'
             ? 'Cancelled'
             : 'Overdue';
-          
+
           return (
             <button
               key={visit.id}
@@ -291,9 +294,11 @@ function NeedsAttentionBanner({
                 </div>
               </div>
               <div className="flex items-center gap-3">
-                <Badge variant="destructive" className="text-[10px] h-5">
-                  {issue}
-                </Badge>
+                <StatusBadge
+                  status={issue}
+                  variant={issue === 'Cancelled' ? 'error' : issue === 'No Show' ? 'warning' : 'error'}
+                  className="text-[10px] h-5"
+                />
                 <span className="text-xs text-muted-foreground">
                   {format(new Date(visit.scheduledDate), 'MMM d')}
                 </span>
@@ -324,8 +329,8 @@ function VisitCard({
   const StatusIcon = status.icon;
 
   const isUnassigned = !visit.installerId && visit.status === 'scheduled';
-  const isOverdue = visit.status === 'scheduled' && 
-    isPast(new Date(visit.scheduledDate)) && 
+  const isOverdue = visit.status === 'scheduled' &&
+    isPast(new Date(visit.scheduledDate)) &&
     !isToday(new Date(visit.scheduledDate));
 
   if (viewMode === 'timeline') {
@@ -349,12 +354,12 @@ function VisitCard({
                   {visitType.label}
                 </Badge>
                 {isUnassigned && (
-                  <Badge variant="destructive" className="text-[10px] h-5">Unassigned</Badge>
+                  <StatusBadge status="Unassigned" variant="error" className="text-[10px] h-5" />
                 )}
               </div>
               <p className="text-sm font-semibold truncate mb-1">{visit.projectTitle}</p>
               <p className="text-xs text-muted-foreground">{visit.projectNumber}</p>
-              
+
               <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                 <span className={cn('flex items-center gap-1', status.color)}>
                   <StatusIcon className="h-3 w-3" />
@@ -368,7 +373,7 @@ function VisitCard({
                 )}
               </div>
             </div>
-            
+
             <div className="text-right shrink-0">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Clock className="h-4 w-4" />
@@ -405,18 +410,16 @@ function VisitCard({
           <div className="flex-1 min-w-0">
             <p className="font-medium text-sm truncate">{visit.visitNumber}</p>
             <p className="text-xs text-muted-foreground truncate">{visit.projectTitle}</p>
-            
+
             {visit.scheduledTime && (
               <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
                 <Clock className="h-3 w-3" />
                 {visit.scheduledTime}
               </div>
             )}
-            
+
             {isUnassigned && (
-              <Badge variant="destructive" className="text-[10px] h-4 mt-1">
-                Unassigned
-              </Badge>
+              <StatusBadge status="Unassigned" variant="error" className="text-[10px] h-4 mt-1" />
             )}
           </div>
         </div>
@@ -524,14 +527,14 @@ export function ScheduleDashboard({
     return visits.filter(visit => {
       const statusMatch = statusFilter === 'all' || visit.status === statusFilter;
       const typeMatch = typeFilter === 'all' || visit.visitType === typeFilter;
-      
+
       let installerMatch = true;
       if (installerFilter === 'unassigned') {
         installerMatch = !visit.installerId;
       } else if (installerFilter !== 'all') {
         installerMatch = visit.installerId === installerFilter;
       }
-      
+
       return statusMatch && typeMatch && installerMatch;
     });
   }, [visits, statusFilter, typeFilter, installerFilter]);
@@ -541,7 +544,7 @@ export function ScheduleDashboard({
     const result: { date: Date; visits: ScheduleVisit[]; isToday: boolean }[] = [];
     for (let i = 0; i < 7; i++) {
       const day = addDays(weekStart, i);
-      const dayVisits = filteredVisits.filter(v => 
+      const dayVisits = filteredVisits.filter(v =>
         isSameDay(new Date(v.scheduledDate), day)
       );
       result.push({
@@ -634,8 +637,8 @@ export function ScheduleDashboard({
           Showing {filteredVisits.length} of {visits.length} visits
         </p>
         {(statusFilter !== 'all' || typeFilter !== 'all' || installerFilter !== 'all') && (
-          <Button 
-            variant="ghost" 
+          <Button
+            variant="ghost"
             size="sm"
             onClick={() => {
               setStatusFilter('all');

@@ -24,6 +24,18 @@ import {
   creditNoteListQuerySchema,
   creditNotesByCustomerQuerySchema,
 } from '@/lib/schemas';
+import { createActivityLoggerWithContext } from '@/server/middleware/activity-context';
+import { computeChanges } from '@/lib/activity-logger';
+
+// Excluded fields for activity logging (system-managed fields)
+const CREDIT_NOTE_EXCLUDED_FIELDS: string[] = [
+  'updatedAt',
+  'updatedBy',
+  'createdAt',
+  'createdBy',
+  'deletedAt',
+  'organizationId',
+];
 
 // ============================================================================
 // TYPES
@@ -175,6 +187,28 @@ export const createCreditNote = createServerFn({ method: 'POST' })
             updatedBy: ctx.user.id,
           })
           .returning();
+
+        // Activity logging
+        const logger = createActivityLoggerWithContext(ctx);
+        logger.logAsync({
+          entityType: 'order', // Credit notes relate to orders/invoices
+          entityId: creditNote.id,
+          action: 'created',
+          description: `Created credit note: ${creditNote.creditNoteNumber}`,
+          changes: computeChanges({
+            before: null,
+            after: creditNote,
+            excludeFields: CREDIT_NOTE_EXCLUDED_FIELDS as never[],
+          }),
+          metadata: {
+            creditNoteNumber: creditNote.creditNoteNumber ?? undefined,
+            customerId: creditNote.customerId,
+            customerName: customer[0].name,
+            orderId: creditNote.orderId ?? undefined,
+            total: Number(creditNote.amount),
+            status: creditNote.status,
+          },
+        });
 
         return creditNote;
       } catch (err: unknown) {
@@ -473,6 +507,25 @@ export const updateCreditNote = createServerFn({ method: 'POST' })
       .where(eq(creditNotes.id, id))
       .returning();
 
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'order',
+      entityId: updated.id,
+      action: 'updated',
+      description: `Updated credit note: ${updated.creditNoteNumber}`,
+      changes: computeChanges({
+        before: existing[0],
+        after: updated,
+        excludeFields: CREDIT_NOTE_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        creditNoteNumber: updated.creditNoteNumber ?? undefined,
+        customerId: updated.customerId,
+        changedFields: Object.keys(updateData),
+      },
+    });
+
     return updated;
   });
 
@@ -518,6 +571,27 @@ export const issueCreditNote = createServerFn({ method: 'POST' })
       })
       .where(eq(creditNotes.id, data.id))
       .returning();
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'order',
+      entityId: issued.id,
+      action: 'updated',
+      description: `Issued credit note: ${issued.creditNoteNumber}`,
+      changes: computeChanges({
+        before: existing[0],
+        after: issued,
+        excludeFields: CREDIT_NOTE_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        creditNoteNumber: issued.creditNoteNumber ?? undefined,
+        customerId: issued.customerId,
+        previousStatus: existing[0].status,
+        newStatus: issued.status,
+        total: Number(issued.amount),
+      },
+    });
 
     return issued;
   });
@@ -617,6 +691,29 @@ export const applyCreditNoteToInvoice = createServerFn({ method: 'POST' })
       .from(creditNotes)
       .where(eq(creditNotes.id, data.creditNoteId));
 
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'order',
+      entityId: updated.id,
+      action: 'updated',
+      description: `Applied credit note ${updated.creditNoteNumber} to order`,
+      changes: computeChanges({
+        before: creditNote[0],
+        after: updated,
+        excludeFields: CREDIT_NOTE_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        creditNoteNumber: updated.creditNoteNumber ?? undefined,
+        customerId: updated.customerId,
+        orderId: data.orderId,
+        orderNumber: order[0].orderNumber ?? undefined,
+        previousStatus: creditNote[0].status,
+        newStatus: updated.status,
+        total: Number(updated.amount),
+      },
+    });
+
     return updated;
   });
 
@@ -671,6 +768,27 @@ export const voidCreditNote = createServerFn({ method: 'POST' })
       })
       .where(eq(creditNotes.id, data.id))
       .returning();
+
+    // Activity logging
+    const logger = createActivityLoggerWithContext(ctx);
+    logger.logAsync({
+      entityType: 'order',
+      entityId: voided.id,
+      action: 'updated',
+      description: `Voided credit note: ${voided.creditNoteNumber}`,
+      changes: computeChanges({
+        before: existing[0],
+        after: voided,
+        excludeFields: CREDIT_NOTE_EXCLUDED_FIELDS as never[],
+      }),
+      metadata: {
+        creditNoteNumber: voided.creditNoteNumber ?? undefined,
+        customerId: voided.customerId,
+        previousStatus: existing[0].status,
+        newStatus: voided.status,
+        reason: data.voidReason,
+      },
+    });
 
     return voided;
   });

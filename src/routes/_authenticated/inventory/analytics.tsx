@@ -38,6 +38,7 @@ import {
   type MovementByType,
   type ReportTopMover as TopMover,
   type MovementTrend,
+  type MovementType,
 } from "@/components/domain/inventory";
 import {
   useInventoryValuation,
@@ -45,6 +46,13 @@ import {
   useInventoryTurnover,
   useMovements,
 } from "@/hooks/inventory";
+import type {
+  MovementWithRelations,
+  ListMovementsResult,
+  MovementTypeCount,
+  ProductMovementAggregation,
+  DateGroupAggregation,
+} from "@/lib/schemas/inventory";
 
 // ============================================================================
 // ROUTE DEFINITION
@@ -69,10 +77,10 @@ export const Route = createFileRoute("/_authenticated/inventory/analytics" as an
 // MAIN COMPONENT
 // ============================================================================
 
+type AnalyticsTab = "valuation" | "aging" | "turnover" | "movements";
+
 function AnalyticsPage() {
-  const [activeTab, setActiveTab] = useState<
-    "valuation" | "aging" | "turnover" | "movements"
-  >("valuation");
+  const [activeTab, setActiveTab] = useState<AnalyticsTab>("valuation");
 
   // Data hooks - using TanStack Query via hooks
   // Valuation data - always fetched as default tab
@@ -99,116 +107,158 @@ function AnalyticsPage() {
     isLoading: isLoadingMovements,
   } = useMovements({ page: 1, pageSize: 100, sortOrder: 'desc' }, activeTab === "movements");
 
-  // Transform valuation data (API returns different shape than component expects)
+  // Transform valuation data - server now returns complete data
   const valuationSummary: ValuationSummary | null = valuationData
     ? {
         totalValue: valuationData.totalValue ?? 0,
-        totalUnits: (valuationData as any).totalUnits ?? (valuationData.byProduct?.reduce((sum: number, p: any) => sum + (p.totalQuantity ?? 0), 0) ?? 0),
-        averageUnitCost: (valuationData as any).averageUnitCost ?? 0,
-        totalSkus: valuationData.totalSkus ?? (valuationData.byProduct?.length ?? 0),
+        totalUnits: valuationData.totalUnits ?? 0,
+        averageUnitCost: valuationData.averageUnitCost ?? 0,
+        totalSkus: valuationData.totalSkus ?? 0,
         locationsCount: valuationData.byLocation?.length ?? 0,
-        costMethod: "fifo",
+        costMethod: valuationData.valuationMethod === 'fifo' ? 'fifo' : valuationData.valuationMethod === 'weighted_average' ? 'weighted_average' : 'fifo',
       }
     : null;
 
-  const valuationByCategory: CategoryValuation[] = ((valuationData as any)?.byCategory ?? []).map((c: any) => ({
-    categoryId: c.categoryId ?? c.id,
-    categoryName: c.categoryName ?? c.name ?? "Unknown",
+  const valuationByCategory: CategoryValuation[] = (valuationData?.byCategory ?? []).map((c) => ({
+    categoryId: c.categoryId ?? '',
+    categoryName: c.categoryName ?? 'Uncategorized',
     totalValue: c.totalValue ?? 0,
     totalUnits: c.totalUnits ?? 0,
     percentOfTotal: c.percentOfTotal ?? 0,
     skuCount: c.skuCount ?? 0,
   }));
 
-  const valuationByLocation: LocationValuation[] = (valuationData?.byLocation ?? []).map((l: any) => ({
-    locationId: l.locationId ?? l.id,
-    locationName: l.locationName ?? l.name ?? "Unknown",
+  const valuationByLocation: LocationValuation[] = (valuationData?.byLocation ?? []).map((l) => ({
+    locationId: l.locationId ?? '',
+    locationName: l.locationName ?? 'Unknown',
     totalValue: l.totalValue ?? 0,
-    totalUnits: l.totalUnits ?? 0,
+    totalUnits: Number(l.totalQuantity ?? 0),
     percentOfTotal: l.percentOfTotal ?? 0,
     utilization: l.utilization ?? 0,
   }));
 
-  // Transform aging data (API returns different shape than component expects)
-  const agingDataAny = agingData as any;
+  // Transform aging data - server now returns complete data
   const agingSummary: AgingSummary | null = agingData
     ? {
-        totalItems: agingDataAny.summary?.totalItems ?? agingDataAny.totalItems ?? 0,
-        totalValue: agingDataAny.summary?.totalValue ?? agingDataAny.totalValue ?? 0,
-        averageAge: agingDataAny.summary?.averageAge ?? agingDataAny.averageAge ?? 0,
-        valueAtRisk: agingDataAny.summary?.valueAtRisk ?? agingDataAny.valueAtRisk ?? 0,
-        riskPercentage: agingDataAny.summary?.riskPercentage ?? agingDataAny.riskPercentage ?? 0,
+        totalItems: agingData.summary?.totalItems ?? 0,
+        totalValue: agingData.summary?.totalValue ?? 0,
+        averageAge: agingData.summary?.averageAge ?? 0,
+        valueAtRisk: agingData.summary?.valueAtRisk ?? 0,
+        riskPercentage: agingData.summary?.riskPercentage ?? 0,
       }
     : null;
 
-  const agingBuckets: AgeBucket[] = (agingDataAny?.aging ?? agingDataAny?.buckets ?? []).map((b: any) => ({
-    label: b.bucket ?? b.label ?? "",
-    minDays: b.minDays ?? 0,
-    maxDays: b.maxDays ?? null,
-    itemCount: b.itemCount ?? 0,
-    totalValue: b.totalValue ?? 0,
-    percentOfTotal: b.percentOfTotal ?? 0,
-    risk: b.risk ?? "low",
-  }));
+  const agingBuckets: AgeBucket[] = (agingData?.aging ?? []).map((b) => {
+    const riskValue = b.risk;
+    const validRisk: 'low' | 'medium' | 'high' | 'critical' =
+      riskValue === 'low' || riskValue === 'medium' || riskValue === 'high' || riskValue === 'critical'
+        ? riskValue
+        : 'low';
 
-  const agingItemsRaw = agingDataAny?.aging?.flatMap((b: any) => b.items ?? []) ?? agingDataAny?.items ?? [];
-  const agingItems: AgingItem[] = agingItemsRaw.slice(0, 20).map((item: any) => ({
-    inventoryId: item.inventoryId ?? item.id,
-    productId: item.productId,
-    productName: item.productName ?? "Unknown",
-    productSku: item.productSku ?? "",
-    locationName: item.locationName ?? "Unknown",
-    quantity: item.quantity ?? 0,
-    unitCost: item.unitCost ?? 0,
-    totalValue: item.totalValue ?? 0,
-    ageInDays: item.ageInDays ?? 0,
-    receivedAt: new Date(item.receivedAt ?? Date.now()),
-    risk: item.risk ?? "low",
-  }));
+    return {
+      label: b.bucket ?? '',
+      minDays: b.minDays ?? 0,
+      maxDays: b.maxDays ?? null,
+      itemCount: b.itemCount ?? 0,
+      totalValue: b.totalValue ?? 0,
+      percentOfTotal: b.percentOfTotal ?? 0,
+      risk: validRisk,
+    };
+  });
 
-  const asNumber = (value: unknown) => {
-    const num = Number(value ?? 0);
-    return Number.isFinite(num) ? num : 0;
-  };
-
-  // Transform turnover data (API returns different shape than component expects)
-  const turnoverDataAny = turnoverData as any;
-  const turnoverSummary: TurnoverSummary | null = turnoverData
-    ? {
-        turnoverRatio: asNumber(
-          turnoverDataAny.turnover?.turnoverRate ?? turnoverDataAny.turnoverRatio
-        ),
-        averageDaysOnHand: asNumber(
-          turnoverDataAny.turnover?.daysOnHand ?? turnoverDataAny.daysOnHand
-        ),
-        annualizedTurnover:
-          asNumber(turnoverDataAny.turnover?.turnoverRate ?? turnoverDataAny.turnoverRatio) * 4,
-        periodStart: new Date(turnoverDataAny.periodStart ?? Date.now() - 90 * 24 * 60 * 60 * 1000),
-        periodEnd: new Date(turnoverDataAny.periodEnd ?? Date.now()),
-        industryBenchmark: 6,
+  const agingItems: AgingItem[] = useMemo(() => {
+    const agingItemsRaw = agingData?.aging?.flatMap((b) => b.items ?? []) ?? [];
+    return agingItemsRaw.slice(0, 20).map((item) => {
+      // Safely parse receivedAt - handle both Date objects and ISO strings
+      let receivedAtDate: Date;
+      if (item.receivedAt instanceof Date) {
+        receivedAtDate = item.receivedAt;
+      } else if (typeof item.receivedAt === 'string' && item.receivedAt) {
+        receivedAtDate = new Date(item.receivedAt);
+      } else {
+        // Fallback to current date if invalid
+        receivedAtDate = new Date();
       }
-    : null;
 
-  const turnoverByCategory: CategoryTurnover[] = (turnoverDataAny?.byCategory ?? turnoverDataAny?.byProduct ?? []).map((c: any) => ({
-    categoryId: c.categoryId ?? c.productId ?? c.id,
-    categoryName: c.categoryName ?? c.productName ?? c.name ?? "Unknown",
-    turnoverRatio: asNumber(c.turnoverRatio ?? c.turnoverRate),
-    daysOnHand: asNumber(c.daysOnHand),
-    cogs: asNumber(c.cogs),
-    averageInventory: asNumber(c.averageInventory),
-    trend: c.trend ?? "stable",
-    trendPercentage: asNumber(c.trendPercentage),
-  }));
+      // Ensure date is valid
+      if (isNaN(receivedAtDate.getTime())) {
+        receivedAtDate = new Date();
+      }
 
-  const turnoverTrends: TurnoverTrend[] = (turnoverDataAny?.trends ?? []).map((t: any) => ({
-    period: t.period ?? "",
-    turnoverRatio: asNumber(t.turnoverRatio),
-    daysOnHand: asNumber(t.daysOnHand),
-  }));
+      return {
+        inventoryId: item.inventoryId ?? '',
+        productId: item.productId ?? '',
+        productName: item.productName ?? 'Unknown',
+        productSku: item.productSku ?? '',
+        locationName: item.locationName ?? 'Unknown',
+        quantity: Number(item.quantity ?? 0),
+        unitCost: Number(item.unitCost ?? 0),
+        totalValue: Number(item.totalValue ?? 0),
+        ageInDays: Number(item.ageInDays ?? 0),
+        receivedAt: receivedAtDate,
+        risk: (item.risk ?? 'low') as 'low' | 'medium' | 'high' | 'critical',
+      };
+    });
+  }, [agingData]);
+
+  // Transform turnover data - server now returns complete data
+  const turnoverSummary: TurnoverSummary | null = useMemo(() => {
+    if (!turnoverData) return null;
+
+    const now = new Date();
+    const periodDays = turnoverData.turnover?.periodDays ?? 90;
+    const periodStart = new Date(now.getTime() - periodDays * 24 * 60 * 60 * 1000);
+
+    return {
+      turnoverRatio: turnoverData.turnover?.turnoverRate ?? 0,
+      averageDaysOnHand: turnoverData.turnover?.daysOnHand ?? 0,
+      annualizedTurnover: (turnoverData.turnover?.turnoverRate ?? 0) * 4,
+      periodStart,
+      periodEnd: now,
+      industryBenchmark: 6,
+    };
+  }, [turnoverData]);
+
+  const turnoverByCategory: CategoryTurnover[] = useMemo(() => {
+    return (turnoverData?.byProduct ?? [])
+      .filter((p) => {
+        // Filter out invalid products - must have ID and name
+        if (!p.productId || !p.productName) return false;
+        // Filter out "Unknown Product" placeholder if it's not a real product
+        if (p.productName === 'Unknown Product' && (!p.productSku || p.productSku === 'N/A')) return false;
+        return true;
+      })
+      .map((p) => {
+        // Safely convert all numeric values, handling null/undefined/NaN
+        const turnoverRate = Number(p.turnoverRate ?? 0) || 0;
+        const periodCOGS = Number(p.periodCOGS ?? 0) || 0;
+        const inventoryValue = Number(p.inventoryValue ?? 0) || 0;
+        const daysOnHand = turnoverRate > 0 ? Math.round(365 / turnoverRate) : 0;
+
+        return {
+          categoryId: p.productId ?? '',
+          categoryName: p.productName ?? 'Unknown',
+          turnoverRatio: turnoverRate,
+          daysOnHand,
+          cogs: periodCOGS,
+          averageInventory: inventoryValue,
+          trend: (p.trend ?? 'stable') as 'up' | 'down' | 'stable',
+          trendPercentage: Number(p.trendPercentage ?? 0) || 0,
+        };
+      });
+  }, [turnoverData]);
+
+  const turnoverTrends: TurnoverTrend[] = useMemo(() => {
+    return (turnoverData?.trends ?? []).map((t) => ({
+      period: t.period ?? '',
+      turnoverRatio: Number(t.turnoverRate ?? 0),
+      daysOnHand: Number(t.daysOnHand ?? 0),
+    }));
+  }, [turnoverData]);
 
   // Transform movement data with useMemo for complex calculations
   const { movementSummary, movementByType, topMovers, movementTrends } = useMemo(() => {
-    const movements = movementData?.movements ?? [];
+    const movements = ((movementData as ListMovementsResult | undefined)?.movements ?? []) as MovementWithRelations[];
     const periodDays = 30;
 
     if (movements.length === 0) {
@@ -225,21 +275,23 @@ function AnalyticsPage() {
     let totalUnitsOut = 0;
     let totalValueIn = 0;
     let totalValueOut = 0;
-    const typeCounts: Record<string, { count: number; units: number; value: number }> = {};
+    const typeCounts: Record<string, MovementTypeCount> = {};
 
-    movements.forEach((m: any) => {
-      const qty = Math.abs(m.quantity ?? 0);
-      const val = Math.abs((m.quantity ?? 0) * (m.unitCost ?? 0));
+    movements.forEach((m: MovementWithRelations) => {
+      const qty = Math.abs(Number(m.quantity ?? 0));
+      // Use totalCost from database instead of recalculating
+      const val = Math.abs(Number(m.totalCost ?? 0));
+      const quantity = Number(m.quantity ?? 0);
 
-      if (m.quantity > 0) {
+      if (quantity > 0) {
         totalUnitsIn += qty;
         totalValueIn += val;
-      } else {
+      } else if (quantity < 0) {
         totalUnitsOut += qty;
         totalValueOut += val;
       }
 
-      const type = m.movementType ?? "adjust";
+      const type = (m.movementType ?? "adjust") as MovementType;
       if (!typeCounts[type]) {
         typeCounts[type] = { count: 0, units: 0, value: 0 };
       }
@@ -259,27 +311,33 @@ function AnalyticsPage() {
 
     // Movement by type
     const totalCount = movements.length;
-    const byType: MovementByType[] = Object.entries(typeCounts).map(([type, counts]) => ({
-      type: type as any,
-      count: counts.count,
-      units: counts.units,
-      value: counts.value,
-      percentOfTotal: totalCount > 0 ? (counts.count / totalCount) * 100 : 0,
-    }));
+    const byType: MovementByType[] = Object.entries(typeCounts).map(([type, counts]) => {
+      const validType: MovementType =
+        type === 'receive' || type === 'allocate' || type === 'deallocate' ||
+        type === 'pick' || type === 'ship' || type === 'return' ||
+        type === 'transfer' || type === 'adjust'
+          ? type as MovementType
+          : 'adjust';
+
+      return {
+        type: validType,
+        count: counts.count,
+        units: counts.units,
+        value: counts.value,
+        percentOfTotal: totalCount > 0 ? (counts.count / totalCount) * 100 : 0,
+      };
+    });
 
     // Top movers
-    const productMovements: Record<
-      string,
-      { productId: string; productName: string; productSku: string; unitsIn: number; unitsOut: number; count: number }
-    > = {};
+    const productMovements: Record<string, ProductMovementAggregation> = {};
 
-    movements.forEach((m: any) => {
+    movements.forEach((m: MovementWithRelations) => {
       const pid = m.productId;
       if (!productMovements[pid]) {
         productMovements[pid] = {
           productId: pid,
-          productName: m.product?.name ?? "Unknown",
-          productSku: m.product?.sku ?? "",
+          productName: m.productName ?? "Unknown",
+          productSku: m.productSku ?? "",
           unitsIn: 0,
           unitsOut: 0,
           count: 0,
@@ -297,9 +355,9 @@ function AnalyticsPage() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10)
       .map((p) => ({
-        productId: p.productId,
-        productName: p.productName,
-        productSku: p.productSku,
+        productId: p.productId ?? '',
+        productName: p.productName ?? 'Unknown',
+        productSku: p.productSku ?? '',
         totalMovements: p.count,
         unitsIn: p.unitsIn,
         unitsOut: p.unitsOut,
@@ -308,9 +366,26 @@ function AnalyticsPage() {
       }));
 
     // Group movements by date for trend
-    const dateGroups: Record<string, { unitsIn: number; unitsOut: number; count: number }> = {};
-    movements.forEach((m: any) => {
-      const date = new Date(m.createdAt ?? Date.now()).toLocaleDateString("en-AU", {
+    const dateGroups: Record<string, DateGroupAggregation> = {};
+    const now = new Date();
+    movements.forEach((m: MovementWithRelations) => {
+      // Safely parse date - handle both Date objects and ISO strings
+      let createdAtDate: Date;
+      const createdAt = m.createdAt;
+      if (createdAt instanceof Date) {
+        createdAtDate = createdAt;
+      } else if (typeof createdAt === 'string' && createdAt) {
+        createdAtDate = new Date(createdAt);
+      } else {
+        createdAtDate = now;
+      }
+
+      // Ensure date is valid
+      if (isNaN(createdAtDate.getTime())) {
+        createdAtDate = now;
+      }
+
+      const date = createdAtDate.toLocaleDateString("en-AU", {
         day: "numeric",
         month: "short",
       });
@@ -318,10 +393,11 @@ function AnalyticsPage() {
         dateGroups[date] = { unitsIn: 0, unitsOut: 0, count: 0 };
       }
       dateGroups[date].count++;
-      if (m.quantity > 0) {
-        dateGroups[date].unitsIn += m.quantity;
-      } else {
-        dateGroups[date].unitsOut += Math.abs(m.quantity);
+      const qty = Number(m.quantity ?? 0);
+      if (qty > 0) {
+        dateGroups[date].unitsIn += qty;
+      } else if (qty < 0) {
+        dateGroups[date].unitsOut += Math.abs(qty);
       }
     });
 
@@ -350,7 +426,7 @@ function AnalyticsPage() {
       />
 
       <PageLayout.Content>
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)}>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as AnalyticsTab)}>
           <TabsList className="mb-6">
             <TabsTrigger value="valuation">
               <DollarSign className="h-4 w-4 mr-2" aria-hidden="true" />

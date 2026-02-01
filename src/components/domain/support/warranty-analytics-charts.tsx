@@ -28,7 +28,8 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, CheckCircle2, Clock, TrendingDown, TrendingUp, Minus } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock, TrendingDown } from 'lucide-react';
+import { MetricCard } from '@/components/shared';
 import type {
   WarrantyAnalyticsSummary,
   ClaimsByProductResult,
@@ -94,17 +95,7 @@ function ChartSkeleton({ height = 300 }: { height?: number }) {
   );
 }
 
-function MetricCardSkeleton() {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <Skeleton className="mb-2 h-4 w-24" />
-        <Skeleton className="mb-1 h-8 w-16" />
-        <Skeleton className="h-3 w-20" />
-      </CardContent>
-    </Card>
-  );
-}
+// Note: Skeleton loading handled by MetricCard isLoading prop
 
 // ============================================================================
 // EMPTY STATE COMPONENT
@@ -151,78 +142,7 @@ function ErrorChartState({ onRetry }: ErrorChartStateProps) {
   );
 }
 
-// ============================================================================
-// TREND INDICATOR COMPONENT
-// ============================================================================
-
-interface TrendIndicatorProps {
-  change: number;
-  label?: string;
-  inverse?: boolean; // If true, negative is good (e.g., cost reduction)
-}
-
-function TrendIndicator({ change, label, inverse = false }: TrendIndicatorProps) {
-  const isPositive = inverse ? change < 0 : change > 0;
-  const isNeutral = change === 0;
-
-  return (
-    <div className="flex items-center gap-1 text-xs">
-      {isNeutral ? (
-        <Minus className="text-muted-foreground h-3 w-3" />
-      ) : isPositive ? (
-        <TrendingUp className="h-3 w-3 text-emerald-500" />
-      ) : (
-        <TrendingDown className="h-3 w-3 text-red-500" />
-      )}
-      <span
-        className={cn(
-          isNeutral ? 'text-muted-foreground' : isPositive ? 'text-emerald-600' : 'text-red-600'
-        )}
-      >
-        {change > 0 ? '+' : ''}
-        {change}%
-      </span>
-      {label && <span className="text-muted-foreground">{label}</span>}
-    </div>
-  );
-}
-
-// ============================================================================
-// SUMMARY METRIC CARD
-// ============================================================================
-
-interface MetricCardProps {
-  title: string;
-  value: string | number;
-  change?: number;
-  changeLabel?: string;
-  icon?: React.ReactNode;
-  inverse?: boolean;
-}
-
-export function MetricCard({
-  title,
-  value,
-  change,
-  changeLabel,
-  icon,
-  inverse = false,
-}: MetricCardProps) {
-  return (
-    <Card>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <p className="text-muted-foreground text-sm font-medium">{title}</p>
-          {icon}
-        </div>
-        <p className="mt-2 text-2xl font-bold">{value}</p>
-        {change !== undefined && (
-          <TrendIndicator change={change} label={changeLabel} inverse={inverse} />
-        )}
-      </CardContent>
-    </Card>
-  );
-}
+// Note: Using shared MetricCard from @/components/shared
 
 // ============================================================================
 // SUMMARY METRICS GRID
@@ -239,7 +159,7 @@ export function SummaryMetricsGrid({ data, isLoading, isError }: SummaryMetricsG
     return (
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         {Array.from({ length: 6 }).map((_, i) => (
-          <MetricCardSkeleton key={i} />
+          <MetricCard key={i} title="" value="" isLoading />
         ))}
       </div>
     );
@@ -264,42 +184,48 @@ export function SummaryMetricsGrid({ data, isLoading, isError }: SummaryMetricsG
       <MetricCard
         title="Total Warranties"
         value={data.totalWarranties.toLocaleString()}
-        change={data.warrantiesChange}
-        changeLabel="vs prev"
+        delta={data.warrantiesChange}
+        subtitle="vs prev"
+        variant="compact"
       />
       <MetricCard
         title="Active Claims"
         value={data.activeClaims.toLocaleString()}
-        change={data.claimsChange}
-        changeLabel="vs prev"
-        inverse
+        delta={data.claimsChange}
+        positive={data.claimsChange !== undefined ? data.claimsChange < 0 : undefined}
+        subtitle="vs prev"
+        variant="compact"
       />
       <MetricCard
         title="Claims Rate"
         value={`${data.claimsRate}%`}
-        change={data.claimsRateChange}
-        changeLabel="vs prev"
-        inverse
+        delta={data.claimsRateChange}
+        positive={data.claimsRateChange !== undefined ? data.claimsRateChange < 0 : undefined}
+        subtitle="vs prev"
+        variant="compact"
       />
       <MetricCard
         title="Avg Claim Cost"
         value={`$${data.averageClaimCost.toLocaleString()}`}
-        change={data.avgCostChange}
-        changeLabel="vs prev"
-        inverse
+        delta={data.avgCostChange}
+        positive={data.avgCostChange !== undefined ? data.avgCostChange < 0 : undefined}
+        subtitle="vs prev"
+        variant="compact"
       />
       <MetricCard
         title="Total Claims Cost"
         value={`$${data.totalClaimsCost.toLocaleString()}`}
-        change={data.totalCostChange}
-        changeLabel="vs prev"
-        inverse
+        delta={data.totalCostChange}
+        positive={data.totalCostChange !== undefined ? data.totalCostChange < 0 : undefined}
+        subtitle="vs prev"
+        variant="compact"
       />
       <MetricCard
         title="Warranty Revenue"
         value={`$${data.warrantyRevenue.toLocaleString()}`}
-        change={data.revenueChange}
-        changeLabel="vs prev"
+        delta={data.revenueChange}
+        subtitle="vs prev"
+        variant="compact"
       />
     </div>
   );

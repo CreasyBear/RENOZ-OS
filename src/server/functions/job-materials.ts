@@ -12,7 +12,7 @@
 'use server';
 
 import { createServerFn } from '@tanstack/react-start';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { db } from '@/lib/db';
 import { jobMaterials } from 'drizzle/schema';
 import {

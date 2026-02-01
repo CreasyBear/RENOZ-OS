@@ -9,7 +9,7 @@
  */
 
 import { CheckCircle2, Circle, Clock, AlertCircle, Loader2 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/shared';
 import { cn } from '@/lib/utils';
 
 // ============================================================================
@@ -46,31 +46,31 @@ export interface TaskListProps {
 
 const STATUS_CONFIG: Record<
   Task['status'],
-  { label: string; icon: typeof Circle; color: string; bgColor: string }
+  { label: string; icon: typeof Circle; color: string; variant: 'neutral' | 'progress' | 'success' | 'error' }
 > = {
   pending: {
     label: 'Pending',
     icon: Circle,
     color: 'text-gray-600',
-    bgColor: 'bg-gray-100',
+    variant: 'neutral',
   },
   in_progress: {
     label: 'In Progress',
     icon: Clock,
     color: 'text-blue-600',
-    bgColor: 'bg-blue-100',
+    variant: 'progress',
   },
   completed: {
     label: 'Completed',
     icon: CheckCircle2,
     color: 'text-green-600',
-    bgColor: 'bg-green-100',
+    variant: 'success',
   },
   blocked: {
     label: 'Blocked',
     icon: AlertCircle,
     color: 'text-red-600',
-    bgColor: 'bg-red-100',
+    variant: 'error',
   },
 };
 
@@ -155,9 +155,7 @@ export function TaskList({
                   {task.title}
                 </p>
 
-                <Badge variant="secondary" className={cn('text-xs', statusConfig.bgColor, statusConfig.color)}>
-                  {statusConfig.label}
-                </Badge>
+                <StatusBadge status={task.status} variant={statusConfig.variant} />
 
                 {priorityConfig && (
                   <span className={cn('text-xs', priorityConfig.color)}>{priorityConfig.label}</span>

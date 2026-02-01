@@ -13,7 +13,7 @@ export {
   getWarranty,
   updateWarrantyOptOut,
   updateCustomerWarrantyOptOut,
-} from './warranties';
+} from './core/warranties';
 
 // Warranty Policies
 export {
@@ -30,7 +30,7 @@ export {
   seedDefaultWarrantyPolicies,
   getWarrantyPoliciesWithSla,
   triggerWarrantyRegistrationNotification,
-} from './warranty-policies';
+} from './policies/warranty-policies';
 
 // Warranty Claims
 export {
@@ -42,7 +42,7 @@ export {
   listWarrantyClaims,
   getWarrantyClaim,
   assignClaim,
-} from './warranty-claims';
+} from './claims/warranty-claims';
 
 // Warranty Extensions
 export {
@@ -50,14 +50,14 @@ export {
   listWarrantyExtensions,
   getExtensionHistory,
   getExtensionById,
-} from './warranty-extensions';
+} from './extensions/warranty-extensions';
 
 // Warranty Certificates
 export {
   generateWarrantyCertificate,
   getWarrantyCertificate,
   regenerateWarrantyCertificate,
-} from './warranty-certificates';
+} from './certificates/warranty-certificates';
 
 // Warranty Analytics
 export {
@@ -70,7 +70,7 @@ export {
   getExtensionVsResolution,
   exportWarrantyAnalytics,
   getWarrantyAnalyticsFilterOptions,
-} from './warranty-analytics';
+} from './analytics/warranty-analytics';
 
 // Bulk Import
 export {
@@ -79,4 +79,4 @@ export {
   bulkRegisterWarrantiesSchema,
   previewBulkWarrantyImport,
   bulkRegisterWarrantiesFromCsv,
-} from './warranty-bulk-import';
+} from './bulk-import/warranty-bulk-import';

@@ -10,8 +10,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { z } from "zod";
 import { RouteErrorFallback, PageLayout } from "@/components/layout";
 import { AdminTableSkeleton } from "@/components/skeletons/admin";
-import { ActivityFeed } from "@/components/activity";
-import type { ActivityFiltersValue } from "@/components/activity/activity-filters";
+import { ActivityFeed, type ActivityFiltersValue } from "@/components/shared/activity";
 import {
   activityActionSchema,
   activityEntityTypeSchema,
@@ -73,21 +72,20 @@ function ActivitiesPage() {
         title="Activity Feed"
         description="See all organization activity in one place"
       />
-      <PageLayout.Content>
-        <div className="h-[calc(100vh-12rem)]">
-          <ActivityFeed
-            filters={{
-              entityType: search.entityType,
-              action: search.action,
-              userId: search.userId,
-              dateFrom: search.dateFrom,
-              dateTo: search.dateTo,
-            }}
-            onFiltersChange={handleFiltersChange}
-            showFilters
-            height="100%"
-          />
-        </div>
+      <PageLayout.Content className="flex flex-col overflow-hidden h-[calc(100vh-10rem)]">
+        <ActivityFeed
+          filters={{
+            entityType: search.entityType,
+            action: search.action,
+            userId: search.userId,
+            dateFrom: search.dateFrom,
+            dateTo: search.dateTo,
+          }}
+          onFiltersChange={handleFiltersChange}
+          showFilters
+          height="100%"
+          className="flex-1 min-h-0"
+        />
       </PageLayout.Content>
     </PageLayout>
   );

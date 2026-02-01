@@ -150,7 +150,7 @@ const DocumentTableRow = memo(function DocumentTableRow({ document }: DocumentRo
       <TableCell className="text-muted-foreground">
         <div className="flex items-center gap-1">
           <HardDrive className="h-3 w-3" />
-          {formatFileSize(document.fileSize)}
+          {document.fileSize != null ? formatFileSize(document.fileSize) : 'N/A'}
         </div>
       </TableCell>
       <TableCell>
@@ -194,7 +194,7 @@ const DocumentListItem = memo(function DocumentListItem({ document }: DocumentRo
               {getDocumentTypeLabel(document.documentType)}
             </Badge>
             <span>{formatDate(document.generatedAt)}</span>
-            <span>{formatFileSize(document.fileSize)}</span>
+            <span>{document.fileSize != null ? formatFileSize(document.fileSize) : 'N/A'}</span>
           </div>
         </div>
       </div>

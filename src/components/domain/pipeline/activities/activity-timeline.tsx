@@ -1,14 +1,26 @@
 /**
  * ActivityTimeline Component
  *
- * Displays opportunity activities in a chronological timeline.
- * Supports filtering by type, date range, and completion status.
- * Allows marking activities as complete inline.
+ * @deprecated Use OpportunityActivityTimelineContainer from
+ * '@/components/domain/pipeline/opportunities' instead.
+ * This component violates the container/presenter pattern by having
+ * query logic inside the component.
+ *
+ * Migration:
+ * ```tsx
+ * // Before
+ * import { ActivityTimeline } from '@/components/domain/pipeline/activities';
+ * <ActivityTimeline opportunityId={id} />
+ *
+ * // After
+ * import { OpportunityActivityTimelineContainer } from '@/components/domain/pipeline/opportunities';
+ * <OpportunityActivityTimelineContainer opportunityId={id} />
+ * ```
  *
  * @see _Initiation/_prd/2-domains/pipeline/pipeline.prd.json (PIPE-ACTIVITIES-UI)
  */
 
-import { memo, useState } from "react";
+import { memo, useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/query-keys";
 import {
@@ -127,6 +139,17 @@ export const ActivityTimeline = memo(function ActivityTimeline({
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  // Deprecation warning
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(
+        '[DEPRECATED] ActivityTimeline from @/components/domain/pipeline/activities is deprecated. ' +
+        'Use OpportunityActivityTimelineContainer from @/components/domain/pipeline/opportunities instead. ' +
+        'This component violates the container/presenter pattern by having query logic inside.'
+      );
+    }
+  }, []);
 
   // Fetch activities
   const { data, isLoading, error } = useQuery<TimelineResponse>({

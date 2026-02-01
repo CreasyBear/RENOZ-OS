@@ -25,10 +25,16 @@ import {
   type OpportunityKanbanFilters,
 } from "@/hooks/pipeline";
 import { toastSuccess, toastError } from "@/hooks";
+import { DomainFilterBar } from "@/components/shared/filters";
 import { PipelineBoard } from "./pipeline-board";
 import { PipelineListView } from "./pipeline-list-view";
 import { PipelineMetrics } from "./pipeline-metrics";
-import { PipelineFilters, type PipelineFiltersState } from "./pipeline-filters";
+import {
+  createPipelineFilterConfig,
+  DEFAULT_PIPELINE_FILTERS,
+  type PipelineFiltersState,
+} from "./pipeline-filter-config";
+import { useUsers } from "@/hooks/users/use-users";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,16 +56,12 @@ import type { OpportunityStage } from "@/lib/schemas/pipeline";
 // ============================================================================
 
 /**
- * Default filters for the pipeline kanban view.
- * These limits ensure the board remains performant and usable.
+ * Default filters for the pipeline kanban view (overrides global defaults).
+ * Starts with "my deals" for better initial UX.
  */
-export const DEFAULT_PIPELINE_FILTERS: PipelineFiltersState = {
-  search: "",
-  stages: [], // All active stages (new, qualified, proposal, negotiation)
+const KANBAN_DEFAULT_FILTERS: PipelineFiltersState = {
+  ...DEFAULT_PIPELINE_FILTERS,
   assignedTo: "me", // Default to current user's opportunities
-  minValue: null,
-  maxValue: null,
-  includeWonLost: false, // Exclude closed deals by default
 };
 
 /**
@@ -122,12 +124,11 @@ function isMyPipeline(filters: PipelineFiltersState): boolean {
  */
 function isDefaultScope(filters: PipelineFiltersState): boolean {
   return (
-    filters.assignedTo === DEFAULT_PIPELINE_FILTERS.assignedTo &&
+    filters.assignedTo === KANBAN_DEFAULT_FILTERS.assignedTo &&
     !filters.includeWonLost &&
     !filters.search &&
     filters.stages.length === 0 &&
-    filters.minValue === null &&
-    filters.maxValue === null
+    filters.valueRange === null
   );
 }
 
@@ -267,7 +268,7 @@ function QuickFilterChips({ currentFilters, onChange }: QuickFilterChipsProps) {
 
   const handleClick = (filter: (typeof QUICK_FILTERS)[number]) => {
     onChange({
-      ...DEFAULT_PIPELINE_FILTERS,
+      ...KANBAN_DEFAULT_FILTERS,
       ...filter.filters,
     });
   };
@@ -295,7 +296,7 @@ function QuickFilterChips({ currentFilters, onChange }: QuickFilterChipsProps) {
           variant="ghost"
           size="sm"
           className="h-8 text-muted-foreground"
-          onClick={() => onChange(DEFAULT_PIPELINE_FILTERS)}
+          onClick={() => onChange(KANBAN_DEFAULT_FILTERS)}
         >
           <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
           Reset
@@ -318,12 +319,24 @@ export function PipelineKanbanContainer({
 
   // Filter state with defaults
   const [filters, setFilters] = useState<PipelineFiltersState>({
-    ...DEFAULT_PIPELINE_FILTERS,
+    ...KANBAN_DEFAULT_FILTERS,
     ...initialFilters,
   });
 
   // View mode state (kanban vs list)
   const [viewMode, setViewMode] = useState<PipelineViewMode>(initialViewMode);
+
+  // Fetch team members for dynamic assignee options
+  const { data: usersData } = useUsers({ page: 1, pageSize: 100, status: "active", sortOrder: "asc" });
+
+  // Create dynamic filter config with assignee options
+  const filterConfig = useMemo(() => {
+    const assignees = (usersData?.items ?? []).map((user) => ({
+      id: user.id,
+      name: user.name ?? user.email ?? "Unknown",
+    }));
+    return createPipelineFilterConfig(assignees);
+  }, [usersData?.items]);
 
   // Convert filter state to hook options
   const kanbanFilters = useMemo<OpportunityKanbanFilters>(
@@ -331,8 +344,8 @@ export function PipelineKanbanContainer({
       search: filters.search || undefined,
       stages: filters.stages.length > 0 ? filters.stages : undefined,
       assignedTo: filters.assignedTo === "me" ? undefined : filters.assignedTo || undefined,
-      minValue: filters.minValue ?? undefined,
-      maxValue: filters.maxValue ?? undefined,
+      minValue: filters.valueRange?.min ?? undefined,
+      maxValue: filters.valueRange?.max ?? undefined,
       includeWonLost: filters.includeWonLost,
     }),
     [filters]
@@ -443,7 +456,7 @@ export function PipelineKanbanContainer({
       <ScopeIndicator
         filters={filters}
         totalCount={totalCount}
-        onReset={() => setFilters(DEFAULT_PIPELINE_FILTERS)}
+        onReset={() => setFilters(KANBAN_DEFAULT_FILTERS)}
         onViewAll={() => setFilters({ ...filters, includeWonLost: true })}
       />
 
@@ -451,7 +464,12 @@ export function PipelineKanbanContainer({
       <PipelineMetrics metrics={metricsData ?? null} isLoading={isLoadingMetrics} />
 
       {/* Filters */}
-      <PipelineFilters filters={filters} onChange={setFilters} />
+      <DomainFilterBar<PipelineFiltersState>
+        config={filterConfig}
+        filters={filters}
+        onFiltersChange={setFilters}
+        defaultFilters={DEFAULT_PIPELINE_FILTERS}
+      />
 
       {/* View Toggle */}
       <div className="flex items-center justify-between">

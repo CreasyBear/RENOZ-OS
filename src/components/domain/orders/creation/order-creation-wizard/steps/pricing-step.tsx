@@ -18,9 +18,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import type { StepProps } from '../types';
-import { formatPrice } from '../types';
+import { useOrgFormat } from '@/hooks/use-org-format';
 
 export const PricingStep = memo(function PricingStep({ state, setState }: StepProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatPrice = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
   // Calculate subtotal before discounts
   const subtotal = state.lineItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
 
@@ -121,11 +124,11 @@ export const PricingStep = memo(function PricingStep({ state, setState }: StepPr
                   type="number"
                   min={0}
                   step={1}
-                  value={state.discountAmount ? state.discountAmount / 100 : ''}
+                  value={state.discountAmount || ''}
                   onChange={(e) =>
                     setState((s) => ({
                       ...s,
-                      discountAmount: Math.round(Number(e.target.value) * 100) || 0,
+                      discountAmount: Number(e.target.value) || 0,
                     }))
                   }
                   className="pl-8"

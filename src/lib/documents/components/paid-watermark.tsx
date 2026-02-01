@@ -7,7 +7,6 @@
 import { Text, View, StyleSheet } from "@react-pdf/renderer";
 import { useOrgDocument } from "../context";
 import {
-  colors,
   fontSize,
   spacing,
   pageMargins,

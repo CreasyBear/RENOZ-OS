@@ -34,7 +34,7 @@ import {
 } from "lucide-react"
 import { cn } from "~/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card"
-import { Button } from "~/components/ui/button"
+import { Button, buttonVariants } from "~/components/ui/button"
 import {
   getOnboardingProgress,
   dismissWelcomeChecklist,
@@ -198,12 +198,13 @@ function ChecklistItemRow({ item }: ChecklistItemRowProps) {
             <ArrowRight className="h-3 w-3" />
           </Link>
         ) : (
-          <Button asChild size="sm" variant="outline" className="h-8">
-            <Link to={item.href}>
-              Get started
-              <ArrowRight className="h-3 w-3 ml-1" />
-            </Link>
-          </Button>
+          <Link
+            to={item.href}
+            className={cn(buttonVariants({ size: "sm", variant: "outline" }), "h-8")}
+          >
+            Get started
+            <ArrowRight className="h-3 w-3 ml-1" />
+          </Link>
         )}
       </div>
     </li>

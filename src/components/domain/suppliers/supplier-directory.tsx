@@ -6,7 +6,7 @@
  */
 
 import { SupplierTable, type SupplierTableData } from './supplier-table';
-import { SupplierFilters } from './supplier-filters';
+import { DomainFilterBar } from '@/components/shared/filters';
 import {
   Pagination,
   PaginationContent,
@@ -15,7 +15,11 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-import type { SupplierFiltersState } from '@/lib/schemas/suppliers';
+import {
+  SUPPLIER_FILTER_CONFIG,
+  DEFAULT_SUPPLIER_FILTERS,
+  type SupplierFiltersState,
+} from './supplier-filter-config';
 
 // ============================================================================
 // TYPES
@@ -26,7 +30,6 @@ interface SupplierDirectoryProps {
   isLoading?: boolean;
   filters: SupplierFiltersState;
   onFiltersChange: (filters: SupplierFiltersState) => void;
-  onSearch: (search: string) => void;
   pagination: {
     page: number;
     pageSize: number;
@@ -47,7 +50,6 @@ export function SupplierDirectory({
   isLoading,
   filters,
   onFiltersChange,
-  onSearch,
   pagination,
   onPageChange,
   onDelete,
@@ -102,7 +104,12 @@ export function SupplierDirectory({
   return (
     <div className="space-y-4">
       {/* Filters */}
-      <SupplierFilters filters={filters} onFiltersChange={onFiltersChange} onSearch={onSearch} />
+      <DomainFilterBar<SupplierFiltersState>
+        config={SUPPLIER_FILTER_CONFIG}
+        filters={filters}
+        onFiltersChange={onFiltersChange}
+        defaultFilters={DEFAULT_SUPPLIER_FILTERS}
+      />
 
       {/* Results count */}
       {!isLoading && (

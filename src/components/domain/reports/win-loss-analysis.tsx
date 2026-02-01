@@ -1,12 +1,14 @@
 /**
- * WinLossAnalysis Component
+ * WinLossAnalysis Presenter Component
  *
- * Dashboard for analyzing win/loss patterns and trends.
+ * Pure UI component for displaying win/loss analysis data.
+ * Receives all data via props - no data fetching or state management.
  *
+ * @see src/components/domain/reports/win-loss-analysis-container.tsx (container)
  * @see _Initiation/_prd/2-domains/pipeline/pipeline.prd.json (PIPE-WINLOSS-UI)
  */
 
-import { memo, useState, useMemo, useCallback } from "react";
+import { memo } from "react";
 import {
   Trophy,
   XCircle,
@@ -50,105 +52,69 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/formatters";
-import { useWinLossAnalysis, useCompetitors } from "@/hooks/reports";
-import { useCreateScheduledReport, useGenerateReport } from "@/hooks/reports";
+import { useOrgFormat } from "@/hooks/use-org-format";
 import { ScheduledReportForm } from "@/components/domain/settings/scheduled-report-form";
-import type { Button } from "react-day-picker";
+import { Button } from "@/components/ui/button";
+import type {
+  WinLossAnalysisResult,
+  Competitor,
+} from "@/hooks/reports";
+import type { CreateScheduledReportInput } from "@/lib/schemas/reports/scheduled-reports";
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export interface WinLossAnalysisProps {
+export interface WinLossAnalysisPresenterProps {
+  /** @source Container: win-loss-analysis-container.tsx - useWinLossAnalysis hook */
+  analysis: WinLossAnalysisResult | undefined;
+  /** @source Container: win-loss-analysis-container.tsx - useCompetitors hook */
+  competitors: Competitor[];
+  /** @source Container: win-loss-analysis-container.tsx - useQuery isLoading */
+  isLoading: boolean;
+  /** @source Container: win-loss-analysis-container.tsx - useState */
+  period: string;
+  /** @source Container: win-loss-analysis-container.tsx - useState setter */
+  onPeriodChange: (period: string) => void;
+  /** @source Container: win-loss-analysis-container.tsx - useCallback */
+  onExport: (format: "pdf" | "excel") => void;
+  /** @source Container: win-loss-analysis-container.tsx - useCallback */
+  onScheduleReport: () => void;
+  /** @source Container: win-loss-analysis-container.tsx - useState */
+  scheduleOpen: boolean;
+  /** @source Container: win-loss-analysis-container.tsx - useState setter */
+  onScheduleOpenChange: (open: boolean) => void;
+  /** @source Container: win-loss-analysis-container.tsx - useCallback */
+  onScheduleSubmit: (input: CreateScheduledReportInput) => Promise<void>;
+  /** @source Container: win-loss-analysis-container.tsx - useMutation isPending */
+  isScheduleSubmitting: boolean;
   className?: string;
 }
 
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-function getDateRange(period: string): { dateFrom: Date; dateTo: Date } {
-  const dateTo = new Date();
-  const dateFrom = new Date();
-
-  switch (period) {
-    case "30d":
-      dateFrom.setDate(dateFrom.getDate() - 30);
-      break;
-    case "90d":
-      dateFrom.setDate(dateFrom.getDate() - 90);
-      break;
-    case "6m":
-      dateFrom.setMonth(dateFrom.getMonth() - 6);
-      break;
-    case "1y":
-      dateFrom.setFullYear(dateFrom.getFullYear() - 1);
-      break;
-    case "all":
-    default:
-      dateFrom.setFullYear(2020, 0, 1);
-      break;
-  }
-
-  return { dateFrom, dateTo };
-}
+// Keep old interface name for backward compatibility during migration
+export interface WinLossAnalysisProps extends WinLossAnalysisPresenterProps {}
 
 // ============================================================================
 // COMPONENT
 // ============================================================================
 
 export const WinLossAnalysis = memo(function WinLossAnalysis({
+  analysis,
+  competitors,
+  isLoading,
+  period,
+  onPeriodChange,
+  onExport,
+  onScheduleReport,
+  scheduleOpen,
+  onScheduleOpenChange,
+  onScheduleSubmit,
+  isScheduleSubmitting,
   className,
-}: WinLossAnalysisProps) {
-  const [period, setPeriod] = useState("90d");
-  const [scheduleOpen, setScheduleOpen] = useState(false);
-  const { dateFrom, dateTo } = useMemo(() => getDateRange(period), [period]);
-
-  // Fetch analysis data
-  const analysisQuery = useWinLossAnalysis({ dateFrom, dateTo });
-
-  // Fetch competitors
-  const competitorsQuery = useCompetitors({ dateFrom, dateTo });
-
-  const analysis = analysisQuery.data;
-  const competitors = competitorsQuery.data?.competitors ?? [];
-  const isLoading = analysisQuery.isLoading;
-  const createScheduledReport = useCreateScheduledReport();
-  const generateReport = useGenerateReport();
-
-  const handleExport = useCallback(
-    (format: "pdf" | "excel") => {
-      const reportFormat = format === "excel" ? "xlsx" : "pdf";
-      generateReport
-        .mutateAsync({
-          metrics: ["win_rate", "won_revenue", "lost_revenue"],
-          dateFrom: dateFrom.toISOString().split("T")[0],
-          dateTo: dateTo.toISOString().split("T")[0],
-          format: reportFormat,
-          includeCharts: true,
-          includeTrends: true,
-        })
-        .then((result) => {
-          window.open(result.reportUrl, "_blank", "noopener,noreferrer");
-        })
-        .catch(() => {
-          // keep UI quiet; caller can toast
-        });
-    },
-    [generateReport, dateFrom, dateTo]
-  );
-
-  const handleScheduleReport = useCallback(() => {
-    setScheduleOpen(true);
-  }, []);
-
-  const handleScheduleSubmit = useCallback(
-    async (input: Parameters<typeof createScheduledReport.mutateAsync>[0]) => {
-      await createScheduledReport.mutateAsync(input);
-    },
-    [createScheduledReport]
-  );
+}: WinLossAnalysisPresenterProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
 
   // Render metric card
   const renderMetricCard = (
@@ -201,7 +167,7 @@ export const WinLossAnalysis = memo(function WinLossAnalysis({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Select value={period} onValueChange={setPeriod}>
+          <Select value={period} onValueChange={onPeriodChange}>
             <SelectTrigger className="w-[140px]">
               <SelectValue />
             </SelectTrigger>
@@ -221,15 +187,15 @@ export const WinLossAnalysis = memo(function WinLossAnalysis({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => handleExport("pdf")}>
+              <DropdownMenuItem onClick={() => onExport("pdf")}>
                 Export PDF
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleExport("excel")}>
+              <DropdownMenuItem onClick={() => onExport("excel")}>
                 Export Excel
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <Button variant="outline" onClick={handleScheduleReport}>
+          <Button variant="outline" onClick={onScheduleReport}>
             <Mail className="mr-2 h-4 w-4" />
             Schedule
           </Button>
@@ -262,13 +228,13 @@ export const WinLossAnalysis = memo(function WinLossAnalysis({
           )}
           {renderMetricCard(
             "Won Revenue",
-            formatCurrency(analysis?.summary.totalWonValue ?? 0),
+            formatCurrencyDisplay(analysis?.summary.totalWonValue ?? 0),
             <TrendingUp className="h-4 w-4 text-green-600" />,
             `${analysis?.summary.totalWon ?? 0} opportunities`
           )}
           {renderMetricCard(
             "Lost Revenue",
-            formatCurrency(analysis?.summary.totalLostValue ?? 0),
+            formatCurrencyDisplay(analysis?.summary.totalLostValue ?? 0),
             <TrendingDown className="h-4 w-4 text-red-600" />,
             `${analysis?.summary.totalLost ?? 0} opportunities`
           )}
@@ -327,7 +293,7 @@ export const WinLossAnalysis = memo(function WinLossAnalysis({
                             <div className="flex items-center gap-2">
                               <Badge variant="secondary">{reason.count}</Badge>
                               <span className="text-sm text-muted-foreground">
-                                {formatCurrency(reason.totalValue)}
+                                {formatCurrencyDisplay(reason.totalValue)}
                               </span>
                             </div>
                           </div>
@@ -374,7 +340,7 @@ export const WinLossAnalysis = memo(function WinLossAnalysis({
                             <div className="flex items-center gap-2">
                               <Badge variant="destructive">{reason.count}</Badge>
                               <span className="text-sm text-muted-foreground">
-                                {formatCurrency(reason.totalValue)}
+                                {formatCurrencyDisplay(reason.totalValue)}
                               </span>
                             </div>
                           </div>
@@ -444,10 +410,10 @@ export const WinLossAnalysis = memo(function WinLossAnalysis({
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          {formatCurrency(trend.wonValue)}
+                          {formatCurrencyDisplay(trend.wonValue)}
                         </TableCell>
                         <TableCell className="text-right">
-                          {formatCurrency(trend.lostValue)}
+                          {formatCurrencyDisplay(trend.lostValue)}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -470,7 +436,7 @@ export const WinLossAnalysis = memo(function WinLossAnalysis({
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {competitorsQuery.isLoading ? (
+              {isLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
                     <Skeleton key={i} className="h-12 w-full" />
@@ -500,10 +466,10 @@ export const WinLossAnalysis = memo(function WinLossAnalysis({
                           {competitor.lossCount}
                         </TableCell>
                         <TableCell className="text-right">
-                          {formatCurrency(competitor.totalLostValue)}
+                          {formatCurrencyDisplay(competitor.totalLostValue)}
                         </TableCell>
                         <TableCell className="text-right">
-                          {formatCurrency(
+                          {formatCurrencyDisplay(
                             competitor.lossCount > 0
                               ? Math.round(competitor.totalLostValue / competitor.lossCount)
                               : 0
@@ -520,9 +486,9 @@ export const WinLossAnalysis = memo(function WinLossAnalysis({
       </Tabs>
       <ScheduledReportForm
         open={scheduleOpen}
-        onOpenChange={setScheduleOpen}
-        onSubmit={handleScheduleSubmit}
-        isSubmitting={createScheduledReport.isPending}
+        onOpenChange={onScheduleOpenChange}
+        onSubmit={onScheduleSubmit}
+        isSubmitting={isScheduleSubmitting}
         defaultValues={{
           name: "Win/Loss Report",
           description: "Recurring win/loss summary and competitor insights",

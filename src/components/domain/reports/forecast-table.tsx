@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/formatters";
+import { useOrgFormat } from "@/hooks/use-org-format";
 import type { ForecastPeriod } from "@/lib/schemas/pipeline";
 
 // ============================================================================
@@ -67,6 +67,9 @@ export const ForecastTable = memo(function ForecastTable({
 }: ForecastTableProps) {
   const [sortField, setSortField] = useState<SortField>("period");
   const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
 
   // Sort data
   const sortedData = useMemo(() => {
@@ -150,10 +153,10 @@ export const ForecastTable = memo(function ForecastTable({
     const rows = sortedData.map((period) => [
       period.period,
       period.opportunityCount,
-      (period.totalValue / 100).toFixed(2),
-      (period.weightedValue / 100).toFixed(2),
-      (period.wonValue / 100).toFixed(2),
-      (period.lostValue / 100).toFixed(2),
+      period.totalValue.toFixed(2),
+      period.weightedValue.toFixed(2),
+      period.wonValue.toFixed(2),
+      period.lostValue.toFixed(2),
       period.avgProbability,
     ]);
 
@@ -161,10 +164,10 @@ export const ForecastTable = memo(function ForecastTable({
     rows.push([
       "TOTAL",
       totals.opportunityCount,
-      (totals.totalValue / 100).toFixed(2),
-      (totals.weightedValue / 100).toFixed(2),
-      (totals.wonValue / 100).toFixed(2),
-      (totals.lostValue / 100).toFixed(2),
+      totals.totalValue.toFixed(2),
+      totals.weightedValue.toFixed(2),
+      totals.wonValue.toFixed(2),
+      totals.lostValue.toFixed(2),
       "-",
     ]);
 
@@ -277,7 +280,7 @@ export const ForecastTable = memo(function ForecastTable({
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        {formatCurrency(period.totalValue)}
+                        {formatCurrencyDisplay(period.totalValue)}
                         {valueTrend !== 0 && (
                           <span
                             className={cn(
@@ -296,14 +299,14 @@ export const ForecastTable = memo(function ForecastTable({
                     </TableCell>
                     {showWeighted && (
                       <TableCell className="text-right">
-                        {formatCurrency(period.weightedValue)}
+                        {formatCurrencyDisplay(period.weightedValue)}
                       </TableCell>
                     )}
                     <TableCell className="text-right text-green-600">
-                      {period.wonValue > 0 ? formatCurrency(period.wonValue) : "-"}
+                      {period.wonValue > 0 ? formatCurrencyDisplay(period.wonValue) : "-"}
                     </TableCell>
                     <TableCell className="text-right text-red-600">
-                      {period.lostValue > 0 ? formatCurrency(period.lostValue) : "-"}
+                      {period.lostValue > 0 ? formatCurrencyDisplay(period.lostValue) : "-"}
                     </TableCell>
                     <TableCell className="text-right">
                       <Badge
@@ -329,18 +332,18 @@ export const ForecastTable = memo(function ForecastTable({
                   {totals.opportunityCount}
                 </TableCell>
                 <TableCell className="text-right font-semibold">
-                  {formatCurrency(totals.totalValue)}
+                  {formatCurrencyDisplay(totals.totalValue)}
                 </TableCell>
                 {showWeighted && (
                   <TableCell className="text-right font-semibold">
-                    {formatCurrency(totals.weightedValue)}
+                    {formatCurrencyDisplay(totals.weightedValue)}
                   </TableCell>
                 )}
                 <TableCell className="text-right font-semibold text-green-600">
-                  {formatCurrency(totals.wonValue)}
+                  {formatCurrencyDisplay(totals.wonValue)}
                 </TableCell>
                 <TableCell className="text-right font-semibold text-red-600">
-                  {formatCurrency(totals.lostValue)}
+                  {formatCurrencyDisplay(totals.lostValue)}
                 </TableCell>
                 <TableCell></TableCell>
               </TableRow>

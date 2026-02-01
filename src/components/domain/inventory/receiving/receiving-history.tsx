@@ -30,6 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useOrgFormat } from "@/hooks/use-org-format";
 
 // ============================================================================
 // TYPES
@@ -71,11 +72,9 @@ export const ReceivingHistory = memo(function ReceivingHistory({
   showTitle = true,
   className,
 }: ReceivingHistoryProps) {
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat("en-AU", {
-      style: "currency",
-      currency: "AUD",
-    }).format(value);
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (value: number) =>
+    formatCurrency(value, { cents: false, showCents: true });
 
   const formatDate = (date: Date) =>
     new Intl.DateTimeFormat("en-AU", {
@@ -249,11 +248,11 @@ export const ReceivingHistory = memo(function ReceivingHistory({
                   </TableCell>
 
                   <TableCell className="text-right tabular-nums">
-                    {formatCurrency(record.unitCost)}
+                    {formatCurrencyDisplay(record.unitCost)}
                   </TableCell>
 
                   <TableCell className="text-right tabular-nums font-medium">
-                    {formatCurrency(record.totalCost)}
+                    {formatCurrencyDisplay(record.totalCost)}
                   </TableCell>
 
                   <TableCell>
@@ -286,7 +285,7 @@ export const ReceivingHistory = memo(function ReceivingHistory({
                 </TableCell>
                 <TableCell />
                 <TableCell className="text-right tabular-nums">
-                  {formatCurrency(totalValue)}
+                  {formatCurrencyDisplay(totalValue)}
                 </TableCell>
                 <TableCell />
               </TableRow>

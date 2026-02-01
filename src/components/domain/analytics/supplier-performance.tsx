@@ -29,7 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { formatCurrency } from '@/lib/formatters';
+import { useOrgFormat } from '@/hooks/use-org-format';
 import type { SupplierPerformanceData, SupplierRanking } from '@/lib/schemas/analytics';
 
 // ============================================================================
@@ -235,6 +235,9 @@ interface PerformanceTableProps {
 }
 
 function PerformanceTable({ suppliers }: PerformanceTableProps) {
+  const { formatCurrency } = useOrgFormat();
+  const formatCurrencyDisplay = (amount: number) =>
+    formatCurrency(amount, { cents: false, showCents: true });
   return (
     <Card>
       <CardHeader>
@@ -284,7 +287,7 @@ function PerformanceTable({ suppliers }: PerformanceTableProps) {
                 <TableCell className="text-right">{supplier.avgLeadTime}d</TableCell>
                 <TableCell className="text-right">{supplier.totalOrders}</TableCell>
                 <TableCell className="text-right">
-                  {formatCurrency(supplier.totalSpend, { cents: false })}
+                  {formatCurrencyDisplay(supplier.totalSpend)}
                 </TableCell>
               </TableRow>
             ))}
@@ -303,7 +306,7 @@ function PerformanceTable({ suppliers }: PerformanceTableProps) {
  * Supplier Performance Presenter
  * Displays supplier rankings and performance metrics.
  * Receives all data via props - no sample data defaults.
- * 
+ *
  * @source suppliers from useSupplierMetrics or useProcurementDashboard hook
  * @source rankings from useSupplierMetrics hook
  */

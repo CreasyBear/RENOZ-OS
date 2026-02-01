@@ -10,7 +10,6 @@
  * @see _Initiation/_prd/2-domains/support/support.prd.json - DOM-SUP-006
  */
 
-import * as React from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { PageLayout, RouteErrorFallback } from '@/components/layout';
 import { SupportDashboardSkeleton } from '@/components/skeletons/support';
@@ -19,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { MetricCard } from '@/components/shared';
 import { useSupportMetrics } from '@/hooks/support';
 import { useCsatMetrics } from '@/hooks/support';
 import { CsatMetricsWidget } from '@/components/domain/support';
@@ -28,13 +28,11 @@ import {
   Clock,
   CheckCircle2,
   AlertTriangle,
-  TrendingUp,
-  TrendingDown,
   Plus,
   BarChart3,
-  ListChecks,
   RefreshCw,
   Activity,
+  ListChecks,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -60,85 +58,7 @@ export const Route = createFileRoute('/_authenticated/support/dashboard')({
   ),
 });
 
-// ============================================================================
-// METRIC CARD COMPONENT
-// ============================================================================
-
-interface MetricCardProps {
-  title: string;
-  value: number | string;
-  description?: string;
-  icon: React.ReactNode;
-  trend?: {
-    value: number;
-    direction: 'up' | 'down' | 'neutral';
-    label: string;
-  };
-  variant?: 'default' | 'success' | 'warning' | 'danger';
-  loading?: boolean;
-}
-
-function MetricCard({
-  title,
-  value,
-  description,
-  icon,
-  trend,
-  variant = 'default',
-  loading,
-}: MetricCardProps) {
-  const variantColors = {
-    default: 'text-primary',
-    success: 'text-green-500',
-    warning: 'text-amber-500',
-    danger: 'text-red-500',
-  };
-
-  if (loading) {
-    return (
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-4 w-4" />
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="mb-2 h-8 w-16" />
-          <Skeleton className="h-3 w-32" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <div className={cn('h-4 w-4', variantColors[variant])}>{icon}</div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {description && <p className="text-muted-foreground text-xs">{description}</p>}
-        {trend && (
-          <div
-            className={cn(
-              'mt-1 flex items-center gap-1 text-xs',
-              trend.direction === 'up' && 'text-green-500',
-              trend.direction === 'down' && 'text-red-500',
-              trend.direction === 'neutral' && 'text-muted-foreground'
-            )}
-          >
-            {trend.direction === 'up' && <TrendingUp className="h-3 w-3" />}
-            {trend.direction === 'down' && <TrendingDown className="h-3 w-3" />}
-            <span>
-              {trend.value > 0 ? '+' : ''}
-              {trend.value} {trend.label}
-            </span>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
+// Note: Using shared MetricCard from @/components/shared
 
 // ============================================================================
 // BREAKDOWN CHART COMPONENT
@@ -261,34 +181,34 @@ function SupportDashboardPage() {
         <MetricCard
           title="Open Issues"
           value={metrics?.overview.openIssues ?? 0}
-          description="Awaiting response"
-          icon={<AlertCircle className="h-4 w-4" />}
-          variant={(metrics?.overview.openIssues ?? 0) > 10 ? 'warning' : 'default'}
-          loading={isLoading}
+          subtitle="Awaiting response"
+          icon={AlertCircle}
+          alert={(metrics?.overview.openIssues ?? 0) > 10}
+          isLoading={isLoading}
         />
         <MetricCard
           title="In Progress"
           value={metrics?.overview.inProgressIssues ?? 0}
-          description="Being worked on"
-          icon={<Activity className="h-4 w-4" />}
-          loading={isLoading}
+          subtitle="Being worked on"
+          icon={Activity}
+          isLoading={isLoading}
         />
         <MetricCard
           title="Resolved Today"
           value={metrics?.overview.resolvedToday ?? 0}
-          description="Closed today"
-          icon={<CheckCircle2 className="h-4 w-4" />}
-          variant="success"
-          loading={isLoading}
+          subtitle="Closed today"
+          icon={CheckCircle2}
+          iconClassName="text-green-600"
+          isLoading={isLoading}
         />
         <MetricCard
           title="Avg Resolution"
           value={
             metrics?.overview.avgResolutionHours ? `${metrics.overview.avgResolutionHours}h` : '—'
           }
-          description="Time to resolve"
-          icon={<Clock className="h-4 w-4" />}
-          loading={isLoading}
+          subtitle="Time to resolve"
+          icon={Clock}
+          isLoading={isLoading}
         />
       </div>
 
@@ -347,28 +267,20 @@ function SupportDashboardPage() {
         <MetricCard
           title="SLA Breaches"
           value={metrics?.sla.breached ?? 0}
-          description="Issues that missed SLA"
-          icon={<AlertCircle className="h-4 w-4" />}
-          variant={(metrics?.sla.breached ?? 0) > 0 ? 'danger' : 'success'}
-          loading={isLoading}
+          subtitle="Issues that missed SLA"
+          icon={AlertCircle}
+          iconClassName={(metrics?.sla.breached ?? 0) > 0 ? 'text-red-600' : 'text-green-600'}
+          isLoading={isLoading}
         />
 
         <MetricCard
           title="Weekly Trend"
           value={Math.abs(metrics?.trend.netChange ?? 0)}
-          description={(metrics?.trend.netChange ?? 0) >= 0 ? 'Net new issues' : 'Net resolved'}
-          icon={<ListChecks className="h-4 w-4" />}
-          trend={{
-            value: metrics?.trend.netChange ?? 0,
-            direction:
-              (metrics?.trend.netChange ?? 0) > 0
-                ? 'up'
-                : (metrics?.trend.netChange ?? 0) < 0
-                  ? 'down'
-                  : 'neutral',
-            label: 'this week',
-          }}
-          loading={isLoading}
+          subtitle={(metrics?.trend.netChange ?? 0) >= 0 ? 'Net new issues' : 'Net resolved'}
+          icon={ListChecks}
+          delta={metrics?.trend.netChange}
+          positive={(metrics?.trend.netChange ?? 0) < 0}
+          isLoading={isLoading}
         />
       </div>
 

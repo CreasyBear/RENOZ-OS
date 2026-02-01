@@ -44,6 +44,21 @@ export const activityEntityTypeValues = [
   'user',
   'email',
   'call',
+  'project',
+  'workstream',
+  'task',
+  'purchase_order',
+  'shipment',
+  'quote',
+  // Jobs/Projects domain
+  'site_visit',
+  'job_assignment',
+  'job_material',
+  'job_photo',
+  // Warranty domain
+  'warranty_claim',
+  'warranty_policy',
+  'warranty_extension',
 ] as const;
 
 // Activity source values for tracking how activities were created (COMMS-AUTO-002)
@@ -61,9 +76,22 @@ export type ActivitySource = z.infer<typeof activitySourceSchema>;
 // ACTIVITY CHANGES
 // ============================================================================
 
+/**
+ * JSON-serializable value type for activity changes.
+ * Matches Drizzle schema: ActivityChanges interface
+ */
+const activityChangeValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+  z.array(z.string()),
+  z.array(z.number()),
+]);
+
 export const activityChangesSchema = z.object({
-  before: z.record(z.string(), z.unknown()).optional(),
-  after: z.record(z.string(), z.unknown()).optional(),
+  before: z.record(z.string(), activityChangeValueSchema).optional(),
+  after: z.record(z.string(), activityChangeValueSchema).optional(),
   fields: z.array(z.string()).optional(),
 });
 
@@ -74,15 +102,125 @@ export type ActivityChanges = z.infer<typeof activityChangesSchema>;
 // ============================================================================
 
 /**
- * Metadata schema - free-form context data per action type.
- * ipAddress and userAgent are now separate columns in the database.
+ * Metadata schema - type-safe context data per action type.
+ * Matches Drizzle schema: ActivityMetadata interface
  */
-export const activityMetadataSchema = z
-  .object({
-    requestId: z.string().optional(),
-    reason: z.string().optional(),
-  })
-  .passthrough();
+export const activityMetadataSchema = z.object({
+  // General fields
+  requestId: z.string().optional(),
+  reason: z.string().optional(),
+  assignedTo: z.string().optional(),
+  format: z.string().optional(),
+  recordCount: z.number().optional(),
+  sharedWith: z.array(z.string()).optional(),
+  permission: z.string().optional(),
+
+  // Entity context fields
+  customerId: z.string().optional(),
+  customerName: z.string().optional(),
+  orderId: z.string().optional(),
+  orderNumber: z.string().optional(),
+  opportunityId: z.string().optional(),
+  opportunityTitle: z.string().optional(),
+
+  // Email activity fields
+  emailId: z.string().optional(),
+  recipientEmail: z.string().optional(),
+  recipientName: z.string().optional(),
+  subject: z.string().optional(),
+  eventType: z.string().optional(),
+  clickedUrl: z.string().optional(),
+  linkId: z.string().optional(),
+
+  // Call activity fields
+  callId: z.string().optional(),
+  purpose: z.string().optional(),
+  direction: z.enum(['inbound', 'outbound']).optional(),
+  durationMinutes: z.number().optional(),
+  notes: z.string().optional(),
+
+  // Note activity fields
+  noteId: z.string().optional(),
+  contentPreview: z.string().optional(),
+
+  // Communications fields
+  logType: z.string().optional(),
+  fullNotes: z.string().optional(),
+
+  // Customer fields (merge operations)
+  mergedCount: z.number().optional(),
+  mergedIntoCustomerId: z.string().optional(),
+  mergedCustomerIds: z.array(z.string()).optional(),
+  mergeReason: z.string().optional(),
+
+  // Inventory fields
+  movementId: z.string().optional(),
+  movementType: z.string().optional(),
+  referenceType: z.string().optional(),
+  referenceId: z.string().optional(),
+  productId: z.string().optional(),
+  quantity: z.number().optional(),
+
+  // Order fields
+  total: z.number().optional(),
+  changedFields: z.array(z.string()).optional(),
+  status: z.string().optional(),
+  lineItemCount: z.number().optional(),
+
+  // Pipeline/Opportunity fields
+  value: z.number().optional(),
+  stage: z.string().optional(),
+  previousStage: z.string().optional(),
+  newStage: z.string().optional(),
+  probability: z.number().optional(),
+
+  // Support fields
+  escalationType: z.string().optional(),
+  escalatedAt: z.string().optional(),
+
+  // Jobs/Projects domain fields
+  projectId: z.string().optional(),
+  projectNumber: z.string().optional(),
+  projectTitle: z.string().optional(),
+  projectType: z.string().optional(),
+  priority: z.string().optional(),
+  taskId: z.string().optional(),
+  taskTitle: z.string().optional(),
+  siteVisitId: z.string().optional(),
+  visitNumber: z.string().optional(),
+  visitType: z.string().optional(),
+  jobAssignmentId: z.string().optional(),
+  jobNumber: z.string().optional(),
+  jobTitle: z.string().optional(),
+  installerId: z.string().optional(),
+  installerName: z.string().optional(),
+  scheduledDate: z.string().optional(),
+  materialId: z.string().optional(),
+  productName: z.string().optional(),
+  previousStatus: z.string().optional(),
+  newStatus: z.string().optional(),
+
+  // Warranty domain fields
+  warrantyId: z.string().optional(),
+  warrantyNumber: z.string().optional(),
+  warrantyPolicyId: z.string().optional(),
+  policyName: z.string().optional(),
+  policyType: z.string().optional(),
+  claimId: z.string().optional(),
+  claimNumber: z.string().optional(),
+  claimType: z.string().optional(),
+  claimStatus: z.string().optional(),
+  extensionId: z.string().optional(),
+  extensionType: z.string().optional(),
+  extensionMonths: z.number().optional(),
+  previousExpiryDate: z.string().optional(),
+  newExpiryDate: z.string().optional(),
+  resolutionType: z.string().optional(),
+  denialReason: z.string().optional(),
+
+  // Custom extension
+  customFields: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
+});
 
 export type ActivityMetadata = z.infer<typeof activityMetadataSchema>;
 
@@ -144,6 +282,8 @@ export const activityWithUserSchema = activitySchema.extend({
       email: z.string(),
     })
     .nullable(),
+  /** Entity name/label for display (e.g., customer name, order number, opportunity title) */
+  entityName: z.string().nullable().optional(),
 });
 
 export type ActivityWithUser = z.infer<typeof activityWithUserSchema>;

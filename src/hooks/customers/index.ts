@@ -20,6 +20,22 @@ export {
 } from './use-customers';
 export type { CustomerFilters } from '@/lib/query-keys';
 
+// Contact hooks
+export {
+  useCreateContact,
+  useUpdateContact,
+  useDeleteContact,
+} from './use-customer-contacts';
+export type { CreateContactInput, UpdateContactInput } from './use-customer-contacts';
+
+// Address hooks
+export {
+  useCreateAddress,
+  useUpdateAddress,
+  useDeleteAddress,
+} from './use-customer-addresses';
+export type { CreateAddressInput, UpdateAddressInput, AddressType } from './use-customer-addresses';
+
 // Analytics hooks
 export {
   useCustomerKpis,

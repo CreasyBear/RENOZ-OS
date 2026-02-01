@@ -10,6 +10,7 @@
  * - Proper focus management
  */
 import { memo, useMemo } from "react";
+import { Link } from "@tanstack/react-router";
 import {
   Package,
   MapPin,
@@ -20,6 +21,7 @@ import {
   Clock,
   DollarSign,
   BarChart3,
+  ExternalLink,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -28,6 +30,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FormatAmount } from "@/components/shared/format";
 import { MetricCard } from "@/components/shared/metric-card";
+import { StatusCell } from "@/components/shared/data-table";
+import { MOVEMENT_TYPE_CONFIG } from "./inventory-status-config";
 
 // ============================================================================
 // TYPES
@@ -46,10 +50,17 @@ export interface InventoryMetrics {
 
 export interface MovementSummary {
   id: string;
+  productId: string;
   productName: string;
+  productSku: string;
   movementType: string;
   quantity: number;
+  movementCount?: number; // Number of individual movements aggregated
   locationName: string;
+  locationCode?: string | null;
+  referenceType?: string | null;
+  referenceId?: string | null;
+  metadataReason?: string | null;
   performedAt: Date;
   performedBy: string;
 }
@@ -91,32 +102,62 @@ export const StockOverviewWidget = memo(function StockOverviewWidget({
         title="Total Inventory Value"
         value={
           metrics ? (
-            <FormatAmount amount={metrics.totalValue} cents={false} />
+            <FormatAmount amount={metrics.totalValue} />
           ) : (
             "$0.00"
           )
         }
         subtitle={`${metrics?.totalUnits ?? 0} total units`}
-        icon={<DollarSign className="h-5 w-5" />}
+        icon={DollarSign}
         isLoading={isLoading}
       />
       <MetricCard
         title="Warehouse Locations"
         value={metrics?.locationsCount ?? 0}
         subtitle="Active locations"
-        icon={<MapPin className="h-5 w-5" />}
+        icon={MapPin}
         isLoading={isLoading}
       />
       <MetricCard
         title="Stock Alerts"
         value={(metrics?.lowStockCount ?? 0) + (metrics?.outOfStockCount ?? 0)}
         subtitle={`${metrics?.lowStockCount ?? 0} low, ${metrics?.outOfStockCount ?? 0} out`}
-        icon={<AlertTriangle className="h-5 w-5" />}
+        icon={AlertTriangle}
         isLoading={isLoading}
       />
     </div>
   );
 });
+
+// ============================================================================
+// UTILITIES
+// ============================================================================
+
+/**
+ * Generate a link URL for a movement reference
+ */
+function getMovementReferenceLink(
+  referenceType: string | null | undefined,
+  referenceId: string | null | undefined
+): string | null {
+  if (!referenceType || !referenceId) return null;
+
+  const routeMap: Record<string, (id: string) => string> = {
+    order: (id) => `/orders/${id}`,
+    purchase_order: (id) => `/purchase-orders/${id}`,
+  };
+
+  const routeBuilder = routeMap[referenceType];
+  return routeBuilder ? routeBuilder(referenceId) : null;
+}
+
+/**
+ * Format reference type for display
+ */
+function formatReferenceType(type: string | null | undefined): string {
+  if (!type) return '';
+  return type.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+}
 
 // ============================================================================
 // RECENT MOVEMENTS WIDGET
@@ -127,16 +168,6 @@ interface RecentMovementsWidgetProps {
   isLoading?: boolean;
 }
 
-const MOVEMENT_TYPE_CONFIG: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  receive: { label: "Received", variant: "default" },
-  allocate: { label: "Allocated", variant: "secondary" },
-  deallocate: { label: "Released", variant: "outline" },
-  pick: { label: "Picked", variant: "secondary" },
-  ship: { label: "Shipped", variant: "default" },
-  adjust: { label: "Adjusted", variant: "outline" },
-  return: { label: "Returned", variant: "destructive" },
-  transfer: { label: "Transferred", variant: "outline" },
-};
 
 export const RecentMovementsWidget = memo(function RecentMovementsWidget({
   movements,
@@ -202,10 +233,6 @@ export const RecentMovementsWidget = memo(function RecentMovementsWidget({
       <CardContent>
         <div className="space-y-4" role="list" aria-label="Recent inventory movements">
           {movements.map((movement) => {
-            const config = MOVEMENT_TYPE_CONFIG[movement.movementType] ?? {
-              label: movement.movementType,
-              variant: "outline" as const,
-            };
             return (
               <div
                 key={movement.id}
@@ -213,12 +240,55 @@ export const RecentMovementsWidget = memo(function RecentMovementsWidget({
                 role="listitem"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium truncate">
-                    {movement.productName}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {movement.locationName} &bull;{" "}
-                    {new Date(movement.performedAt).toLocaleTimeString()}
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium truncate">
+                      {movement.productName}
+                    </p>
+                    {movement.productSku && (
+                      <Badge variant="outline" className="text-xs font-mono shrink-0">
+                        {movement.productSku}
+                      </Badge>
+                    )}
+                    {movement.referenceType && (
+                      (() => {
+                        const referenceLink = getMovementReferenceLink(movement.referenceType, movement.referenceId);
+                        return referenceLink ? (
+                          <Link
+                            to={referenceLink as any}
+                            className="inline-flex items-center gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Badge variant="secondary" className="text-xs shrink-0 capitalize hover:bg-secondary/80 transition-colors cursor-pointer">
+                              {formatReferenceType(movement.referenceType)}
+                              <ExternalLink className="h-2.5 w-2.5 ml-0.5" />
+                            </Badge>
+                          </Link>
+                        ) : (
+                          <Badge variant="secondary" className="text-xs shrink-0 capitalize">
+                            {formatReferenceType(movement.referenceType)}
+                          </Badge>
+                        );
+                      })()
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {movement.locationCode
+                      ? `${movement.locationName} (${movement.locationCode})`
+                      : movement.locationName} &bull;{" "}
+                    {movement.performedAt instanceof Date && !isNaN(movement.performedAt.getTime())
+                      ? movement.performedAt.toLocaleString(undefined, {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit',
+                        })
+                      : 'Unknown time'}
+                    {movement.movementCount && movement.movementCount > 1 && (
+                      <span className="ml-1">({movement.movementCount} movements)</span>
+                    )}
+                    {movement.metadataReason && (
+                      <span className="ml-1"> &bull; {movement.metadataReason}</span>
+                    )}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 ml-4">
@@ -226,7 +296,10 @@ export const RecentMovementsWidget = memo(function RecentMovementsWidget({
                     {movement.quantity > 0 ? "+" : ""}
                     {movement.quantity}
                   </span>
-                  <Badge variant={config.variant}>{config.label}</Badge>
+                  <StatusCell
+                    status={movement.movementType as keyof typeof MOVEMENT_TYPE_CONFIG}
+                    statusConfig={MOVEMENT_TYPE_CONFIG}
+                  />
                 </div>
               </div>
             );
